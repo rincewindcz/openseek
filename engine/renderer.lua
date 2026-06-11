@@ -140,12 +140,32 @@ function Renderer:_draw_entities(list, vp)
         g.circle("fill", e.x, e.y, 3)
         g.setColor(1, 1, 1)
       end
-      -- overlay animation (debug preview, non-destructive)
+      -- overlay animation (non-destructive: hit flash, etc.)
       if e.state == "animating" and e.anim then
         local img = e.anim:current_image()
         if img then
           local iw, ih = img:getDimensions()
           g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+        end
+      end
+
+      -- Damage smoke emitters (persistent, threshold-based)
+      for _, se in ipairs(e._damage_smokes) do
+        local img = se.anim:current_image()
+        if img then
+          local iw, ih = img:getDimensions()
+          g.setColor(1, 1, 1, 0.85)
+          g.draw(img, e.x + se.ox, e.y + se.oy, 0, 1, 1, iw / 2, ih / 2)
+          g.setColor(1, 1, 1)
+        end
+      end
+
+      -- One-shot hit smokes (SMOKE2)
+      for _, hs in ipairs(e._hit_smokes) do
+        local img = hs.anim:current_image()
+        if img then
+          local iw, ih = img:getDimensions()
+          g.draw(img, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, iw / 2, ih / 2)
         end
       end
     end

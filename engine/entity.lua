@@ -15,8 +15,6 @@ function Entity.type_for(kind_name)
   return entity_types[kind_name] or {}
 end
 
--- stage_ent: raw entity from stage JSON {class, x, y, route}
--- stage_cls: matching class record from stage JSON
 function Entity:init(id, stage_ent, stage_cls)
   self.id           = id
   self.class_idx    = stage_ent.class
@@ -25,16 +23,22 @@ function Entity:init(id, stage_ent, stage_cls)
   self.angle        = 0
   self.hp           = stage_cls.hit_points
   self.max_hp       = stage_cls.hit_points
-  self.state        = "idle"   -- idle | patrol | attack | animating | exploding | dead
-  self.state_before = nil      -- state to restore after a non-destructive animation
+  self.state        = "idle"
+  self.state_before = nil
   self.route        = stage_ent.route
   self.route_pt     = 1
   self.type_data    = Entity.type_for(stage_cls.kind_name)
   self.anim         = nil
+
+  -- Damage visual effects
+  self._damage_smokes = {}   -- {anim, ox, oy} — persistent looping smoke per HP tier
+  self._hit_smokes    = {}   -- {anim, ox, oy} — one-shot SMOKE2 on hit
 end
 
+-- Entity is hittable and should be drawn while idle/animating/patrol/attack.
+-- Exploding entities are "logically gone" — projectiles pass through them.
 function Entity:is_alive()
-  return self.state ~= "dead"
+  return self.state ~= "dead" and self.state ~= "exploding"
 end
 
 function Entity:take_damage(amount)
@@ -46,8 +50,19 @@ function Entity:take_damage(amount)
   end
 end
 
--- Play a named animation clip as an overlay without killing the entity.
--- After the clip finishes the entity returns to its previous state.
+-- Spawn a one-shot SMOKE2 hit effect at the entity's position with a small random offset.
+function Entity:on_hit()
+  if not self:is_alive() then return end
+  local Animation = require "engine.animation"
+  local anim = Animation.new("smoke2")
+  if anim:is_done() then return end  -- clip not found / empty
+  self._hit_smokes[#self._hit_smokes + 1] = {
+    anim = anim,
+    ox   = (math.random() - 0.5) * 12,
+    oy   = (math.random() - 0.5) * 12,
+  }
+end
+
 function Entity:play_anim(clip_name)
   local Animation = require "engine.animation"
   local anim = Animation.new(clip_name)
@@ -63,9 +78,13 @@ function Entity:_start_death()
   local explosion = (self.type_data and self.type_data.explosion) or "none"
   self.anim  = Animation.new("explosion_" .. explosion)
   self.state = self.anim:is_done() and "dead" or "exploding"
+  -- Clear smoke effects when dying
+  self._damage_smokes = {}
+  self._hit_smokes    = {}
 end
 
 function Entity:update(dt)
+  -- Explosion / overlay animation
   if (self.state == "exploding" or self.state == "animating") and self.anim then
     self.anim:update(dt)
     if self.anim:is_done() then
@@ -77,6 +96,43 @@ function Entity:update(dt)
       end
     end
   end
+
+  if not self:is_alive() then return end
+
+  -- Persistent damage smoke: threshold by HP percentage
+  if self.max_hp > 0 then
+    local pct    = self.hp / self.max_hp
+    local target = 0
+    if pct < 0.6 then target = 1 end
+    if pct < 0.4 then target = 2 end
+    if pct < 0.2 then target = 3 end
+
+    while #self._damage_smokes < target do
+      local Animation = require "engine.animation"
+      local anim = Animation.new("smoke")
+      self._damage_smokes[#self._damage_smokes + 1] = {
+        anim = anim,
+        ox   = (math.random() - 0.5) * 20,
+        oy   = (math.random() - 0.5) * 20,
+      }
+    end
+    while #self._damage_smokes > target do
+      table.remove(self._damage_smokes)
+    end
+
+    for _, se in ipairs(self._damage_smokes) do
+      se.anim:update(dt)
+      if se.anim:is_done() then se.anim:reset() end
+    end
+  end
+
+  -- One-shot hit smokes
+  local live = {}
+  for _, hs in ipairs(self._hit_smokes) do
+    hs.anim:update(dt)
+    if not hs.anim:is_done() then live[#live + 1] = hs end
+  end
+  self._hit_smokes = live
 end
 
 -- Returns rotation in radians for g.draw().

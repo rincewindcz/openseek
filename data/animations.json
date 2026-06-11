@@ -138,6 +138,31 @@
     "fps": 40, "loop": true
   },
 
+  "missle": {
+    "frames": ["stage00/missle_f07.png"],
+    "fps": 1, "loop": false
+  },
+
+  "shell": {
+    "frames": ["stage00/shell_f07.png"],
+    "fps": 1, "loop": false
+  },
+
+  "ffr": {
+    "frames": ["stage00/ffr_f07.png"],
+    "fps": 1, "loop": false
+  },
+
+  "bomb": {
+    "frames": ["stage00/bomb_f23.png"],
+    "fps": 1, "loop": false
+  },
+
+  "trace": {
+    "frames": ["stage00/trace_f007.png"],
+    "fps": 1, "loop": false
+  },
+
   "tankbgrn": {
     "frames": ["player/tankbgrn_f00.png","player/tankbgrn_f01.png"],
     "fps": 8, "loop": true

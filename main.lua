@@ -1,11 +1,12 @@
-local World     = require "engine.world"
-local Camera    = require "engine.camera"
-local Renderer  = require "engine.renderer"
-local Debug     = require "engine.debug"
-local Animation = require "engine.animation"
-local Player    = require "engine.player"
-local Hud       = require "engine.hud"
-local json      = require "lib.json"
+local World        = require "engine.world"
+local Camera       = require "engine.camera"
+local Renderer     = require "engine.renderer"
+local Debug        = require "engine.debug"
+local Animation    = require "engine.animation"
+local Player       = require "engine.player"
+local Hud          = require "engine.hud"
+local CombatSystem = require "engine.combat"
+local json         = require "lib.json"
 
 local world
 local camera
@@ -13,11 +14,18 @@ local renderer
 local dbg
 local hud
 local player
-local game_mode   = false
+local combat
+local game_mode    = false
 local sandbox_mode = false
 local sel_vehicle  = "chopper"
 local viewer_zi    = 4
 local vehicle_defs = {}
+
+-- Weapon lists per vehicle (order determines cycle order)
+local VEHICLE_WEAPONS = {
+  chopper = {"chaingun", "rockets", "air_to_ground", "air_to_air", "bomb"},
+  tank    = {"chaingun", "shells"},
+}
 
 -- ── sandbox UI ────────────────────────────────────────────────────────────────
 
@@ -140,16 +148,22 @@ local function enter_game_mode()
   player.vehicle    = sel_vehicle
   local def = vehicle_defs[sel_vehicle]
   if def then player:load_vehicle_def(def) end
-  hud.player = player
+  -- Set default weapon for vehicle
+  local wlist = VEHICLE_WEAPONS[sel_vehicle]
+  if wlist then player.weapon_name = wlist[1] end
+  hud.player    = player
+  combat.player = player
   love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
 end
 
 local function leave_game_mode()
-  game_mode    = false
-  sandbox_mode = false
-  player       = nil
-  hud.player   = nil
-  camera.angle = nil
+  game_mode         = false
+  sandbox_mode      = false
+  player            = nil
+  hud.player        = nil
+  combat.player     = nil
+  combat.projectiles = {}
+  camera.angle      = nil
   camera:set_zoom(viewer_zi)
   love.window.setTitle(world:title())
 end
@@ -186,13 +200,28 @@ function love.load(args)
   hud      = Hud:new()
   hud:load("data/hud.json")
   hud.world = world
+  combat   = CombatSystem:new(world, camera)
+  combat:load("data/weapons.json")
   renderer:refresh_kinds()
   love.window.setTitle(world:title())
+end
+
+local function _try_fire(dt)
+  if not (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl")) then return end
+  local wdef = combat.weapons[player.weapon_name]
+  if not wdef then return end
+  if player.fire_timer > 0 then return end
+  local level = wdef.levels and wdef.levels[player.weapon_level] or wdef
+  combat:tick_swing("player", player.weapon_name)
+  combat:fire(player.x, player.y, player.angle, player.weapon_name, "player", player.weapon_level)
+  player.fire_timer = 1.0 / (level.fire_rate or wdef.fire_rate or 10)
 end
 
 function love.update(dt)
   if game_mode and player then
     player:update(dt)
+    _try_fire(dt)
+    combat:update(dt)
     camera.x     = player.x
     camera.y     = player.y
     camera.angle = player:camera_angle()
@@ -217,8 +246,19 @@ function love.draw()
   renderer:draw()
 
   if game_mode and player then
+    combat:draw()
     player:draw()
     hud:draw()
+    -- Weapon indicator (top-left, below renderer bar)
+    local g = love.graphics
+    g.setColor(0, 0, 0, 0.55)
+    g.rectangle("fill", 0, 22, 220, 20)
+    g.setColor(1, 1, 0.2, 1)
+    local wdef  = combat.weapons[player.weapon_name]
+    local n_lvl = wdef and wdef.levels and #wdef.levels or 1
+    g.print(string.format("Q: %s  E: lv%d/%d  ctrl: fire",
+      player.weapon_name, player.weapon_level, n_lvl), 4, 24)
+    g.setColor(1, 1, 1)
     if sandbox_mode then
       draw_sandbox_panel()
     end
@@ -283,6 +323,25 @@ function love.keypressed(key)
         player:land()
       elseif player.land_state == "grounded" then
         player:take_off()
+      end
+      return
+    end
+    if key == "q" then
+      local wlist = VEHICLE_WEAPONS[player.vehicle] or {}
+      local idx = 1
+      for i, w in ipairs(wlist) do
+        if w == player.weapon_name then idx = i; break end
+      end
+      idx = idx % #wlist + 1
+      player.weapon_name  = wlist[idx]
+      player.weapon_level = 1
+      player.fire_timer   = 0
+      return
+    end
+    if key == "e" then
+      local wdef = combat.weapons[player.weapon_name]
+      if wdef and wdef.levels then
+        player.weapon_level = player.weapon_level % #wdef.levels + 1
       end
       return
     end

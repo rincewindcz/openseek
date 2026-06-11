@@ -1,0 +1,159 @@
+{
+  "chaingun": {
+    "vehicle": "both",
+    "proj_type": "bullet",
+    "proj_color": [1, 1, 1],
+    "proj_size": 2,
+    "speed": 600,
+    "proj_radius": 3,
+    "ttl": 1.5,
+    "aoe": 0,
+    "explosion": "explosion_none",
+    "levels": [
+      { "damage": 8,  "fire_rate": 10, "spread_deg": 0,  "streams": 1, "swing": false },
+      { "damage": 8,  "fire_rate": 10, "spread_deg": 6,  "streams": 2, "swing": false },
+      { "damage": 8,  "fire_rate": 10, "spread_deg": 20, "streams": 2, "swing": true  }
+    ]
+  },
+
+  "rockets": {
+    "vehicle": "chopper",
+    "proj_type": "sprite",
+    "proj_sprite": "ffr",
+    "speed": 420,
+    "proj_radius": 5,
+    "ttl": 3.0,
+    "aoe": 0,
+    "explosion": "explosion_medium",
+    "levels": [
+      { "damage": 35, "fire_rate": 6.0, "spread_deg": 0,  "count": 2, "side_offset": 10 },
+      { "damage": 35, "fire_rate": 5.0, "spread_deg": 10, "count": 3 },
+      { "damage": 35, "fire_rate": 4.0, "spread_deg": 6,  "count": 4, "side_offset": 12 }
+    ]
+  },
+
+  "air_to_ground": {
+    "vehicle": "chopper",
+    "proj_type": "sprite",
+    "proj_sprite": "missle",
+
+    "trail": "missile_smoke",
+    "speed": 400,
+    "proj_radius": 6,
+    "ttl": 4.0,
+    "aoe": 30,
+    "explosion": "explosion_large",
+    "levels": [
+      { "damage": 80, "fire_rate": 1.0, "count": 1, "locking": false },
+      { "damage": 80, "fire_rate": 1.0, "count": 1, "locking": true  },
+      { "damage": 80, "fire_rate": 1.0, "count": 2, "locking": true  }
+    ]
+  },
+
+  "air_to_air": {
+    "vehicle": "chopper",
+    "proj_type": "sprite",
+    "proj_sprite": "missle",
+
+    "trail": "missile_smoke",
+    "speed": 450,
+    "proj_radius": 6,
+    "ttl": 3.5,
+    "aoe": 0,
+    "explosion": "explosion_medium",
+    "levels": [
+      { "damage": 60, "fire_rate": 1.0, "count": 1, "locking": false },
+      { "damage": 60, "fire_rate": 1.0, "count": 1, "locking": true  },
+      { "damage": 60, "fire_rate": 1.0, "count": 2, "locking": true  }
+    ]
+  },
+
+  "bomb": {
+    "vehicle": "chopper",
+    "proj_type": "bomb_drop",
+    "proj_sprite": "bomb",
+    "proj_sprite_frame": 23,
+    "speed": 0,
+    "proj_radius": 8,
+    "ttl": 5.0,
+    "aoe": 80,
+    "explosion": "explosion_large",
+    "levels": [
+      { "damage": 120, "fire_rate": 0.5 }
+    ]
+  },
+
+  "shells": {
+    "vehicle": "tank",
+    "proj_type": "sprite",
+    "proj_sprite": "shell",
+
+    "speed": 380,
+    "proj_radius": 5,
+    "ttl": 2.5,
+    "aoe": 40,
+    "explosion": "explosion_large",
+    "levels": [
+      { "damage": 100, "fire_rate": 0.5, "count": 1 },
+      { "damage": 100, "fire_rate": 1.0, "count": 1 },
+      { "damage": 100, "fire_rate": 1.0, "count": 2 }
+    ]
+  },
+
+  "flak": {
+    "vehicle": "enemy",
+    "proj_type": "tracer",
+    "proj_sprite": "trace",
+    "speed": 420,
+    "proj_radius": 3,
+    "ttl": 2.2,
+    "aoe": 0,
+    "explosion": "explosion_flak",
+    "damage": 30,
+    "fire_rate": 1.5,
+    "spread_deg": 5
+  },
+
+  "machine_gun": {
+    "vehicle": "enemy",
+    "proj_type": "tracer",
+    "proj_sprite": "trace",
+    "speed": 560,
+    "proj_radius": 2,
+    "ttl": 1.6,
+    "aoe": 0,
+    "explosion": "explosion_none",
+    "damage": 12,
+    "fire_rate": 8,
+    "spread_deg": 4
+  },
+
+  "tank_cannon": {
+    "vehicle": "enemy",
+    "proj_type": "sprite",
+    "proj_sprite": "shell",
+
+    "speed": 350,
+    "proj_radius": 5,
+    "ttl": 2.5,
+    "aoe": 40,
+    "explosion": "explosion_large",
+    "damage": 100,
+    "fire_rate": 0.5
+  },
+
+  "rifle": {
+    "vehicle": "enemy",
+    "proj_type": "bullet",
+    "proj_color": [1, 0.9, 0.3],
+    "proj_size": 2,
+    "speed": 500,
+    "proj_radius": 2,
+    "ttl": 1.5,
+    "aoe": 0,
+    "explosion": "explosion_none",
+    "damage": 10,
+    "fire_rate": 2,
+    "spread_deg": 5
+  }
+}

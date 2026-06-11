@@ -26,9 +26,12 @@ function Player:init(x, y)
   self.load_fuel  = 100
   self.load_armor = 100
 
-  self.world_size = 4096
-  self.weapon_idx = 0
-  self.vehicle    = "chopper"
+  self.world_size   = 4096
+  self.weapon_idx   = 0       -- HUD sprite index (0-based)
+  self.vehicle      = "chopper"
+  self.weapon_name  = "chaingun"
+  self.weapon_level = 1
+  self.fire_timer   = 0
 
   -- vehicle params (defaults; overridden by load_vehicle_def)
   self.sprite_scale = 3
@@ -92,6 +95,9 @@ function Player:update(dt)
     self:_drain_fuel(dt)
   end
   self:_update_anims(dt)
+  if self.fire_timer > 0 then
+    self.fire_timer = self.fire_timer - dt
+  end
 end
 
 function Player:_update_altitude(dt)
