@@ -657,9 +657,16 @@ end
 
 function Debug:_screen_to_world(sx, sy)
   local sw, sh = love.graphics.getDimensions()
-  local z = self.camera:zoom()
-  return self.camera.x + (sx - sw/2) / z,
-         self.camera.y + (sy - sh/2) / z
+  local z  = self.camera:zoom()
+  local dx = (sx - sw / 2) / z
+  local dy = (sy - sh / 2) / z
+  -- undo camera rotation when in game mode
+  local a  = self.camera.angle
+  if a then
+    local ca, sa = math.cos(-a), math.sin(-a)
+    dx, dy = dx * ca - dy * sa, dx * sa + dy * ca
+  end
+  return self.camera.x + dx, self.camera.y + dy
 end
 
 return Debug

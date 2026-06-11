@@ -3,17 +3,38 @@ local Camera    = require "engine.camera"
 local Renderer  = require "engine.renderer"
 local Debug     = require "engine.debug"
 local Animation = require "engine.animation"
+local Player    = require "engine.player"
 
 local world
 local camera
 local renderer
 local dbg
+local player       -- nil in viewer mode
+local game_mode = false
 
 local function after_stage_load()
   camera.world_size = world.stage.world_size
   camera:clamp()
   renderer:refresh_kinds()
   dbg.world = world
+  love.window.setTitle(world:title())
+  -- update player world size so clamping stays correct
+  if player then player.world_size = world.stage.world_size end
+end
+
+local function enter_game_mode()
+  game_mode = true
+  local ws  = world.stage.world_size
+  player    = Player:new(ws / 2, ws / 2)
+  player.world_size = ws
+  love.window.setTitle(world:title() .. "  [game]")
+end
+
+local function leave_game_mode()
+  game_mode    = false
+  player       = nil
+  camera.angle = nil
+  camera:clamp()
   love.window.setTitle(world:title())
 end
 
@@ -30,8 +51,15 @@ function love.load(args)
 end
 
 function love.update(dt)
-  if not renderer.picker and not renderer.kind_picker then
-    camera:update(dt)
+  if game_mode and player then
+    player:update(dt)
+    camera.x     = player.x
+    camera.y     = player.y
+    camera.angle = player:camera_angle()
+  else
+    if not renderer.picker and not renderer.kind_picker then
+      camera:update(dt)
+    end
   end
   world:update(dt)
   dbg:update()
@@ -39,6 +67,7 @@ end
 
 function love.draw()
   renderer:draw()
+  if game_mode and player then player:draw() end
   dbg:draw()
 end
 
@@ -58,7 +87,21 @@ function love.keypressed(key)
     if dbg:keypressed(key) then return end
   end
 
-  -- kind picker intercepts all navigation keys while open
+  -- game mode toggle
+  if key == "f1" then
+    if game_mode then leave_game_mode() else enter_game_mode() end
+    return
+  end
+
+  -- takeoff / land (game mode only)
+  if game_mode and player then
+    if key == "space" or key == "f" then
+      if player.airborne then player:land() else player:take_off() end
+      return
+    end
+  end
+
+  -- kind picker modal
   if renderer.kind_picker then
     if key == "escape" or key == "k" then
       renderer.kind_picker = false
@@ -68,7 +111,7 @@ function love.keypressed(key)
     return
   end
 
-  -- stage picker
+  -- stage picker modal
   if renderer.picker then
     if key == "escape" or key == "tab" then
       renderer.picker = false
@@ -84,9 +127,9 @@ function love.keypressed(key)
     return
   end
 
-  if key == "escape"  then love.event.quit() end
-  if key == "tab"     then renderer.picker      = true end
-  if key == "k"       then renderer:toggle_kind_picker() end
+  if key == "escape" then love.event.quit() end
+  if key == "tab"    then renderer.picker      = true end
+  if key == "k"      then renderer:toggle_kind_picker() end
 
   if key == "pagedown" then
     world:load_index(world.stage_index % #world.stages + 1)
@@ -97,10 +140,13 @@ function love.keypressed(key)
     after_stage_load()
   end
 
-  if key == "l" then renderer.show_segments = not renderer.show_segments end
-  if key == "g" then renderer.show_grid     = not renderer.show_grid     end
-  if key == "+" or key == "=" or key == "kp+" then camera:set_zoom(camera.zi + 1) end
-  if key == "-" or key == "kp-"               then camera:set_zoom(camera.zi - 1) end
+  -- viewer-mode-only controls
+  if not game_mode then
+    if key == "l" then renderer.show_segments = not renderer.show_segments end
+    if key == "g" then renderer.show_grid     = not renderer.show_grid     end
+    if key == "+" or key == "=" or key == "kp+" then camera:set_zoom(camera.zi + 1) end
+    if key == "-" or key == "kp-"               then camera:set_zoom(camera.zi - 1) end
+  end
 end
 
 function love.mousepressed(x, y, button)

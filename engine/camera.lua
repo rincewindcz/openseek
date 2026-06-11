@@ -6,9 +6,10 @@ local Camera = Class()
 
 function Camera:init(world_size)
   self.world_size = world_size or 4096
-  self.x  = self.world_size / 2
-  self.y  = self.world_size / 2
-  self.zi = 4  -- index into ZOOMS; default 1x
+  self.x     = self.world_size / 2
+  self.y     = self.world_size / 2
+  self.zi    = 4     -- index into ZOOMS; default 1x
+  self.angle = nil   -- radians; nil = no rotation (viewer mode)
 end
 
 function Camera:zoom()
@@ -36,6 +37,7 @@ function Camera:clamp()
   self.y = math.max(0, math.min(self.world_size, self.y))
 end
 
+-- Free-roam pan (viewer mode only; not called in game mode).
 function Camera:update(dt)
   local speed = 600 / self:zoom() * dt
   local kb = love.keyboard.isDown
@@ -51,19 +53,28 @@ function Camera:on_wheel(dy)
   self:set_zoom(self.zi + (dy > 0 and 1 or -1), mx, my)
 end
 
--- Apply the camera transform (call inside love.draw after love.graphics.push).
+-- Apply the camera transform.  When self.angle is set, the world is rotated
+-- around screen center so the player always faces up.
 function Camera:apply()
   local w, h = love.graphics.getDimensions()
   love.graphics.translate(w / 2, h / 2)
   love.graphics.scale(self:zoom())
+  if self.angle then
+    love.graphics.rotate(self.angle)
+  end
   love.graphics.translate(-self.x, -self.y)
 end
 
--- Viewport in world coordinates (with margin).
+-- Viewport in world coordinates (expanded for rotation so culling stays correct).
 function Camera:viewport(margin)
   margin = margin or 64
   local w, h = love.graphics.getDimensions()
   local z = self:zoom()
+  if self.angle then
+    -- Rotated viewport: expand margin to cover the full screen diagonal.
+    local diag = math.sqrt(w * w + h * h) / 2 / z
+    margin = math.max(margin, diag)
+  end
   return {
     x0 = self.x - w / 2 / z - margin,
     x1 = self.x + w / 2 / z + margin,
