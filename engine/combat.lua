@@ -36,6 +36,12 @@ function Projectile:get_image()
   return clip.frames[1]
 end
 
+-- Draw origin that centers the sprite's visible art on the projectile position.
+function Projectile:get_anchor()
+  if not self.wdef.proj_sprite then return 0, 0 end
+  return Animation.frame_anchor(self.wdef.proj_sprite, 1)
+end
+
 -- ── CombatSystem ─────────────────────────────────────────────────────────────
 
 local CombatSystem = Class()
@@ -196,10 +202,10 @@ function CombatSystem:draw()
     else
       local img = proj:get_image()
       if img then
-        local w, h = img:getDimensions()
-        local extra = (wdef.proj_sprite_rot or 0) * math.pi / 180
+        local extra    = (wdef.proj_sprite_rot or 0) * math.pi / 180
+        local ax, ay   = proj:get_anchor()
         g.setColor(1, 1, 1)
-        g.draw(img, proj.x, proj.y, proj.angle_rad + extra, 1, 1, w / 2, h / 2)
+        g.draw(img, proj.x, proj.y, proj.angle_rad + extra, 1, 1, ax, ay)
       end
     end
   end

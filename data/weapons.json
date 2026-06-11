@@ -10,9 +10,9 @@
     "aoe": 0,
     "explosion": "explosion_none",
     "levels": [
-      { "damage": 5,  "fire_rate": 10, "spread_deg": 0,  "streams": 1, "swing": false },
-      { "damage": 5,  "fire_rate": 10, "spread_deg": 6,  "streams": 2, "swing": false },
-      { "damage": 5,  "fire_rate": 10, "spread_deg": 20, "streams": 2, "swing": true  }
+      { "damage": 3,  "fire_rate": 10, "spread_deg": 0,  "streams": 1, "swing": false },
+      { "damage": 3,  "fire_rate": 10, "spread_deg": 6,  "streams": 2, "swing": false },
+      { "damage": 3,  "fire_rate": 10, "spread_deg": 20, "streams": 2, "swing": true  }
     ]
   },
 
@@ -27,9 +27,9 @@
     "aoe": 0,
     "explosion": "explosion_medium",
     "levels": [
-      { "damage": 20, "fire_rate": 11.0, "spread_deg": 0,  "count": 2, "side_offset": 16 },
-      { "damage": 20, "fire_rate": 9.0,  "spread_deg": 10, "count": 3 },
-      { "damage": 20, "fire_rate": 8.0,  "spread_deg": 6,  "count": 4, "side_offset": 12 }
+      { "damage": 12, "fire_rate": 11.0, "spread_deg": 0,  "count": 2, "side_offset": 16 },
+      { "damage": 12, "fire_rate": 9.0,  "spread_deg": 10, "count": 3 },
+      { "damage": 12, "fire_rate": 8.0,  "spread_deg": 6,  "count": 4, "side_offset": 12 }
     ]
   },
 

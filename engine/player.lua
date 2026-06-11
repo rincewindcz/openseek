@@ -33,7 +33,7 @@ function Player:init(x, y)
   self.weapon_level = 1
   self.fire_timer   = 0
 
-  self.turret_angle     = 0    -- tank turret absolute heading (deg, 0=north CW)
+  self.turret_offset    = 0    -- tank turret heading relative to the hull (deg)
   self.turret_rate      = 140
   self.collision_radius = 8
   self.world            = nil  -- set in game mode for collision queries
@@ -88,7 +88,7 @@ end
 
 -- Heading projectiles travel along: the turret for tanks, the hull otherwise.
 function Player:fire_angle()
-  if self.vehicle == "tank" then return self.turret_angle end
+  if self.vehicle == "tank" then return self.angle + self.turret_offset end
   return self.angle
 end
 
@@ -159,7 +159,7 @@ function Player:_apply_input(dt)
     -- shift + turn rotates the turret; otherwise the hull
     if modifier then
       if rotate ~= 0 then
-        self.turret_angle = (self.turret_angle + rotate * self.turret_rate * dt) % 360
+        self.turret_offset = (self.turret_offset + rotate * self.turret_rate * dt) % 360
       end
     elseif rotate ~= 0 then
       self.angle = (self.angle + rotate * self.turn_rate * dt) % 360
@@ -356,7 +356,7 @@ function Player:_draw_tank(g, cx, cy, s)
   local top_img = self:_frames("tanktop")[1]
   if top_img then
     local w, h = top_img:getDimensions()
-    local rot  = (self.turret_angle - self.angle) * math.pi / 180
+    local rot  = self.turret_offset * math.pi / 180
     g.draw(top_img, cx, cy, rot, s, s, w / 2, h / 2)
   end
 end

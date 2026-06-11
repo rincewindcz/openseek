@@ -11,6 +11,8 @@ function AnimClip:init(def, image_cache)
   self.fps   = def.fps or 12
   self.loop  = def.loop ~= false   -- default true unless explicitly false
   self.frames = {}
+  self.frame_paths = {}   -- parallel to frames; source path for lazy anchor calc
+  self.anchors = {}       -- lazily filled art-center anchors keyed by frame index
   for _, path in ipairs(def.frames or {}) do
     local img = image_cache[path]
     if not img then
@@ -23,8 +25,46 @@ function AnimClip:init(def, image_cache)
     end
     if img then
       self.frames[#self.frames + 1] = img
+      self.frame_paths[#self.frames] = "assets/" .. path
     end
   end
+end
+
+-- Origin (in pixels) that centers a frame's visible art rather than its image
+-- box. Sprites decoded from rotation arcs sit off-center in their shared canvas,
+-- so drawing them by image center skews position and rotation. Computed once
+-- per frame from the alpha bounding box and cached.
+function AnimClip:anchor(i)
+  local cached = self.anchors[i]
+  if cached then return cached[1], cached[2] end
+  local img = self.frames[i]
+  if not img then return 0, 0 end
+  local w, h = img:getDimensions()
+  local ax, ay = w / 2, h / 2
+  local path = self.frame_paths[i]
+  if path and love.image then
+    local ok, data = pcall(love.image.newImageData, path)
+    if ok then
+      local x0, y0, x1, y1 = math.huge, math.huge, -1, -1
+      for py = 0, h - 1 do
+        for px = 0, w - 1 do
+          local _, _, _, a = data:getPixel(px, py)
+          if a > 0 then
+            if px < x0 then x0 = px end
+            if px > x1 then x1 = px end
+            if py < y0 then y0 = py end
+            if py > y1 then y1 = py end
+          end
+        end
+      end
+      if x1 >= 0 then
+        ax = (x0 + x1 + 1) / 2
+        ay = (y0 + y1 + 1) / 2
+      end
+    end
+  end
+  self.anchors[i] = { ax, ay }
+  return ax, ay
 end
 
 function AnimClip:frame_count()
@@ -109,6 +149,12 @@ end
 
 function Animation.clip(name)
   return clips[name]
+end
+
+function Animation.frame_anchor(name, i)
+  local clip = clips[name]
+  if not clip then return 0, 0 end
+  return clip:anchor(i or 1)
 end
 
 function Animation.clip_names()

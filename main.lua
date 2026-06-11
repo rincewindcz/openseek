@@ -151,14 +151,13 @@ local function enter_game_mode()
   player.vehicle      = sel_vehicle
   player.world        = world
   player.camera       = camera
-  player.turret_angle = player.angle
   local def = vehicle_defs[sel_vehicle]
   if def then player:load_vehicle_def(def) end
   -- Set default weapon for vehicle
   local wlist = VEHICLE_WEAPONS[sel_vehicle]
   if wlist then player.weapon_name = wlist[1] end
   local _, sh = love.graphics.getDimensions()
-  camera.view_oy = sh * 0.18
+  camera.view_oy = sh * 0.24
   hud.player    = player
   combat.player = player
   love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
