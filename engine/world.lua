@@ -1,5 +1,5 @@
 local Class  = require "engine.class"
-local json   = require "json"
+local json   = require "lib.json"
 local Entity = require "engine.entity"
 
 -- Ground fill colors per mission (palette entry 49 of STAGE0M/PAL1.BIN, 6-bit DAC to 8-bit).

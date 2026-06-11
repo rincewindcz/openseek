@@ -1,5 +1,5 @@
 local Class = require "engine.class"
-local json  = require "json"
+local json  = require "lib.json"
 
 local entity_types = {}  -- keyed by kind_name, loaded once
 
