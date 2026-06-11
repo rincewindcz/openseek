@@ -1,0 +1,61 @@
+{
+  "rotor_slow": {
+    "frames": [
+      "player/chopbnk1_f0.png", "player/chopbnk1_f1.png",
+      "player/chopbnk1_f2.png", "player/chopbnk1_f3.png",
+      "player/chopbnk1_f4.png", "player/chopbnk1_f5.png",
+      "player/chopbnk1_f6.png", "player/chopbnk1_f7.png"
+    ],
+    "fps": 6,
+    "loop": true
+  },
+  "rotor_medium": {
+    "frames": [
+      "player/chopbnk2_f0.png", "player/chopbnk2_f1.png",
+      "player/chopbnk2_f2.png", "player/chopbnk2_f3.png",
+      "player/chopbnk2_f4.png", "player/chopbnk2_f5.png",
+      "player/chopbnk2_f6.png", "player/chopbnk2_f7.png"
+    ],
+    "fps": 14,
+    "loop": true
+  },
+  "rotor_fast": {
+    "frames": [
+      "player/chopbnk3_f0.png", "player/chopbnk3_f1.png",
+      "player/chopbnk3_f2.png", "player/chopbnk3_f3.png",
+      "player/chopbnk3_f4.png", "player/chopbnk3_f5.png",
+      "player/chopbnk3_f6.png", "player/chopbnk3_f7.png"
+    ],
+    "fps": 24,
+    "loop": true
+  },
+  "explosion_none": {
+    "frames": [],
+    "fps": 1,
+    "loop": false
+  },
+  "explosion_small": {
+    "frames": [
+      "effects/exp_s0.png", "effects/exp_s1.png",
+      "effects/exp_s2.png", "effects/exp_s3.png"
+    ],
+    "fps": 14,
+    "loop": false
+  },
+  "explosion_medium": {
+    "frames": [
+      "effects/exp_m0.png", "effects/exp_m1.png", "effects/exp_m2.png",
+      "effects/exp_m3.png", "effects/exp_m4.png"
+    ],
+    "fps": 12,
+    "loop": false
+  },
+  "explosion_large": {
+    "frames": [
+      "effects/exp_l0.png", "effects/exp_l1.png", "effects/exp_l2.png",
+      "effects/exp_l3.png", "effects/exp_l4.png", "effects/exp_l5.png"
+    ],
+    "fps": 10,
+    "loop": false
+  }
+}

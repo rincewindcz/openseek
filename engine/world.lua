@@ -87,7 +87,9 @@ function World:load_index(idx)
 end
 
 function World:update(dt)
-  -- placeholder for future entity simulation
+  for _, e in ipairs(self.entities) do
+    e:update(dt)
+  end
 end
 
 function World:ground_color()

@@ -1,7 +1,8 @@
-local World    = require "engine.world"
-local Camera   = require "engine.camera"
-local Renderer = require "engine.renderer"
-local Debug    = require "engine.debug"
+local World     = require "engine.world"
+local Camera    = require "engine.camera"
+local Renderer  = require "engine.renderer"
+local Debug     = require "engine.debug"
+local Animation = require "engine.animation"
 
 local world
 local camera
@@ -18,6 +19,7 @@ end
 
 function love.load(args)
   love.graphics.setDefaultFilter("nearest", "nearest")
+  Animation.load("data/animations.json")
   world    = World:new()
   world:load(args[1] or world.stages[1])
   camera   = Camera:new(world.stage.world_size)

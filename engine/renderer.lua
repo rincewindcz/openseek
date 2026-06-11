@@ -120,11 +120,18 @@ function Renderer:_draw_entities(list, vp)
   g.setColor(1, 1, 1)
   for _, e in ipairs(list) do
     local cls = classes[e.class_idx + 1]
-    if e:is_alive()
-      and not hidden[cls.kind_name]
-      and e.x >= vp.x0 and e.x <= vp.x1
-      and e.y >= vp.y0 and e.y <= vp.y1
-    then
+    local in_vp = e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1
+    if not in_vp then goto continue end
+    if hidden[cls.kind_name] then goto continue end
+
+    if e.state == "exploding" and e.anim then
+      -- draw explosion animation centered on entity position
+      local img = e.anim:current_image()
+      if img then
+        local iw, ih = img:getDimensions()
+        g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+      end
+    elseif e:is_alive() then
       local r = images[e.class_idx + 1]
       if r then
         local rot = e:draw_angle_rad(cls.angle_steps)
@@ -135,6 +142,8 @@ function Renderer:_draw_entities(list, vp)
         g.setColor(1, 1, 1)
       end
     end
+
+    ::continue::
   end
 end
 
