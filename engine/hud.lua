@@ -13,28 +13,27 @@ local ANCHOR = {
   center        = function(w, h) return w/2, h/2 end,
 }
 
--- Radar entity color by kind_name (matches original game's color coding).
 local RADAR_COLOR = {
-  structure     = { 0.55, 0.35, 0.10 },   -- brown: buildings
-  flak_turret   = { 1.0,  0.2,  0.2  },   -- red: enemies
-  tree          = { 0.2,  0.55, 0.15 },   -- green: trees/foliage
-  scenery       = { 0.45, 0.45, 0.45 },   -- grey: scenery
-  ground_decal  = { 0,    0,    0, 0  },   -- invisible
+  structure    = { 0.55, 0.35, 0.10 },
+  flak_turret  = { 1.0,  0.2,  0.2  },
+  tree         = { 0.2,  0.55, 0.15 },
+  scenery      = { 0.45, 0.45, 0.45 },
+  ground_decal = { 0,    0,    0,    0 },
 }
-local RADAR_DEFAULT = { 0.9, 0.3, 0.3 }   -- red default for unknowns
+local RADAR_DEFAULT = { 0.9, 0.3, 0.3 }
 
 function Hud:init()
   self.player = nil
   self.world  = nil
   self.items  = {}
-  self._cache = {}   -- path -> Image|false
+  self._cache = {}
 end
 
 function Hud:load(path)
   local raw = love.filesystem.read(path)
   if not raw then error("hud: missing " .. path) end
-  local def   = json.decode(raw)
-  self.items  = def.items or {}
+  local def  = json.decode(raw)
+  self.items = def.items or {}
   for _, item in ipairs(self.items) do
     self:_preload_item(item)
   end
@@ -74,7 +73,7 @@ function Hud:draw()
   local sw, sh = g.getDimensions()
   for _, item in ipairs(self.items) do
     local fn     = ANCHOR[item.anchor or "top_left"]
-    local ax, ay = fn and fn(sw, sh) or 0, 0
+    local ax, ay = fn(sw, sh)
     local ox     = item.offset and item.offset[1] or 0
     local oy     = item.offset and item.offset[2] or 0
     local x, y   = ax + ox, ay + oy
@@ -88,7 +87,7 @@ function Hud:draw()
   g.setColor(1, 1, 1)
 end
 
--- ── gauge (armour / fuel) ────────────────────────────────────────────────────
+-- ── gauge ─────────────────────────────────────────────────────────────────────
 
 function Hud:_gauge_frame_index(item)
   local p   = self.player
@@ -99,56 +98,58 @@ function Hud:_gauge_frame_index(item)
   else                       pct = 0
   end
   pct = math.max(0, math.min(1, pct))
-  -- frame 0 = empty, frame (count-1) = full
   return math.floor(pct * (item.sprite_count - 1) + 0.5) + 1
 end
 
 function Hud:_draw_gauge(g, item, x, y)
   if not item._frames then return end
+  local s   = item.scale or 1
   local fi  = self:_gauge_frame_index(item)
   local img = item._frames[fi]
   if img then
     g.setColor(1, 1, 1)
-    g.draw(img, x, y)
+    g.draw(img, x, y, 0, s, s)
   end
 end
 
--- ── weapon icon ──────────────────────────────────────────────────────────────
+-- ── weapon icon ───────────────────────────────────────────────────────────────
 
 function Hud:_draw_weapon(g, item, x, y)
   if not item._frames then return end
+  local s   = item.scale or 1
   local p   = self.player
   local fi  = math.max(1, math.min(#item._frames, (p.weapon_idx or 0) + 1))
   local img = item._frames[fi]
   if img then
     g.setColor(1, 1, 1)
-    g.draw(img, x, y)
+    g.draw(img, x, y, 0, s, s)
   end
 end
 
 -- ── movement cursor ───────────────────────────────────────────────────────────
--- A square box with a dot showing current speed (vertical) and strafe (horizontal).
 
 function Hud:_draw_cursor(g, item, x, y)
   local p    = self.player
-  local size = item.size or 60
+  local s    = item.scale or 1
+  local size = (item.size or 60) * s
   local half = size / 2
 
   g.setColor(0, 0, 0, 0.75)
   g.rectangle("fill", x, y, size, size)
   g.setColor(0.2, 0.45, 0.2, 0.85)
+  g.setLineWidth(s)
   g.rectangle("line", x, y, size, size)
 
   -- crosshair
   g.setColor(0.15, 0.3, 0.15, 0.7)
-  g.line(x + half, y + 4,      x + half, y + size - 4)
-  g.line(x + 4,    y + half,   x + size - 4, y + half)
+  g.line(x + half, y + 4*s,       x + half, y + size - 4*s)
+  g.line(x + 4*s,  y + half,      x + size - 4*s, y + half)
 
   -- dot
-  local max_s = p.MAX_FWD    or 180
+  local max_s = p.MAX_FWD      or 180
   local max_r = p.STRAFE_SPEED or 100
-  local dx    = (p.strafe or 0) / max_r * (half - 6)
-  local dy    = -(p.speed  or 0) / max_s * (half - 6)  -- up = forward
+  local dx    = (p.strafe or 0) / max_r * (half - 6*s)
+  local dy    = -(p.speed or 0) / max_s * (half - 6*s)
   local dot_x = x + half + dx
   local dot_y = y + half + dy
 
@@ -157,25 +158,32 @@ function Hud:_draw_cursor(g, item, x, y)
   else
     g.setColor(0.85, 0.75, 0.1)
   end
-  g.circle("fill", dot_x, dot_y, 4)
+  g.circle("fill", dot_x, dot_y, 4 * s)
   g.setColor(0, 0, 0, 0.5)
-  g.circle("line", dot_x, dot_y, 4)
+  g.circle("line", dot_x, dot_y, 4 * s)
+  g.setLineWidth(1)
 end
 
--- ── radar ────────────────────────────────────────────────────────────────────
+-- ── radar ─────────────────────────────────────────────────────────────────────
 
 function Hud:_draw_radar(g, item, x, y)
   local p     = self.player
-  local r     = item.radius    or 88
+  local s     = item.scale or 1
+  local r     = (item.radius or 88) * s
   local range = item.world_range or 900
-  local cx, cy = x + r, y + r
-  local scale  = r / range
 
-  -- background
+  -- center: middle of the (scaled) background image
+  local cx, cy
   if item._bg then
+    local bw = item._bg:getWidth()  * s
+    local bh = item._bg:getHeight() * s
+    cx = x + bw / 2
+    cy = y + bh / 2
     g.setColor(1, 1, 1)
-    g.draw(item._bg, x, y)
+    g.draw(item._bg, x, y, 0, s, s)
   else
+    cx = x + r
+    cy = y + r
     g.setColor(0, 0.04, 0, 0.92)
     g.circle("fill", cx, cy, r)
     g.setColor(0.1, 0.5, 0.1)
@@ -186,32 +194,32 @@ function Hud:_draw_radar(g, item, x, y)
 
   if not self.world then return end
 
-  -- entity dots rotated to match player heading (north = up on radar)
   local pa      = -(p.angle * math.pi / 180)
   local cos_pa  = math.cos(pa)
   local sin_pa  = math.sin(pa)
+  local px_per_unit = r / range
   local classes = self.world.stage.classes
+  local dot_r   = math.max(1.5, s * 1.5)
 
   for _, e in ipairs(self.world.entities) do
     if e:is_alive() then
-      local dx = (e.x - p.x) * scale
-      local dy = (e.y - p.y) * scale
+      local dx = (e.x - p.x) * px_per_unit
+      local dy = (e.y - p.y) * px_per_unit
       local rx  = dx * cos_pa - dy * sin_pa
       local ry  = dx * sin_pa + dy * cos_pa
       if rx * rx + ry * ry <= r * r then
         local cls = classes[e.class_idx + 1]
         local c   = RADAR_COLOR[cls.kind_name] or RADAR_DEFAULT
-        if c[4] ~= 0 then   -- skip invisible kinds
+        if not (c[4] == 0) then
           g.setColor(c[1], c[2], c[3], 0.9)
-          g.rectangle("fill", cx + rx - 1.5, cy + ry - 1.5, 3, 3)
+          g.rectangle("fill", cx + rx - dot_r, cy + ry - dot_r, dot_r*2, dot_r*2)
         end
       end
     end
   end
 
-  -- player dot
   g.setColor(1, 1, 1)
-  g.circle("fill", cx, cy, 2.5)
+  g.circle("fill", cx, cy, math.max(2.5, s * 2.5))
 end
 
 return Hud
