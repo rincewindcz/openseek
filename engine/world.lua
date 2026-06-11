@@ -75,7 +75,8 @@ function World:load(name)
   end
   local by_y = function(a, b)
     if a.y ~= b.y then return a.y < b.y end
-    return a.x < b.x
+    if a.x ~= b.x then return a.x < b.x end
+    return a.id < b.id  -- stable tiebreaker for entities at identical positions
   end
   table.sort(self.decals,  by_y)
   table.sort(self.objects, by_y)

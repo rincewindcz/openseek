@@ -8,6 +8,14 @@ local camera
 local renderer
 local dbg
 
+local function after_stage_load()
+  camera.world_size = world.stage.world_size
+  camera:clamp()
+  renderer:refresh_kinds()
+  dbg.world = world
+  love.window.setTitle(world:title())
+end
+
 function love.load(args)
   love.graphics.setDefaultFilter("nearest", "nearest")
   world    = World:new()
@@ -15,11 +23,12 @@ function love.load(args)
   camera   = Camera:new(world.stage.world_size)
   renderer = Renderer:new(world, camera)
   dbg      = Debug:new(world, camera)
+  renderer:refresh_kinds()
   love.window.setTitle(world:title())
 end
 
 function love.update(dt)
-  if not renderer.picker then
+  if not renderer.picker and not renderer.kind_picker then
     camera:update(dt)
   end
   world:update(dt)
@@ -32,7 +41,7 @@ function love.draw()
 end
 
 function love.wheelmoved(_, dy)
-  if not renderer.picker then
+  if not renderer.picker and not renderer.kind_picker then
     camera:on_wheel(dy)
   end
 end
@@ -47,40 +56,43 @@ function love.keypressed(key)
     if dbg:keypressed(key) then return end
   end
 
-  local w = world
-
-  if renderer.picker then
-    if key == "escape" or key == "tab" then
-      renderer.picker = false
-    elseif key == "up" then
-      w.stage_index = (w.stage_index - 2) % #w.stages + 1
-    elseif key == "down" then
-      w.stage_index = w.stage_index % #w.stages + 1
-    elseif key == "return" then
-      renderer.picker = false
-      w:load(w.stages[w.stage_index])
-      camera.world_size = w.stage.world_size
-      camera:clamp()
-      dbg.world = w
-      love.window.setTitle(w:title())
+  -- kind picker intercepts all navigation keys while open
+  if renderer.kind_picker then
+    if key == "escape" or key == "k" then
+      renderer.kind_picker = false
+    else
+      renderer:on_kind_picker_key(key)
     end
     return
   end
 
-  if key == "escape" then love.event.quit() end
-  if key == "tab"    then renderer.picker = true end
+  -- stage picker
+  if renderer.picker then
+    if key == "escape" or key == "tab" then
+      renderer.picker = false
+    elseif key == "up" then
+      world.stage_index = (world.stage_index - 2) % #world.stages + 1
+    elseif key == "down" then
+      world.stage_index = world.stage_index % #world.stages + 1
+    elseif key == "return" then
+      renderer.picker = false
+      world:load(world.stages[world.stage_index])
+      after_stage_load()
+    end
+    return
+  end
+
+  if key == "escape"  then love.event.quit() end
+  if key == "tab"     then renderer.picker      = true end
+  if key == "k"       then renderer:toggle_kind_picker() end
 
   if key == "pagedown" then
-    w:load_index(w.stage_index % #w.stages + 1)
-    camera.world_size = w.stage.world_size
-    camera:clamp()
-    love.window.setTitle(w:title())
+    world:load_index(world.stage_index % #world.stages + 1)
+    after_stage_load()
   end
   if key == "pageup" then
-    w:load_index((w.stage_index - 2) % #w.stages + 1)
-    camera.world_size = w.stage.world_size
-    camera:clamp()
-    love.window.setTitle(w:title())
+    world:load_index((world.stage_index - 2) % #world.stages + 1)
+    after_stage_load()
   end
 
   if key == "l" then renderer.show_segments = not renderer.show_segments end
