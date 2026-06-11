@@ -1,0 +1,10 @@
+*.pyc
+__pycache__/
+*.png
+!assets/**/*.png
+*.exe
+*.bin
+*.BIN
+*.EXE
+*.JAL
+*.JAM
