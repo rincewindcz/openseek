@@ -9,9 +9,8 @@ local PIT_FRAMES  = 14
 local BNK_NEUTRAL = 3    -- chopbnk1 neutral frame
 local BNK_MAX_R   = 6    -- chopbnk1 max-right frame used
 local DRP_FRAMES  = 5    -- chopdrp1 total frames
-local TOP_FRAME   = 31   -- tanktop axis-aligned south frame
 local STRAFE_THR  = 5    -- |strafe| threshold to switch bank/pitch mode
-local ROTOR_MIN_S = 0.5  -- rotor scale factor when grounded (scales up to 1 airborne)
+local ROTOR_MIN_S = 0.65  -- rotor scale factor when grounded (scales up to 1 airborne)
 
 function Player:init(x, y)
   self.x          = x or 2048
@@ -33,6 +32,12 @@ function Player:init(x, y)
   self.weapon_name  = "chaingun"
   self.weapon_level = 1
   self.fire_timer   = 0
+
+  self.turret_angle     = 0    -- tank turret absolute heading (deg, 0=north CW)
+  self.turret_rate      = 140
+  self.collision_radius = 8
+  self.world            = nil  -- set in game mode for collision queries
+  self.camera           = nil  -- set in game mode for screen placement
 
   -- vehicle params (defaults; overridden by load_vehicle_def)
   self.sprite_scale = 3
@@ -73,6 +78,18 @@ function Player:load_vehicle_def(def)
   self.fuel_drain   = def.fuel_drain     or self.fuel_drain
   self.takeoff_time = def.takeoff_time   or self.takeoff_time
   self.land_time    = def.land_time      or self.land_time
+  self.turret_rate      = def.turret_rate      or self.turret_rate
+  self.collision_radius = def.collision_radius or self.collision_radius
+end
+
+function Player:is_flyer()
+  return self.vehicle ~= "tank"
+end
+
+-- Heading projectiles travel along: the turret for tanks, the hull otherwise.
+function Player:fire_angle()
+  if self.vehicle == "tank" then return self.turret_angle end
+  return self.angle
 end
 
 function Player:_apply_config()
@@ -89,10 +106,11 @@ end
 function Player:update(dt)
   self:_update_altitude(dt)
   self:_apply_input(dt)
-  if self.land_state == "airborne" then
+  if self.land_state == "airborne" or not self:is_flyer() then
     self:_move(dt)
   end
-  if self.land_state ~= "grounded" then
+  if self.land_state ~= "grounded"
+  or (not self:is_flyer() and math.abs(self.speed) > 1) then
     self:_drain_fuel(dt)
   end
   self:_update_anims(dt)
@@ -102,6 +120,7 @@ function Player:update(dt)
 end
 
 function Player:_update_altitude(dt)
+  if not self:is_flyer() then return end
   if self.land_state == "taking_off" then
     local tt = self.takeoff_time > 0 and self.takeoff_time or 0.01
     self.altitude = math.min(1.0, self.altitude + dt / tt)
@@ -110,6 +129,11 @@ function Player:_update_altitude(dt)
       self.land_state = "airborne"
     end
   elseif self.land_state == "landing" then
+    -- Abort the descent and climb back up if the spot is over an obstacle.
+    if self.world and self.world:blocked(self.x, self.y, self.collision_radius) then
+      self.land_state = "taking_off"
+      return
+    end
     local lt = self.land_time > 0 and self.land_time or 0.01
     self.altitude = math.max(0.0, self.altitude - dt / lt)
     self.speed = self.speed * math.max(0, 1 - dt * 3)
@@ -129,27 +153,38 @@ function Player:_apply_input(dt)
   if kb("a") or kb("left")  then rotate = rotate - 1 end
   if kb("d") or kb("right") then rotate = rotate + 1 end
 
-  local strafing = kb("lshift") or kb("rshift")
+  local modifier = kb("lshift") or kb("rshift")
 
-  -- smooth strafe toward target
-  local strafe_target = 0
-  if strafing then
-    if kb("a") or kb("left")  then strafe_target = -self.strafe_speed end
-    if kb("d") or kb("right") then strafe_target =  self.strafe_speed end
-  end
-  local sa = self.strafe_accel > 0 and self.strafe_accel or 9999
-  if self.strafe < strafe_target then
-    self.strafe = math.min(strafe_target, self.strafe + sa * dt)
-  elseif self.strafe > strafe_target then
-    self.strafe = math.max(strafe_target, self.strafe - sa * dt)
+  if self.vehicle == "tank" then
+    -- shift + turn rotates the turret; otherwise the hull
+    if modifier then
+      if rotate ~= 0 then
+        self.turret_angle = (self.turret_angle + rotate * self.turret_rate * dt) % 360
+      end
+    elseif rotate ~= 0 then
+      self.angle = (self.angle + rotate * self.turn_rate * dt) % 360
+    end
+    self.strafe = 0
+  else
+    -- chopper: smooth strafe toward target while shift is held
+    local strafe_target = 0
+    if modifier then
+      if kb("a") or kb("left")  then strafe_target = -self.strafe_speed end
+      if kb("d") or kb("right") then strafe_target =  self.strafe_speed end
+    end
+    local sa = self.strafe_accel > 0 and self.strafe_accel or 9999
+    if self.strafe < strafe_target then
+      self.strafe = math.min(strafe_target, self.strafe + sa * dt)
+    elseif self.strafe > strafe_target then
+      self.strafe = math.max(strafe_target, self.strafe - sa * dt)
+    end
+    -- rotation only when shift is not held
+    if not modifier and rotate ~= 0 then
+      self.angle = (self.angle + rotate * self.turn_rate * dt) % 360
+    end
   end
 
-  -- rotation only when shift is not held
-  if not strafing and rotate ~= 0 then
-    self.angle = (self.angle + rotate * self.turn_rate * dt) % 360
-  end
-
-  if self.land_state ~= "airborne" then return end
+  if self:is_flyer() and self.land_state ~= "airborne" then return end
 
   local max_fwd = self.max_fwd * self.speed_factor
   local max_rev = self.max_rev * self.speed_factor
@@ -169,11 +204,23 @@ end
 
 function Player:_move(dt)
   local rad = (self.angle - 90) * math.pi / 180
-  self.x = self.x + math.cos(rad) * self.speed * dt
-  self.y = self.y + math.sin(rad) * self.speed * dt
-  local sr = rad + math.pi / 2
-  self.x = self.x + math.cos(sr) * self.strafe * dt
-  self.y = self.y + math.sin(sr) * self.strafe * dt
+  local sr  = rad + math.pi / 2
+  local dx  = (math.cos(rad) * self.speed + math.cos(sr) * self.strafe) * dt
+  local dy  = (math.sin(rad) * self.speed + math.sin(sr) * self.strafe) * dt
+
+  if self.world and not self:is_flyer() then
+    -- Axis-separated so the tank slides along obstacles instead of sticking.
+    local r  = self.collision_radius
+    local nx = self.x + dx
+    if self.world:blocked(nx, self.y, r) then nx = self.x end
+    local ny = self.y + dy
+    if self.world:blocked(nx, ny, r) then ny = self.y end
+    self.x, self.y = nx, ny
+  else
+    self.x = self.x + dx
+    self.y = self.y + dy
+  end
+
   self.x = math.max(0, math.min(self.world_size, self.x))
   self.y = math.max(0, math.min(self.world_size, self.y))
 end
@@ -199,11 +246,13 @@ end
 -- ── state transitions ─────────────────────────────────────────────────────────
 
 function Player:take_off()
+  if not self:is_flyer() then return end
   if self.land_state ~= "grounded" then return end
   self.land_state = "taking_off"
 end
 
 function Player:land()
+  if not self:is_flyer() then return end
   if self.land_state ~= "airborne" then return end
   self.land_state = "landing"
 end
@@ -267,9 +316,14 @@ end
 
 function Player:draw()
   local g      = love.graphics
-  local sw, sh = g.getDimensions()
-  local cx, cy = sw / 2, sh / 2
-  local s      = self.sprite_scale
+  local cx, cy
+  if self.camera then
+    cx, cy = self.camera:screen_center()
+  else
+    local sw, sh = g.getDimensions()
+    cx, cy = sw / 2, sh / 2
+  end
+  local s = self.sprite_scale
 
   g.setColor(1, 1, 1)
   if self.vehicle == "tank" then
@@ -297,9 +351,14 @@ function Player:_draw_tank(g, cx, cy, s)
   local body_frames = self:_frames("tankbgrn")
   local body_img    = body_frames[self._tank_anim.frame] or body_frames[1]
   self:_draw_centered(g, body_img, cx, cy, s)
-  local top_frames = self:_frames("tanktop")
-  local top_img    = top_frames[TOP_FRAME + 1]
-  self:_draw_centered(g, top_img, cx, cy, s)
+  -- Turret: frame 0 points north; rotate it to the turret heading relative to
+  -- the hull (the camera already rotates the world so the hull faces up).
+  local top_img = self:_frames("tanktop")[1]
+  if top_img then
+    local w, h = top_img:getDimensions()
+    local rot  = (self.turret_angle - self.angle) * math.pi / 180
+    g.draw(top_img, cx, cy, rot, s, s, w / 2, h / 2)
+  end
 end
 
 return Player

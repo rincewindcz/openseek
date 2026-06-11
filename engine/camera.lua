@@ -10,6 +10,14 @@ function Camera:init(world_size)
   self.y     = self.world_size / 2
   self.zi    = 4     -- index into ZOOMS; default 1x
   self.angle = nil   -- radians; nil = no rotation (viewer mode)
+  self.view_oy = 0   -- screen-space vertical offset of the focus point (px)
+end
+
+-- Screen pixel the focus point (camera x,y) maps to. In game mode the vehicle
+-- sits below center so more of the world ahead is visible.
+function Camera:screen_center()
+  local w, h = love.graphics.getDimensions()
+  return w / 2, h / 2 + self.view_oy
 end
 
 function Camera:zoom()
@@ -56,8 +64,8 @@ end
 -- Apply the camera transform.  When self.angle is set, the world is rotated
 -- around screen center so the player always faces up.
 function Camera:apply()
-  local w, h = love.graphics.getDimensions()
-  love.graphics.translate(w / 2, h / 2)
+  local cx, cy = self:screen_center()
+  love.graphics.translate(cx, cy)
   love.graphics.scale(self:zoom())
   if self.angle then
     love.graphics.rotate(self.angle)

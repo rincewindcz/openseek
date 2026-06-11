@@ -1,6 +1,7 @@
 {
   "accel": 600,
   "brake": 480,
+  "collision_radius": 8,
   "decel": 320,
   "fuel_drain": 2.0,
   "land_time": 0.5,

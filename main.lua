@@ -135,22 +135,30 @@ local function after_stage_load()
   dbg.world = world
   hud.world = world
   love.window.setTitle(world:title())
-  if player then player.world_size = world.stage.world_size end
+  if player then
+    player.world_size = world.stage.world_size
+    player.world      = world
+  end
 end
 
 local function enter_game_mode()
   viewer_zi  = camera.zi
   game_mode  = true
   camera:set_zoom(6)
-  local ws = world.stage.world_size
-  player = Player:new(ws / 2, ws / 2)
-  player.world_size = ws
-  player.vehicle    = sel_vehicle
+  local sx, sy = world:player_start()
+  player = Player:new(sx, sy)
+  player.world_size   = world.stage.world_size
+  player.vehicle      = sel_vehicle
+  player.world        = world
+  player.camera       = camera
+  player.turret_angle = player.angle
   local def = vehicle_defs[sel_vehicle]
   if def then player:load_vehicle_def(def) end
   -- Set default weapon for vehicle
   local wlist = VEHICLE_WEAPONS[sel_vehicle]
   if wlist then player.weapon_name = wlist[1] end
+  local _, sh = love.graphics.getDimensions()
+  camera.view_oy = sh * 0.18
   hud.player    = player
   combat.player = player
   love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
@@ -164,6 +172,7 @@ local function leave_game_mode()
   combat.player     = nil
   combat.projectiles = {}
   camera.angle      = nil
+  camera.view_oy    = 0
   camera:set_zoom(viewer_zi)
   love.window.setTitle(world:title())
 end
@@ -213,7 +222,7 @@ local function _try_fire(dt)
   if player.fire_timer > 0 then return end
   local level = wdef.levels and wdef.levels[player.weapon_level] or wdef
   combat:tick_swing("player", player.weapon_name)
-  combat:fire(player.x, player.y, player.angle, player.weapon_name, "player", player.weapon_level)
+  combat:fire(player.x, player.y, player:fire_angle(), player.weapon_name, "player", player.weapon_level)
   player.fire_timer = 1.0 / (level.fire_rate or wdef.fire_rate or 10)
 end
 
@@ -252,12 +261,13 @@ function love.draw()
     -- Weapon indicator (top-left, below renderer bar)
     local g = love.graphics
     g.setColor(0, 0, 0, 0.55)
-    g.rectangle("fill", 0, 22, 220, 20)
+    g.rectangle("fill", 0, 22, 360, 20)
     g.setColor(1, 1, 0.2, 1)
     local wdef  = combat.weapons[player.weapon_name]
     local n_lvl = wdef and wdef.levels and #wdef.levels or 1
-    g.print(string.format("Q: %s  E: lv%d/%d  ctrl: fire",
-      player.weapon_name, player.weapon_level, n_lvl), 4, 24)
+    local mod   = player.vehicle == "tank" and "shift+turn: turret" or "shift: strafe"
+    g.print(string.format("Q: %s  E: lv%d/%d  ctrl: fire  %s",
+      player.weapon_name, player.weapon_level, n_lvl, mod), 4, 24)
     g.setColor(1, 1, 1)
     if sandbox_mode then
       draw_sandbox_panel()

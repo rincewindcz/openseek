@@ -35,8 +35,10 @@ and drawn throughout `engine/`.
   (`F3`) live-edits and saves vehicle parameters.
 - **HUD:** sprite-based gauges and a radar.
 - **Combat:** in progress. Player weapons fire projectiles, projectiles hit
-  entities, entities take damage, show hit/damage smoke, and explode. Enemy AI,
-  enemy fire, player death, ammo, and weapon shop are not yet implemented.
+  entities, entities take damage, show hit/damage smoke, explode, and large
+  entities leave a crater. The tank turret aims and fires independently of the
+  hull. Solid entities block tank movement and veto helicopter landings. Enemy
+  AI, enemy fire, player death, ammo, and weapon shop are not yet implemented.
 
 ## Architecture
 
@@ -51,15 +53,22 @@ Engine modules (`engine/`), all built on the tiny `class.lua` helper:
 
 | Module | Responsibility |
 |--------|----------------|
-| `world.lua` | Loads a stage JSON, instantiates entities, owns the entity list, ground color, y-sorting. |
-| `entity.lua` | One world object: HP, state machine (idle/animating/exploding/dead), damage smoke, hit effects. Loads shared type data from `data/entity_types.json`. |
-| `player.lua` | Player vehicle: movement, altitude/landing state, fuel, sprite frame selection per speed/strafe, weapon selection state. |
+| `world.lua` | Loads a stage JSON, instantiates entities, owns the entity list, ground color, y-sorting, the heliport spawn point (`player_start`) and the solid-entity collision query (`blocked`). |
+| `entity.lua` | One world object: HP, state machine (idle/animating/exploding/dead), damage smoke, hit effects, destruction crater. Loads shared type data from `data/entity_types.json`. |
+| `player.lua` | Player vehicle: movement and collision, altitude/landing state (chopper only), independent tank turret, fuel, sprite frame selection per speed/strafe, weapon selection state. |
 | `combat.lua` | Weapons, projectiles, firing geometry (spread/streams/swing/side offset), hit detection, AoE. Loads `data/weapons.json`. |
-| `camera.lua` | Zoom, pan, world-rotation transform, viewport culling. |
+| `camera.lua` | Zoom, pan, world-rotation transform, viewport culling, game-mode vertical focus offset (`view_oy`, `screen_center`). |
 | `renderer.lua` | Draws world entities (decals then objects, y-sorted, culled), segments, grid, pickers, viewer HUD bar. |
 | `hud.lua` | Sprite-based gauges and radar from `data/hud.json`. |
 | `animation.lua` | Shared immutable `AnimClip` definitions plus per-instance `AnimState` playback. Loads `data/animations.json`. |
 | `debug.lua` | Debug overlay (`F2`). |
+
+## Game controls
+
+`F1` enters game mode and spawns the vehicle on the base heliport. WASD or arrows
+drive; the chopper takes off / lands with `Space` (it bounces back up if it tries
+to land on a solid obstacle). Holding `Shift` while turning strafes the chopper or
+rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `E` cycles weapon level.
 
 ## Coordinate and angle conventions
 
@@ -77,7 +86,7 @@ Engine modules (`engine/`), all built on the tiny `class.lua` helper:
 |------|----------|
 | `assets/stageMP.json` + `assets/stageMP/*.png` | Decoded stages and sprites (generated, not committed). |
 | `data/weapons.json` | Weapon and projectile definitions, including per-level upgrades. |
-| `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges). |
+| `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`). |
 | `data/vehicles/*.json` | Player vehicle tuning. |
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |
 | `data/hud.json` | HUD layout and gauge sprites. |

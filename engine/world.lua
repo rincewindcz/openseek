@@ -86,6 +86,42 @@ function World:load_index(idx)
   self:load(self.stages[idx])
 end
 
+-- World position the player spawns at: the friendly heliport pad (h.bin / lh.bin)
+-- if the stage has one, otherwise the world center.
+function World:player_start()
+  for _, e in ipairs(self.entities) do
+    local cls = self.stage.classes[e.class_idx + 1]
+    local file = cls and cls.asset and self.stage.assets[cls.asset + 1]
+    local fname = file and file.file
+    if fname == "h.bin" or fname == "lh.bin" then
+      return e.x, e.y
+    end
+  end
+  local c = self.stage.world_size / 2
+  return c, c
+end
+
+-- True if a circle at (x, y) with the given radius overlaps a solid entity.
+-- Decals (roads, pads, ground specks) are never solid. Used for vehicle
+-- collision and to veto helicopter landings over obstacles.
+function World:blocked(x, y, radius, ignore)
+  for _, e in ipairs(self.objects) do
+    if e ~= ignore and e:is_alive() then
+      local td = e.type_data
+      if td and td.solid then
+        local cr = td.collision_radius or 8
+        local dx = e.x - x
+        local dy = e.y - y
+        local rr = radius + cr
+        if dx * dx + dy * dy < rr * rr then
+          return true, e
+        end
+      end
+    end
+  end
+  return false
+end
+
 function World:update(dt)
   for _, e in ipairs(self.entities) do
     e:update(dt)

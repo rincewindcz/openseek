@@ -1,6 +1,7 @@
 {
   "accel": 150,
   "brake": 300,
+  "collision_radius": 10,
   "decel": 200,
   "fuel_drain": 1.0,
   "land_time": 0,
@@ -12,5 +13,6 @@
   "strafe_accel": 0,
   "strafe_speed": 0,
   "takeoff_time": 0,
-  "turn_rate": 80
+  "turn_rate": 80,
+  "turret_rate": 140
 }
