@@ -7,8 +7,8 @@
       "sprite_pattern": "hud/armour_f%02d.png",
       "sprite_count": 16,
       "anchor": "bottom_left",
-      "offset": [8, -112],
-      "scale": 2
+      "offset": [8, -47],
+      "scale": 3
     },
     {
       "id": "fuel",
@@ -17,8 +17,8 @@
       "sprite_pattern": "hud/fuel_f%02d.png",
       "sprite_count": 15,
       "anchor": "top_right",
-      "offset": [-344, 8],
-      "scale": 2
+      "offset": [-134, 8],
+      "scale": 3
     },
     {
       "id": "weapon",
@@ -27,24 +27,24 @@
       "sprite_pattern": "hud/weapons_f%02d.png",
       "sprite_count": 13,
       "anchor": "bottom_right",
-      "offset": [-264, -168],
+      "offset": [-72, -48],
       "scale": 2
     },
     {
       "id": "cursor",
       "type": "cursor",
-      "anchor": "top_left",
-      "offset": [8, 8],
-      "size": 60,
-      "scale": 2
+      "anchor": "bottom_left",
+      "offset": [130, -48],
+      "size": 36,
+      "scale": 1
     },
     {
       "id": "radar",
       "type": "radar",
-      "anchor": "bottom_center",
-      "offset": [-188, -392],
+      "anchor": "bottom_right",
+      "offset": [-298, -116],
       "background": "hud/scanner_f00.png",
-      "radius": 88,
+      "radius": 20,
       "world_range": 1800,
       "scale": 2
     }

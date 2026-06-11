@@ -1,0 +1,16 @@
+{
+  "accel": 280,
+  "brake": 480,
+  "decel": 320,
+  "fuel_drain": 2.0,
+  "land_time": 0.5,
+  "max_fwd": 260,
+  "max_rev": 100,
+  "rotor_fps": 40,
+  "rotor_y_offset": -26,
+  "sprite_scale": 3,
+  "strafe_accel": 400,
+  "strafe_speed": 140,
+  "takeoff_time": 0.65,
+  "turn_rate": 160
+}

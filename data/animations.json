@@ -80,7 +80,87 @@
     "fps": 10, "loop": false
   },
 
-  "rotor_slow":   { "frames": [], "fps": 6,  "loop": true },
-  "rotor_medium": { "frames": [], "fps": 14, "loop": true },
-  "rotor_fast":   { "frames": [], "fps": 24, "loop": true }
+  "choppit1": {
+    "frames": ["player/choppit1_f00.png","player/choppit1_f01.png","player/choppit1_f02.png","player/choppit1_f03.png",
+      "player/choppit1_f04.png","player/choppit1_f05.png","player/choppit1_f06.png","player/choppit1_f07.png",
+      "player/choppit1_f08.png","player/choppit1_f09.png","player/choppit1_f10.png","player/choppit1_f11.png",
+      "player/choppit1_f12.png","player/choppit1_f13.png"],
+    "fps": 1, "loop": false
+  },
+
+  "chopbnk1": {
+    "frames": ["player/chopbnk1_f00.png","player/chopbnk1_f01.png","player/chopbnk1_f02.png","player/chopbnk1_f03.png",
+      "player/chopbnk1_f04.png","player/chopbnk1_f05.png","player/chopbnk1_f06.png","player/chopbnk1_f07.png"],
+    "fps": 1, "loop": false
+  },
+
+  "chopdrp1": {
+    "frames": ["player/chopdrp1_f00.png","player/chopdrp1_f01.png","player/chopdrp1_f02.png",
+      "player/chopdrp1_f03.png","player/chopdrp1_f04.png"],
+    "fps": 1, "loop": false
+  },
+
+  "blade": {
+    "frames": ["player/blade_f00.png","player/blade_f01.png","player/blade_f02.png","player/blade_f03.png",
+      "player/blade_f04.png","player/blade_f05.png","player/blade_f06.png"],
+    "fps": 30, "loop": true
+  },
+
+  "bladeb": {
+    "frames": [
+      "player/bladeb_f00.png","player/bladeb_f01.png","player/bladeb_f02.png","player/bladeb_f03.png",
+      "player/bladeb_f04.png","player/bladeb_f05.png","player/bladeb_f06.png","player/bladeb_f07.png",
+      "player/bladeb_f08.png","player/bladeb_f09.png","player/bladeb_f10.png","player/bladeb_f11.png",
+      "player/bladeb_f12.png","player/bladeb_f13.png","player/bladeb_f14.png","player/bladeb_f15.png",
+      "player/bladeb_f16.png","player/bladeb_f17.png","player/bladeb_f18.png","player/bladeb_f19.png",
+      "player/bladeb_f20.png","player/bladeb_f21.png","player/bladeb_f22.png","player/bladeb_f23.png",
+      "player/bladeb_f24.png","player/bladeb_f25.png","player/bladeb_f26.png","player/bladeb_f27.png",
+      "player/bladeb_f28.png","player/bladeb_f29.png","player/bladeb_f30.png","player/bladeb_f31.png",
+      "player/bladeb_f32.png","player/bladeb_f33.png","player/bladeb_f34.png","player/bladeb_f35.png",
+      "player/bladeb_f36.png","player/bladeb_f37.png","player/bladeb_f38.png"],
+    "fps": 40, "loop": true
+  },
+
+  "bladep": {
+    "frames": [
+      "player/bladep_f00.png","player/bladep_f01.png","player/bladep_f02.png","player/bladep_f03.png",
+      "player/bladep_f04.png","player/bladep_f05.png","player/bladep_f06.png","player/bladep_f07.png",
+      "player/bladep_f08.png","player/bladep_f09.png","player/bladep_f10.png","player/bladep_f11.png",
+      "player/bladep_f12.png","player/bladep_f13.png","player/bladep_f14.png","player/bladep_f15.png",
+      "player/bladep_f16.png","player/bladep_f17.png","player/bladep_f18.png","player/bladep_f19.png",
+      "player/bladep_f20.png","player/bladep_f21.png","player/bladep_f22.png","player/bladep_f23.png",
+      "player/bladep_f24.png","player/bladep_f25.png","player/bladep_f26.png","player/bladep_f27.png",
+      "player/bladep_f28.png","player/bladep_f29.png","player/bladep_f30.png","player/bladep_f31.png",
+      "player/bladep_f32.png","player/bladep_f33.png","player/bladep_f34.png","player/bladep_f35.png",
+      "player/bladep_f36.png","player/bladep_f37.png","player/bladep_f38.png","player/bladep_f39.png",
+      "player/bladep_f40.png","player/bladep_f41.png","player/bladep_f42.png","player/bladep_f43.png",
+      "player/bladep_f44.png","player/bladep_f45.png","player/bladep_f46.png"],
+    "fps": 40, "loop": true
+  },
+
+  "tankbgrn": {
+    "frames": ["player/tankbgrn_f00.png","player/tankbgrn_f01.png"],
+    "fps": 8, "loop": true
+  },
+
+  "tanktop": {
+    "frames": [
+      "player/tanktop_f00.png","player/tanktop_f01.png","player/tanktop_f02.png","player/tanktop_f03.png",
+      "player/tanktop_f04.png","player/tanktop_f05.png","player/tanktop_f06.png","player/tanktop_f07.png",
+      "player/tanktop_f08.png","player/tanktop_f09.png","player/tanktop_f10.png","player/tanktop_f11.png",
+      "player/tanktop_f12.png","player/tanktop_f13.png","player/tanktop_f14.png","player/tanktop_f15.png",
+      "player/tanktop_f16.png","player/tanktop_f17.png","player/tanktop_f18.png","player/tanktop_f19.png",
+      "player/tanktop_f20.png","player/tanktop_f21.png","player/tanktop_f22.png","player/tanktop_f23.png",
+      "player/tanktop_f24.png","player/tanktop_f25.png","player/tanktop_f26.png","player/tanktop_f27.png",
+      "player/tanktop_f28.png","player/tanktop_f29.png","player/tanktop_f30.png","player/tanktop_f31.png",
+      "player/tanktop_f32.png","player/tanktop_f33.png","player/tanktop_f34.png","player/tanktop_f35.png",
+      "player/tanktop_f36.png","player/tanktop_f37.png","player/tanktop_f38.png","player/tanktop_f39.png",
+      "player/tanktop_f40.png","player/tanktop_f41.png","player/tanktop_f42.png","player/tanktop_f43.png",
+      "player/tanktop_f44.png","player/tanktop_f45.png","player/tanktop_f46.png","player/tanktop_f47.png",
+      "player/tanktop_f48.png","player/tanktop_f49.png","player/tanktop_f50.png","player/tanktop_f51.png",
+      "player/tanktop_f52.png","player/tanktop_f53.png","player/tanktop_f54.png","player/tanktop_f55.png",
+      "player/tanktop_f56.png","player/tanktop_f57.png","player/tanktop_f58.png","player/tanktop_f59.png",
+      "player/tanktop_f60.png","player/tanktop_f61.png","player/tanktop_f62.png"],
+    "fps": 1, "loop": false
+  }
 }

@@ -13,14 +13,20 @@ local ANCHOR = {
   center        = function(w, h) return w/2, h/2 end,
 }
 
-local RADAR_COLOR = {
-  structure    = { 0.55, 0.35, 0.10 },
-  flak_turret  = { 1.0,  0.2,  0.2  },
-  tree         = { 0.2,  0.55, 0.15 },
-  scenery      = { 0.45, 0.45, 0.45 },
-  ground_decal = { 0,    0,    0,    0 },
+local RADAR_ENEMY = {
+  flak_turret        = true,
+  tank               = true,
+  enemy_helicopter   = true,
+  truck              = true,
+  soldier            = true,
+  soldier_aggressive = true,
 }
-local RADAR_DEFAULT = { 0.9, 0.3, 0.3 }
+local RADAR_BUILDING = {
+  structure = true,
+  radar     = true,
+}
+local RADAR_COLOR_ENEMY    = { 1.0, 0.15, 0.15 }
+local RADAR_COLOR_BUILDING = { 0.0, 0.0,  0.0  }
 
 function Hud:init()
   self.player = nil
@@ -129,39 +135,34 @@ end
 -- ── movement cursor ───────────────────────────────────────────────────────────
 
 function Hud:_draw_cursor(g, item, x, y)
-  local p    = self.player
-  local s    = item.scale or 1
-  local size = (item.size or 60) * s
-  local half = size / 2
+  local p     = self.player
+  local s     = item.scale or 1
+  local size  = (item.size or 36) * s
+  local half  = size / 2
+  local wall  = math.max(2, math.floor(size / 8))
 
-  g.setColor(0, 0, 0, 0.75)
-  g.rectangle("fill", x, y, size, size)
-  g.setColor(0.2, 0.45, 0.2, 0.85)
-  g.setLineWidth(s)
-  g.rectangle("line", x, y, size, size)
+  -- thick black border, transparent interior
+  g.setColor(0, 0, 0, 1.0)
+  g.setLineWidth(wall)
+  g.rectangle("line", x + wall/2, y + wall/2, size - wall, size - wall)
+  g.setLineWidth(1)
 
-  -- crosshair
-  g.setColor(0.15, 0.3, 0.15, 0.7)
-  g.line(x + half, y + 4*s,       x + half, y + size - 4*s)
-  g.line(x + 4*s,  y + half,      x + size - 4*s, y + half)
-
-  -- dot
-  local max_s = p.MAX_FWD      or 180
-  local max_r = p.STRAFE_SPEED or 100
-  local dx    = (p.strafe or 0) / max_r * (half - 6*s)
-  local dy    = -(p.speed or 0) / max_s * (half - 6*s)
-  local dot_x = x + half + dx
-  local dot_y = y + half + dy
+  -- large green square dot
+  local max_s  = p.max_fwd      or 260
+  local max_r  = p.strafe_speed or 140
+  local inner  = half - wall - 3*s
+  local dx     = (p.strafe or 0) / max_r * inner
+  local dy     = -(p.speed or 0) / max_s * inner
+  local dot_sz = math.max(3, math.floor(size / 7))
+  local dot_x  = x + half + dx - dot_sz / 2
+  local dot_y  = y + half + dy - dot_sz / 2
 
   if p.land_state == "airborne" or p.land_state == "taking_off" then
-    g.setColor(0.1, 1.0, 0.15)
+    g.setColor(0.1, 1.0, 0.15, 1.0)
   else
-    g.setColor(0.85, 0.75, 0.1)
+    g.setColor(0.85, 0.75, 0.1, 1.0)
   end
-  g.circle("fill", dot_x, dot_y, 4 * s)
-  g.setColor(0, 0, 0, 0.5)
-  g.circle("line", dot_x, dot_y, 4 * s)
-  g.setLineWidth(1)
+  g.rectangle("fill", dot_x, dot_y, dot_sz, dot_sz)
 end
 
 -- ── radar ─────────────────────────────────────────────────────────────────────
@@ -199,27 +200,29 @@ function Hud:_draw_radar(g, item, x, y)
   local sin_pa  = math.sin(pa)
   local px_per_unit = r / range
   local classes = self.world.stage.classes
-  local dot_r   = math.max(1.5, s * 1.5)
+  local dot_r   = math.max(0.8, s * 0.8)
 
   for _, e in ipairs(self.world.entities) do
     if e:is_alive() then
-      local dx = (e.x - p.x) * px_per_unit
-      local dy = (e.y - p.y) * px_per_unit
-      local rx  = dx * cos_pa - dy * sin_pa
-      local ry  = dx * sin_pa + dy * cos_pa
-      if rx * rx + ry * ry <= r * r then
-        local cls = classes[e.class_idx + 1]
-        local c   = RADAR_COLOR[cls.kind_name] or RADAR_DEFAULT
-        if not (c[4] == 0) then
-          g.setColor(c[1], c[2], c[3], 0.9)
+      local cls  = classes[e.class_idx + 1]
+      local kind = cls.kind_name
+      local c
+      if     RADAR_ENEMY[kind]    then c = RADAR_COLOR_ENEMY
+      elseif RADAR_BUILDING[kind] then c = RADAR_COLOR_BUILDING
+      end
+      if c then
+        local dx = (e.x - p.x) * px_per_unit
+        local dy = (e.y - p.y) * px_per_unit
+        local rx = dx * cos_pa - dy * sin_pa
+        local ry = dx * sin_pa + dy * cos_pa
+        if rx * rx + ry * ry <= r * r then
+          g.setColor(c[1], c[2], c[3], 0.95)
           g.rectangle("fill", cx + rx - dot_r, cy + ry - dot_r, dot_r*2, dot_r*2)
         end
       end
     end
   end
 
-  g.setColor(1, 1, 1)
-  g.circle("fill", cx, cy, math.max(2.5, s * 2.5))
 end
 
 return Hud

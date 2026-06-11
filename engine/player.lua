@@ -1,55 +1,81 @@
-local Class = require "engine.class"
+local Class     = require "engine.class"
+local Animation = require "engine.animation"
 
 local Player = Class()
 
--- ── class-level constants ──────────────────────────────────────────────────────
-Player.TURN_RATE     = 120    -- deg/sec
-Player.ACCEL         = 90     -- px/sec^2 forward
-Player.DECEL         = 140    -- px/sec^2 natural slowdown
-Player.BRAKE         = 200    -- px/sec^2 active braking (S key)
-Player.MAX_FWD       = 180    -- px/sec
-Player.MAX_REV       = 70     -- px/sec
-Player.STRAFE_SPEED  = 100    -- px/sec (constant, no accel)
-Player.FUEL_DRAIN    = 2.0    -- units/sec while airborne (regardless of movement)
-Player.TAKEOFF_TIME  = 0.65   -- seconds altitude 0 -> 1
-Player.LAND_TIME     = 0.50   -- seconds altitude 1 -> 0
+-- sprite frame constants (0-indexed, matching exported assets)
+local PIT_NEUTRAL = 6    -- choppit1 neutral frame
+local PIT_FRAMES  = 14
+local BNK_NEUTRAL = 3    -- chopbnk1 neutral frame
+local BNK_MAX_R   = 6    -- chopbnk1 max-right frame used
+local DRP_FRAMES  = 5    -- chopdrp1 total frames
+local TOP_FRAME   = 31   -- tanktop axis-aligned south frame
+local STRAFE_THR  = 5    -- |strafe| threshold to switch bank/pitch mode
 
 function Player:init(x, y)
   self.x          = x or 2048
   self.y          = y or 2048
-  self.angle      = 0       -- degrees, 0 = north, CW positive
-  self.speed      = 0       -- px/sec (+forward, -reverse)
-  self.strafe     = 0       -- px/sec (+right, -left) set each frame
-  self.land_state = "grounded"   -- grounded | taking_off | airborne | landing
-  self.altitude   = 0.0     -- 0 = ground, 1 = fully airborne
+  self.angle      = 0
+  self.speed      = 0
+  self.strafe     = 0
+  self.land_state = "grounded"
+  self.altitude   = 0.0
 
-  -- fuel / armor (current values)
   self.fuel       = 100
   self.armor      = 100
-
-  -- vehicle load config (0-200, default 100 = balanced)
-  -- higher load_fuel  -> larger fuel tank but slower
-  -- higher load_armor -> more armor but slower
   self.load_fuel  = 100
   self.load_armor = 100
 
   self.world_size = 4096
-  self.weapon_idx = 0    -- current weapon (0-based index into weapons list)
+  self.weapon_idx = 0
+  self.vehicle    = "chopper"
+
+  -- vehicle params (defaults; overridden by load_vehicle_def)
+  self.sprite_scale = 3
+  self.rotor_y_off  = 0
+  self.rotor_fps    = 40
+  self.turn_rate    = 160
+  self.accel        = 280
+  self.decel        = 320
+  self.brake        = 480
+  self.max_fwd      = 260
+  self.max_rev      = 100
+  self.strafe_speed = 140
+  self.strafe_accel = 400
+  self.fuel_drain   = 2.0
+  self.takeoff_time = 0.65
+  self.land_time    = 0.50
+
+  self._tank_anim    = Animation.new("tankbgrn")
+  self._rotor_pitch  = Animation.new("bladep")
+  self._rotor_bank   = Animation.new("bladeb")
+  self._active_rotor = self._rotor_pitch
 
   self:_apply_config()
 end
 
--- Recompute max_fuel, max_armor, speed_factor from current load settings.
--- Call after changing load_fuel or load_armor.
+function Player:load_vehicle_def(def)
+  self.sprite_scale = def.sprite_scale   or self.sprite_scale
+  self.rotor_y_off  = def.rotor_y_offset or self.rotor_y_off
+  self.rotor_fps    = def.rotor_fps      ~= nil and def.rotor_fps or self.rotor_fps
+  self.turn_rate    = def.turn_rate      or self.turn_rate
+  self.accel        = def.accel          or self.accel
+  self.decel        = def.decel          or self.decel
+  self.brake        = def.brake          or self.brake
+  self.max_fwd      = def.max_fwd        or self.max_fwd
+  self.max_rev      = def.max_rev        or self.max_rev
+  self.strafe_speed = def.strafe_speed   or self.strafe_speed
+  self.strafe_accel = def.strafe_accel   or self.strafe_accel
+  self.fuel_drain   = def.fuel_drain     or self.fuel_drain
+  self.takeoff_time = def.takeoff_time   or self.takeoff_time
+  self.land_time    = def.land_time      or self.land_time
+end
+
 function Player:_apply_config()
-  -- max values: 40-160 range, 100 at balanced load
   self.max_fuel  = 40 + self.load_fuel  * 0.6
   self.max_armor = 40 + self.load_armor * 0.6
-  -- speed_factor: 1.0 when loads sum to 200 (balanced 100+100),
-  -- slower with heavier loads, faster with lighter
-  local total    = self.load_fuel + self.load_armor   -- 0-400
+  local total = self.load_fuel + self.load_armor
   self.speed_factor = math.max(0.25, math.min(2.0, 2.0 - total / 200.0))
-  -- clamp current fuel/armor to new maxima
   self.fuel  = math.min(self.fuel,  self.max_fuel)
   self.armor = math.min(self.armor, self.max_armor)
 end
@@ -65,18 +91,20 @@ function Player:update(dt)
   if self.land_state ~= "grounded" then
     self:_drain_fuel(dt)
   end
+  self:_update_anims(dt)
 end
 
 function Player:_update_altitude(dt)
   if self.land_state == "taking_off" then
-    self.altitude = math.min(1.0, self.altitude + dt / Player.TAKEOFF_TIME)
+    local tt = self.takeoff_time > 0 and self.takeoff_time or 0.01
+    self.altitude = math.min(1.0, self.altitude + dt / tt)
     if self.altitude >= 1.0 then
       self.altitude   = 1.0
       self.land_state = "airborne"
     end
   elseif self.land_state == "landing" then
-    self.altitude = math.max(0.0, self.altitude - dt / Player.LAND_TIME)
-    -- damp speed during descent
+    local lt = self.land_time > 0 and self.land_time or 0.01
+    self.altitude = math.max(0.0, self.altitude - dt / lt)
     self.speed = self.speed * math.max(0, 1 - dt * 3)
     if self.altitude <= 0.0 then
       self.altitude   = 0.0
@@ -90,38 +118,44 @@ end
 function Player:_apply_input(dt)
   local kb = love.keyboard.isDown
 
-  local rotate  = 0
+  local rotate   = 0
   if kb("a") or kb("left")  then rotate = rotate - 1 end
   if kb("d") or kb("right") then rotate = rotate + 1 end
 
   local strafing = kb("lshift") or kb("rshift")
+
+  -- smooth strafe toward target
+  local strafe_target = 0
   if strafing then
-    self.strafe = 0
-    if kb("a") or kb("left")  then self.strafe = -Player.STRAFE_SPEED end
-    if kb("d") or kb("right") then self.strafe =  Player.STRAFE_SPEED end
-    -- suppress rotation while strafing
-  else
-    self.strafe = 0
-    if rotate ~= 0 then
-      self.angle = (self.angle + rotate * Player.TURN_RATE * dt) % 360
-    end
+    if kb("a") or kb("left")  then strafe_target = -self.strafe_speed end
+    if kb("d") or kb("right") then strafe_target =  self.strafe_speed end
+  end
+  local sa = self.strafe_accel > 0 and self.strafe_accel or 9999
+  if self.strafe < strafe_target then
+    self.strafe = math.min(strafe_target, self.strafe + sa * dt)
+  elseif self.strafe > strafe_target then
+    self.strafe = math.max(strafe_target, self.strafe - sa * dt)
   end
 
-  -- throttle only when fully airborne
+  -- rotation only when shift is not held
+  if not strafing and rotate ~= 0 then
+    self.angle = (self.angle + rotate * self.turn_rate * dt) % 360
+  end
+
   if self.land_state ~= "airborne" then return end
 
-  local max_fwd = Player.MAX_FWD * self.speed_factor
-  local max_rev = Player.MAX_REV * self.speed_factor
+  local max_fwd = self.max_fwd * self.speed_factor
+  local max_rev = self.max_rev * self.speed_factor
 
   if kb("w") or kb("up") then
-    self.speed = math.min(self.speed + Player.ACCEL * self.speed_factor * dt, max_fwd)
+    self.speed = math.min(self.speed + self.accel * self.speed_factor * dt, max_fwd)
   elseif kb("s") or kb("down") then
-    self.speed = math.max(self.speed - Player.BRAKE * dt, -max_rev)
+    self.speed = math.max(self.speed - self.brake * dt, -max_rev)
   else
     if self.speed > 0 then
-      self.speed = math.max(0, self.speed - Player.DECEL * dt)
+      self.speed = math.max(0, self.speed - self.decel * dt)
     elseif self.speed < 0 then
-      self.speed = math.min(0, self.speed + Player.DECEL * dt)
+      self.speed = math.min(0, self.speed + self.decel * dt)
     end
   end
 end
@@ -130,17 +164,29 @@ function Player:_move(dt)
   local rad = (self.angle - 90) * math.pi / 180
   self.x = self.x + math.cos(rad) * self.speed * dt
   self.y = self.y + math.sin(rad) * self.speed * dt
-  -- strafe: perpendicular (90 deg right of facing)
   local sr = rad + math.pi / 2
   self.x = self.x + math.cos(sr) * self.strafe * dt
   self.y = self.y + math.sin(sr) * self.strafe * dt
-  -- clamp to world
   self.x = math.max(0, math.min(self.world_size, self.x))
   self.y = math.max(0, math.min(self.world_size, self.y))
 end
 
 function Player:_drain_fuel(dt)
-  self.fuel = math.max(0, self.fuel - Player.FUEL_DRAIN * dt)
+  self.fuel = math.max(0, self.fuel - self.fuel_drain * dt)
+end
+
+function Player:_update_anims(dt)
+  if self.vehicle == "tank" then
+    if math.abs(self.speed) > 1 then self._tank_anim:update(dt) end
+    return
+  end
+  -- always spin rotor; switch bank/pitch based on strafe state
+  local next_rotor = math.abs(self.strafe) > STRAFE_THR
+    and self._rotor_bank or self._rotor_pitch
+  self._active_rotor = next_rotor
+  if self.rotor_fps > 0 then
+    self._active_rotor:update(dt * (self.rotor_fps / 40.0))
+  end
 end
 
 -- ── state transitions ─────────────────────────────────────────────────────────
@@ -163,15 +209,51 @@ function Player:repair(amount)
   self.armor = math.min(self.max_armor, self.armor + (amount or self.max_armor))
 end
 
--- ── queries ───────────────────────────────────────────────────────────────────
-
 function Player:is_dead()
   return self.armor <= 0 or self.fuel <= 0
 end
 
--- Camera rotation angle in radians (negate player heading to spin world).
 function Player:camera_angle()
   return -self.angle * math.pi / 180
+end
+
+-- ── sprite helpers ────────────────────────────────────────────────────────────
+
+function Player:_frames(clip_name)
+  local clip = Animation.clip(clip_name)
+  return clip and clip.frames or {}
+end
+
+function Player:_using_bank()
+  return math.abs(self.strafe) > STRAFE_THR
+end
+
+function Player:_chopper_body_frame()
+  if self.land_state == "landing" or self.land_state == "taking_off"
+  or self.land_state == "grounded" then
+    local fi = math.floor((1.0 - self.altitude) * (DRP_FRAMES - 1) + 0.5) + 1
+    local frames = self:_frames("chopdrp1")
+    return frames[math.max(1, math.min(#frames, fi))]
+  end
+
+  if self:_using_bank() then
+    local t  = self.strafe_speed > 0 and (self.strafe / self.strafe_speed) or 0
+    local fi = math.floor(BNK_NEUTRAL + t * BNK_NEUTRAL + 0.5) + 1
+    local frames = self:_frames("chopbnk1")
+    return frames[math.max(1, math.min(BNK_MAX_R + 1, fi))]
+  end
+
+  local n = PIT_NEUTRAL
+  local fi
+  if self.speed >= 0 then
+    local t = self.speed / math.max(1, self.max_fwd * self.speed_factor)
+    fi = math.floor(n - n * t + 0.5) + 1
+  else
+    local t = (-self.speed) / math.max(1, self.max_rev * self.speed_factor)
+    fi = math.floor(n + (PIT_FRAMES - 1 - n) * t + 0.5) + 1
+  end
+  local frames = self:_frames("choppit1")
+  return frames[math.max(1, math.min(#frames, fi))]
 end
 
 -- ── draw ─────────────────────────────────────────────────────────────────────
@@ -180,36 +262,36 @@ function Player:draw()
   local g      = love.graphics
   local sw, sh = g.getDimensions()
   local cx, cy = sw / 2, sh / 2
-
-  -- body: teardrop pointing up (north = forward on screen)
-  local state_color = {
-    grounded   = { 0.85, 0.70, 0.15 },
-    taking_off = { 0.50, 0.90, 0.35 },
-    airborne   = { 0.25, 0.90, 0.35 },
-    landing    = { 0.50, 0.70, 0.30 },
-  }
-  local c = state_color[self.land_state] or { 0.5, 0.5, 0.5 }
-  g.setColor(c[1], c[2], c[3])
-  g.polygon("fill",
-    cx,      cy - 16,
-    cx - 10, cy + 4,
-    cx,      cy + 8,
-    cx + 10, cy + 4
-  )
-  g.setColor(0, 0, 0, 0.5)
-  g.setLineWidth(1)
-  g.polygon("line", cx, cy - 16, cx - 10, cy + 4, cx, cy + 8, cx + 10, cy + 4)
-
-  -- altitude indicator: small bar below marker
-  if self.land_state ~= "grounded" then
-    local bw = 20
-    g.setColor(0, 0, 0, 0.6)
-    g.rectangle("fill", cx - bw/2, cy + 14, bw, 4)
-    g.setColor(c[1], c[2], c[3])
-    g.rectangle("fill", cx - bw/2, cy + 14, bw * self.altitude, 4)
-  end
+  local s      = self.sprite_scale
 
   g.setColor(1, 1, 1)
+  if self.vehicle == "tank" then
+    self:_draw_tank(g, cx, cy, s)
+  else
+    self:_draw_chopper(g, cx, cy, s)
+  end
+  g.setColor(1, 1, 1)
+end
+
+function Player:_draw_centered(g, img, cx, cy, s)
+  if not img then return end
+  local w, h = img:getDimensions()
+  g.draw(img, cx, cy, 0, s, s, w / 2, h / 2)
+end
+
+function Player:_draw_chopper(g, cx, cy, s)
+  self:_draw_centered(g, self:_chopper_body_frame(), cx, cy, s)
+  local rotor_img = self._active_rotor:current_image()
+  self:_draw_centered(g, rotor_img, cx, cy + self.rotor_y_off, s)
+end
+
+function Player:_draw_tank(g, cx, cy, s)
+  local body_frames = self:_frames("tankbgrn")
+  local body_img    = body_frames[self._tank_anim.frame] or body_frames[1]
+  self:_draw_centered(g, body_img, cx, cy, s)
+  local top_frames = self:_frames("tanktop")
+  local top_img    = top_frames[TOP_FRAME + 1]
+  self:_draw_centered(g, top_img, cx, cy, s)
 end
 
 return Player
