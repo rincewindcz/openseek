@@ -1,61 +1,86 @@
 {
-  "rotor_slow": {
-    "frames": [
-      "player/chopbnk1_f0.png", "player/chopbnk1_f1.png",
-      "player/chopbnk1_f2.png", "player/chopbnk1_f3.png",
-      "player/chopbnk1_f4.png", "player/chopbnk1_f5.png",
-      "player/chopbnk1_f6.png", "player/chopbnk1_f7.png"
-    ],
-    "fps": 6,
-    "loop": true
-  },
-  "rotor_medium": {
-    "frames": [
-      "player/chopbnk2_f0.png", "player/chopbnk2_f1.png",
-      "player/chopbnk2_f2.png", "player/chopbnk2_f3.png",
-      "player/chopbnk2_f4.png", "player/chopbnk2_f5.png",
-      "player/chopbnk2_f6.png", "player/chopbnk2_f7.png"
-    ],
-    "fps": 14,
-    "loop": true
-  },
-  "rotor_fast": {
-    "frames": [
-      "player/chopbnk3_f0.png", "player/chopbnk3_f1.png",
-      "player/chopbnk3_f2.png", "player/chopbnk3_f3.png",
-      "player/chopbnk3_f4.png", "player/chopbnk3_f5.png",
-      "player/chopbnk3_f6.png", "player/chopbnk3_f7.png"
-    ],
-    "fps": 24,
-    "loop": true
-  },
-  "explosion_none": {
-    "frames": [],
-    "fps": 1,
-    "loop": false
-  },
+  "explosion_none": { "frames": [], "fps": 1, "loop": false },
+
   "explosion_small": {
     "frames": [
-      "effects/exp_s0.png", "effects/exp_s1.png",
-      "effects/exp_s2.png", "effects/exp_s3.png"
+      "effects/explo32_f00.png","effects/explo32_f01.png","effects/explo32_f02.png",
+      "effects/explo32_f03.png","effects/explo32_f04.png","effects/explo32_f05.png",
+      "effects/explo32_f06.png","effects/explo32_f07.png","effects/explo32_f08.png",
+      "effects/explo32_f09.png","effects/explo32_f10.png","effects/explo32_f11.png",
+      "effects/explo32_f12.png"
     ],
-    "fps": 14,
-    "loop": false
+    "fps": 14, "loop": false
   },
+
   "explosion_medium": {
     "frames": [
-      "effects/exp_m0.png", "effects/exp_m1.png", "effects/exp_m2.png",
-      "effects/exp_m3.png", "effects/exp_m4.png"
+      "effects/rdnexpd_f00.png","effects/rdnexpd_f01.png","effects/rdnexpd_f02.png",
+      "effects/rdnexpd_f03.png","effects/rdnexpd_f04.png","effects/rdnexpd_f05.png",
+      "effects/rdnexpd_f06.png","effects/rdnexpd_f07.png","effects/rdnexpd_f08.png",
+      "effects/rdnexpd_f09.png","effects/rdnexpd_f10.png","effects/rdnexpd_f11.png"
     ],
-    "fps": 12,
-    "loop": false
+    "fps": 12, "loop": false
   },
+
   "explosion_large": {
     "frames": [
-      "effects/exp_l0.png", "effects/exp_l1.png", "effects/exp_l2.png",
-      "effects/exp_l3.png", "effects/exp_l4.png", "effects/exp_l5.png"
+      "effects/explo64_f00.png","effects/explo64_f01.png","effects/explo64_f02.png",
+      "effects/explo64_f03.png","effects/explo64_f04.png","effects/explo64_f05.png",
+      "effects/explo64_f06.png","effects/explo64_f07.png","effects/explo64_f08.png",
+      "effects/explo64_f09.png","effects/explo64_f10.png","effects/explo64_f11.png",
+      "effects/explo64_f12.png","effects/explo64_f13.png"
     ],
-    "fps": 10,
-    "loop": false
-  }
+    "fps": 10, "loop": false
+  },
+
+  "explosion_flak": {
+    "frames": [
+      "effects/flakani_f00.png","effects/flakani_f01.png","effects/flakani_f02.png",
+      "effects/flakani_f03.png","effects/flakani_f04.png","effects/flakani_f05.png",
+      "effects/flakani_f06.png"
+    ],
+    "fps": 12, "loop": false
+  },
+
+  "fire": {
+    "frames": [
+      "effects/fire_f00.png","effects/fire_f01.png","effects/fire_f02.png",
+      "effects/fire_f03.png","effects/fire_f04.png","effects/fire_f05.png",
+      "effects/fire_f06.png","effects/fire_f07.png","effects/fire_f08.png",
+      "effects/fire_f09.png","effects/fire_f10.png","effects/fire_f11.png",
+      "effects/fire_f12.png"
+    ],
+    "fps": 8, "loop": true
+  },
+
+  "smoke": {
+    "frames": [
+      "effects/smoke_f00.png","effects/smoke_f01.png","effects/smoke_f02.png",
+      "effects/smoke_f03.png","effects/smoke_f04.png","effects/smoke_f05.png",
+      "effects/smoke_f06.png","effects/smoke_f07.png","effects/smoke_f08.png"
+    ],
+    "fps": 8, "loop": false
+  },
+
+  "smoke2": {
+    "frames": [
+      "effects/smoke2_f00.png","effects/smoke2_f01.png","effects/smoke2_f02.png",
+      "effects/smoke2_f03.png","effects/smoke2_f04.png","effects/smoke2_f05.png",
+      "effects/smoke2_f06.png","effects/smoke2_f07.png","effects/smoke2_f08.png"
+    ],
+    "fps": 8, "loop": false
+  },
+
+  "missile_smoke": {
+    "frames": [
+      "effects/misssmk0_f00.png","effects/misssmk0_f01.png","effects/misssmk0_f02.png",
+      "effects/misssmk0_f03.png","effects/misssmk0_f04.png","effects/misssmk0_f05.png",
+      "effects/misssmk0_f06.png","effects/misssmk0_f07.png","effects/misssmk0_f08.png"
+    ],
+    "fps": 10, "loop": false
+  },
+
+  "rotor_slow":   { "frames": [], "fps": 6,  "loop": true },
+  "rotor_medium": { "frames": [], "fps": 14, "loop": true },
+  "rotor_fast":   { "frames": [], "fps": 24, "loop": true }
 }

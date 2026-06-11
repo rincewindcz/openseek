@@ -111,4 +111,11 @@ function Animation.clip(name)
   return clips[name]
 end
 
+function Animation.clip_names()
+  local names = {}
+  for k in pairs(clips) do names[#names + 1] = k end
+  table.sort(names)
+  return names
+end
+
 return Animation

@@ -125,7 +125,6 @@ function Renderer:_draw_entities(list, vp)
     if hidden[cls.kind_name] then goto continue end
 
     if e.state == "exploding" and e.anim then
-      -- draw explosion animation centered on entity position
       local img = e.anim:current_image()
       if img then
         local iw, ih = img:getDimensions()
@@ -140,6 +139,14 @@ function Renderer:_draw_entities(list, vp)
         g.setColor(1, 0, 1)
         g.circle("fill", e.x, e.y, 3)
         g.setColor(1, 1, 1)
+      end
+      -- overlay animation (debug preview, non-destructive)
+      if e.state == "animating" and e.anim then
+        local img = e.anim:current_image()
+        if img then
+          local iw, ih = img:getDimensions()
+          g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+        end
       end
     end
 

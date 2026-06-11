@@ -1,119 +1,47 @@
 {
   "flak_turret": {
-    "speed": 0,
-    "turn_speed": 120,
-    "weapon": "flak",
     "attack_range": 400,
     "detection_radius": 500,
+    "explosion": "medium",
     "hit_radius": 14,
-    "explosion": "medium"
-  },
-  "tank": {
-    "speed": 40,
-    "turn_speed": 60,
-    "weapon": "tank_cannon",
-    "attack_range": 350,
-    "detection_radius": 450,
-    "hit_radius": 18,
-    "explosion": "large"
-  },
-  "enemy_helicopter": {
-    "speed": 80,
-    "turn_speed": 90,
-    "weapon": "machine_gun",
-    "attack_range": 300,
-    "detection_radius": 600,
-    "hit_radius": 20,
-    "explosion": "large"
-  },
-  "truck": {
-    "speed": 50,
-    "turn_speed": 90,
-    "weapon": null,
-    "attack_range": 0,
-    "detection_radius": 0,
-    "hit_radius": 12,
-    "explosion": "small"
-  },
-  "soldier_aggressive": {
-    "speed": 20,
-    "turn_speed": 180,
-    "weapon": "rifle",
-    "attack_range": 200,
-    "detection_radius": 300,
-    "hit_radius": 6,
-    "explosion": "none"
-  },
-  "soldier": {
-    "speed": 15,
-    "turn_speed": 180,
-    "weapon": null,
-    "attack_range": 0,
-    "detection_radius": 0,
-    "hit_radius": 6,
-    "explosion": "none"
-  },
-  "civilian": {
-    "speed": 10,
-    "turn_speed": 180,
-    "weapon": null,
-    "attack_range": 0,
-    "detection_radius": 0,
-    "hit_radius": 6,
-    "explosion": "none"
-  },
-  "radar": {
     "speed": 0,
-    "turn_speed": 30,
-    "weapon": null,
-    "attack_range": 0,
-    "detection_radius": 0,
-    "hit_radius": 10,
-    "explosion": "small"
-  },
-  "structure": {
-    "speed": 0,
-    "turn_speed": 0,
-    "weapon": null,
-    "attack_range": 0,
-    "detection_radius": 0,
-    "hit_radius": 16,
-    "explosion": "medium"
-  },
-  "scenery": {
-    "speed": 0,
-    "turn_speed": 0,
-    "weapon": null,
-    "attack_range": 0,
-    "detection_radius": 0,
-    "hit_radius": 0,
-    "explosion": "none"
-  },
-  "tree": {
-    "speed": 0,
-    "turn_speed": 0,
-    "weapon": null,
-    "attack_range": 0,
-    "detection_radius": 0,
-    "hit_radius": 0,
-    "explosion": "none"
+    "turn_speed": 120,
+    "weapon": "flak"
   },
   "ground_decal": {
-    "speed": 0,
-    "turn_speed": 0,
-    "weapon": null,
     "attack_range": 0,
     "detection_radius": 0,
+    "explosion": "none",
     "hit_radius": 0,
-    "explosion": "none"
+    "speed": 0,
+    "turn_speed": 0
   },
-  "effect_or_projectile": {
-    "speed": 0,
-    "turn_speed": 0,
-    "weapon": null,
+  "powerup_marker": {
+  },
+  "scenery": {
     "attack_range": 0,
     "detection_radius": 0,
+    "explosion": "none",
     "hit_radius": 0,
-    "explosion": "none"
+    "speed": 0,
+    "turn_speed": 0
+  },
+  "structure": {
+    "attack_range": 0,
+    "detection_radius": 0,
+    "explosion": "medium",
+    "hit_radius": 16,
+    "speed": 0,
+    "turn_speed": 0
+  },
+  "tree": {
+    "attack_range": 0,
+    "detection_radius": 0,
+    "explosion": "none",
+    "hit_radius": 0,
+    "speed": 0,
+    "turn_speed": 0
+  },
+  "unknown_14": {
   }
 }
