@@ -78,6 +78,11 @@ function Entity:_start_death()
   local explosion = (self.type_data and self.type_data.explosion) or "none"
   self.anim  = Animation.new("explosion_" .. explosion)
   self.state = self.anim:is_done() and "dead" or "exploding"
+  -- Large entities leave a persistent crater decal once destroyed.
+  if self.type_data and self.type_data.crater then
+    local clip = Animation.clip("crater")
+    self.crater_img = clip and clip.frames[1] or nil
+  end
   -- Clear smoke effects when dying
   self._damage_smokes = {}
   self._hit_smokes    = {}
@@ -122,7 +127,11 @@ function Entity:update(dt)
 
     for _, se in ipairs(self._damage_smokes) do
       se.anim:update(dt)
-      if se.anim:is_done() then se.anim:reset() end
+      if se.anim:is_done() then
+        se.anim:reset()
+        se.ox = (math.random() - 0.5) * 20
+        se.oy = (math.random() - 0.5) * 20
+      end
     end
   end
 

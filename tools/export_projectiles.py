@@ -19,11 +19,12 @@ sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 
 PROJECTILE_SPRITES = [
-    ("MISSLE", "missle"),
-    ("SHELL",  "shell"),
-    ("FFR",    "ffr"),
-    ("BOMB",   "bomb"),
-    ("TRACE",  "trace"),
+    ("MISSLE",   "missle"),
+    ("SHELL",    "shell"),
+    ("FFR",      "ffr"),
+    ("BOMB",     "bomb"),
+    ("TRACE",    "trace"),
+    ("HOLE4038", "hole"),
 ]
 
 

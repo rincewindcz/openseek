@@ -124,13 +124,7 @@ function Renderer:_draw_entities(list, vp)
     if not in_vp then goto continue end
     if hidden[cls.kind_name] then goto continue end
 
-    if e.state == "exploding" and e.anim then
-      local img = e.anim:current_image()
-      if img then
-        local iw, ih = img:getDimensions()
-        g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
-      end
-    elseif e:is_alive() then
+    if e:is_alive() then
       local r = images[e.class_idx + 1]
       if r then
         local rot = e:draw_angle_rad(cls.angle_steps)
@@ -166,6 +160,20 @@ function Renderer:_draw_entities(list, vp)
         if img then
           local iw, ih = img:getDimensions()
           g.draw(img, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, iw / 2, ih / 2)
+        end
+      end
+    else
+      -- Not alive: persistent crater under any in-progress explosion.
+      if e.crater_img then
+        local iw, ih = e.crater_img:getDimensions()
+        g.setColor(1, 1, 1)
+        g.draw(e.crater_img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+      end
+      if e.state == "exploding" and e.anim then
+        local img = e.anim:current_image()
+        if img then
+          local iw, ih = img:getDimensions()
+          g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
         end
       end
     end

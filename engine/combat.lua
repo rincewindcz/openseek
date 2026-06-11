@@ -197,8 +197,9 @@ function CombatSystem:draw()
       local img = proj:get_image()
       if img then
         local w, h = img:getDimensions()
+        local extra = (wdef.proj_sprite_rot or 0) * math.pi / 180
         g.setColor(1, 1, 1)
-        g.draw(img, proj.x, proj.y, proj.angle_rad, 1, 1, w / 2, h / 2)
+        g.draw(img, proj.x, proj.y, proj.angle_rad + extra, 1, 1, w / 2, h / 2)
       end
     end
   end

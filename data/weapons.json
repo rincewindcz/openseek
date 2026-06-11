@@ -3,7 +3,7 @@
     "vehicle": "both",
     "proj_type": "bullet",
     "proj_color": [1, 1, 1],
-    "proj_size": 2,
+    "proj_size": 1,
     "speed": 600,
     "proj_radius": 3,
     "ttl": 1.5,
@@ -20,15 +20,16 @@
     "vehicle": "chopper",
     "proj_type": "sprite",
     "proj_sprite": "ffr",
+    "proj_sprite_rot": -90,
     "speed": 420,
     "proj_radius": 5,
     "ttl": 3.0,
     "aoe": 0,
     "explosion": "explosion_medium",
     "levels": [
-      { "damage": 35, "fire_rate": 6.0, "spread_deg": 0,  "count": 2, "side_offset": 10 },
-      { "damage": 35, "fire_rate": 5.0, "spread_deg": 10, "count": 3 },
-      { "damage": 35, "fire_rate": 4.0, "spread_deg": 6,  "count": 4, "side_offset": 12 }
+      { "damage": 35, "fire_rate": 11.0, "spread_deg": 0,  "count": 2, "side_offset": 10 },
+      { "damage": 35, "fire_rate": 9.0,  "spread_deg": 10, "count": 3 },
+      { "damage": 35, "fire_rate": 8.0,  "spread_deg": 6,  "count": 4, "side_offset": 12 }
     ]
   },
 

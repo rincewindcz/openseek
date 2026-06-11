@@ -11,6 +11,7 @@ local BNK_MAX_R   = 6    -- chopbnk1 max-right frame used
 local DRP_FRAMES  = 5    -- chopdrp1 total frames
 local TOP_FRAME   = 31   -- tanktop axis-aligned south frame
 local STRAFE_THR  = 5    -- |strafe| threshold to switch bank/pitch mode
+local ROTOR_MIN_S = 0.5  -- rotor scale factor when grounded (scales up to 1 airborne)
 
 function Player:init(x, y)
   self.x          = x or 2048
@@ -288,7 +289,8 @@ end
 function Player:_draw_chopper(g, cx, cy, s)
   self:_draw_centered(g, self:_chopper_body_frame(), cx, cy, s)
   local rotor_img = self._active_rotor:current_image()
-  self:_draw_centered(g, rotor_img, cx, cy + self.rotor_y_off, s)
+  local rs = s * (ROTOR_MIN_S + (1 - ROTOR_MIN_S) * self.altitude)
+  self:_draw_centered(g, rotor_img, cx, cy + self.rotor_y_off, rs)
 end
 
 function Player:_draw_tank(g, cx, cy, s)
