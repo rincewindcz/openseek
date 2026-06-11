@@ -19,6 +19,7 @@ function love.update(dt)
   if not renderer.picker then
     camera:update(dt)
   end
+  world:update(dt)
 end
 
 function love.draw()

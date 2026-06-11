@@ -1,5 +1,6 @@
 local Class  = require "engine.class"
 local json   = require "json"
+local Entity = require "engine.entity"
 
 -- Ground fill colors per mission (palette entry 49 of STAGE0M/PAL1.BIN, 6-bit DAC to 8-bit).
 local MISSION_GROUND = {
@@ -18,9 +19,11 @@ function World:init()
   self.stage_name  = nil
   self.stages      = {}    -- sorted list of available stage names
   self.stage_index = 1
-  self.images      = {}    -- class index+1 -> {img, ox, oy, rot} or nil
-  self.decals      = {}    -- entities with kind == 15, y-sorted
-  self.objects     = {}    -- all other entities, y-sorted
+  self.images      = {}    -- class index+1 -> {img, ox, oy} or nil
+  self.entities    = {}    -- all Entity instances
+  self.decals      = {}    -- Entity instances with kind == 15, y-sorted
+  self.objects     = {}    -- all other Entity instances, y-sorted
+  Entity.load_types("data/entity_types.json")
   self:_discover()
 end
 
@@ -38,9 +41,7 @@ end
 
 function World:load(name)
   local data = love.filesystem.read("assets/" .. name .. ".json")
-  if not data then
-    error("stage not found: " .. name)
-  end
+  if not data then error("stage not found: " .. name) end
   self.stage      = json.decode(data)
   self.stage_name = name
   for i, s in ipairs(self.stages) do
@@ -56,19 +57,21 @@ function World:load(name)
         cache[path] = love.graphics.newImage(path)
         cache[path]:setFilter("nearest", "nearest")
       end
-      local rot = c.angle_steps > 1 and -math.pi / 2 or 0
       self.images[i] = cache[path] and
-        { img = cache[path], ox = c.render.ox, oy = c.render.oy, rot = rot }
+        { img = cache[path], ox = c.render.ox, oy = c.render.oy }
         or nil
     end
   end
 
-  self.decals  = {}
-  self.objects = {}
-  for _, e in ipairs(self.stage.entities) do
-    local cls  = self.stage.classes[e.class + 1]
+  self.entities = {}
+  self.decals   = {}
+  self.objects  = {}
+  for id, raw in ipairs(self.stage.entities) do
+    local cls    = self.stage.classes[raw.class + 1]
+    local entity = Entity:new(id, raw, cls)
+    self.entities[id] = entity
     local list = cls.kind == 15 and self.decals or self.objects
-    list[#list + 1] = e
+    list[#list + 1] = entity
   end
   local by_y = function(a, b)
     if a.y ~= b.y then return a.y < b.y end
@@ -80,6 +83,10 @@ end
 
 function World:load_index(idx)
   self:load(self.stages[idx])
+end
+
+function World:update(dt)
+  -- placeholder for future entity simulation
 end
 
 function World:ground_color()

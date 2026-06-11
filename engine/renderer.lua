@@ -54,14 +54,17 @@ function Renderer:_draw_world()
 end
 
 function Renderer:_draw_entities(list, vp)
-  local g      = love.graphics
-  local images = self.world.images
+  local g       = love.graphics
+  local images  = self.world.images
+  local classes = self.world.stage.classes
   g.setColor(1, 1, 1)
   for _, e in ipairs(list) do
-    if e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
-      local r = images[e.class + 1]
+    if e:is_alive() and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
+      local r   = images[e.class_idx + 1]
+      local cls = classes[e.class_idx + 1]
       if r then
-        g.draw(r.img, e.x, e.y, r.rot, 1, 1, -r.ox, -r.oy)
+        local rot = e:draw_angle_rad(cls.angle_steps)
+        g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
       else
         g.setColor(1, 0, 1)
         g.circle("fill", e.x, e.y, 3)
