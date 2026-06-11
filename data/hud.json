@@ -1,0 +1,47 @@
+{
+  "items": [
+    {
+      "id": "armour",
+      "type": "gauge",
+      "value": "armor",
+      "sprite_pattern": "hud/armour_f%02d.png",
+      "sprite_count": 16,
+      "anchor": "bottom_left",
+      "offset": [8, -60]
+    },
+    {
+      "id": "fuel",
+      "type": "gauge",
+      "value": "fuel",
+      "sprite_pattern": "hud/fuel_f%02d.png",
+      "sprite_count": 15,
+      "anchor": "top_right",
+      "offset": [-178, 6]
+    },
+    {
+      "id": "weapon",
+      "type": "weapon",
+      "value": "weapon",
+      "sprite_pattern": "hud/weapons_f%02d.png",
+      "sprite_count": 13,
+      "anchor": "bottom_right",
+      "offset": [-140, -90]
+    },
+    {
+      "id": "cursor",
+      "type": "cursor",
+      "anchor": "bottom_center",
+      "offset": [-156, -72],
+      "size": 60
+    },
+    {
+      "id": "radar",
+      "type": "radar",
+      "anchor": "bottom_center",
+      "offset": [-94, -200],
+      "background": "hud/scanner_f00.png",
+      "radius": 88,
+      "world_range": 900
+    }
+  ]
+}

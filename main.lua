@@ -4,11 +4,13 @@ local Renderer  = require "engine.renderer"
 local Debug     = require "engine.debug"
 local Animation = require "engine.animation"
 local Player    = require "engine.player"
+local Hud       = require "engine.hud"
 
 local world
 local camera
 local renderer
 local dbg
+local hud
 local player       -- nil in viewer mode
 local game_mode = false
 
@@ -17,8 +19,8 @@ local function after_stage_load()
   camera:clamp()
   renderer:refresh_kinds()
   dbg.world = world
+  hud.world = world
   love.window.setTitle(world:title())
-  -- update player world size so clamping stays correct
   if player then player.world_size = world.stage.world_size end
 end
 
@@ -27,12 +29,14 @@ local function enter_game_mode()
   local ws  = world.stage.world_size
   player    = Player:new(ws / 2, ws / 2)
   player.world_size = ws
+  hud.player = player
   love.window.setTitle(world:title() .. "  [game]")
 end
 
 local function leave_game_mode()
   game_mode    = false
   player       = nil
+  hud.player   = nil
   camera.angle = nil
   camera:clamp()
   love.window.setTitle(world:title())
@@ -46,6 +50,9 @@ function love.load(args)
   camera   = Camera:new(world.stage.world_size)
   renderer = Renderer:new(world, camera)
   dbg      = Debug:new(world, camera)
+  hud      = Hud:new()
+  hud:load("data/hud.json")
+  hud.world = world
   renderer:refresh_kinds()
   love.window.setTitle(world:title())
 end
@@ -67,7 +74,10 @@ end
 
 function love.draw()
   renderer:draw()
-  if game_mode and player then player:draw() end
+  if game_mode and player then
+    player:draw()
+    hud:draw()
+  end
   dbg:draw()
 end
 
@@ -93,10 +103,14 @@ function love.keypressed(key)
     return
   end
 
-  -- takeoff / land (game mode only)
+  -- takeoff / land
   if game_mode and player then
     if key == "space" or key == "f" then
-      if player.airborne then player:land() else player:take_off() end
+      if player.land_state == "airborne" then
+        player:land()
+      elseif player.land_state == "grounded" then
+        player:take_off()
+      end
       return
     end
   end
@@ -140,7 +154,6 @@ function love.keypressed(key)
     after_stage_load()
   end
 
-  -- viewer-mode-only controls
   if not game_mode then
     if key == "l" then renderer.show_segments = not renderer.show_segments end
     if key == "g" then renderer.show_grid     = not renderer.show_grid     end
