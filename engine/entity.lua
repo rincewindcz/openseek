@@ -34,6 +34,8 @@ function Entity:init(id, stage_ent, stage_cls)
   self.route        = stage_ent.route
   self.route_pt     = 1
   self.route_points = nil   -- resolved from the stage at load (patrol waypoints)
+  self.patrol_v     = 0     -- current patrol speed (eased for accel/decel)
+  self.engaging     = false -- set by the AI: in firing range, so slow to a stop
   self.type_data    = Entity.type_for(stage_cls.kind_name)
   self.anim         = nil
 
@@ -235,25 +237,50 @@ function Entity:update(dt)
   self._hit_smokes = live
 end
 
--- Patrol the assigned waypoint loop. The hull faces its travel direction; the
--- turret (aim_angle) is steered independently by the combat AI.
+-- Patrol the assigned waypoint loop, driving like a tank: the hull eases its
+-- speed up/down (slowing to a stop when about to fire, telegraphing the shot)
+-- and turns toward the next waypoint gradually rather than snapping. The turret
+-- (aim_angle) is steered independently by the combat AI.
 function Entity:_patrol(dt)
-  local pts = self.route_points
-  if not pts or #pts < 2 then return end
-  local sp = (self.type_data and self.type_data.patrol_speed) or 0
-  if sp <= 0 then return end
+  local pts  = self.route_points
+  local td   = self.type_data
+  local base = td and td.patrol_speed or 0
+  if not pts or #pts < 2 or base <= 0 then return end
+
+  -- Ease speed toward the target (0 while engaging the player, else cruising).
+  local target = self.engaging and 0 or base
+  local accel  = base * 1.5
+  if self.patrol_v < target then
+    self.patrol_v = math.min(target, self.patrol_v + accel * dt)
+  else
+    self.patrol_v = math.max(target, self.patrol_v - accel * dt)
+  end
+
   local tgt = pts[self.route_pt]
   if not tgt then self.route_pt = 1; return end
   local dx, dy = tgt.x - self.x, tgt.y - self.y
-  local dist   = math.sqrt(dx * dx + dy * dy)
-  if dist < 4 then
+  if dx * dx + dy * dy < 36 then           -- reached the waypoint (< 6 px)
     self.route_pt = self.route_pt % #pts + 1
     return
   end
-  local step = math.min(dist, sp * dt)
-  self.x = self.x + dx / dist * step
-  self.y = self.y + dy / dist * step
-  self.angle = (math.deg(atan2(dy, dx)) + 90) % 360   -- 0 = north, clockwise
+
+  -- Turn the hull toward the waypoint at a limited rate (no instant snap).
+  local desired = (math.deg(atan2(dy, dx)) + 90) % 360
+  local turn    = (td.patrol_turn or 70) * dt
+  local diff    = ((desired - self.angle + 180) % 360) - 180
+  if math.abs(diff) <= turn then
+    self.angle = desired
+  else
+    self.angle = (self.angle + (diff > 0 and turn or -turn)) % 360
+  end
+
+  -- Drive forward along the current heading.
+  if self.patrol_v > 0 then
+    local rad  = (self.angle - 90) * math.pi / 180
+    local step = self.patrol_v * dt
+    self.x = self.x + math.cos(rad) * step
+    self.y = self.y + math.sin(rad) * step
+  end
 end
 
 -- Returns rotation in radians for g.draw().

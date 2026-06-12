@@ -255,6 +255,7 @@ function CombatSystem:_update_ai(dt)
       local dy  = p.y - e.y
       local d2  = dx * dx + dy * dy
       local det = td.detection_radius or 0
+      e.engaging = false
       if det > 0 and d2 <= det * det then
         local target = (math.deg(atan2(dy, dx)) + 90) % 360
         local diff   = ((target - e.aim_angle + 180) % 360) - 180
@@ -271,6 +272,7 @@ function CombatSystem:_update_ai(dt)
 
         local atk    = td.attack_range or det
         local weapon = e.weapon or td.weapon
+        e.engaging   = d2 <= atk * atk   -- in firing range: patrol slows to a stop
         local can_fire = (not e.has_turret) or e.turret_alive
         if can_fire and math.abs(diff) < LOCK_DEG and d2 <= atk * atk then
           e.reload = e.reload - dt
