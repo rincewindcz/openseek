@@ -57,7 +57,7 @@ function Player:init(x, y)
   self.max_rev      = 100
   self.strafe_speed = 140
   self.strafe_accel = 400
-  self.fuel_drain   = 2.0
+  self.fuel_drain   = 1.3
   self.takeoff_time = 0.65
   self.land_time    = 0.50
 

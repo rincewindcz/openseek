@@ -3,7 +3,7 @@
   "brake": 300,
   "collision_radius": 10,
   "decel": 200,
-  "fuel_drain": 1.0,
+  "fuel_drain": 0.7,
   "land_time": 0,
   "max_fwd": 120,
   "max_rev": 60,
