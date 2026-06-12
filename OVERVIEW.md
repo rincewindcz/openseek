@@ -49,8 +49,14 @@ and drawn throughout `engine/`.
   separate turret that spins to aim; the turret has its own HP and must be
   destroyed (it absorbs all hits and explodes first) before the hull can be
   damaged. Solid entities block tank movement and veto helicopter landings;
-  player armor takes damage from enemy fire. Enemy movement, player death, ammo,
-  and weapon shop are not yet implemented.
+  player armor takes damage from enemy fire. The chopper arsenal includes a
+  widening-cone napalm and an alternating-pod mega missile (with a smoke trail);
+  weapons carry their canonical shortname (GUN/FAR/NAP/MRK/...) and WEAPONS.BIN
+  icon. Player ammo is tracked per weapon (chaingun infinite, others limited);
+  destroyed large buildings drop power-ups (PICKUPS.BIN) that refill ammo, fuel,
+  armor, or award a medal, collected by flying over (easy) or landing on them
+  (hard). `F5` toggles unlimited ammo/fuel/armor for testing. Enemy movement,
+  player death, and a weapon shop are not yet implemented.
 
 ## Architecture
 
@@ -71,7 +77,8 @@ Engine modules (`engine/`), all built on the tiny `class.lua` helper:
 | `combat.lua` | Weapons, projectiles, firing geometry (spread/streams/swing/side offset), hit detection, AoE. Loads `data/weapons.json`. |
 | `camera.lua` | Zoom, pan, world-rotation transform, viewport culling, game-mode vertical focus offset (`view_oy`, `screen_center`). |
 | `renderer.lua` | Draws world entities (decals then objects, y-sorted, culled), segments, grid, pickers, viewer HUD bar. |
-| `hud.lua` | Sprite-based gauges and radar from `data/hud.json`. |
+| `hud.lua` | Sprite-based gauges, weapon icon, and radar from `data/hud.json`. |
+| `powerups.lua` | Power-up drops from destroyed large buildings: spawn, ttl/blink, fly-over vs land-on collection, and effect application. Frames from the `pickup` clip. |
 | `animation.lua` | Shared immutable `AnimClip` definitions plus per-instance `AnimState` playback. Loads `data/animations.json`. |
 | `debug.lua` | Debug overlay (`F2`). |
 
@@ -81,6 +88,8 @@ Engine modules (`engine/`), all built on the tiny `class.lua` helper:
 drive; the chopper takes off / lands with `Space` (it bounces back up if it tries
 to land on a solid obstacle). Holding `Shift` while turning strafes the chopper or
 rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `E` cycles weapon level.
+`F5` toggles unlimited ammo/fuel/armor (god mode); `F6` toggles power-up pickup
+between easy (fly-over) and hard (land-on).
 
 ## Coordinate and angle conventions
 
@@ -97,7 +106,7 @@ rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `E` cycles weapon leve
 | File | Contents |
 |------|----------|
 | `assets/stageMP.json` + `assets/stageMP/*.png` | Decoded stages and sprites (generated, not committed). |
-| `data/weapons.json` | Weapon and projectile definitions, including per-level upgrades. |
+| `data/weapons.json` | Weapon and projectile definitions: per-level upgrades, `short`/`icon` (WEAPONS.BIN), `ammo_max`/`ammo_pickup`, plus `alternate_side`/`trail` (mega missile) and `flame` cone params (napalm). |
 | `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`, unit `sprite`/`dead_sprite`, two-part tank `turret_hp`/`turret_explosion`). |
 | `data/vehicles/*.json` | Player vehicle tuning. |
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |

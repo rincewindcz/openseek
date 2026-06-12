@@ -1,6 +1,8 @@
 {
   "chaingun": {
     "vehicle": "both",
+    "short": "GUN",
+    "icon": 3,
     "proj_type": "bullet",
     "proj_color": [1, 1, 1],
     "proj_size": 1,
@@ -18,6 +20,8 @@
 
   "rockets": {
     "vehicle": "chopper",
+    "short": "FAR",
+    "icon": 4,
     "proj_type": "sprite",
     "proj_sprite": "ffr",
     "proj_sprite_rot": -90,
@@ -26,6 +30,8 @@
     "ttl": 3.0,
     "aoe": 0,
     "explosion": "explosion_medium",
+    "ammo_max": 40,
+    "ammo_pickup": 20,
     "levels": [
       { "damage": 12, "fire_rate": 11.0, "spread_deg": 0, "count": 2, "side_offset": 16 },
       { "damage": 12, "fire_rate": 9.0,  "spread_deg": 0, "count": 3, "side_offset": 10 },
@@ -33,17 +39,63 @@
     ]
   },
 
-  "air_to_ground": {
+  "mega_missile": {
     "vehicle": "chopper",
+    "short": "MRK",
+    "icon": 8,
     "proj_type": "sprite",
     "proj_sprite": "missle",
+    "proj_sprite_rot": -90,
+    "speed": 460,
+    "proj_radius": 6,
+    "ttl": 3.5,
+    "aoe": 30,
+    "explosion": "explosion_large",
+    "alternate_side": true,
+    "side_offset": 14,
+    "trail": "smoke2",
+    "trail_interval": 14,
+    "damage": 100,
+    "fire_rate": 3.0,
+    "ammo_max": 8,
+    "ammo_pickup": 4
+  },
 
+  "napalm": {
+    "vehicle": "chopper",
+    "short": "NAP",
+    "icon": 2,
+    "proj_type": "flame",
+    "effect": "fire",
+    "explosion": "explosion_none",
+    "damage": 40,
+    "aoe": 22,
+    "fire_rate": 4.0,
+    "ammo_max": 30,
+    "ammo_pickup": 15,
+    "levels": [
+      { "cone_deg": 18, "count": 5,  "range": 120 },
+      { "cone_deg": 34, "count": 8,  "range": 130 },
+      { "cone_deg": 52, "count": 12, "range": 140 }
+    ]
+  },
+
+  "air_to_ground": {
+    "vehicle": "chopper",
+    "short": "STR",
+    "icon": 1,
+    "proj_type": "sprite",
+    "proj_sprite": "missle",
+    "proj_sprite_rot": -90,
     "trail": "missile_smoke",
+    "trail_interval": 16,
     "speed": 400,
     "proj_radius": 6,
     "ttl": 4.0,
     "aoe": 30,
     "explosion": "explosion_large",
+    "ammo_max": 10,
+    "ammo_pickup": 5,
     "levels": [
       { "damage": 80, "fire_rate": 1.0, "count": 1, "locking": false },
       { "damage": 80, "fire_rate": 1.0, "count": 1, "locking": true  },
@@ -53,15 +105,20 @@
 
   "air_to_air": {
     "vehicle": "chopper",
+    "short": "AIM",
+    "icon": 0,
     "proj_type": "sprite",
     "proj_sprite": "missle",
-
+    "proj_sprite_rot": -90,
     "trail": "missile_smoke",
+    "trail_interval": 16,
     "speed": 450,
     "proj_radius": 6,
     "ttl": 3.5,
     "aoe": 0,
     "explosion": "explosion_medium",
+    "ammo_max": 10,
+    "ammo_pickup": 5,
     "levels": [
       { "damage": 60, "fire_rate": 1.0, "count": 1, "locking": false },
       { "damage": 60, "fire_rate": 1.0, "count": 1, "locking": true  },
@@ -71,6 +128,8 @@
 
   "bomb": {
     "vehicle": "chopper",
+    "short": "BMB",
+    "icon": 7,
     "proj_type": "bomb_drop",
     "proj_sprite": "bomb",
     "proj_sprite_frame": 23,
@@ -79,6 +138,8 @@
     "ttl": 5.0,
     "aoe": 80,
     "explosion": "explosion_large",
+    "ammo_max": 6,
+    "ammo_pickup": 3,
     "levels": [
       { "damage": 120, "fire_rate": 0.5 }
     ]
@@ -86,6 +147,8 @@
 
   "shells": {
     "vehicle": "tank",
+    "short": "SHL",
+    "icon": 6,
     "proj_type": "sprite",
     "proj_sprite": "shell",
     "proj_sprite_rot": -90,
@@ -94,6 +157,8 @@
     "ttl": 2.5,
     "aoe": 40,
     "explosion": "explosion_large",
+    "ammo_max": 20,
+    "ammo_pickup": 10,
     "levels": [
       { "damage": 100, "fire_rate": 1.0, "count": 1 },
       { "damage": 100, "fire_rate": 1.5, "count": 1 },

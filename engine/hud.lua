@@ -124,7 +124,7 @@ function Hud:_draw_weapon(g, item, x, y)
   if not item._frames then return end
   local s   = item.scale or 1
   local p   = self.player
-  local fi  = math.max(1, math.min(#item._frames, (p.weapon_idx or 0) + 1))
+  local fi  = math.max(1, math.min(#item._frames, (p.weapon_icon or 0) + 1))
   local img = item._frames[fi]
   if img then
     g.setColor(1, 1, 1)

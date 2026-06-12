@@ -24,6 +24,9 @@ function Projectile:init(p)
   self.max_range = p.max_range
   self.accel     = p.accel or 0  -- forward acceleration (px/s^2), e.g. tracers
   self.traveled  = 0
+  self.trail          = p.trail            -- effect clip dropped along the path
+  self.trail_interval = p.trail_interval or 14
+  self._trail_dist    = 0
   self.alive     = true
   -- Animated sprite (e.g. the growing tracer streak); plays once, holds last frame.
   if p.animate then self.anim = Animation.new(p.wdef.proj_sprite) end
@@ -42,7 +45,9 @@ function Projectile:update(dt)
   local dy = self.vy * dt
   self.x = self.x + dx
   self.y = self.y + dy
-  self.traveled = self.traveled + math.sqrt(dx * dx + dy * dy)
+  local step = math.sqrt(dx * dx + dy * dy)
+  self.traveled = self.traveled + step
+  if self.trail then self._trail_dist = self._trail_dist + step end
   if self.max_range and self.traveled >= self.max_range then self.alive = false end
   if self.anim then self.anim:update(dt) end
   self.ttl = self.ttl - dt
@@ -74,8 +79,31 @@ function CombatSystem:init(world, camera)
   self.camera      = camera
   self.player      = nil
   self.projectiles = {}
+  self.effects     = {}   -- transient world anims (missile trails, napalm fire)
   self.weapons     = {}
   self._swing      = {}
+  self._alt        = {}   -- per owner+weapon side toggle for alternate_side weapons
+end
+
+-- Spawn a transient world-space effect. opts: {rot, scale, damage, radius, ttl}.
+-- A damage effect applies its damage once to entities within radius. ttl bounds
+-- looping clips (napalm fire); non-looping clips also cull when their anim ends.
+function CombatSystem:add_effect(clip_name, x, y, opts)
+  opts = opts or {}
+  local anim = Animation.new(clip_name)
+  if anim:is_done() then return end
+  self.effects[#self.effects + 1] = {
+    anim   = anim,
+    x      = x,
+    y      = y,
+    rot    = opts.rot   or 0,
+    scale  = opts.scale or 1,
+    damage = opts.damage,
+    radius = opts.radius or 0,
+    ttl    = opts.ttl,
+    age    = 0,
+    hit    = false,
+  }
 end
 
 function CombatSystem:load(path)
@@ -97,6 +125,11 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
   -- Right-perpendicular (90 deg CW in Y-down screen space): (-fy, fx)
   local rx  = -fy
   local ry  =  fx
+
+  -- Napalm and similar: a widening cone of ground fire ahead, no projectiles.
+  if wdef.proj_type == "flame" then
+    return self:_fire_flame(x, y, fx, fy, rad, wdef, level)
+  end
 
   -- Range cap: player shots are limited to ~1.5x the visible screen so they
   -- cannot cross the map; enemies pass their attack range so their shots reach.
@@ -122,6 +155,15 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     swing_off = math.sin(self._swing[key] or 0) * spread
   end
 
+  -- Alternate-side weapons (mega missile) fire one round, swapping the muzzle
+  -- between the left and right pod each trigger.
+  local alt_sign = 0
+  if wdef.alternate_side then
+    local key = tostring(owner) .. weapon_name
+    alt_sign = (self._alt[key] == 1) and -1 or 1
+    self._alt[key] = alt_sign
+  end
+
   for i = 1, total do
     -- Angular spread offset
     local angle_off = swing_off
@@ -140,6 +182,10 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
       ox = rx * dist
       oy = ry * dist
     end
+    if wdef.alternate_side then
+      ox = rx * side * alt_sign
+      oy = ry * side * alt_sign
+    end
 
     local fire_rad = rad + angle_off
     local proj = Projectile:new({
@@ -156,10 +202,31 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
       max_range = max_range,
       accel     = wdef.proj_accel or 0,
       animate   = animate,
+      trail          = wdef.trail,
+      trail_interval = wdef.trail_interval,
       -- Rotation for drawing: angle_deg in our CW-from-north system maps to Love2D radians
       angle_rad = angle_deg * math.pi / 180 + angle_off,
     })
     self.projectiles[#self.projectiles + 1] = proj
+  end
+end
+
+-- Napalm: scatter `count` damaging fire patches across a cone of `cone_deg`
+-- ahead of the muzzle, out to `range`. Each patch is a one-shot damage effect.
+function CombatSystem:_fire_flame(x, y, fx, fy, rad, wdef, level)
+  local count = level.count    or 6
+  local cone  = (level.cone_deg or 20) * math.pi / 180
+  local range = level.range    or 120
+  local dmg   = level.damage   or wdef.damage or 30
+  local radius= wdef.aoe       or 20
+  for i = 1, count do
+    local frac = count > 1 and (i - 1) / (count - 1) or 0.5
+    local a    = rad + (frac - 0.5) * cone
+    local d    = range * (0.35 + 0.65 * math.random())
+    local px   = x + math.cos(a) * d
+    local py   = y + math.sin(a) * d
+    self:add_effect(wdef.effect or "fire", px, py,
+      { damage = dmg, radius = radius, ttl = wdef.fire_ttl or 1.3 })
   end
 end
 
@@ -222,11 +289,43 @@ function CombatSystem:update(dt)
   local alive = {}
   for _, proj in ipairs(self.projectiles) do
     proj:update(dt)
+    -- Drop a trail puff every trail_interval px travelled.
+    if proj.trail and proj._trail_dist >= proj.trail_interval then
+      proj._trail_dist = 0
+      self:add_effect(proj.trail, proj.x, proj.y, {})
+    end
     if proj.alive and not self:_check_hit(proj) then
       alive[#alive + 1] = proj
     end
   end
   self.projectiles = alive
+
+  self:_update_effects(dt)
+end
+
+function CombatSystem:_update_effects(dt)
+  local live = {}
+  for _, fx in ipairs(self.effects) do
+    fx.anim:update(dt)
+    fx.age = fx.age + dt
+    if fx.damage and not fx.hit then
+      fx.hit = true
+      local r2 = (fx.radius or 0) ^ 2
+      for _, e in ipairs(self.world.entities) do
+        if e:is_alive() and (e.type_data and (e.type_data.hit_radius or 0) > 0) then
+          local dx = e.x - fx.x
+          local dy = e.y - fx.y
+          if dx * dx + dy * dy < r2 then
+            e:on_hit()
+            e:take_damage(fx.damage, dx, dy)
+          end
+        end
+      end
+    end
+    local expired = (fx.ttl and fx.age >= fx.ttl) or fx.anim:is_done()
+    if not expired then live[#live + 1] = fx end
+  end
+  self.effects = live
 end
 
 function CombatSystem:_check_hit(proj)
@@ -253,7 +352,7 @@ function CombatSystem:_check_hit(proj)
       local dy = p.y - proj.y
       local pr = (p.collision_radius or 12) + proj.radius
       if dx * dx + dy * dy < pr * pr then
-        p.armor = math.max(0, p.armor - proj.damage)
+        if not p.unlimited then p.armor = math.max(0, p.armor - proj.damage) end
         return true
       end
     end
@@ -275,10 +374,20 @@ function CombatSystem:_apply_aoe(proj)
 end
 
 function CombatSystem:draw()
-  if #self.projectiles == 0 then return end
+  if #self.projectiles == 0 and #self.effects == 0 then return end
   local g = love.graphics
   g.push()
   self.camera:apply()
+
+  -- Transient effects (trails, napalm fire) draw under the projectiles.
+  for _, fx in ipairs(self.effects) do
+    local img = fx.anim:current_image()
+    if img then
+      local iw, ih = img:getDimensions()
+      g.setColor(1, 1, 1)
+      g.draw(img, fx.x, fx.y, fx.rot, fx.scale, fx.scale, iw / 2, ih / 2)
+    end
+  end
 
   for _, proj in ipairs(self.projectiles) do
     local wdef = proj.wdef

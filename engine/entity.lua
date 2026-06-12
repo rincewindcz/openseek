@@ -7,6 +7,7 @@ local Entity = Class()
 
 local DEATH_PUSH  = 5     -- px a unit corpse slides in the shot direction
 local DEATH_SLIDE = 0.12  -- seconds for the corpse slide to settle
+local DROP_CHANCE = 0.5   -- chance a destroyed large building drops a power-up
 
 function Entity.load_types(path)
   local data = love.filesystem.read(path)
@@ -137,6 +138,8 @@ function Entity:_start_death(dx, dy)
   if self.crater_eligible then
     local clip = Animation.clip("crater")
     self.crater_img = clip and clip.frames[1] or nil
+    -- ...and sometimes drop a power-up for the player to grab.
+    if math.random() < DROP_CHANCE then self.drop_powerup = true end
   end
   -- Clear smoke effects when dying
   self._damage_smokes = {}

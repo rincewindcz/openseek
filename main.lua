@@ -6,6 +6,7 @@ local Animation    = require "engine.animation"
 local Player       = require "engine.player"
 local Hud          = require "engine.hud"
 local CombatSystem = require "engine.combat"
+local Powerups     = require "engine.powerups"
 local json         = require "lib.json"
 
 local world
@@ -15,6 +16,7 @@ local dbg
 local hud
 local player
 local combat
+local powerups
 local game_mode    = false
 local sandbox_mode = false
 local sel_vehicle  = "chopper"
@@ -23,9 +25,16 @@ local vehicle_defs = {}
 
 -- Weapon lists per vehicle (order determines cycle order)
 local VEHICLE_WEAPONS = {
-  chopper = {"chaingun", "rockets", "air_to_ground", "air_to_air", "bomb"},
+  chopper = {"chaingun", "napalm", "rockets", "mega_missile", "air_to_ground", "air_to_air", "bomb"},
   tank    = {"chaingun", "shells"},
 }
+
+-- Sync the HUD weapon icon (WEAPONS.BIN frame) to the active weapon.
+local function sync_weapon_icon()
+  if not (player and combat) then return end
+  local wdef = combat.weapons[player.weapon_name]
+  player.weapon_icon = wdef and wdef.icon or 0
+end
 
 -- ── sandbox UI ────────────────────────────────────────────────────────────────
 
@@ -156,10 +165,13 @@ local function enter_game_mode()
   -- Set default weapon for vehicle
   local wlist = VEHICLE_WEAPONS[sel_vehicle]
   if wlist then player.weapon_name = wlist[1] end
+  player:seed_ammo(combat.weapons)
+  sync_weapon_icon()
   local _, sh = love.graphics.getDimensions()
   camera.view_oy = sh * 0.24
   hud.player    = player
   combat.player = player
+  powerups:reset(player)
   love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
 end
 
@@ -170,6 +182,8 @@ local function leave_game_mode()
   hud.player        = nil
   combat.player     = nil
   combat.projectiles = {}
+  combat.effects     = {}
+  powerups:reset(nil)
   camera.angle      = nil
   camera.view_oy    = 0
   camera:set_zoom(viewer_zi)
@@ -210,6 +224,7 @@ function love.load(args)
   hud.world = world
   combat   = CombatSystem:new(world, camera)
   combat:load("data/weapons.json")
+  powerups = Powerups:new(world, camera, combat.weapons)
   renderer:refresh_kinds()
   love.window.setTitle(world:title())
 end
@@ -219,9 +234,11 @@ local function _try_fire(dt)
   local wdef = combat.weapons[player.weapon_name]
   if not wdef then return end
   if player.fire_timer > 0 then return end
+  if not player:has_ammo(player.weapon_name) then return end
   local level = wdef.levels and wdef.levels[player.weapon_level] or wdef
   combat:tick_swing("player", player.weapon_name)
   combat:fire(player.x, player.y, player:fire_angle(), player.weapon_name, "player", player.weapon_level)
+  player:consume_ammo(player.weapon_name, wdef.ammo_cost or 1)
   player.fire_timer = 1.0 / (level.fire_rate or wdef.fire_rate or 10)
 end
 
@@ -230,6 +247,7 @@ function love.update(dt)
     player:update(dt)
     _try_fire(dt)
     combat:update(dt)
+    powerups:update(dt)
     camera.x     = player.x
     camera.y     = player.y
     camera.angle = player:camera_angle()
@@ -254,6 +272,7 @@ function love.draw()
   renderer:draw()
 
   if game_mode and player then
+    powerups:draw()
     player:draw_world()
     combat:draw()
     player:draw()
@@ -262,13 +281,18 @@ function love.draw()
     -- Weapon indicator (top-left, below renderer bar)
     local g = love.graphics
     g.setColor(0, 0, 0, 0.55)
-    g.rectangle("fill", 0, 22, 360, 20)
+    g.rectangle("fill", 0, 22, 470, 20)
     g.setColor(1, 1, 0.2, 1)
-    local wdef  = combat.weapons[player.weapon_name]
-    local n_lvl = wdef and wdef.levels and #wdef.levels or 1
-    local mod   = player.vehicle == "tank" and "shift+turn: turret" or "shift: strafe"
-    g.print(string.format("Q: %s  E: lv%d/%d  ctrl: fire  %s",
-      player.weapon_name, player.weapon_level, n_lvl, mod), 4, 24)
+    local wdef   = combat.weapons[player.weapon_name]
+    local n_lvl  = wdef and wdef.levels and #wdef.levels or 1
+    local short  = wdef and wdef.short or "?"
+    local ammo   = player.ammo[player.weapon_name]
+    local ammo_s = ammo and tostring(ammo) or "inf"
+    local mod    = player.vehicle == "tank" and "shift+turn: turret" or "shift: strafe"
+    local flags  = (player.unlimited and " [GOD]" or "")
+      .. (powerups.easy_mode and "" or " [LAND]")
+    g.print(string.format("Q:%s(%s) E:lv%d/%d ammo:%s ctrl:fire %s%s",
+      short, player.weapon_name, player.weapon_level, n_lvl, ammo_s, mod, flags), 4, 24)
     g.setColor(1, 1, 1)
     if sandbox_mode then
       draw_sandbox_panel()
@@ -329,6 +353,8 @@ function love.keypressed(key)
   end
 
   if game_mode and player then
+    if key == "f5" then player.unlimited = not player.unlimited; return end
+    if key == "f6" then powerups.easy_mode = not powerups.easy_mode; return end
     if key == "space" or key == "f" then
       if player.land_state == "airborne" then
         player:land()
@@ -347,6 +373,7 @@ function love.keypressed(key)
       player.weapon_name  = wlist[idx]
       player.weapon_level = 1
       player.fire_timer   = 0
+      sync_weapon_icon()
       return
     end
     if key == "e" then

@@ -83,6 +83,7 @@ function World:load(name)
   self.combatants = {}
 
   -- First pass: build every entity and index hulls by exact position.
+  local created = {}
   local hull_at = {}
   for id, raw in ipairs(self.stage.entities) do
     local cls    = self.stage.classes[raw.class + 1]
@@ -95,26 +96,27 @@ function World:load(name)
       local w, h = r.img:getDimensions()
       if math.max(w, h) >= 28 then entity.crater_eligible = true end
     end
-    self.entities[id] = entity
+    created[id] = entity
     if cls.kind_name == "tank" then
       hull_at[raw.x .. "," .. raw.y] = entity
     end
   end
 
   -- Second pass: fold each turret onto its co-located hull (dropping the turret
-  -- as a standalone entity); everything else joins the draw/combat lists.
+  -- as a standalone entity); everything else joins the dense entity list and the
+  -- draw/combat lists. self.entities must stay hole-free for ipairs consumers.
   for id, raw in ipairs(self.stage.entities) do
-    local entity = self.entities[id]
+    local entity = created[id]
     local cls    = self.stage.classes[raw.class + 1]
     if top_class[raw.class] then
       local hull = hull_at[raw.x .. "," .. raw.y]
       local r    = self.images[raw.class + 1]
       if hull and r then
         hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy })
-        self.entities[id] = nil
         goto continue
       end
     end
+    self.entities[#self.entities + 1] = entity
     local list = cls.kind == 15 and self.decals or self.objects
     list[#list + 1] = entity
     local td = entity.type_data

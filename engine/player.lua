@@ -28,10 +28,15 @@ function Player:init(x, y)
 
   self.world_size   = 4096
   self.weapon_idx   = 0       -- HUD sprite index (0-based)
+  self.weapon_icon  = 0       -- WEAPONS.BIN frame for the current weapon
   self.vehicle      = "chopper"
   self.weapon_name  = "chaingun"
   self.weapon_level = 1
   self.fire_timer   = 0
+
+  self.ammo         = {}      -- weapon_name -> rounds left (absent = infinite)
+  self.unlimited    = false   -- god mode: skip ammo/fuel/armor consumption
+  self.medals       = 0
 
   self.turret_offset    = 0    -- tank turret heading relative to the hull (deg)
   self.turret_rate      = 140
@@ -93,6 +98,36 @@ end
 function Player:fire_angle()
   if self.vehicle == "tank" then return self.angle + self.turret_offset end
   return self.angle
+end
+
+-- ── ammo ──────────────────────────────────────────────────────────────────────
+
+-- Seed per-weapon ammo to full from the weapon table. Weapons without an
+-- ammo_max (chaingun) stay absent and read as infinite.
+function Player:seed_ammo(weapons)
+  self.ammo      = {}
+  self._ammo_max = {}
+  for name, w in pairs(weapons) do
+    if w.ammo_max then
+      self.ammo[name]      = w.ammo_max
+      self._ammo_max[name] = w.ammo_max
+    end
+  end
+end
+
+function Player:has_ammo(name)
+  return self.unlimited or self.ammo[name] == nil or self.ammo[name] > 0
+end
+
+function Player:consume_ammo(name, cost)
+  if self.unlimited or self.ammo[name] == nil then return end
+  self.ammo[name] = math.max(0, self.ammo[name] - (cost or 1))
+end
+
+function Player:add_ammo(name, amount)
+  if self.ammo[name] == nil then return end  -- not an ammo-tracked weapon
+  local cap = self._ammo_max and self._ammo_max[name] or self.ammo[name] + amount
+  self.ammo[name] = math.min(cap, self.ammo[name] + amount)
 end
 
 function Player:_apply_config()
@@ -292,6 +327,7 @@ function Player:_move(dt)
 end
 
 function Player:_drain_fuel(dt)
+  if self.unlimited then return end
   self.fuel = math.max(0, self.fuel - self.fuel_drain * dt)
 end
 
@@ -332,6 +368,7 @@ function Player:repair(amount)
 end
 
 function Player:is_dead()
+  if self.unlimited then return false end
   return self.armor <= 0 or self.fuel <= 0
 end
 
