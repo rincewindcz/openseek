@@ -123,30 +123,16 @@ function Player:update(dt)
   end
 end
 
--- Smoke intensity scales with armor loss: one stream under 60% armor, two under
--- 40%, three under 20%. Each puff is dropped at the vehicle's world position and
--- stays there, so movement leaves a trail (same idea as damaged enemy entities).
+-- Smoke intensity scales with armor loss: ~2-3 puffs under 60% armor, ~5-7 under
+-- 40%, ~8-12 under 20%. Each puff is dropped at the vehicle's world position with
+-- a random offset and stays there, so movement leaves a spreading trail.
 function Player:_update_damage_smoke(dt)
   local maxa = self.max_armor or 100
   local pct  = maxa > 0 and (self.armor / maxa) or 1
-  local tier = 0
-  if pct < 0.6 then tier = 1 end
-  if pct < 0.4 then tier = 2 end
-  if pct < 0.2 then tier = 3 end
-
-  if tier > 0 then
-    self._smoke_timer = self._smoke_timer - dt
-    if self._smoke_timer <= 0 then
-      self._smoke_timer = 0.12
-      for _ = 1, tier do
-        self._smoke_puffs[#self._smoke_puffs + 1] = {
-          x    = self.x + (math.random() - 0.5) * 8,
-          y    = self.y + (math.random() - 0.5) * 8,
-          anim = Animation.new("smoke"),
-        }
-      end
-    end
-  end
+  local target = 0
+  if pct < 0.6 then target = 3  end
+  if pct < 0.4 then target = 7  end
+  if pct < 0.2 then target = 12 end
 
   local live = {}
   for _, pf in ipairs(self._smoke_puffs) do
@@ -154,6 +140,18 @@ function Player:_update_damage_smoke(dt)
     if not pf.anim:is_done() then live[#live + 1] = pf end
   end
   self._smoke_puffs = live
+
+  if #self._smoke_puffs < target then
+    self._smoke_timer = self._smoke_timer - dt
+    if self._smoke_timer <= 0 then
+      self._smoke_timer = 0.05
+      self._smoke_puffs[#self._smoke_puffs + 1] = {
+        x    = self.x + (math.random() - 0.5) * 30,
+        y    = self.y + (math.random() - 0.5) * 30,
+        anim = Animation.new("smoke"),
+      }
+    end
+  end
 end
 
 -- World-space smoke trail (drawn through the camera, before the vehicle).
@@ -406,13 +404,13 @@ function Player:_draw_tank(g, cx, cy, s)
   local body_frames = self:_frames("tankbgrn")
   local body_img    = body_frames[self._tank_anim.frame] or body_frames[1]
   self:_draw_centered(g, body_img, cx, cy, s)
-  -- Turret: the tanktop arc is pre-rendered, so select the frame for the turret
-  -- heading (frame 0 = forward/up) instead of runtime-rotating one frame.
-  local top = self:_frames("tanktop")
-  local n   = #top
-  if n > 0 then
-    local fi = (math.floor(self.turret_offset / 360 * n + 0.5) % n) + 1
-    self:_draw_centered(g, top[fi], cx, cy, s)
+  -- Turret: axis-aligned frame 15 (barrel east), runtime-rotated to the turret
+  -- heading relative to the hull. Anchored on its art center to spin in place.
+  local img = self:_frames("tanktop")[16]  -- frame 15
+  if img then
+    local ax, ay = Animation.frame_anchor("tanktop", 16)
+    local rot    = (self.turret_offset - 90) * math.pi / 180
+    g.draw(img, cx, cy, rot, s, s, ax, ay)
   end
 end
 

@@ -38,9 +38,9 @@ and drawn throughout `engine/`.
   entities; entities take damage, show hit/damage smoke, explode, and large static
   buildings leave a crater. Enemy soldiers are destructible and switch to a corpse
   sprite when killed. The player tank turret aims and fires independently of the
-  hull (selecting the matching pre-rendered turret frame; the one place we use the
-  arc frames instead of runtime rotation). A damaged player vehicle trails smoke in
-  world space. Enemies (flak turrets, enemy tanks with their own sprite, soldiers)
+  hull (axis-aligned frame 15, runtime-rotated like everything else). A damaged
+  player vehicle trails smoke in world space. Enemies (flak turrets, enemy tanks
+  with their own sprite, soldiers)
   rotate to track the player and fire when locked and in range: flak fires paired
   accelerating animated tracers, tanks fire shells, soldiers fire rifles. Solid
   entities block tank movement and veto helicopter landings; player armor takes
