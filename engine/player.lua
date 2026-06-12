@@ -55,6 +55,8 @@ function Player:init(x, y)
   self.takeoff_time = 0.65
   self.land_time    = 0.50
 
+  self._damage_smokes = {}   -- {anim, ox, oy} — vehicle smoke scaled by armor loss
+
   self._tank_anim    = Animation.new("tankbgrn")
   self._rotor_pitch  = Animation.new("bladep")
   self._rotor_bank   = Animation.new("bladeb")
@@ -114,8 +116,40 @@ function Player:update(dt)
     self:_drain_fuel(dt)
   end
   self:_update_anims(dt)
+  self:_update_damage_smoke(dt)
   if self.fire_timer > 0 then
     self.fire_timer = self.fire_timer - dt
+  end
+end
+
+-- Continuous smoke emitters scaled by remaining armor: one under 60%, two under
+-- 40%, three under 20% (same idea as damaged enemy entities).
+function Player:_update_damage_smoke(dt)
+  local maxa = self.max_armor or 100
+  local pct  = maxa > 0 and (self.armor / maxa) or 1
+  local target = 0
+  if pct < 0.6 then target = 1 end
+  if pct < 0.4 then target = 2 end
+  if pct < 0.2 then target = 3 end
+
+  while #self._damage_smokes < target do
+    self._damage_smokes[#self._damage_smokes + 1] = {
+      anim = Animation.new("smoke"),
+      ox   = (math.random() - 0.5) * 24,
+      oy   = (math.random() - 0.5) * 24,
+    }
+  end
+  while #self._damage_smokes > target do
+    table.remove(self._damage_smokes)
+  end
+
+  for _, se in ipairs(self._damage_smokes) do
+    se.anim:update(dt)
+    if se.anim:is_done() then
+      se.anim:reset()
+      se.ox = (math.random() - 0.5) * 24
+      se.oy = (math.random() - 0.5) * 24
+    end
   end
 end
 
@@ -330,6 +364,16 @@ function Player:draw()
     self:_draw_tank(g, cx, cy, s)
   else
     self:_draw_chopper(g, cx, cy, s)
+  end
+
+  for _, se in ipairs(self._damage_smokes) do
+    local img = se.anim:current_image()
+    if img then
+      local w, h = img:getDimensions()
+      local ss   = s * 0.7
+      g.setColor(1, 1, 1, 0.9)
+      g.draw(img, cx + se.ox, cy + se.oy, 0, ss, ss, w / 2, h / 2)
+    end
   end
   g.setColor(1, 1, 1)
 end

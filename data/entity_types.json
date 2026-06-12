@@ -30,7 +30,7 @@
     "weapon": "rifle",
     "sprite": "soldier",
     "dead_sprite": "soldier_dead",
-    "sprite_rot": -90
+    "sprite_rot": 0
   },
   "soldier_aggressive": {
     "attack_range": 240,
@@ -42,7 +42,7 @@
     "weapon": "rifle",
     "sprite": "soldier",
     "dead_sprite": "soldier_dead",
-    "sprite_rot": -90
+    "sprite_rot": 0
   },
   "scenery": {
     "attack_range": 0,

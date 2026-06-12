@@ -106,14 +106,14 @@
     "proj_type": "tracer",
     "proj_sprite": "trace",
     "proj_sprite_rot": -90,
-    "speed": 140,
-    "proj_accel": 1000,
+    "speed": 70,
+    "proj_accel": 650,
     "proj_radius": 3,
     "ttl": 2.5,
     "aoe": 0,
     "explosion": "explosion_flak",
     "damage": 5,
-    "fire_rate": 4,
+    "fire_rate": 1.5,
     "spread_deg": 4
   },
 
@@ -142,7 +142,7 @@
     "aoe": 40,
     "explosion": "explosion_large",
     "damage": 25,
-    "fire_rate": 0.5
+    "fire_rate": 0.25
   },
 
   "rifle": {
@@ -156,7 +156,7 @@
     "aoe": 0,
     "explosion": "explosion_none",
     "damage": 8,
-    "fire_rate": 2,
+    "fire_rate": 0.9,
     "spread_deg": 5
   }
 }
