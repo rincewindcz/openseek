@@ -37,6 +37,7 @@ function Player:init(x, y)
   self.ammo         = {}      -- weapon_name -> rounds left (absent = infinite)
   self.unlimited    = false   -- god mode: skip ammo/fuel/armor consumption
   self.medals       = 0
+  self.death        = nil     -- death sequence state (set by start_death)
 
   self.turret_offset    = 0    -- tank turret heading relative to the hull (deg)
   self.turret_rate      = 140
@@ -142,6 +143,7 @@ end
 -- ── update ────────────────────────────────────────────────────────────────────
 
 function Player:update(dt)
+  if self.death then return self:_update_death(dt) end
   self:_update_altitude(dt)
   self:_apply_input(dt)
   if self.land_state == "airborne" or not self:is_flyer() then
@@ -218,6 +220,83 @@ function Player:_draw_smoke_layer(front)
   end
   g.setColor(1, 1, 1)
   g.pop()
+end
+
+-- ── death sequence ────────────────────────────────────────────────────────────
+
+local FALL_TIME = 0.9   -- seconds for a downed chopper to drop from full altitude
+local TANK_BURN = 1.6   -- seconds the tank burns before the turret blows
+
+-- Begin the death sequence: a chopper falls and explodes on the ground; a tank
+-- burns with explosions and smoke, then its turret blows. Idempotent.
+function Player:start_death()
+  if self.death then return end
+  self.speed  = 0
+  self.strafe = 0
+  if self:is_flyer() then
+    self.land_state = "landing"   -- drop frames driven by altitude
+    self.death = { phase = "fall", t = 0, fx = {} }
+  else
+    self.death = { phase = "burn", t = 0, spawn = 0, fx = {}, turret_exploded = false }
+  end
+end
+
+function Player:death_done()
+  return self.death ~= nil and self.death.phase == "done"
+end
+
+function Player:_update_death(dt)
+  local d = self.death
+  d.t = d.t + dt
+  for i = #d.fx, 1, -1 do
+    d.fx[i].anim:update(dt)
+    if d.fx[i].anim:is_done() then table.remove(d.fx, i) end
+  end
+  if self:is_flyer() then
+    self:_update_death_chopper(dt, d)
+  else
+    self:_update_death_tank(dt, d)
+  end
+end
+
+function Player:_update_death_chopper(dt, d)
+  if d.phase == "fall" then
+    self:_update_anims(dt)   -- rotor keeps spinning on the way down
+    self.altitude = math.max(0, self.altitude - dt / FALL_TIME)
+    if self.altitude <= 0 then
+      d.phase = "boom"
+      d.boom  = Animation.new("explosion_large")
+    end
+  elseif d.phase == "boom" then
+    if d.boom then
+      d.boom:update(dt)
+      if d.boom:is_done() then d.phase = "done" end
+    else
+      d.phase = "done"
+    end
+  end
+end
+
+function Player:_update_death_tank(dt, d)
+  if d.phase == "burn" then
+    d.spawn = d.spawn - dt
+    if d.spawn <= 0 then
+      d.spawn = 0.16
+      local clip = (math.random() < 0.5) and "explosion_medium" or "smoke"
+      d.fx[#d.fx + 1] = {
+        anim = Animation.new(clip),
+        ox   = (math.random() - 0.5) * 44,
+        oy   = (math.random() - 0.5) * 36,
+      }
+    end
+    if d.t >= TANK_BURN then
+      d.phase           = "turret"
+      d.turret_exploded = true
+      d.fx[#d.fx + 1]   = { anim = Animation.new("explosion_large"), ox = 0, oy = -4 }
+    end
+  elseif d.phase == "turret" then
+    if d.t >= TANK_BURN + 0.6 and #d.fx == 0 then d.phase = "done" end
+  end
 end
 
 function Player:_update_altitude(dt)
@@ -429,10 +508,41 @@ function Player:draw()
   local s = self.sprite_scale
 
   g.setColor(1, 1, 1)
-  if self.vehicle == "tank" then
+  if self.death then
+    self:_draw_death(g, cx, cy, s)
+  elseif self.vehicle == "tank" then
     self:_draw_tank(g, cx, cy, s)
   else
     self:_draw_chopper(g, cx, cy, s)
+  end
+  g.setColor(1, 1, 1)
+end
+
+function Player:_draw_death(g, cx, cy, s)
+  local d = self.death
+  if self:is_flyer() then
+    if d.phase == "fall" then
+      local jx = (math.random() - 0.5) * 7   -- shake while plummeting
+      local jy = (math.random() - 0.5) * 7
+      self:_draw_chopper(g, cx + jx, cy + jy, s)
+    elseif d.phase == "boom" and d.boom then
+      local img = d.boom:current_image()
+      if img then
+        local w, h = img:getDimensions()
+        g.draw(img, cx, cy, 0, s, s, w / 2, h / 2)
+      end
+    end
+  else
+    self:_draw_tank(g, cx, cy, s)   -- burning hull; turret skipped once exploded
+  end
+  -- explosions / smoke around the wreck
+  for _, e in ipairs(d.fx) do
+    local img = e.anim:current_image()
+    if img then
+      local w, h = img:getDimensions()
+      g.setColor(1, 1, 1)
+      g.draw(img, cx + e.ox * s, cy + e.oy * s, 0, s, s, w / 2, h / 2)
+    end
   end
   g.setColor(1, 1, 1)
 end
@@ -454,6 +564,7 @@ function Player:_draw_tank(g, cx, cy, s)
   local body_frames = self:_frames("tankbgrn")
   local body_img    = body_frames[self._tank_anim.frame] or body_frames[1]
   self:_draw_centered(g, body_img, cx, cy, s)
+  if self.death and self.death.turret_exploded then return end
   -- Turret: axis-aligned frame 15 (barrel east), runtime-rotated to the turret
   -- heading relative to the hull. Anchored on its art center to spin in place.
   local img = self:_frames("tanktop")[16]  -- frame 15

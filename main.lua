@@ -19,6 +19,7 @@ local combat
 local powerups
 local game_mode    = false
 local sandbox_mode = false
+local death_enabled = false   -- optional game-over (chopper falls, tank burns)
 local sel_vehicle  = "chopper"
 local viewer_zi    = 4
 local vehicle_defs = {}
@@ -135,6 +136,21 @@ local function draw_sandbox_panel()
   end
 end
 
+local function draw_game_over()
+  local g      = love.graphics
+  local sw, sh = g.getDimensions()
+  g.setColor(0, 0, 0, 0.55)
+  g.rectangle("fill", 0, 0, sw, sh)
+  g.setColor(1, 0.25, 0.2, 1)
+  local font = g.getFont()
+  local msg  = "GAME OVER"
+  g.print(msg, (sw - font:getWidth(msg) * 3) / 2, sh / 2 - 40, 0, 3, 3)
+  g.setColor(1, 1, 1, 0.9)
+  local hint = "R - restart level     F1 - exit to overview"
+  g.print(hint, (sw - font:getWidth(hint)) / 2, sh / 2 + 16)
+  g.setColor(1, 1, 1)
+end
+
 -- ── mode transitions ──────────────────────────────────────────────────────────
 
 local function after_stage_load()
@@ -150,10 +166,8 @@ local function after_stage_load()
   end
 end
 
-local function enter_game_mode()
-  viewer_zi  = camera.zi
-  game_mode  = true
-  camera:set_zoom(6)
+-- Build a fresh player on the stage spawn and wire it into the systems.
+local function spawn_player()
   local sx, sy = world:player_start()
   player = Player:new(sx, sy)
   player.world_size   = world.stage.world_size
@@ -162,7 +176,6 @@ local function enter_game_mode()
   player.camera       = camera
   local def = vehicle_defs[sel_vehicle]
   if def then player:load_vehicle_def(def) end
-  -- Set default weapon for vehicle
   local wlist = VEHICLE_WEAPONS[sel_vehicle]
   if wlist then player.weapon_name = wlist[1] end
   player:seed_ammo(combat.weapons)
@@ -171,7 +184,25 @@ local function enter_game_mode()
   camera.view_oy = sh * 0.24
   hud.player    = player
   combat.player = player
+  combat.projectiles = {}
+  combat.effects     = {}
   powerups:reset(player)
+end
+
+local function enter_game_mode()
+  viewer_zi  = camera.zi
+  game_mode  = true
+  camera:set_zoom(6)
+  spawn_player()
+  love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
+end
+
+-- Reload the current stage and respawn the player (R in game mode).
+local function restart_level()
+  local name = world.stage_name
+  world:load(name)
+  after_stage_load()
+  spawn_player()
   love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
 end
 
@@ -245,7 +276,10 @@ end
 function love.update(dt)
   if game_mode and player then
     player:update(dt)
-    _try_fire(dt)
+    if death_enabled and not player.death and player:is_dead() then
+      player:start_death()
+    end
+    if not player.death then _try_fire(dt) end
     combat:update(dt)
     powerups:update(dt)
     camera.x     = player.x
@@ -291,9 +325,10 @@ function love.draw()
     local mod    = player.vehicle == "tank" and "shift+turn: turret" or "shift: strafe"
     local flags  = (player.unlimited and " [GOD]" or "")
       .. (powerups.easy_mode and "" or " [LAND]")
-    g.print(string.format("Q:%s(%s) E:lv%d/%d ammo:%s ctrl:fire %s%s",
+    g.print(string.format("Q:%s(%s) E:lv%d/%d ammo:%s ctrl:fire %s%s  R:restart",
       short, player.weapon_name, player.weapon_level, n_lvl, ammo_s, mod, flags), 4, 24)
     g.setColor(1, 1, 1)
+    if player:death_done() then draw_game_over() end
     if sandbox_mode then
       draw_sandbox_panel()
     end
@@ -301,9 +336,10 @@ function love.draw()
     -- vehicle / sandbox hint below the renderer bar
     local g = love.graphics
     g.setColor(0, 0, 0, 0.55)
-    g.rectangle("fill", 0, 22, 260, 20)
+    g.rectangle("fill", 0, 22, 380, 20)
     g.setColor(1, 1, 1, 0.9)
-    g.print("V: [" .. sel_vehicle .. "]  F1: play  F3: sandbox", 4, 24)
+    g.print(string.format("V: [%s]  F1: play  F3: sandbox  O: game-over [%s]",
+      sel_vehicle, death_enabled and "ON" or "OFF"), 4, 24)
     g.setColor(1, 1, 1)
   end
 
@@ -353,6 +389,7 @@ function love.keypressed(key)
   end
 
   if game_mode and player then
+    if key == "r"  then restart_level(); return end
     if key == "f5" then player.unlimited = not player.unlimited; return end
     if key == "f6" then powerups.easy_mode = not powerups.easy_mode; return end
     if key == "space" or key == "f" then
@@ -426,6 +463,7 @@ function love.keypressed(key)
     if key == "v" then
       sel_vehicle = (sel_vehicle == "chopper") and "tank" or "chopper"
     end
+    if key == "o" then death_enabled = not death_enabled end
     if key == "l" then renderer.show_segments = not renderer.show_segments end
     if key == "g" then renderer.show_grid     = not renderer.show_grid     end
     if key == "+" or key == "=" or key == "kp+" then camera:set_zoom(camera.zi + 1) end

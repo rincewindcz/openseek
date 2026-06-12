@@ -59,8 +59,10 @@ and drawn throughout `engine/`.
   others limited); destroyed large buildings almost always drop a power-up
   (PICKUPS.BIN) that refills ammo, fuel, armor, or awards a medal, collected by
   flying over (easy) or landing on them (hard). `F5` toggles unlimited
-  ammo/fuel/armor for testing. Enemy movement, player death, and a weapon shop
-  are not yet implemented.
+  ammo/fuel/armor for testing. Game-over is optional (toggle `O` in the overview):
+  when enabled, running out of fuel or armor downs the player, a chopper falling
+  and exploding on the ground, a tank burning then losing its turret; `R` restarts
+  the current level. Enemy movement and a weapon shop are not yet implemented.
 
 ## Architecture
 
@@ -93,7 +95,8 @@ drive; the chopper takes off / lands with `Space` (it bounces back up if it trie
 to land on a solid obstacle). Holding `Shift` while turning strafes the chopper or
 rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `E` cycles weapon level.
 `F5` toggles unlimited ammo/fuel/armor (god mode); `F6` toggles power-up pickup
-between easy (fly-over) and hard (land-on).
+between easy (fly-over) and hard (land-on); `R` restarts the current level. In the
+overview screen, `O` toggles optional game-over (death) on or off.
 
 ## Coordinate and angle conventions
 
