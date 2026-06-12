@@ -33,6 +33,10 @@ function Entity:init(id, stage_ent, stage_cls)
   self.type_data    = Entity.type_for(stage_cls.kind_name)
   self.anim         = nil
 
+  -- Enemy AI: turret/facing heading toward the player and a reload timer
+  self.aim_angle    = 0
+  self.reload       = 0
+
   -- Damage visual effects
   self._damage_smokes = {}   -- {anim, ox, oy} — persistent looping smoke per HP tier
   self._hit_smokes    = {}   -- {anim, ox, oy} — one-shot SMOKE2 on hit

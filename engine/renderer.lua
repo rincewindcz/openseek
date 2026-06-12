@@ -132,6 +132,13 @@ function Renderer:_draw_entities(list, vp)
       goto continue
     end
 
+    -- Vehicles with a separately rotating turret (enemy tanks). Dead ones fall
+    -- through to the explosion path below.
+    if e.type_data and e.type_data.vehicle and e:is_alive() then
+      self:_draw_vehicle(e)
+      goto continue
+    end
+
     if e:is_alive() then
       local r = images[e.class_idx + 1]
       if r then
@@ -190,6 +197,27 @@ function Renderer:_draw_entities(list, vp)
   end
 end
 
+-- Persistent damage smoke and one-shot hit smoke for an entity.
+function Renderer:_draw_smokes(e)
+  local g = love.graphics
+  for _, se in ipairs(e._damage_smokes) do
+    local img = se.anim:current_image()
+    if img then
+      local iw, ih = img:getDimensions()
+      g.setColor(1, 1, 1, 0.85)
+      g.draw(img, e.x + se.ox, e.y + se.oy, 0, 1, 1, iw / 2, ih / 2)
+      g.setColor(1, 1, 1)
+    end
+  end
+  for _, hs in ipairs(e._hit_smokes) do
+    local img = hs.anim:current_image()
+    if img then
+      local iw, ih = img:getDimensions()
+      g.draw(img, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, iw / 2, ih / 2)
+    end
+  end
+end
+
 function Renderer:_draw_unit(e)
   local g  = love.graphics
   local td = e.type_data
@@ -198,18 +226,30 @@ function Renderer:_draw_unit(e)
   local img  = clip and clip.frames[1]
   if img then
     local iw, ih = img:getDimensions()
+    local rot = (e.aim_angle + (td.sprite_rot or 0)) * math.pi / 180
     g.setColor(1, 1, 1)
-    g.draw(img, e.x + e.death_ox, e.y + e.death_oy, 0, 1, 1, iw / 2, ih / 2)
+    g.draw(img, e.x + e.death_ox, e.y + e.death_oy, rot, 1, 1, iw / 2, ih / 2)
   end
-  if e:is_alive() then
-    for _, hs in ipairs(e._hit_smokes) do
-      local him = hs.anim:current_image()
-      if him then
-        local hw, hh = him:getDimensions()
-        g.draw(him, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, hw / 2, hh / 2)
-      end
-    end
+  if e:is_alive() then self:_draw_smokes(e) end
+end
+
+-- Enemy tank: static hull plus a turret that rotates to its aim heading.
+function Renderer:_draw_vehicle(e)
+  local g = love.graphics
+  g.setColor(1, 1, 1)
+  local body = Animation.clip("tankbgrn")
+  local bi   = body and body.frames[1]
+  if bi then
+    local w, h = bi:getDimensions()
+    g.draw(bi, e.x, e.y, 0, 1, 1, w / 2, h / 2)
   end
+  local top = Animation.clip("tanktop")
+  local ti  = top and top.frames[1]   -- frame 0 = barrel north
+  if ti then
+    local w, h = ti:getDimensions()
+    g.draw(ti, e.x, e.y, e.aim_angle * math.pi / 180, 1, 1, w / 2, h / 2)
+  end
+  self:_draw_smokes(e)
 end
 
 function Renderer:_draw_hud()

@@ -23,6 +23,7 @@ function World:init()
   self.entities    = {}    -- all Entity instances
   self.decals      = {}    -- Entity instances with kind == 15, y-sorted
   self.objects     = {}    -- all other Entity instances, y-sorted
+  self.combatants  = {}    -- entities that can target and fire on the player
   Entity.load_types("data/entity_types.json")
   self:_discover()
 end
@@ -63,9 +64,10 @@ function World:load(name)
     end
   end
 
-  self.entities = {}
-  self.decals   = {}
-  self.objects  = {}
+  self.entities   = {}
+  self.decals     = {}
+  self.objects    = {}
+  self.combatants = {}
   for id, raw in ipairs(self.stage.entities) do
     local cls    = self.stage.classes[raw.class + 1]
     local entity = Entity:new(id, raw, cls)
@@ -80,6 +82,10 @@ function World:load(name)
     self.entities[id] = entity
     local list = cls.kind == 15 and self.decals or self.objects
     list[#list + 1] = entity
+    local td = entity.type_data
+    if td and td.weapon and (td.detection_radius or 0) > 0 then
+      self.combatants[#self.combatants + 1] = entity
+    end
   end
   local by_y = function(a, b)
     if a.y ~= b.y then return a.y < b.y end

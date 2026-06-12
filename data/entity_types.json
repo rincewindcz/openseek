@@ -1,7 +1,7 @@
 {
   "flak_turret": {
-    "attack_range": 400,
-    "detection_radius": 500,
+    "attack_range": 240,
+    "detection_radius": 320,
     "explosion": "medium",
     "hit_radius": 14,
     "speed": 0,
@@ -21,25 +21,28 @@
   "powerup_marker": {
   },
   "soldier": {
-    "attack_range": 0,
-    "detection_radius": 0,
+    "attack_range": 220,
+    "detection_radius": 280,
     "explosion": "none",
     "hit_radius": 6,
     "speed": 0,
-    "turn_speed": 0,
-    "sprite": "soldier",
-    "dead_sprite": "soldier_dead"
-  },
-  "soldier_aggressive": {
-    "attack_range": 300,
-    "detection_radius": 400,
-    "explosion": "none",
-    "hit_radius": 6,
-    "speed": 0,
-    "turn_speed": 0,
+    "turn_speed": 100,
     "weapon": "rifle",
     "sprite": "soldier",
-    "dead_sprite": "soldier_dead"
+    "dead_sprite": "soldier_dead",
+    "sprite_rot": -90
+  },
+  "soldier_aggressive": {
+    "attack_range": 240,
+    "detection_radius": 320,
+    "explosion": "none",
+    "hit_radius": 6,
+    "speed": 0,
+    "turn_speed": 150,
+    "weapon": "rifle",
+    "sprite": "soldier",
+    "dead_sprite": "soldier_dead",
+    "sprite_rot": -90
   },
   "scenery": {
     "attack_range": 0,
@@ -58,6 +61,18 @@
     "turn_speed": 0,
     "solid": true,
     "collision_radius": 14
+  },
+  "tank": {
+    "attack_range": 260,
+    "detection_radius": 360,
+    "explosion": "large",
+    "hit_radius": 18,
+    "speed": 0,
+    "turn_speed": 70,
+    "weapon": "tank_cannon",
+    "solid": true,
+    "collision_radius": 14,
+    "vehicle": "tank"
   },
   "tree": {
     "attack_range": 0,

@@ -174,8 +174,12 @@
   },
 
   "trace": {
-    "frames": ["stage00/trace_f007.png"],
-    "fps": 1, "loop": false
+    "frames": [
+      "stage00/trace_f007.png","stage00/trace_f039.png","stage00/trace_f071.png",
+      "stage00/trace_f103.png","stage00/trace_f135.png","stage00/trace_f167.png",
+      "stage00/trace_f199.png"
+    ],
+    "fps": 24, "loop": false
   },
 
   "tankbgrn": {

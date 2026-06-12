@@ -2,6 +2,9 @@ local Class     = require "engine.class"
 local json      = require "lib.json"
 local Animation = require "engine.animation"
 
+-- LuaJIT (LÖVE) has math.atan2; Lua 5.3+ folds it into math.atan(y, x).
+local atan2 = math.atan2 or math.atan
+
 -- ── Projectile ────────────────────────────────────────────────────────────────
 
 local Projectile = Class()
@@ -19,17 +22,29 @@ function Projectile:init(p)
   self.wdef      = p.wdef
   self.angle_rad = p.angle_rad  -- Love2D draw rotation (radians)
   self.max_range = p.max_range
+  self.accel     = p.accel or 0  -- forward acceleration (px/s^2), e.g. tracers
   self.traveled  = 0
   self.alive     = true
+  -- Animated sprite (e.g. the growing tracer streak); plays once, holds last frame.
+  if p.animate then self.anim = Animation.new(p.wdef.proj_sprite) end
 end
 
 function Projectile:update(dt)
+  if self.accel > 0 then
+    local sp = math.sqrt(self.vx * self.vx + self.vy * self.vy)
+    if sp > 0 then
+      local nsp = sp + self.accel * dt
+      self.vx = self.vx / sp * nsp
+      self.vy = self.vy / sp * nsp
+    end
+  end
   local dx = self.vx * dt
   local dy = self.vy * dt
   self.x = self.x + dx
   self.y = self.y + dy
   self.traveled = self.traveled + math.sqrt(dx * dx + dy * dy)
   if self.max_range and self.traveled >= self.max_range then self.alive = false end
+  if self.anim then self.anim:update(dt) end
   self.ttl = self.ttl - dt
   if self.ttl <= 0 then self.alive = false end
 end
@@ -37,6 +52,7 @@ end
 function Projectile:get_image()
   local wdef = self.wdef
   if not wdef.proj_sprite then return nil end
+  if self.anim then return self.anim:current_image() end
   local clip = Animation.clip(wdef.proj_sprite)
   if not clip or #clip.frames == 0 then return nil end
   return clip.frames[1]
@@ -45,7 +61,8 @@ end
 -- Draw origin that centers the sprite's visible art on the projectile position.
 function Projectile:get_anchor()
   if not self.wdef.proj_sprite then return 0, 0 end
-  return Animation.frame_anchor(self.wdef.proj_sprite, 1)
+  local frame = self.anim and self.anim.frame or 1
+  return Animation.frame_anchor(self.wdef.proj_sprite, frame)
 end
 
 -- ── CombatSystem ─────────────────────────────────────────────────────────────
@@ -67,7 +84,7 @@ function CombatSystem:load(path)
   self.weapons = json.decode(raw)
 end
 
-function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx)
+function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range_override)
   local wdef = self.weapons[weapon_name]
   if not wdef then return end
   level_idx = level_idx or 1
@@ -81,10 +98,15 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx)
   local rx  = -fy
   local ry  =  fx
 
-  -- Range cap: roughly 1.5x the visible screen so shots cannot cross the map.
-  local sw, sh   = love.graphics.getDimensions()
-  local view     = math.max(sw, sh) / self.camera:zoom()
-  local max_range = 1.5 * view
+  -- Range cap: player shots are limited to ~1.5x the visible screen so they
+  -- cannot cross the map; enemies pass their attack range so their shots reach.
+  local sw, sh    = love.graphics.getDimensions()
+  local view      = math.max(sw, sh) / self.camera:zoom()
+  local max_range = range_override or (1.5 * view)
+
+  -- Multi-frame projectile sprites animate (the tracer streak that grows).
+  local clip      = wdef.proj_sprite and Animation.clip(wdef.proj_sprite)
+  local animate   = clip and #clip.frames > 1 or false
 
   local speed      = wdef.speed or 0
   local spread     = (level.spread_deg or wdef.spread_deg or 0) * math.pi / 180
@@ -132,6 +154,8 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx)
       radius    = wdef.proj_radius or 3,
       wdef      = wdef,
       max_range = max_range,
+      accel     = wdef.proj_accel or 0,
+      animate   = animate,
       -- Rotation for drawing: angle_deg in our CW-from-north system maps to Love2D radians
       angle_rad = angle_deg * math.pi / 180 + angle_off,
     })
@@ -144,10 +168,52 @@ function CombatSystem:tick_swing(owner, weapon_name)
   if not self._swing[key] then self._swing[key] = 0 end
 end
 
+-- Angular threshold (deg) within which a turret/soldier is considered locked on.
+local LOCK_DEG = 8
+
+-- Drive enemy aiming and firing. Each combatant rotates its aim toward the
+-- player at its turn_speed, and fires its weapon when locked and in range.
+function CombatSystem:_update_ai(dt)
+  local p = self.player
+  if not p then return end
+  for _, e in ipairs(self.world.combatants) do
+    if e:is_alive() then
+      local td  = e.type_data
+      local dx  = p.x - e.x
+      local dy  = p.y - e.y
+      local d2  = dx * dx + dy * dy
+      local det = td.detection_radius or 0
+      if det > 0 and d2 <= det * det then
+        local target = (math.deg(atan2(dy, dx)) + 90) % 360
+        local diff   = ((target - e.aim_angle + 180) % 360) - 180
+        local step   = (td.turn_speed or 90) * dt
+        if math.abs(diff) <= step then
+          e.aim_angle = target
+        else
+          e.aim_angle = (e.aim_angle + (diff > 0 and step or -step)) % 360
+        end
+        e.angle = e.aim_angle  -- drives sprite rotation for normal-path turrets (flak)
+
+        local atk = td.attack_range or det
+        if math.abs(diff) < LOCK_DEG and d2 <= atk * atk then
+          e.reload = e.reload - dt
+          if e.reload <= 0 then
+            self:fire(e.x, e.y, e.aim_angle, td.weapon, "enemy", 1, atk * 1.3)
+            local w = self.weapons[td.weapon]
+            e.reload = 1 / ((w and w.fire_rate) or 1)
+          end
+        end
+      end
+    end
+  end
+end
+
 function CombatSystem:update(dt)
   for k in pairs(self._swing) do
     self._swing[k] = self._swing[k] + dt * 5.0
   end
+
+  self:_update_ai(dt)
 
   local alive = {}
   for _, proj in ipairs(self.projectiles) do
@@ -181,7 +247,8 @@ function CombatSystem:_check_hit(proj)
     if p and p.armor > 0 then
       local dx = p.x - proj.x
       local dy = p.y - proj.y
-      if dx * dx + dy * dy < (proj.radius + 20) ^ 2 then
+      local pr = (p.collision_radius or 12) + proj.radius
+      if dx * dx + dy * dy < pr * pr then
         p.armor = math.max(0, p.armor - proj.damage)
         return true
       end

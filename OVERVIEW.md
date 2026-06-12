@@ -38,8 +38,11 @@ and drawn throughout `engine/`.
   entities; entities take damage, show hit/damage smoke, explode, and large static
   buildings leave a crater. Enemy soldiers are destructible and switch to a corpse
   sprite when killed. The tank turret aims and fires independently of the hull.
-  Solid entities block tank movement and veto helicopter landings. Enemy AI, enemy
-  fire, player death, ammo, and weapon shop are not yet implemented.
+  Solid entities block tank movement and veto helicopter landings. Enemies (flak
+  turrets, tanks, soldiers) rotate their turret/facing to track the player and fire
+  when locked and in range; flak fires accelerating animated tracers. Player armor
+  takes damage from enemy fire. Enemy movement, player death, ammo, and weapon shop
+  are not yet implemented.
 
 ## Architecture
 

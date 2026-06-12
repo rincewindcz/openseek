@@ -105,14 +105,16 @@
     "vehicle": "enemy",
     "proj_type": "tracer",
     "proj_sprite": "trace",
-    "speed": 420,
+    "proj_sprite_rot": -90,
+    "speed": 140,
+    "proj_accel": 1000,
     "proj_radius": 3,
-    "ttl": 2.2,
+    "ttl": 2.5,
     "aoe": 0,
     "explosion": "explosion_flak",
-    "damage": 30,
-    "fire_rate": 1.5,
-    "spread_deg": 5
+    "damage": 5,
+    "fire_rate": 4,
+    "spread_deg": 4
   },
 
   "machine_gun": {
@@ -139,7 +141,7 @@
     "ttl": 2.5,
     "aoe": 40,
     "explosion": "explosion_large",
-    "damage": 100,
+    "damage": 25,
     "fire_rate": 0.5
   },
 
@@ -153,7 +155,7 @@
     "ttl": 1.5,
     "aoe": 0,
     "explosion": "explosion_none",
-    "damage": 10,
+    "damage": 8,
     "fire_rate": 2,
     "spread_deg": 5
   }
