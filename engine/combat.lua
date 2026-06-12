@@ -242,6 +242,8 @@ end
 
 -- Angular threshold (deg) within which a turret/soldier is considered locked on.
 local LOCK_DEG = 8
+-- How long before its next shot a patrolling tank slows to a stop (then resumes).
+local STOP_LEAD = 0.8
 
 -- Drive enemy aiming and firing. Each combatant rotates its aim toward the
 -- player at its turn_speed, and fires its weapon when locked and in range.
@@ -272,7 +274,10 @@ function CombatSystem:_update_ai(dt)
 
         local atk    = td.attack_range or det
         local weapon = e.weapon or td.weapon
-        e.engaging   = d2 <= atk * atk   -- in firing range: patrol slows to a stop
+        -- Patrol only pauses for the brief window around each shot (slow to a
+        -- stop as the reload comes up, fire, then resume), not the whole time
+        -- the player is in range.
+        e.engaging   = d2 <= atk * atk and e.reload <= STOP_LEAD
         local can_fire = (not e.has_turret) or e.turret_alive
         if can_fire and math.abs(diff) < LOCK_DEG and d2 <= atk * atk then
           e.reload = e.reload - dt
