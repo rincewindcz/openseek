@@ -195,7 +195,7 @@
   },
 
   "gunfire": {
-    "frames": ["effects/fire_f01.png"],
+    "frames": ["effects/fire_f00.png"],
     "fps": 1, "loop": false
   },
 

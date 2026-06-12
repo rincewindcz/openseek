@@ -73,6 +73,7 @@
     "fire_rate": 3.0,
     "spacing": 15,
     "line_offset": 18,
+    "wave_delay": 0.04,
     "ammo_max": 30,
     "ammo_pickup": 15,
     "levels": [

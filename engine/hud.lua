@@ -26,7 +26,7 @@ local RADAR_BUILDING = {
   radar     = true,
 }
 local RADAR_COLOR_ENEMY    = { 1.0, 0.15, 0.15 }
-local RADAR_COLOR_BUILDING = { 0.0, 0.0,  0.0  }
+local RADAR_COLOR_BUILDING = { 0.33, 0.18, 0.07 }
 
 function Hud:init()
   self.player = nil

@@ -101,6 +101,7 @@ function CombatSystem:add_effect(clip_name, x, y, opts)
     damage = opts.damage,
     radius = opts.radius or 0,
     ttl    = opts.ttl,
+    delay  = opts.delay or 0,   -- seconds before the effect ignites (napalm wave)
     age    = 0,
     hit    = false,
   }
@@ -221,6 +222,7 @@ function CombatSystem:_fire_flame(x, y, fx, fy, rad, wdef, level)
   local loff    = level.line_offset or wdef.line_offset or 18
   local dmg     = level.damage  or wdef.damage or 30
   local radius  = wdef.aoe      or 20
+  local wave    = wdef.wave_delay or 0.04  -- per-step ignition delay (outward wave)
   local px, py  = -fy, fx  -- perpendicular (lateral) direction
   for l = 1, lines do
     local lat = (l - (lines + 1) / 2) * loff
@@ -229,7 +231,7 @@ function CombatSystem:_fire_flame(x, y, fx, fy, rad, wdef, level)
       local ex = x + fx * d + px * lat
       local ey = y + fy * d + py * lat
       self:add_effect(wdef.effect or "fire", ex, ey,
-        { damage = dmg, radius = radius, ttl = wdef.fire_ttl or 1.3 })
+        { damage = dmg, radius = radius, ttl = wdef.fire_ttl or 1.3, delay = (i - 1) * wave })
     end
   end
 end
@@ -325,23 +327,26 @@ end
 function CombatSystem:_update_effects(dt)
   local live = {}
   for _, fx in ipairs(self.effects) do
-    fx.anim:update(dt)
     fx.age = fx.age + dt
-    if fx.damage and not fx.hit then
-      fx.hit = true
-      local r2 = (fx.radius or 0) ^ 2
-      for _, e in ipairs(self.world.entities) do
-        if e:is_alive() and (e.type_data and (e.type_data.hit_radius or 0) > 0) then
-          local dx = e.x - fx.x
-          local dy = e.y - fx.y
-          if dx * dx + dy * dy < r2 then
-            e:on_hit()
-            e:take_damage(fx.damage, dx, dy)
+    if fx.age >= fx.delay then            -- ignited
+      fx.anim:update(dt)
+      if fx.damage and not fx.hit then
+        fx.hit = true
+        local r2 = (fx.radius or 0) ^ 2
+        for _, e in ipairs(self.world.entities) do
+          if e:is_alive() and (e.type_data and (e.type_data.hit_radius or 0) > 0) then
+            local dx = e.x - fx.x
+            local dy = e.y - fx.y
+            if dx * dx + dy * dy < r2 then
+              e:on_hit()
+              e:take_damage(fx.damage, dx, dy)
+            end
           end
         end
       end
     end
-    local expired = (fx.ttl and fx.age >= fx.ttl) or fx.anim:is_done()
+    local life    = fx.age - fx.delay
+    local expired = (fx.ttl and life >= fx.ttl) or (life >= 0 and fx.anim:is_done())
     if not expired then live[#live + 1] = fx end
   end
   self.effects = live
@@ -400,7 +405,7 @@ function CombatSystem:draw()
 
   -- Transient effects (trails, napalm fire) draw under the projectiles.
   for _, fx in ipairs(self.effects) do
-    local img = fx.anim:current_image()
+    local img = fx.age >= fx.delay and fx.anim:current_image() or nil
     if img then
       local iw, ih = img:getDimensions()
       g.setColor(1, 1, 1)
