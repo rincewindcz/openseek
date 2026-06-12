@@ -25,6 +25,9 @@ function World:init()
   self.objects     = {}    -- all other Entity instances, y-sorted
   self.combatants  = {}    -- entities that can target and fire on the player
   Entity.load_types("data/entity_types.json")
+  self.weapon_overrides = {}   -- asset filename -> enemy weapon name
+  local raw = love.filesystem.read("data/enemy_overrides.json")
+  if raw then self.weapon_overrides = json.decode(raw) end
   self:_discover()
 end
 
@@ -95,6 +98,11 @@ function World:load(name)
     if cls.kind_name == "structure" and r and r.img then
       local w, h = r.img:getDimensions()
       if math.max(w, h) >= 28 then entity.crater_eligible = true end
+    end
+    -- Per-sprite enemy weapon override (e.g. gun1 fires rockets, sguntop fires fire).
+    local af = cls.asset and self.stage.assets[cls.asset + 1]
+    if af and af.file then
+      entity.weapon = self.weapon_overrides[af.file:lower()]
     end
     created[id] = entity
     if cls.kind_name == "tank" then

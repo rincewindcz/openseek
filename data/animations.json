@@ -194,6 +194,11 @@
     "fps": 24, "loop": false
   },
 
+  "gunfire": {
+    "frames": ["effects/fire_f01.png"],
+    "fps": 1, "loop": false
+  },
+
   "tankbgrn": {
     "frames": ["player/tankbgrn_f00.png","player/tankbgrn_f01.png"],
     "fps": 8, "loop": true

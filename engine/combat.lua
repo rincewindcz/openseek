@@ -211,22 +211,26 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
   end
 end
 
--- Napalm: scatter `count` damaging fire patches across a cone of `cone_deg`
--- ahead of the muzzle, out to `range`. Each patch is a one-shot damage effect.
+-- Napalm: a deterministic wave of `count` fire patches laid straight ahead of
+-- the muzzle, repeated as `lines` parallel rows (level 1/2/3 -> 1/2/3 lines).
+-- Each patch is a one-shot damage effect.
 function CombatSystem:_fire_flame(x, y, fx, fy, rad, wdef, level)
-  local count = level.count    or 6
-  local cone  = (level.cone_deg or 20) * math.pi / 180
-  local range = level.range    or 120
-  local dmg   = level.damage   or wdef.damage or 30
-  local radius= wdef.aoe       or 20
-  for i = 1, count do
-    local frac = count > 1 and (i - 1) / (count - 1) or 0.5
-    local a    = rad + (frac - 0.5) * cone
-    local d    = range * (0.35 + 0.65 * math.random())
-    local px   = x + math.cos(a) * d
-    local py   = y + math.sin(a) * d
-    self:add_effect(wdef.effect or "fire", px, py,
-      { damage = dmg, radius = radius, ttl = wdef.fire_ttl or 1.3 })
+  local lines   = level.lines   or 1
+  local count   = level.count   or 10
+  local spacing = level.spacing or wdef.spacing or 15
+  local loff    = level.line_offset or wdef.line_offset or 18
+  local dmg     = level.damage  or wdef.damage or 30
+  local radius  = wdef.aoe      or 20
+  local px, py  = -fy, fx  -- perpendicular (lateral) direction
+  for l = 1, lines do
+    local lat = (l - (lines + 1) / 2) * loff
+    for i = 1, count do
+      local d  = i * spacing
+      local ex = x + fx * d + px * lat
+      local ey = y + fy * d + py * lat
+      self:add_effect(wdef.effect or "fire", ex, ey,
+        { damage = dmg, radius = radius, ttl = wdef.fire_ttl or 1.3 })
+    end
   end
 end
 
@@ -264,13 +268,14 @@ function CombatSystem:_update_ai(dt)
         -- which the renderer draws from aim_angle.
         if not e.has_turret then e.angle = e.aim_angle end
 
-        local atk = td.attack_range or det
+        local atk    = td.attack_range or det
+        local weapon = e.weapon or td.weapon
         local can_fire = (not e.has_turret) or e.turret_alive
         if can_fire and math.abs(diff) < LOCK_DEG and d2 <= atk * atk then
           e.reload = e.reload - dt
           if e.reload <= 0 then
-            self:fire(e.x, e.y, e.aim_angle, td.weapon, "enemy", 1, atk * 1.3)
-            local w = self.weapons[td.weapon]
+            self:fire(e.x, e.y, e.aim_angle, weapon, "enemy", 1, atk * 1.3)
+            local w = self.weapons[weapon]
             e.reload = 1 / ((w and w.fire_rate) or 1)
           end
         end
@@ -294,13 +299,27 @@ function CombatSystem:update(dt)
       proj._trail_dist = 0
       self:add_effect(proj.trail, proj.x, proj.y, {})
     end
-    if proj.alive and not self:_check_hit(proj) then
-      alive[#alive + 1] = proj
+    local ended
+    if proj.alive then
+      if self:_check_hit(proj) then ended = true else alive[#alive + 1] = proj end
+    else
+      ended = true
     end
+    if ended then self:_end_projectile(proj) end
   end
   self.projectiles = alive
 
   self:_update_effects(dt)
+end
+
+-- An enemy round bursts into its explosion clip when it hits the player or fades
+-- out (e.g. flak/sgun -> flakani). Player impacts are handled by entity deaths.
+function CombatSystem:_end_projectile(proj)
+  if proj.owner == "player" then return end
+  local ex = proj.wdef.explosion
+  if ex and ex ~= "explosion_none" then
+    self:add_effect(ex, proj.x, proj.y, {})
+  end
 end
 
 function CombatSystem:_update_effects(dt)

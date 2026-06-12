@@ -49,14 +49,18 @@ and drawn throughout `engine/`.
   separate turret that spins to aim; the turret has its own HP and must be
   destroyed (it absorbs all hits and explodes first) before the hull can be
   damaged. Solid entities block tank movement and veto helicopter landings;
-  player armor takes damage from enemy fire. The chopper arsenal includes a
-  widening-cone napalm and an alternating-pod mega missile (with a smoke trail);
-  weapons carry their canonical shortname (GUN/FAR/NAP/MRK/...) and WEAPONS.BIN
-  icon. Player ammo is tracked per weapon (chaingun infinite, others limited);
-  destroyed large buildings drop power-ups (PICKUPS.BIN) that refill ammo, fuel,
-  armor, or award a medal, collected by flying over (easy) or landing on them
-  (hard). `F5` toggles unlimited ammo/fuel/armor for testing. Enemy movement,
-  player death, and a weapon shop are not yet implemented.
+  player armor takes damage from enemy fire. Enemy turrets vary their weapon by
+  sprite (`data/enemy_overrides.json`): gun1 fires rockets, sguntop spits
+  fireballs; enemy rounds burst into their explosion clip (flak/sgun -> flakani)
+  on impact or when they fade. The chopper arsenal includes a straight-wave
+  napalm (1/2/3 parallel lines of fire) and an alternating-pod mega missile (with
+  a smoke trail); weapons carry their canonical shortname (GUN/FAR/NAP/MRK/...)
+  and WEAPONS.BIN icon. Player ammo is tracked per weapon (chaingun infinite,
+  others limited); destroyed large buildings almost always drop a power-up
+  (PICKUPS.BIN) that refills ammo, fuel, armor, or awards a medal, collected by
+  flying over (easy) or landing on them (hard). `F5` toggles unlimited
+  ammo/fuel/armor for testing. Enemy movement, player death, and a weapon shop
+  are not yet implemented.
 
 ## Architecture
 
@@ -108,6 +112,7 @@ between easy (fly-over) and hard (land-on).
 | `assets/stageMP.json` + `assets/stageMP/*.png` | Decoded stages and sprites (generated, not committed). |
 | `data/weapons.json` | Weapon and projectile definitions: per-level upgrades, `short`/`icon` (WEAPONS.BIN), `ammo_max`/`ammo_pickup`, plus `alternate_side`/`trail` (mega missile) and `flame` cone params (napalm). |
 | `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`, unit `sprite`/`dead_sprite`, two-part tank `turret_hp`/`turret_explosion`). |
+| `data/enemy_overrides.json` | Per-sprite enemy weapon overrides (asset filename -> weapon), for turrets that share the `flak_turret` kind but fire different weapons. |
 | `data/vehicles/*.json` | Player vehicle tuning. |
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |
 | `data/hud.json` | HUD layout and gauge sprites. |

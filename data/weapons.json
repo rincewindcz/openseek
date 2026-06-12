@@ -69,14 +69,16 @@
     "effect": "fire",
     "explosion": "explosion_none",
     "damage": 40,
-    "aoe": 22,
-    "fire_rate": 4.0,
+    "aoe": 20,
+    "fire_rate": 3.0,
+    "spacing": 15,
+    "line_offset": 18,
     "ammo_max": 30,
     "ammo_pickup": 15,
     "levels": [
-      { "cone_deg": 18, "count": 5,  "range": 120 },
-      { "cone_deg": 34, "count": 8,  "range": 130 },
-      { "cone_deg": 52, "count": 12, "range": 140 }
+      { "lines": 1, "count": 11 },
+      { "lines": 2, "count": 11 },
+      { "lines": 3, "count": 11 }
     ]
   },
 
@@ -182,6 +184,40 @@
     "spread_deg": 0,
     "count": 2,
     "side_offset": 7
+  },
+
+  "sgun": {
+    "vehicle": "enemy",
+    "proj_type": "sprite",
+    "proj_sprite": "gunfire",
+    "speed": 240,
+    "proj_accel": 120,
+    "proj_radius": 4,
+    "ttl": 2.5,
+    "aoe": 0,
+    "explosion": "explosion_flak",
+    "damage": 6,
+    "fire_rate": 2,
+    "spread_deg": 0,
+    "count": 2,
+    "side_offset": 6
+  },
+
+  "enemy_missile": {
+    "vehicle": "enemy",
+    "proj_type": "sprite",
+    "proj_sprite": "missle",
+    "proj_sprite_rot": -90,
+    "trail": "missile_smoke",
+    "trail_interval": 16,
+    "speed": 300,
+    "proj_radius": 6,
+    "ttl": 3.0,
+    "aoe": 0,
+    "explosion": "explosion_medium",
+    "damage": 18,
+    "fire_rate": 0.8,
+    "spread_deg": 0
   },
 
   "machine_gun": {

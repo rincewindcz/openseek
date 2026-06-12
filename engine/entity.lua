@@ -7,7 +7,7 @@ local Entity = Class()
 
 local DEATH_PUSH  = 5     -- px a unit corpse slides in the shot direction
 local DEATH_SLIDE = 0.12  -- seconds for the corpse slide to settle
-local DROP_CHANCE = 0.5   -- chance a destroyed large building drops a power-up
+local DROP_CHANCE = 0.9   -- chance a destroyed large building drops a power-up
 
 function Entity.load_types(path)
   local data = love.filesystem.read(path)
@@ -41,9 +41,11 @@ function Entity:init(id, stage_ent, stage_cls)
   self.turret_alive = false
   self.turret_fx    = nil   -- one-shot explosion played when the turret blows
 
-  -- Enemy AI: turret/facing heading toward the player and a reload timer
+  -- Enemy AI: turret/facing heading toward the player and a reload timer.
+  -- self.weapon may override type_data.weapon for specific sprites (set at load).
   self.aim_angle    = 0
   self.reload       = 0
+  self.weapon       = nil
 
   -- Damage visual effects
   self._damage_smokes = {}   -- {anim, ox, oy} — persistent looping smoke per HP tier
