@@ -192,10 +192,14 @@ function CombatSystem:_update_ai(dt)
         else
           e.aim_angle = (e.aim_angle + (diff > 0 and step or -step)) % 360
         end
-        e.angle = e.aim_angle  -- drives sprite rotation for normal-path turrets (flak)
+        -- Single-sprite turrets (flak) rotate the whole sprite via e.angle;
+        -- two-part tanks keep the hull fixed and spin only the turret overlay,
+        -- which the renderer draws from aim_angle.
+        if not e.has_turret then e.angle = e.aim_angle end
 
         local atk = td.attack_range or det
-        if math.abs(diff) < LOCK_DEG and d2 <= atk * atk then
+        local can_fire = (not e.has_turret) or e.turret_alive
+        if can_fire and math.abs(diff) < LOCK_DEG and d2 <= atk * atk then
           e.reload = e.reload - dt
           if e.reload <= 0 then
             self:fire(e.x, e.y, e.aim_angle, td.weapon, "enemy", 1, atk * 1.3)

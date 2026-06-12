@@ -33,6 +33,13 @@ function Entity:init(id, stage_ent, stage_cls)
   self.type_data    = Entity.type_for(stage_cls.kind_name)
   self.anim         = nil
 
+  -- Two-part enemy (tank): a separate turret entity is folded onto the hull at
+  -- load (see World:load / attach_turret). The turret tracks and fires while the
+  -- hull stays put, and must be destroyed before the hull can be damaged.
+  self.has_turret   = false
+  self.turret_alive = false
+  self.turret_fx    = nil   -- one-shot explosion played when the turret blows
+
   -- Enemy AI: turret/facing heading toward the player and a reload timer
   self.aim_angle    = 0
   self.reload       = 0
@@ -54,11 +61,40 @@ end
 
 function Entity:take_damage(amount, dx, dy)
   if not self:is_alive() then return end
+  -- While the turret stands it absorbs all incoming damage; the hull is only
+  -- vulnerable once the turret is gone.
+  if self.turret_alive then
+    self.turret_hp = self.turret_hp - amount
+    if self.turret_hp <= 0 then
+      self.turret_hp = 0
+      self:_destroy_turret()
+    end
+    return
+  end
   self.hp = self.hp - amount
   if self.hp <= 0 then
     self.hp = 0
     self:_start_death(dx, dy)
   end
+end
+
+-- Fold a co-located turret entity onto this hull. render = {img, ax, ay} drawn
+-- by the renderer, rotated to aim_angle about (ax, ay).
+function Entity:attach_turret(render)
+  self.turret_render = render
+  self.has_turret    = true
+  self.turret_alive  = true
+  self.turret_max_hp = (self.type_data and self.type_data.turret_hp)
+    or math.max(1, math.floor((self.max_hp or 1) * 0.5))
+  self.turret_hp = self.turret_max_hp
+end
+
+function Entity:_destroy_turret()
+  local Animation = require "engine.animation"
+  self.turret_alive = false
+  local ex = (self.type_data and self.type_data.turret_explosion) or "medium"
+  local fx = Animation.new("explosion_" .. ex)
+  self.turret_fx = (not fx:is_done()) and fx or nil
 end
 
 -- Spawn a one-shot SMOKE2 hit effect at the entity's position with a small random offset.
@@ -114,6 +150,12 @@ function Entity:update(dt)
     local f = 1 - (1 - self._death_t) ^ 2
     self.death_ox = self._death_push.x * f
     self.death_oy = self._death_push.y * f
+  end
+
+  -- Turret destruction effect plays while the hull is still alive.
+  if self.turret_fx then
+    self.turret_fx:update(dt)
+    if self.turret_fx:is_done() then self.turret_fx = nil end
   end
 
   -- Explosion / overlay animation

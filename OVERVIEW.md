@@ -39,13 +39,18 @@ and drawn throughout `engine/`.
   buildings leave a crater. Enemy soldiers are destructible and switch to a corpse
   sprite when killed. The player tank turret aims and fires independently of the
   hull (axis-aligned frame 15, runtime-rotated like everything else). A damaged
-  player vehicle trails smoke in world space. Enemies (flak turrets, enemy tanks
-  with their own sprite, soldiers)
+  player vehicle trails smoke in world space (puffs spawn out of phase and sit
+  in front of or behind the hull). Enemies (flak turrets, enemy tanks, soldiers)
   rotate to track the player and fire when locked and in range: flak fires paired
-  accelerating animated tracers, tanks fire shells, soldiers fire rifles. Solid
-  entities block tank movement and veto helicopter landings; player armor takes
-  damage from enemy fire. Enemy movement, player death, ammo, and weapon shop are
-  not yet implemented.
+  accelerating animated tracers, tanks fire shells, soldiers fire rifles. A tank
+  is stored in the stage as two co-located entities, a hull (kind `tank`) and a
+  turret on top (a `*tanktop` sprite filed as a `flak_turret`); `world.lua` folds
+  the turret onto the hull at load into one entity. The fixed hull carries a
+  separate turret that spins to aim; the turret has its own HP and must be
+  destroyed (it absorbs all hits and explodes first) before the hull can be
+  damaged. Solid entities block tank movement and veto helicopter landings;
+  player armor takes damage from enemy fire. Enemy movement, player death, ammo,
+  and weapon shop are not yet implemented.
 
 ## Architecture
 
@@ -93,7 +98,7 @@ rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `E` cycles weapon leve
 |------|----------|
 | `assets/stageMP.json` + `assets/stageMP/*.png` | Decoded stages and sprites (generated, not committed). |
 | `data/weapons.json` | Weapon and projectile definitions, including per-level upgrades. |
-| `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`, unit `sprite`/`dead_sprite`). |
+| `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`, unit `sprite`/`dead_sprite`, two-part tank `turret_hp`/`turret_explosion`). |
 | `data/vehicles/*.json` | Player vehicle tuning. |
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |
 | `data/hud.json` | HUD layout and gauge sprites. |

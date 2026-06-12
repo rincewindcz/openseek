@@ -26,7 +26,6 @@ PROJECTILE_SPRITES = [
     ("TRACE",    "trace"),
     ("HOLE4038", "hole"),
     ("ENEMY",    "enemy"),
-    ("TANK",     "etank"),
 ]
 
 

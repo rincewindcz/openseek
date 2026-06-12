@@ -257,6 +257,7 @@ function love.draw()
     player:draw_world()
     combat:draw()
     player:draw()
+    player:draw_world_front()
     hud:draw()
     -- Weapon indicator (top-left, below renderer bar)
     local g = love.graphics

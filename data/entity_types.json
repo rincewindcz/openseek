@@ -69,6 +69,7 @@
     "speed": 0,
     "turn_speed": 70,
     "weapon": "tank_cannon",
+    "turret_explosion": "medium",
     "solid": true,
     "collision_radius": 14
   },

@@ -11,7 +11,7 @@
     "explosion": "explosion_none",
     "levels": [
       { "damage": 3,  "fire_rate": 10, "spread_deg": 0,  "streams": 1, "swing": false },
-      { "damage": 3,  "fire_rate": 10, "spread_deg": 6,  "streams": 2, "swing": false },
+      { "damage": 3,  "fire_rate": 10, "spread_deg": 0,  "count": 2, "side_offset": 10, "swing": false },
       { "damage": 3,  "fire_rate": 10, "spread_deg": 20, "streams": 2, "swing": true  }
     ]
   },
@@ -95,9 +95,9 @@
     "aoe": 40,
     "explosion": "explosion_large",
     "levels": [
-      { "damage": 100, "fire_rate": 0.5, "count": 1 },
       { "damage": 100, "fire_rate": 1.0, "count": 1 },
-      { "damage": 100, "fire_rate": 1.0, "count": 2 }
+      { "damage": 100, "fire_rate": 1.5, "count": 1 },
+      { "damage": 100, "fire_rate": 1.5, "count": 2 }
     ]
   },
 
@@ -106,10 +106,10 @@
     "proj_type": "tracer",
     "proj_sprite": "trace",
     "proj_sprite_rot": -90,
-    "speed": 40,
-    "proj_accel": 300,
+    "speed": 22,
+    "proj_accel": 140,
     "proj_radius": 3,
-    "ttl": 3.0,
+    "ttl": 3.5,
     "aoe": 0,
     "explosion": "explosion_flak",
     "damage": 5,

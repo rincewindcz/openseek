@@ -124,8 +124,9 @@ function Player:update(dt)
 end
 
 -- Smoke intensity scales with armor loss: ~2-3 puffs under 60% armor, ~5-7 under
--- 40%, ~8-12 under 20%. Each puff is dropped at the vehicle's world position with
--- a random offset and stays there, so movement leaves a spreading trail.
+-- 40%, ~8-12 under 20%. Puffs spawn one at a time with a randomized delay so the
+-- animations are out of phase, and each picks (once) whether it sits in front of
+-- or behind the vehicle, so the trail reads as volume instead of a flat layer.
 function Player:_update_damage_smoke(dt)
   local maxa = self.max_armor or 100
   local pct  = maxa > 0 and (self.armor / maxa) or 1
@@ -144,28 +145,40 @@ function Player:_update_damage_smoke(dt)
   if #self._smoke_puffs < target then
     self._smoke_timer = self._smoke_timer - dt
     if self._smoke_timer <= 0 then
-      self._smoke_timer = 0.05
+      self._smoke_timer = 0.04 + math.random() * 0.10
       self._smoke_puffs[#self._smoke_puffs + 1] = {
-        x    = self.x + (math.random() - 0.5) * 30,
-        y    = self.y + (math.random() - 0.5) * 30,
-        anim = Animation.new("smoke"),
+        x     = self.x + (math.random() - 0.5) * 30,
+        y     = self.y + (math.random() - 0.5) * 30,
+        front = math.random() < 0.5,
+        anim  = Animation.new("smoke"),
       }
     end
   end
 end
 
--- World-space smoke trail (drawn through the camera, before the vehicle).
+-- World-space smoke trail behind the vehicle (drawn before the player sprite).
 function Player:draw_world()
+  self:_draw_smoke_layer(false)
+end
+
+-- Smoke that sits on top of the vehicle (drawn after the player sprite).
+function Player:draw_world_front()
+  self:_draw_smoke_layer(true)
+end
+
+function Player:_draw_smoke_layer(front)
   if not self.camera or #self._smoke_puffs == 0 then return end
   local g = love.graphics
   g.push()
   self.camera:apply()
   for _, pf in ipairs(self._smoke_puffs) do
-    local img = pf.anim:current_image()
-    if img then
-      local w, h = img:getDimensions()
-      g.setColor(1, 1, 1, 0.8)
-      g.draw(img, pf.x, pf.y, 0, 1.2, 1.2, w / 2, h / 2)
+    if pf.front == front then
+      local img = pf.anim:current_image()
+      if img then
+        local w, h = img:getDimensions()
+        g.setColor(1, 1, 1, 0.8)
+        g.draw(img, pf.x, pf.y, 0, 1.2, 1.2, w / 2, h / 2)
+      end
     end
   end
   g.setColor(1, 1, 1)

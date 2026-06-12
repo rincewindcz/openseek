@@ -135,12 +135,31 @@ function Renderer:_draw_entities(list, vp)
     if e:is_alive() then
       local r = images[e.class_idx + 1]
       if r then
-        local rot = e:draw_angle_rad(cls.angle_steps)
+        -- Two-part tanks keep a fixed hull (turret does the aiming); everything
+        -- else rotates its single sprite to face.
+        local rot = e.turret_render and 0 or e:draw_angle_rad(cls.angle_steps)
         g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
       else
         g.setColor(1, 0, 1)
         g.circle("fill", e.x, e.y, 3)
         g.setColor(1, 1, 1)
+      end
+
+      -- Two-part enemy tank: the turret spins on the fixed hull from aim_angle;
+      -- its destruction explosion plays over the hull until the hull itself dies.
+      if e.turret_render then
+        if e.turret_alive then
+          local tr  = e.turret_render
+          local rot = (e.aim_angle - 90) * math.pi / 180
+          g.draw(tr.img, e.x, e.y, rot, 1, 1, tr.ax, tr.ay)
+        end
+        if e.turret_fx then
+          local img = e.turret_fx:current_image()
+          if img then
+            local iw, ih = img:getDimensions()
+            g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+          end
+        end
       end
       -- overlay animation (non-destructive: hit flash, etc.)
       if e.state == "animating" and e.anim then

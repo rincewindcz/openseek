@@ -64,14 +64,16 @@ function World:load(name)
     end
   end
 
-  -- Enemy tank classes ship no sprite; give them the shared orange tank art,
-  -- anchored on its visible center so it rotates cleanly to its aim.
-  local etank = self:_enemy_tank_render()
-  if etank then
-    for i, c in ipairs(self.stage.classes) do
-      if c.kind_name == "tank" and not self.images[i] then
-        self.images[i] = etank
-      end
+  -- A tank is stored as two co-located entities: the hull (kind "tank") and a
+  -- separate turret on top (asset tanktop/stanktop, filed as a flak_turret).
+  -- Identify the turret classes so we can fold each one into its hull below.
+  local top_class = {}
+  for i, c in ipairs(self.stage.classes) do
+    local a     = c.asset and self.stage.assets[c.asset + 1]
+    local fname = a and a.file and a.file:lower()
+    -- tanktop.bin / stanktop.bin / jtanktop.bin across the mission tank variants.
+    if fname and fname:match("tanktop%.bin$") then
+      top_class[c.index] = true
     end
   end
 
@@ -79,6 +81,9 @@ function World:load(name)
   self.decals     = {}
   self.objects    = {}
   self.combatants = {}
+
+  -- First pass: build every entity and index hulls by exact position.
+  local hull_at = {}
   for id, raw in ipairs(self.stage.entities) do
     local cls    = self.stage.classes[raw.class + 1]
     local entity = Entity:new(id, raw, cls)
@@ -91,12 +96,32 @@ function World:load(name)
       if math.max(w, h) >= 28 then entity.crater_eligible = true end
     end
     self.entities[id] = entity
+    if cls.kind_name == "tank" then
+      hull_at[raw.x .. "," .. raw.y] = entity
+    end
+  end
+
+  -- Second pass: fold each turret onto its co-located hull (dropping the turret
+  -- as a standalone entity); everything else joins the draw/combat lists.
+  for id, raw in ipairs(self.stage.entities) do
+    local entity = self.entities[id]
+    local cls    = self.stage.classes[raw.class + 1]
+    if top_class[raw.class] then
+      local hull = hull_at[raw.x .. "," .. raw.y]
+      local r    = self.images[raw.class + 1]
+      if hull and r then
+        hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy })
+        self.entities[id] = nil
+        goto continue
+      end
+    end
     local list = cls.kind == 15 and self.decals or self.objects
     list[#list + 1] = entity
     local td = entity.type_data
     if td and td.weapon and (td.detection_radius or 0) > 0 then
       self.combatants[#self.combatants + 1] = entity
     end
+    ::continue::
   end
   local by_y = function(a, b)
     if a.y ~= b.y then return a.y < b.y end
@@ -109,38 +134,6 @@ end
 
 function World:load_index(idx)
   self:load(self.stages[idx])
-end
-
--- Shared enemy-tank sprite (frame 15, east-facing) with an art-center anchor so
--- the normal renderer rotates it about its visible middle. Loaded once.
-function World:_enemy_tank_render()
-  if self._etank ~= nil then return self._etank or nil end
-  local path = "assets/stage00/etank_f15.png"
-  if not love.filesystem.getInfo(path) then
-    self._etank = false
-    return nil
-  end
-  local img = love.graphics.newImage(path)
-  img:setFilter("nearest", "nearest")
-  local cx, cy = img:getWidth() / 2, img:getHeight() / 2
-  local ok, data = pcall(love.image.newImageData, path)
-  if ok then
-    local x0, y0, x1, y1 = math.huge, math.huge, -1, -1
-    for py = 0, data:getHeight() - 1 do
-      for px = 0, data:getWidth() - 1 do
-        local _, _, _, a = data:getPixel(px, py)
-        if a > 0 then
-          if px < x0 then x0 = px end
-          if px > x1 then x1 = px end
-          if py < y0 then y0 = py end
-          if py > y1 then y1 = py end
-        end
-      end
-    end
-    if x1 >= 0 then cx = (x0 + x1 + 1) / 2; cy = (y0 + y1 + 1) / 2 end
-  end
-  self._etank = { img = img, ox = -cx, oy = -cy }
-  return self._etank
 end
 
 -- World position the player spawns at: the friendly heliport pad (h.bin / lh.bin)
