@@ -112,7 +112,7 @@ function AnimState:current_image()
 end
 
 function AnimState:is_done()
-  return self.done
+  return self.done or self.clip:is_empty()
 end
 
 function AnimState:reset()

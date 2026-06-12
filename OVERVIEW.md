@@ -34,11 +34,12 @@ and drawn throughout `engine/`.
   strafing, and per-vehicle JSON tuning (`data/vehicles/*.json`). A sandbox mode
   (`F3`) live-edits and saves vehicle parameters.
 - **HUD:** sprite-based gauges and a radar.
-- **Combat:** in progress. Player weapons fire projectiles, projectiles hit
-  entities, entities take damage, show hit/damage smoke, explode, and large
-  entities leave a crater. The tank turret aims and fires independently of the
-  hull. Solid entities block tank movement and veto helicopter landings. Enemy
-  AI, enemy fire, player death, ammo, and weapon shop are not yet implemented.
+- **Combat:** in progress. Player weapons fire range-limited projectiles that hit
+  entities; entities take damage, show hit/damage smoke, explode, and large static
+  buildings leave a crater. Enemy soldiers are destructible and switch to a corpse
+  sprite when killed. The tank turret aims and fires independently of the hull.
+  Solid entities block tank movement and veto helicopter landings. Enemy AI, enemy
+  fire, player death, ammo, and weapon shop are not yet implemented.
 
 ## Architecture
 
@@ -86,7 +87,7 @@ rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `E` cycles weapon leve
 |------|----------|
 | `assets/stageMP.json` + `assets/stageMP/*.png` | Decoded stages and sprites (generated, not committed). |
 | `data/weapons.json` | Weapon and projectile definitions, including per-level upgrades. |
-| `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`). |
+| `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`, unit `sprite`/`dead_sprite`). |
 | `data/vehicles/*.json` | Player vehicle tuning. |
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |
 | `data/hud.json` | HUD layout and gauge sprites. |

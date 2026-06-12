@@ -1,4 +1,5 @@
-local Class = require "engine.class"
+local Class     = require "engine.class"
+local Animation = require "engine.animation"
 
 local Renderer = Class()
 
@@ -124,6 +125,13 @@ function Renderer:_draw_entities(list, vp)
     if not in_vp then goto continue end
     if hidden[cls.kind_name] then goto continue end
 
+    -- Units with explicit alive/dead sprites (soldiers) draw axis-aligned and
+    -- persist as a corpse once dead.
+    if e.type_data and e.type_data.sprite then
+      self:_draw_unit(e)
+      goto continue
+    end
+
     if e:is_alive() then
       local r = images[e.class_idx + 1]
       if r then
@@ -179,6 +187,28 @@ function Renderer:_draw_entities(list, vp)
     end
 
     ::continue::
+  end
+end
+
+function Renderer:_draw_unit(e)
+  local g  = love.graphics
+  local td = e.type_data
+  local clip_name = e:is_alive() and td.sprite or (td.dead_sprite or td.sprite)
+  local clip = Animation.clip(clip_name)
+  local img  = clip and clip.frames[1]
+  if img then
+    local iw, ih = img:getDimensions()
+    g.setColor(1, 1, 1)
+    g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+  end
+  if e:is_alive() then
+    for _, hs in ipairs(e._hit_smokes) do
+      local him = hs.anim:current_image()
+      if him then
+        local hw, hh = him:getDimensions()
+        g.draw(him, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, hw / 2, hh / 2)
+      end
+    end
   end
 end
 

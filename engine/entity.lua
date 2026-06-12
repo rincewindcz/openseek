@@ -78,9 +78,8 @@ function Entity:_start_death()
   local explosion = (self.type_data and self.type_data.explosion) or "none"
   self.anim  = Animation.new("explosion_" .. explosion)
   self.state = self.anim:is_done() and "dead" or "exploding"
-  -- Only large entities (bunkers, towers, turrets, tanks) leave a crater;
-  -- small structures and scenery do not.
-  if self.max_hp >= 100 then
+  -- Only large static buildings leave a crater (set on the entity at load).
+  if self.crater_eligible then
     local clip = Animation.clip("crater")
     self.crater_img = clip and clip.frames[1] or nil
   end

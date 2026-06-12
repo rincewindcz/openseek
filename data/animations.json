@@ -163,6 +163,16 @@
     "fps": 1, "loop": false
   },
 
+  "soldier": {
+    "frames": ["stage00/enemy_f31.png"],
+    "fps": 1, "loop": false
+  },
+
+  "soldier_dead": {
+    "frames": ["stage00/enemy_f15.png"],
+    "fps": 1, "loop": false
+  },
+
   "trace": {
     "frames": ["stage00/trace_f007.png"],
     "fps": 1, "loop": false

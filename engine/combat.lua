@@ -18,12 +18,18 @@ function Projectile:init(p)
   self.radius    = p.radius
   self.wdef      = p.wdef
   self.angle_rad = p.angle_rad  -- Love2D draw rotation (radians)
+  self.max_range = p.max_range
+  self.traveled  = 0
   self.alive     = true
 end
 
 function Projectile:update(dt)
-  self.x   = self.x   + self.vx * dt
-  self.y   = self.y   + self.vy * dt
+  local dx = self.vx * dt
+  local dy = self.vy * dt
+  self.x = self.x + dx
+  self.y = self.y + dy
+  self.traveled = self.traveled + math.sqrt(dx * dx + dy * dy)
+  if self.max_range and self.traveled >= self.max_range then self.alive = false end
   self.ttl = self.ttl - dt
   if self.ttl <= 0 then self.alive = false end
 end
@@ -75,6 +81,11 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx)
   local rx  = -fy
   local ry  =  fx
 
+  -- Range cap: roughly 1.5x the visible screen so shots cannot cross the map.
+  local sw, sh   = love.graphics.getDimensions()
+  local view     = math.max(sw, sh) / self.camera:zoom()
+  local max_range = 1.5 * view
+
   local speed      = wdef.speed or 0
   local spread     = (level.spread_deg or wdef.spread_deg or 0) * math.pi / 180
   local count      = level.count   or 1
@@ -115,6 +126,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx)
       ttl       = wdef.ttl        or 2,
       radius    = wdef.proj_radius or 3,
       wdef      = wdef,
+      max_range = max_range,
       -- Rotation for drawing: angle_deg in our CW-from-north system maps to Love2D radians
       angle_rad = angle_deg * math.pi / 180 + angle_off,
     })

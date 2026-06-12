@@ -20,6 +20,27 @@
   },
   "powerup_marker": {
   },
+  "soldier": {
+    "attack_range": 0,
+    "detection_radius": 0,
+    "explosion": "none",
+    "hit_radius": 6,
+    "speed": 0,
+    "turn_speed": 0,
+    "sprite": "soldier",
+    "dead_sprite": "soldier_dead"
+  },
+  "soldier_aggressive": {
+    "attack_range": 300,
+    "detection_radius": 400,
+    "explosion": "none",
+    "hit_radius": 6,
+    "speed": 0,
+    "turn_speed": 0,
+    "weapon": "rifle",
+    "sprite": "soldier",
+    "dead_sprite": "soldier_dead"
+  },
   "scenery": {
     "attack_range": 0,
     "detection_radius": 0,

@@ -69,6 +69,14 @@ function World:load(name)
   for id, raw in ipairs(self.stage.entities) do
     local cls    = self.stage.classes[raw.class + 1]
     local entity = Entity:new(id, raw, cls)
+    -- Craters are for large static buildings only. Keying on kind "structure"
+    -- excludes vehicles/turrets (tank, truck, flak), and the size gate excludes
+    -- small machinery filed under "structure" (jeeps, ammo packs).
+    local r = self.images[raw.class + 1]
+    if cls.kind_name == "structure" and r and r.img then
+      local w, h = r.img:getDimensions()
+      if math.max(w, h) >= 28 then entity.crater_eligible = true end
+    end
     self.entities[id] = entity
     local list = cls.kind == 15 and self.decals or self.objects
     list[#list + 1] = entity

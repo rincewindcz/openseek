@@ -27,9 +27,9 @@
     "aoe": 0,
     "explosion": "explosion_medium",
     "levels": [
-      { "damage": 12, "fire_rate": 11.0, "spread_deg": 0,  "count": 2, "side_offset": 16 },
-      { "damage": 12, "fire_rate": 9.0,  "spread_deg": 10, "count": 3 },
-      { "damage": 12, "fire_rate": 8.0,  "spread_deg": 6,  "count": 4, "side_offset": 12 }
+      { "damage": 12, "fire_rate": 11.0, "spread_deg": 0, "count": 2, "side_offset": 16 },
+      { "damage": 12, "fire_rate": 9.0,  "spread_deg": 0, "count": 3, "side_offset": 10 },
+      { "damage": 12, "fire_rate": 8.0,  "spread_deg": 0, "count": 4, "side_offset": 16 }
     ]
   },
 
