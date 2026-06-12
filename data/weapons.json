@@ -68,17 +68,20 @@
     "proj_type": "flame",
     "effect": "fire",
     "explosion": "explosion_none",
-    "damage": 50,
-    "aoe": 26,
+    "damage": 40,
+    "aoe": 22,
     "fire_rate": 2.5,
     "fire_scale": 2.0,
     "fire_ttl": 1.0,
+    "count": 8,
+    "spacing": 20,
+    "wave_delay": 0.04,
     "ammo_max": 30,
     "ammo_pickup": 15,
     "levels": [
-      { "angles": [0], "range": 80 },
-      { "angles": [-45, 0, 45], "range": 80 },
-      { "angles": [0, 45, 90, 135, 180, 225, 270, 315], "range": 70 }
+      { "angles": [0] },
+      { "angles": [-45, 0, 45] },
+      { "angles": [0, 45, 90, 135, 180, 225, 270, 315] }
     ]
   },
 

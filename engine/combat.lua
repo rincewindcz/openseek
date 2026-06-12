@@ -212,20 +212,26 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
   end
 end
 
--- Napalm: fire bursts placed at the level's angle offsets (relative to the aim)
--- and `range`. Level 1 = one burst ahead, level 2 = a -45/0/45 fan, level 3 = a
--- ring around the chopper. Each burst is a one-shot damage effect.
+-- Napalm: along each of the level's angle offsets (relative to aim), lay a ray of
+-- `count` fire patches that ignite outward from the chopper (the wave). Level 1 =
+-- one tongue ahead, level 2 = a -45/0/45 fan, level 3 = an 8-way ring.
 function CombatSystem:_fire_flame(x, y, fx, fy, rad, wdef, level)
-  local angles = level.angles or { 0 }
-  local range  = level.range  or 80
-  local dmg    = level.damage or wdef.damage or 40
-  local radius = wdef.aoe     or 24
+  local angles  = level.angles or { 0 }
+  local count   = level.count   or wdef.count   or 8
+  local spacing = level.spacing or wdef.spacing or 20
+  local wave    = wdef.wave_delay or 0.04
+  local dmg     = level.damage   or wdef.damage or 40
+  local radius  = wdef.aoe       or 22
+  local scale   = wdef.fire_scale or 1
+  local ttl     = wdef.fire_ttl   or 1.0
   for _, a in ipairs(angles) do
-    local dir = rad + a * math.pi / 180
-    local ex  = x + math.cos(dir) * range
-    local ey  = y + math.sin(dir) * range
-    self:add_effect(wdef.effect or "fire", ex, ey,
-      { damage = dmg, radius = radius, scale = wdef.fire_scale or 1, ttl = wdef.fire_ttl or 1.0 })
+    local dir    = rad + a * math.pi / 180
+    local cx, cy = math.cos(dir), math.sin(dir)
+    for i = 1, count do
+      local d = i * spacing
+      self:add_effect(wdef.effect or "fire", x + cx * d, y + cy * d,
+        { damage = dmg, radius = radius, scale = scale, ttl = ttl, delay = (i - 1) * wave })
+    end
   end
 end
 

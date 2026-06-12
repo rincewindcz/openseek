@@ -224,8 +224,25 @@ end
 
 -- ── death sequence ────────────────────────────────────────────────────────────
 
-local FALL_TIME = 1.25  -- seconds for a downed chopper to drop from full altitude
-local TANK_BURN = 1.6   -- seconds the tank burns before the turret blows
+local FALL_TIME  = 1.25  -- seconds for a downed chopper to drop from full altitude
+local TANK_BURN  = 1.6   -- seconds the tank burns before the turret blows
+local BLAST_R    = 90    -- radius of the player's death explosion damage
+local BLAST_DMG  = 140   -- damage dealt to nearby entities by that explosion
+
+-- The player's death explosion damages everything around the wreck, like a bomb.
+function Player:_death_blast()
+  if not self.world then return end
+  local r2 = BLAST_R * BLAST_R
+  for _, e in ipairs(self.world.entities) do
+    if e:is_alive() and e.type_data and (e.type_data.hit_radius or 0) > 0 then
+      local dx = e.x - self.x
+      local dy = e.y - self.y
+      if dx * dx + dy * dy < r2 then
+        e:take_damage(BLAST_DMG, dx, dy)
+      end
+    end
+  end
+end
 
 -- Begin the death sequence: a chopper falls and explodes on the ground; a tank
 -- burns with explosions and smoke, then its turret blows. Idempotent.
@@ -266,6 +283,7 @@ function Player:_update_death_chopper(dt, d)
     if self.altitude <= 0 then
       d.phase = "boom"
       d.boom  = Animation.new("explosion_large")
+      self:_death_blast()
     end
   elseif d.phase == "boom" then
     if d.boom then
@@ -293,6 +311,7 @@ function Player:_update_death_tank(dt, d)
       d.phase           = "turret"
       d.turret_exploded = true
       d.fx[#d.fx + 1]   = { anim = Animation.new("explosion_large"), ox = 0, oy = -4 }
+      self:_death_blast()
     end
   elseif d.phase == "turret" then
     if d.t >= TANK_BURN + 0.6 and #d.fx == 0 then d.phase = "done" end

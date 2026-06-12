@@ -135,9 +135,11 @@ function Renderer:_draw_entities(list, vp)
     if e:is_alive() then
       local r = images[e.class_idx + 1]
       if r then
-        -- Two-part tanks keep a fixed hull (turret does the aiming); everything
+        -- Two-part tanks keep a fixed hull (turret does the aiming) unless they
+        -- patrol, in which case the hull faces its travel heading; everything
         -- else rotates its single sprite to face.
-        local rot = e.turret_render and 0 or e:draw_angle_rad(cls.angle_steps)
+        local rot = (e.turret_render and not e.route_points) and 0
+          or e:draw_angle_rad(cls.angle_steps)
         g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
       else
         g.setColor(1, 0, 1)

@@ -68,6 +68,7 @@
     "hit_radius": 18,
     "speed": 0,
     "turn_speed": 70,
+    "patrol_speed": 55,
     "weapon": "tank_cannon",
     "turret_explosion": "medium",
     "solid": true,

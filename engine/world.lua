@@ -19,7 +19,7 @@ local World = Class()
 -- rotate on its own (radar dish), nil means the AI aims it (tank turret).
 local TURRET_DEFS = {
   { top_match = "tanktop%.bin$",  hull_kind  = "tank" },
-  { top_match = "^radarsp%.bin$", hull_asset = "radar.bin", spin = 60 },
+  { top_match = "^radarsp%.bin$", hull_asset = "radar.bin", spin = 110 },
 }
 
 function World:init()
@@ -122,6 +122,11 @@ function World:load(name)
       local fn = af.file:lower()
       entity.weapon    = self.weapon_overrides[fn]
       entity.drop_kind = self.building_drops[fn]
+    end
+    -- Resolve patrol waypoints (route index is 0-based into stage.routes).
+    if entity.route ~= nil and self.stage.routes then
+      local r = self.stage.routes[entity.route + 1]
+      entity.route_points = r and r.points or nil
     end
     created[id] = entity
     if hull_class[raw.class] then

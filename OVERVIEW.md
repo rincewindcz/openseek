@@ -45,7 +45,8 @@ and drawn throughout `engine/`.
   accelerating animated tracers, tanks fire shells, soldiers fire rifles. A tank
   is stored in the stage as two co-located entities, a hull (kind `tank`) and a
   turret on top (a `*tanktop` sprite filed as a `flak_turret`); `world.lua` folds
-  the turret onto the hull at load into one entity. The fixed hull carries a
+  the turret onto the hull at load into one entity. Tanks carrying a route patrol
+  its waypoint loop (the hull faces its travel heading while the turret tracks). The fixed hull carries a
   separate turret that spins to aim; the turret has its own HP and must be
   destroyed (it absorbs all hits and explodes first) before the hull can be
   damaged. Solid entities block tank movement and veto helicopter landings;
@@ -54,8 +55,8 @@ and drawn throughout `engine/`.
   fireballs; sgun fireballs flak-burst on impact while tracers fade out. Radar
   stations are two-part like tanks (a `radar.bin` base with a `radarsp` dish that
   spins continuously and must be destroyed first). The chopper arsenal includes a
-  napalm that drops fire bursts (1 ahead / a -45/0/45 fan / an 8-burst ring) and
-  an alternating-pod mega missile (with a smoke trail); weapons carry their
+  napalm that sweeps tongues of fire outward from the chopper (1 ahead / a
+  -45/0/45 fan / an 8-way ring) and an alternating-pod mega missile (smoke trail); weapons carry their
   canonical shortname (GUN/FAR/NAP/MRK/...) and WEAPONS.BIN icon. Player ammo is
   tracked per weapon (chaingun infinite, others limited); destroyed large
   buildings almost always drop a power-up (PICKUPS.BIN) that refills ammo, fuel,
@@ -64,7 +65,8 @@ and drawn throughout `engine/`.
   unlimited ammo/fuel/armor for testing. Game-over is optional (toggle `O` in the
   overview): when enabled, running out of fuel or armor downs the player, a
   chopper falling and exploding on the ground, a tank burning then losing its
-  turret; `R` restarts the current level, `P` pauses. Enemy movement and a weapon
+  turret; the final explosion damages nearby entities like a bomb. `R` restarts
+  the current level, `P` pauses. Enemy movement and a weapon
   shop are not yet implemented.
 
 ## Architecture

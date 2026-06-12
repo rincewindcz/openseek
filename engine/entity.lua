@@ -1,6 +1,8 @@
 local Class = require "engine.class"
 local json  = require "lib.json"
 
+local atan2 = math.atan2 or math.atan  -- Lua 5.3+ folds atan2 into atan(y, x)
+
 local entity_types = {}  -- keyed by kind_name, loaded once
 
 local Entity = Class()
@@ -31,6 +33,7 @@ function Entity:init(id, stage_ent, stage_cls)
   self.state_before = nil
   self.route        = stage_ent.route
   self.route_pt     = 1
+  self.route_points = nil   -- resolved from the stage at load (patrol waypoints)
   self.type_data    = Entity.type_for(stage_cls.kind_name)
   self.anim         = nil
 
@@ -185,6 +188,8 @@ function Entity:update(dt)
 
   if not self:is_alive() then return end
 
+  self:_patrol(dt)
+
   -- Continuously spinning turret (radar dish).
   if self.turret_spin and self.turret_alive then
     self.aim_angle = (self.aim_angle + self.turret_spin * dt) % 360
@@ -228,6 +233,27 @@ function Entity:update(dt)
     if not hs.anim:is_done() then live[#live + 1] = hs end
   end
   self._hit_smokes = live
+end
+
+-- Patrol the assigned waypoint loop. The hull faces its travel direction; the
+-- turret (aim_angle) is steered independently by the combat AI.
+function Entity:_patrol(dt)
+  local pts = self.route_points
+  if not pts or #pts < 2 then return end
+  local sp = (self.type_data and self.type_data.patrol_speed) or 0
+  if sp <= 0 then return end
+  local tgt = pts[self.route_pt]
+  if not tgt then self.route_pt = 1; return end
+  local dx, dy = tgt.x - self.x, tgt.y - self.y
+  local dist   = math.sqrt(dx * dx + dy * dy)
+  if dist < 4 then
+    self.route_pt = self.route_pt % #pts + 1
+    return
+  end
+  local step = math.min(dist, sp * dt)
+  self.x = self.x + dx / dist * step
+  self.y = self.y + dy / dist * step
+  self.angle = (math.deg(atan2(dy, dx)) + 90) % 360   -- 0 = north, clockwise
 end
 
 -- Returns rotation in radians for g.draw().
