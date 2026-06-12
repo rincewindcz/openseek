@@ -55,7 +55,8 @@ function Player:init(x, y)
   self.takeoff_time = 0.65
   self.land_time    = 0.50
 
-  self._damage_smokes = {}   -- {anim, ox, oy} — vehicle smoke scaled by armor loss
+  self._smoke_puffs = {}     -- {x, y, anim} — world-space smoke left behind as a trail
+  self._smoke_timer = 0
 
   self._tank_anim    = Animation.new("tankbgrn")
   self._rotor_pitch  = Animation.new("bladep")
@@ -122,35 +123,55 @@ function Player:update(dt)
   end
 end
 
--- Continuous smoke emitters scaled by remaining armor: one under 60%, two under
--- 40%, three under 20% (same idea as damaged enemy entities).
+-- Smoke intensity scales with armor loss: one stream under 60% armor, two under
+-- 40%, three under 20%. Each puff is dropped at the vehicle's world position and
+-- stays there, so movement leaves a trail (same idea as damaged enemy entities).
 function Player:_update_damage_smoke(dt)
   local maxa = self.max_armor or 100
   local pct  = maxa > 0 and (self.armor / maxa) or 1
-  local target = 0
-  if pct < 0.6 then target = 1 end
-  if pct < 0.4 then target = 2 end
-  if pct < 0.2 then target = 3 end
+  local tier = 0
+  if pct < 0.6 then tier = 1 end
+  if pct < 0.4 then tier = 2 end
+  if pct < 0.2 then tier = 3 end
 
-  while #self._damage_smokes < target do
-    self._damage_smokes[#self._damage_smokes + 1] = {
-      anim = Animation.new("smoke"),
-      ox   = (math.random() - 0.5) * 24,
-      oy   = (math.random() - 0.5) * 24,
-    }
-  end
-  while #self._damage_smokes > target do
-    table.remove(self._damage_smokes)
-  end
-
-  for _, se in ipairs(self._damage_smokes) do
-    se.anim:update(dt)
-    if se.anim:is_done() then
-      se.anim:reset()
-      se.ox = (math.random() - 0.5) * 24
-      se.oy = (math.random() - 0.5) * 24
+  if tier > 0 then
+    self._smoke_timer = self._smoke_timer - dt
+    if self._smoke_timer <= 0 then
+      self._smoke_timer = 0.12
+      for _ = 1, tier do
+        self._smoke_puffs[#self._smoke_puffs + 1] = {
+          x    = self.x + (math.random() - 0.5) * 8,
+          y    = self.y + (math.random() - 0.5) * 8,
+          anim = Animation.new("smoke"),
+        }
+      end
     end
   end
+
+  local live = {}
+  for _, pf in ipairs(self._smoke_puffs) do
+    pf.anim:update(dt)
+    if not pf.anim:is_done() then live[#live + 1] = pf end
+  end
+  self._smoke_puffs = live
+end
+
+-- World-space smoke trail (drawn through the camera, before the vehicle).
+function Player:draw_world()
+  if not self.camera or #self._smoke_puffs == 0 then return end
+  local g = love.graphics
+  g.push()
+  self.camera:apply()
+  for _, pf in ipairs(self._smoke_puffs) do
+    local img = pf.anim:current_image()
+    if img then
+      local w, h = img:getDimensions()
+      g.setColor(1, 1, 1, 0.8)
+      g.draw(img, pf.x, pf.y, 0, 1.2, 1.2, w / 2, h / 2)
+    end
+  end
+  g.setColor(1, 1, 1)
+  g.pop()
 end
 
 function Player:_update_altitude(dt)
@@ -365,16 +386,6 @@ function Player:draw()
   else
     self:_draw_chopper(g, cx, cy, s)
   end
-
-  for _, se in ipairs(self._damage_smokes) do
-    local img = se.anim:current_image()
-    if img then
-      local w, h = img:getDimensions()
-      local ss   = s * 0.7
-      g.setColor(1, 1, 1, 0.9)
-      g.draw(img, cx + se.ox, cy + se.oy, 0, ss, ss, w / 2, h / 2)
-    end
-  end
   g.setColor(1, 1, 1)
 end
 
@@ -395,13 +406,13 @@ function Player:_draw_tank(g, cx, cy, s)
   local body_frames = self:_frames("tankbgrn")
   local body_img    = body_frames[self._tank_anim.frame] or body_frames[1]
   self:_draw_centered(g, body_img, cx, cy, s)
-  -- Turret: frame 0 points north; rotate it to the turret heading relative to
-  -- the hull (the camera already rotates the world so the hull faces up).
-  local top_img = self:_frames("tanktop")[1]
-  if top_img then
-    local w, h = top_img:getDimensions()
-    local rot  = self.turret_offset * math.pi / 180
-    g.draw(top_img, cx, cy, rot, s, s, w / 2, h / 2)
+  -- Turret: the tanktop arc is pre-rendered, so select the frame for the turret
+  -- heading (frame 0 = forward/up) instead of runtime-rotating one frame.
+  local top = self:_frames("tanktop")
+  local n   = #top
+  if n > 0 then
+    local fi = (math.floor(self.turret_offset / 360 * n + 0.5) % n) + 1
+    self:_draw_centered(g, top[fi], cx, cy, s)
   end
 end
 

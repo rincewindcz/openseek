@@ -64,6 +64,17 @@ function World:load(name)
     end
   end
 
+  -- Enemy tank classes ship no sprite; give them the shared orange tank art,
+  -- anchored on its visible center so it rotates cleanly to its aim.
+  local etank = self:_enemy_tank_render()
+  if etank then
+    for i, c in ipairs(self.stage.classes) do
+      if c.kind_name == "tank" and not self.images[i] then
+        self.images[i] = etank
+      end
+    end
+  end
+
   self.entities   = {}
   self.decals     = {}
   self.objects    = {}
@@ -98,6 +109,38 @@ end
 
 function World:load_index(idx)
   self:load(self.stages[idx])
+end
+
+-- Shared enemy-tank sprite (frame 15, east-facing) with an art-center anchor so
+-- the normal renderer rotates it about its visible middle. Loaded once.
+function World:_enemy_tank_render()
+  if self._etank ~= nil then return self._etank or nil end
+  local path = "assets/stage00/etank_f15.png"
+  if not love.filesystem.getInfo(path) then
+    self._etank = false
+    return nil
+  end
+  local img = love.graphics.newImage(path)
+  img:setFilter("nearest", "nearest")
+  local cx, cy = img:getWidth() / 2, img:getHeight() / 2
+  local ok, data = pcall(love.image.newImageData, path)
+  if ok then
+    local x0, y0, x1, y1 = math.huge, math.huge, -1, -1
+    for py = 0, data:getHeight() - 1 do
+      for px = 0, data:getWidth() - 1 do
+        local _, _, _, a = data:getPixel(px, py)
+        if a > 0 then
+          if px < x0 then x0 = px end
+          if px > x1 then x1 = px end
+          if py < y0 then y0 = py end
+          if py > y1 then y1 = py end
+        end
+      end
+    end
+    if x1 >= 0 then cx = (x0 + x1 + 1) / 2; cy = (y0 + y1 + 1) / 2 end
+  end
+  self._etank = { img = img, ox = -cx, oy = -cy }
+  return self._etank
 end
 
 -- World position the player spawns at: the friendly heliport pad (h.bin / lh.bin)

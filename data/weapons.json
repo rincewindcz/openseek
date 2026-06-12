@@ -114,7 +114,9 @@
     "explosion": "explosion_flak",
     "damage": 5,
     "fire_rate": 1.5,
-    "spread_deg": 4
+    "spread_deg": 0,
+    "count": 2,
+    "side_offset": 7
   },
 
   "machine_gun": {

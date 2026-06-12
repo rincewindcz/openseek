@@ -254,6 +254,7 @@ function love.draw()
   renderer:draw()
 
   if game_mode and player then
+    player:draw_world()
     combat:draw()
     player:draw()
     hud:draw()
