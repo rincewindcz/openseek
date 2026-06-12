@@ -5,6 +5,9 @@ local entity_types = {}  -- keyed by kind_name, loaded once
 
 local Entity = Class()
 
+local DEATH_PUSH  = 5     -- px a unit corpse slides in the shot direction
+local DEATH_SLIDE = 0.12  -- seconds for the corpse slide to settle
+
 function Entity.load_types(path)
   local data = love.filesystem.read(path)
   if not data then error("missing " .. path) end
@@ -33,6 +36,10 @@ function Entity:init(id, stage_ent, stage_cls)
   -- Damage visual effects
   self._damage_smokes = {}   -- {anim, ox, oy} — persistent looping smoke per HP tier
   self._hit_smokes    = {}   -- {anim, ox, oy} — one-shot SMOKE2 on hit
+
+  -- Corpse slide (units only): current draw offset and its animation state
+  self.death_ox = 0
+  self.death_oy = 0
 end
 
 -- Entity is hittable and should be drawn while idle/animating/patrol/attack.
@@ -41,12 +48,12 @@ function Entity:is_alive()
   return self.state ~= "dead" and self.state ~= "exploding"
 end
 
-function Entity:take_damage(amount)
+function Entity:take_damage(amount, dx, dy)
   if not self:is_alive() then return end
   self.hp = self.hp - amount
   if self.hp <= 0 then
     self.hp = 0
-    self:_start_death()
+    self:_start_death(dx, dy)
   end
 end
 
@@ -73,11 +80,19 @@ function Entity:play_anim(clip_name)
   self.state        = "animating"
 end
 
-function Entity:_start_death()
+function Entity:_start_death(dx, dy)
   local Animation = require "engine.animation"
   local explosion = (self.type_data and self.type_data.explosion) or "none"
   self.anim  = Animation.new("explosion_" .. explosion)
   self.state = self.anim:is_done() and "dead" or "exploding"
+  -- Unit corpses (soldiers) get nudged in the direction of the killing shot.
+  if dx and dy and self.type_data and self.type_data.sprite then
+    local len = math.sqrt(dx * dx + dy * dy)
+    if len > 0 then
+      self._death_push = { x = dx / len * DEATH_PUSH, y = dy / len * DEATH_PUSH }
+      self._death_t    = 0
+    end
+  end
   -- Only large static buildings leave a crater (set on the entity at load).
   if self.crater_eligible then
     local clip = Animation.clip("crater")
@@ -89,6 +104,14 @@ function Entity:_start_death()
 end
 
 function Entity:update(dt)
+  -- Corpse slide settles over a fraction of a second (ease-out).
+  if self._death_push and self._death_t < 1 then
+    self._death_t = math.min(1, self._death_t + dt / DEATH_SLIDE)
+    local f = 1 - (1 - self._death_t) ^ 2
+    self.death_ox = self._death_push.x * f
+    self.death_oy = self._death_push.y * f
+  end
+
   -- Explosion / overlay animation
   if (self.state == "exploding" or self.state == "animating") and self.anim then
     self.anim:update(dt)

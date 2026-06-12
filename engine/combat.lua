@@ -91,7 +91,8 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx)
   local count      = level.count   or 1
   local streams    = level.streams or 1
   local side       = level.side_offset or 0
-  local total      = math.max(count, streams)
+  local side_list  = level.side_offsets   -- explicit per-projectile lateral offsets (px)
+  local total      = side_list and #side_list or math.max(count, streams)
 
   local swing_off = 0
   if level.swing then
@@ -108,7 +109,11 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx)
 
     -- Lateral position offset (perpendicular to travel)
     local ox, oy = 0, 0
-    if side > 0 and total > 1 then
+    if side_list then
+      local dist = side_list[i]
+      ox = rx * dist
+      oy = ry * dist
+    elseif side > 0 and total > 1 then
       local dist = (i - (total + 1) / 2) * side / math.max(1, total - 1)
       ox = rx * dist
       oy = ry * dist
@@ -164,7 +169,7 @@ function CombatSystem:_check_hit(proj)
           local dy = e.y - proj.y
           if dx * dx + dy * dy < (proj.radius + hr) ^ 2 then
             e:on_hit()
-            e:take_damage(proj.damage)
+            e:take_damage(proj.damage, proj.vx, proj.vy)
             if proj.aoe > 0 then self:_apply_aoe(proj) end
             return true
           end

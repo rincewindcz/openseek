@@ -29,7 +29,7 @@
     "levels": [
       { "damage": 12, "fire_rate": 11.0, "spread_deg": 0, "count": 2, "side_offset": 16 },
       { "damage": 12, "fire_rate": 9.0,  "spread_deg": 0, "count": 3, "side_offset": 10 },
-      { "damage": 12, "fire_rate": 8.0,  "spread_deg": 0, "count": 4, "side_offset": 16 }
+      { "damage": 12, "fire_rate": 8.0,  "spread_deg": 0, "side_offsets": [-13, -8, 8, 13] }
     ]
   },
 

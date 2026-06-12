@@ -199,7 +199,7 @@ function Renderer:_draw_unit(e)
   if img then
     local iw, ih = img:getDimensions()
     g.setColor(1, 1, 1)
-    g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+    g.draw(img, e.x + e.death_ox, e.y + e.death_oy, 0, 1, 1, iw / 2, ih / 2)
   end
   if e:is_alive() then
     for _, hs in ipairs(e._hit_smokes) do
