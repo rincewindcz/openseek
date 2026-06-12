@@ -51,18 +51,21 @@ and drawn throughout `engine/`.
   damaged. Solid entities block tank movement and veto helicopter landings;
   player armor takes damage from enemy fire. Enemy turrets vary their weapon by
   sprite (`data/enemy_overrides.json`): gun1 fires rockets, sguntop spits
-  fireballs; enemy rounds burst into their explosion clip (flak/sgun -> flakani)
-  on impact or when they fade. The chopper arsenal includes a straight-wave
-  napalm (1/2/3 parallel lines of fire) and an alternating-pod mega missile (with
-  a smoke trail); weapons carry their canonical shortname (GUN/FAR/NAP/MRK/...)
-  and WEAPONS.BIN icon. Player ammo is tracked per weapon (chaingun infinite,
-  others limited); destroyed large buildings almost always drop a power-up
-  (PICKUPS.BIN) that refills ammo, fuel, armor, or awards a medal, collected by
-  flying over (easy) or landing on them (hard). `F5` toggles unlimited
-  ammo/fuel/armor for testing. Game-over is optional (toggle `O` in the overview):
-  when enabled, running out of fuel or armor downs the player, a chopper falling
-  and exploding on the ground, a tank burning then losing its turret; `R` restarts
-  the current level. Enemy movement and a weapon shop are not yet implemented.
+  fireballs; sgun fireballs flak-burst on impact while tracers fade out. Radar
+  stations are two-part like tanks (a `radar.bin` base with a `radarsp` dish that
+  spins continuously and must be destroyed first). The chopper arsenal includes a
+  napalm that drops fire bursts (1 ahead / a -45/0/45 fan / an 8-burst ring) and
+  an alternating-pod mega missile (with a smoke trail); weapons carry their
+  canonical shortname (GUN/FAR/NAP/MRK/...) and WEAPONS.BIN icon. Player ammo is
+  tracked per weapon (chaingun infinite, others limited); destroyed large
+  buildings almost always drop a power-up (PICKUPS.BIN) that refills ammo, fuel,
+  armor, or awards a medal (bunkers always drop a medal), collected by flying over
+  (easy) or landing on them (hard); low armor/fuel gauges blink. `F5` toggles
+  unlimited ammo/fuel/armor for testing. Game-over is optional (toggle `O` in the
+  overview): when enabled, running out of fuel or armor downs the player, a
+  chopper falling and exploding on the ground, a tank burning then losing its
+  turret; `R` restarts the current level, `P` pauses. Enemy movement and a weapon
+  shop are not yet implemented.
 
 ## Architecture
 
@@ -95,8 +98,8 @@ drive; the chopper takes off / lands with `Space` (it bounces back up if it trie
 to land on a solid obstacle). Holding `Shift` while turning strafes the chopper or
 rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `E` cycles weapon level.
 `F5` toggles unlimited ammo/fuel/armor (god mode); `F6` toggles power-up pickup
-between easy (fly-over) and hard (land-on); `R` restarts the current level. In the
-overview screen, `O` toggles optional game-over (death) on or off.
+between easy (fly-over) and hard (land-on); `R` restarts the current level; `P`
+pauses. In the overview screen, `O` toggles optional game-over (death) on or off.
 
 ## Coordinate and angle conventions
 
@@ -116,6 +119,7 @@ overview screen, `O` toggles optional game-over (death) on or off.
 | `data/weapons.json` | Weapon and projectile definitions: per-level upgrades, `short`/`icon` (WEAPONS.BIN), `ammo_max`/`ammo_pickup`, plus `alternate_side`/`trail` (mega missile) and `flame` cone params (napalm). |
 | `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`, unit `sprite`/`dead_sprite`, two-part tank `turret_hp`/`turret_explosion`). |
 | `data/enemy_overrides.json` | Per-sprite enemy weapon overrides (asset filename -> weapon), for turrets that share the `flak_turret` kind but fire different weapons. |
+| `data/building_drops.json` | Forced power-up drops on a building's destruction (asset filename -> pickup kind, e.g. `bunker.bin` -> `medal`). |
 | `data/vehicles/*.json` | Player vehicle tuning. |
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |
 | `data/hud.json` | HUD layout and gauge sprites. |

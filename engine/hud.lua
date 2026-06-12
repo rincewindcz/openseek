@@ -107,9 +107,21 @@ function Hud:_gauge_frame_index(item)
   return math.floor(pct * (item.sprite_count - 1) + 0.5) + 1
 end
 
+function Hud:_gauge_pct(item)
+  local p = self.player
+  if     item.value == "armor" then return p.max_armor > 0 and p.armor / p.max_armor or 0
+  elseif item.value == "fuel"  then return p.max_fuel  > 0 and p.fuel  / p.max_fuel  or 0
+  end
+  return 0
+end
+
 function Hud:_draw_gauge(g, item, x, y)
   if not item._frames then return end
   local s   = item.scale or 1
+  -- Low gauges (< 25%) blink to warn the player.
+  if self:_gauge_pct(item) < 0.25 and (math.floor(love.timer.getTime() * 4) % 2 == 0) then
+    return
+  end
   local fi  = self:_gauge_frame_index(item)
   local img = item._frames[fi]
   if img then

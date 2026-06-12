@@ -212,27 +212,20 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
   end
 end
 
--- Napalm: a deterministic wave of `count` fire patches laid straight ahead of
--- the muzzle, repeated as `lines` parallel rows (level 1/2/3 -> 1/2/3 lines).
--- Each patch is a one-shot damage effect.
+-- Napalm: fire bursts placed at the level's angle offsets (relative to the aim)
+-- and `range`. Level 1 = one burst ahead, level 2 = a -45/0/45 fan, level 3 = a
+-- ring around the chopper. Each burst is a one-shot damage effect.
 function CombatSystem:_fire_flame(x, y, fx, fy, rad, wdef, level)
-  local lines   = level.lines   or 1
-  local count   = level.count   or 10
-  local spacing = level.spacing or wdef.spacing or 15
-  local loff    = level.line_offset or wdef.line_offset or 18
-  local dmg     = level.damage  or wdef.damage or 30
-  local radius  = wdef.aoe      or 20
-  local wave    = wdef.wave_delay or 0.04  -- per-step ignition delay (outward wave)
-  local px, py  = -fy, fx  -- perpendicular (lateral) direction
-  for l = 1, lines do
-    local lat = (l - (lines + 1) / 2) * loff
-    for i = 1, count do
-      local d  = i * spacing
-      local ex = x + fx * d + px * lat
-      local ey = y + fy * d + py * lat
-      self:add_effect(wdef.effect or "fire", ex, ey,
-        { damage = dmg, radius = radius, ttl = wdef.fire_ttl or 1.3, delay = (i - 1) * wave })
-    end
+  local angles = level.angles or { 0 }
+  local range  = level.range  or 80
+  local dmg    = level.damage or wdef.damage or 40
+  local radius = wdef.aoe     or 24
+  for _, a in ipairs(angles) do
+    local dir = rad + a * math.pi / 180
+    local ex  = x + math.cos(dir) * range
+    local ey  = y + math.sin(dir) * range
+    self:add_effect(wdef.effect or "fire", ex, ey,
+      { damage = dmg, radius = radius, scale = wdef.fire_scale or 1, ttl = wdef.fire_ttl or 1.0 })
   end
 end
 
@@ -248,7 +241,7 @@ local LOCK_DEG = 8
 -- player at its turn_speed, and fires its weapon when locked and in range.
 function CombatSystem:_update_ai(dt)
   local p = self.player
-  if not p then return end
+  if not p or p.death then return end   -- stop tracking/firing once the player is down
   for _, e in ipairs(self.world.combatants) do
     if e:is_alive() then
       local td  = e.type_data
@@ -318,6 +311,8 @@ end
 -- out (e.g. flak/sgun -> flakani). Player impacts are handled by entity deaths.
 function CombatSystem:_end_projectile(proj)
   if proj.owner == "player" then return end
+  -- Tracers just fade to nothing (handled in draw); they do not burst.
+  if proj.wdef.proj_type == "tracer" then return end
   local ex = proj.wdef.explosion
   if ex and ex ~= "explosion_none" then
     self:add_effect(ex, proj.x, proj.y, {})
@@ -425,7 +420,9 @@ function CombatSystem:draw()
       if img then
         local extra    = (wdef.proj_sprite_rot or 0) * math.pi / 180
         local ax, ay   = proj:get_anchor()
-        g.setColor(1, 1, 1)
+        -- Tracers fade out over their last moments instead of bursting.
+        local alpha = wdef.proj_type == "tracer" and math.min(1, proj.ttl / 0.4) or 1
+        g.setColor(1, 1, 1, alpha)
         g.draw(img, proj.x, proj.y, proj.angle_rad + extra, 1, 1, ax, ay)
       end
     end

@@ -82,9 +82,11 @@ function Entity:take_damage(amount, dx, dy)
 end
 
 -- Fold a co-located turret entity onto this hull. render = {img, ax, ay} drawn
--- by the renderer, rotated to aim_angle about (ax, ay).
-function Entity:attach_turret(render)
+-- by the renderer, rotated to aim_angle about (ax, ay). spin (deg/s) makes the
+-- turret rotate continuously (radar dish) instead of being aimed by the AI.
+function Entity:attach_turret(render, spin)
   self.turret_render = render
+  self.turret_spin   = spin
   self.has_turret    = true
   self.turret_alive  = true
   self.turret_max_hp = (self.type_data and self.type_data.turret_hp)
@@ -140,8 +142,13 @@ function Entity:_start_death(dx, dy)
   if self.crater_eligible then
     local clip = Animation.clip("crater")
     self.crater_img = clip and clip.frames[1] or nil
-    -- ...and sometimes drop a power-up for the player to grab.
-    if math.random() < DROP_CHANCE then self.drop_powerup = true end
+  end
+  -- Power-up drop: a forced kind always drops (e.g. bunker -> medal); otherwise
+  -- large buildings drop a random pickup most of the time.
+  if self.drop_kind then
+    self.drop_powerup = self.drop_kind
+  elseif self.crater_eligible and math.random() < DROP_CHANCE then
+    self.drop_powerup = true
   end
   -- Clear smoke effects when dying
   self._damage_smokes = {}
@@ -177,6 +184,11 @@ function Entity:update(dt)
   end
 
   if not self:is_alive() then return end
+
+  -- Continuously spinning turret (radar dish).
+  if self.turret_spin and self.turret_alive then
+    self.aim_angle = (self.aim_angle + self.turret_spin * dt) % 360
+  end
 
   -- Persistent damage smoke: threshold by HP percentage
   if self.max_hp > 0 then

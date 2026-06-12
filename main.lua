@@ -20,6 +20,7 @@ local powerups
 local game_mode    = false
 local sandbox_mode = false
 local death_enabled = false   -- optional game-over (chopper falls, tank burns)
+local paused        = false
 local sel_vehicle  = "chopper"
 local viewer_zi    = 4
 local vehicle_defs = {}
@@ -136,19 +137,27 @@ local function draw_sandbox_panel()
   end
 end
 
-local function draw_game_over()
+local function draw_overlay_text(title, hint, title_color)
   local g      = love.graphics
   local sw, sh = g.getDimensions()
   g.setColor(0, 0, 0, 0.55)
   g.rectangle("fill", 0, 0, sw, sh)
-  g.setColor(1, 0.25, 0.2, 1)
+  g.setColor(title_color[1], title_color[2], title_color[3], 1)
   local font = g.getFont()
-  local msg  = "GAME OVER"
-  g.print(msg, (sw - font:getWidth(msg) * 3) / 2, sh / 2 - 40, 0, 3, 3)
-  g.setColor(1, 1, 1, 0.9)
-  local hint = "R - restart level     F1 - exit to overview"
-  g.print(hint, (sw - font:getWidth(hint)) / 2, sh / 2 + 16)
+  g.print(title, (sw - font:getWidth(title) * 3) / 2, sh / 2 - 40, 0, 3, 3)
+  if hint then
+    g.setColor(1, 1, 1, 0.9)
+    g.print(hint, (sw - font:getWidth(hint)) / 2, sh / 2 + 16)
+  end
   g.setColor(1, 1, 1)
+end
+
+local function draw_pause()
+  draw_overlay_text("PAUSE", "P - resume", { 0.6, 0.8, 1 })
+end
+
+local function draw_game_over()
+  draw_overlay_text("GAME OVER", "R - restart level     F1 - exit to overview", { 1, 0.25, 0.2 })
 end
 
 -- ── mode transitions ──────────────────────────────────────────────────────────
@@ -192,6 +201,7 @@ end
 local function enter_game_mode()
   viewer_zi  = camera.zi
   game_mode  = true
+  paused     = false
   camera:set_zoom(6)
   spawn_player()
   love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
@@ -209,6 +219,7 @@ end
 local function leave_game_mode()
   game_mode         = false
   sandbox_mode      = false
+  paused            = false
   player            = nil
   hud.player        = nil
   combat.player     = nil
@@ -274,6 +285,7 @@ local function _try_fire(dt)
 end
 
 function love.update(dt)
+  if paused then return end
   if game_mode and player then
     player:update(dt)
     if death_enabled and not player.death and player:is_dead() then
@@ -329,6 +341,7 @@ function love.draw()
       short, player.weapon_name, player.weapon_level, n_lvl, ammo_s, mod, flags), 4, 24)
     g.setColor(1, 1, 1)
     if player:death_done() then draw_game_over() end
+    if paused then draw_pause() end
     if sandbox_mode then
       draw_sandbox_panel()
     end
@@ -389,7 +402,8 @@ function love.keypressed(key)
   end
 
   if game_mode and player then
-    if key == "r"  then restart_level(); return end
+    if key == "p"  then paused = not paused; return end
+    if key == "r"  then paused = false; restart_level(); return end
     if key == "f5" then player.unlimited = not player.unlimited; return end
     if key == "f6" then powerups.easy_mode = not powerups.easy_mode; return end
     if key == "space" or key == "f" then

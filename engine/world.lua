@@ -14,6 +14,14 @@ local DEFAULT_GROUND = { 0.3, 0.5, 0 }
 
 local World = Class()
 
+-- Two-part objects folded at load: a co-located top sprite riding a hull. top is
+-- matched by asset filename; hull by kind or asset; spin (deg/s) makes the top
+-- rotate on its own (radar dish), nil means the AI aims it (tank turret).
+local TURRET_DEFS = {
+  { top_match = "tanktop%.bin$",  hull_kind  = "tank" },
+  { top_match = "^radarsp%.bin$", hull_asset = "radar.bin", spin = 60 },
+}
+
 function World:init()
   self.stage       = nil   -- decoded JSON table
   self.stage_name  = nil
@@ -28,6 +36,9 @@ function World:init()
   self.weapon_overrides = {}   -- asset filename -> enemy weapon name
   local raw = love.filesystem.read("data/enemy_overrides.json")
   if raw then self.weapon_overrides = json.decode(raw) end
+  self.building_drops = {}     -- asset filename -> forced pickup kind
+  local braw = love.filesystem.read("data/building_drops.json")
+  if braw then self.building_drops = json.decode(braw) end
   self:_discover()
 end
 
@@ -68,15 +79,21 @@ function World:load(name)
   end
 
   -- A tank is stored as two co-located entities: the hull (kind "tank") and a
-  -- separate turret on top (asset tanktop/stanktop, filed as a flak_turret).
-  -- Identify the turret classes so we can fold each one into its hull below.
-  local top_class = {}
-  for i, c in ipairs(self.stage.classes) do
+  -- separate top on top of a hull (tank turret, radar dish). Classify each class
+  -- as a turret-top (-> its TURRET_DEF) or a hull candidate so we can fold them.
+  local top_class  = {}   -- class index -> turret def
+  local hull_class = {}   -- class index -> true
+  for _, c in ipairs(self.stage.classes) do
     local a     = c.asset and self.stage.assets[c.asset + 1]
     local fname = a and a.file and a.file:lower()
-    -- tanktop.bin / stanktop.bin / jtanktop.bin across the mission tank variants.
-    if fname and fname:match("tanktop%.bin$") then
-      top_class[c.index] = true
+    for _, def in ipairs(TURRET_DEFS) do
+      if fname and def.top_match and fname:match(def.top_match) then
+        top_class[c.index] = def
+      end
+      if (def.hull_kind and c.kind_name == def.hull_kind)
+      or (def.hull_asset and fname == def.hull_asset) then
+        hull_class[c.index] = true
+      end
     end
   end
 
@@ -102,10 +119,12 @@ function World:load(name)
     -- Per-sprite enemy weapon override (e.g. gun1 fires rockets, sguntop fires fire).
     local af = cls.asset and self.stage.assets[cls.asset + 1]
     if af and af.file then
-      entity.weapon = self.weapon_overrides[af.file:lower()]
+      local fn = af.file:lower()
+      entity.weapon    = self.weapon_overrides[fn]
+      entity.drop_kind = self.building_drops[fn]
     end
     created[id] = entity
-    if cls.kind_name == "tank" then
+    if hull_class[raw.class] then
       hull_at[raw.x .. "," .. raw.y] = entity
     end
   end
@@ -116,11 +135,12 @@ function World:load(name)
   for id, raw in ipairs(self.stage.entities) do
     local entity = created[id]
     local cls    = self.stage.classes[raw.class + 1]
-    if top_class[raw.class] then
+    local tdef = top_class[raw.class]
+    if tdef then
       local hull = hull_at[raw.x .. "," .. raw.y]
       local r    = self.images[raw.class + 1]
       if hull and r then
-        hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy })
+        hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy }, tdef.spin)
         goto continue
       end
     end

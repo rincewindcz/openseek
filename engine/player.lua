@@ -224,7 +224,7 @@ end
 
 -- ── death sequence ────────────────────────────────────────────────────────────
 
-local FALL_TIME = 0.9   -- seconds for a downed chopper to drop from full altitude
+local FALL_TIME = 1.25  -- seconds for a downed chopper to drop from full altitude
 local TANK_BURN = 1.6   -- seconds the tank burns before the turret blows
 
 -- Begin the death sequence: a chopper falls and explodes on the ground; a tank
@@ -522,8 +522,8 @@ function Player:_draw_death(g, cx, cy, s)
   local d = self.death
   if self:is_flyer() then
     if d.phase == "fall" then
-      local jx = (math.random() - 0.5) * 7   -- shake while plummeting
-      local jy = (math.random() - 0.5) * 7
+      local jx = (math.random() - 0.5) * 12   -- shake while plummeting
+      local jy = (math.random() - 0.5) * 12
       self:_draw_chopper(g, cx + jx, cy + jy, s)
     elseif d.phase == "boom" and d.boom then
       local img = d.boom:current_image()

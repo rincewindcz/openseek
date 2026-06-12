@@ -55,16 +55,26 @@ function Powerups:_random_kind()
   return KINDS[1]
 end
 
-function Powerups:_spawn(x, y)
-  self.list[#self.list + 1] = { x = x, y = y, def = self:_random_kind(), age = 0 }
+function Powerups:_kind_named(name)
+  for _, k in ipairs(KINDS) do
+    if k.kind == name then return k end
+  end
+  return nil
+end
+
+function Powerups:_spawn(x, y, forced)
+  local def = (type(forced) == "string" and self:_kind_named(forced)) or self:_random_kind()
+  self.list[#self.list + 1] = { x = x, y = y, def = def, age = 0 }
 end
 
 function Powerups:update(dt)
-  -- Spawn from freshly destroyed large buildings (flag set in entity death).
+  -- Spawn from freshly destroyed buildings. drop_powerup is true (random) or a
+  -- kind name string (forced drop, e.g. bunker -> medal).
   for _, e in ipairs(self.world.entities) do
     if e.drop_powerup then
+      local forced = e.drop_powerup
       e.drop_powerup = false
-      self:_spawn(e.x, e.y)
+      self:_spawn(e.x, e.y, forced)
     end
   end
 
