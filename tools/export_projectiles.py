@@ -18,15 +18,27 @@ REPO_ROOT = THIS_DIR.parent
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 
+# (BIN stem, output prefix, frames to keep, source stage). The port draws the
+# axis-aligned frame 0 and rotates at runtime, so the rotation-arc sets keep
+# only the frame(s) the game uses instead of the whole arc: missile/shell/ffr/
+# bomb -> frame 0, trace -> the axis-aligned growing streak, hole -> the settled
+# crater, enemy (soldier) -> the alive + dead poses. Pickups are an item atlas
+# (keep all). TRACE is 7 growth stages of 32-frame rotation arcs (224 frames);
+# the axis-aligned (vertical) pose of each stage is frame 0 of its arc, so the
+# growing streak the port rotates at runtime is frames 0,32,64,...,192. The
+# source stage selects the STAGE0{n}/ BIN and palette and the assets/stage0{n}/
+# output dir (sgun's BULLET ships in STAGE01). Pass keep=None to export every
+# frame (e.g. when inspecting an arc).
 PROJECTILE_SPRITES = [
-    ("MISSLE",   "missle"),
-    ("SHELL",    "shell"),
-    ("FFR",      "ffr"),
-    ("BOMB",     "bomb"),
-    ("TRACE",    "trace"),
-    ("HOLE4038", "hole"),
-    ("ENEMY",    "enemy"),
-    ("PICKUPS",  "pickup"),
+    ("MISSLE",   "missle", {0},                    0),
+    ("SHELL",    "shell",  {0},                    0),
+    ("FFR",      "ffr",    {0},                    0),
+    ("BOMB",     "bomb",   {0},                    0),
+    ("TRACE",    "trace",  set(range(0, 224, 32)), 0),
+    ("HOLE4038", "hole",   {16},                   0),
+    ("ENEMY",    "enemy",  {16, 32},               0),
+    ("PICKUPS",  "pickup", None,                   0),
+    ("BULLET",   "bullet", {0},                    1),
 ]
 
 
@@ -83,7 +95,7 @@ def render_frame(canvas, palette, x_min, y_min, w, h):
     return img
 
 
-def export_sprite(src_path, prefix, out_dir, palette):
+def export_sprite(src_path, prefix, out_dir, palette, keep=None):
     data     = src_path.read_bytes()
     canvases = decode_all_frames(data)
     if not canvases:
@@ -95,6 +107,8 @@ def export_sprite(src_path, prefix, out_dir, palette):
         print(f"  {src_path.name}: all frames empty")
         return []
 
+    # Bounds and frame-number padding come from the full arc so the kept frames
+    # keep the same canvas/anchor and filename indices as a full export.
     x_min, y_min, x_max, y_max = shared_canvas_bounds(non_empty)
     w = x_max - x_min + 1
     h = y_max - y_min + 1
@@ -103,37 +117,38 @@ def export_sprite(src_path, prefix, out_dir, palette):
     digits = len(str(len(canvases) - 1))
     fmt = f"{{:0{max(2, digits)}d}}"
     for i, canvas in enumerate(canvases):
+        if keep is not None and i not in keep:
+            continue
         img   = render_frame(canvas, palette, x_min, y_min, w, h)
         fname = f"{prefix}_f{fmt.format(i)}.png"
         img.save(out_dir / fname)
         names.append(fname)
 
-    print(f"  {src_path.name}: {len(names)} frames, canvas {w}x{h}")
+    print(f"  {src_path.name}: {len(names)}/{len(canvases)} frames kept, canvas {w}x{h}")
     return names
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Export projectile sprites to assets/stage00/")
+    ap = argparse.ArgumentParser(description="Export projectile sprites to assets/stage0{n}/")
     ap.add_argument("--game-dir", default=None)
     args = ap.parse_args()
 
     game_dir = find_game_dir(args.game_dir)
-    out_dir  = REPO_ROOT / "assets" / "stage00"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    pal_path = game_dir / "STAGE00" / "PAL.BIN"
-    palette  = pal_path.read_bytes()
     print(f"Game dir: {game_dir}")
-    print(f"Palette:  {pal_path}")
-    print(f"Output:   {out_dir}")
     print()
 
-    for stem, prefix in PROJECTILE_SPRITES:
-        src = game_dir / "STAGE00" / (stem + ".BIN")
+    palettes = {}   # stage -> palette bytes (one PAL.BIN read per source stage)
+    for stem, prefix, keep, stage in PROJECTILE_SPRITES:
+        stage_dir = game_dir / f"STAGE{stage:02d}"
+        src = stage_dir / (stem + ".BIN")
         if not src.exists():
             print(f"  skip {stem}: not found")
             continue
-        export_sprite(src, prefix, out_dir, palette)
+        if stage not in palettes:
+            palettes[stage] = (stage_dir / "PAL.BIN").read_bytes()
+        out_dir = REPO_ROOT / "assets" / f"stage{stage:02d}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        export_sprite(src, prefix, out_dir, palettes[stage], keep)
 
 
 if __name__ == "__main__":
