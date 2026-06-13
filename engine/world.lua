@@ -83,6 +83,12 @@ function World:load(name)
   -- as a turret-top (-> its TURRET_DEF) or a hull candidate so we can fold them.
   local top_class  = {}   -- class index -> turret def
   local hull_class = {}   -- class index -> true
+  -- Objective classes (see objectives block in the stage JSON): destroy targets
+  -- carry the is_target flag; rescue stages mark powhere.bin landing zones and
+  -- pow.bin / people.bin civilians by sprite.
+  local target_class        = {}
+  local rescue_zone_class   = {}
+  local rescue_people_class = {}
   for _, c in ipairs(self.stage.classes) do
     local a     = c.asset and self.stage.assets[c.asset + 1]
     local fname = a and a.file and a.file:lower()
@@ -95,12 +101,25 @@ function World:load(name)
         hull_class[c.index] = true
       end
     end
+    if c.is_target then target_class[c.index] = true end
+    if fname then
+      if c.kind == 9 and fname:match("powhere") then
+        rescue_zone_class[c.index] = true
+      end
+      if c.kind == 11 and (fname:match("^pow") or fname:match("people")) then
+        rescue_people_class[c.index] = true
+      end
+    end
   end
 
-  self.entities   = {}
-  self.decals     = {}
-  self.objects    = {}
-  self.combatants = {}
+  self.entities      = {}
+  self.decals        = {}
+  self.objects       = {}
+  self.combatants    = {}
+  self.targets       = {}   -- destroy-objective entities (class is_target)
+  self.rescue_zones  = {}   -- powhere.bin landing markers (kind 9)
+  self.rescue_people = {}   -- pow.bin / people.bin civilians to rescue (kind 11)
+  self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
 
   -- First pass: build every entity and index hulls by exact position.
   local created = {}
@@ -122,6 +141,16 @@ function World:load(name)
       local fn = af.file:lower()
       entity.weapon    = self.weapon_overrides[fn]
       entity.drop_kind = self.building_drops[fn]
+      -- Friendly base / spawn pad. Every stage marks it with basecirc.bin at a
+      -- fixed spot (~2180,2171); the home one is the first basecirc (later ones
+      -- sit under landhere/lh objective zones). Missions 0 and 3 also stamp an
+      -- h.bin heliport on the same spot, which takes precedence when present.
+      -- helipad/landhere/lh are objective drop zones, not the home.
+      if fn == "h.bin" then
+        self.home_entity = entity
+      elseif fn == "basecirc.bin" and not self.home_entity then
+        self.home_entity = entity
+      end
     end
     -- Resolve patrol waypoints (route index is 0-based into stage.routes).
     if entity.route ~= nil and self.stage.routes then
@@ -152,6 +181,18 @@ function World:load(name)
     self.entities[#self.entities + 1] = entity
     local list = cls.kind == 15 and self.decals or self.objects
     list[#list + 1] = entity
+    if target_class[raw.class] then
+      self.targets[#self.targets + 1] = entity
+      entity.objective = true   -- white dot on the radar, reticle in the world
+    end
+    if rescue_zone_class[raw.class] then
+      self.rescue_zones[#self.rescue_zones + 1] = entity
+      entity.objective = true
+    end
+    if rescue_people_class[raw.class] then
+      self.rescue_people[#self.rescue_people + 1] = entity
+      entity.objective = true
+    end
     local td = entity.type_data
     if td and td.weapon and (td.detection_radius or 0) > 0 then
       self.combatants[#self.combatants + 1] = entity
@@ -171,19 +212,34 @@ function World:load_index(idx)
   self:load(self.stages[idx])
 end
 
--- World position the player spawns at: the friendly heliport pad (h.bin / lh.bin)
--- if the stage has one, otherwise the world center.
+-- Asset (.bin) filename backing a class index, or nil. Shared by the debug
+-- inspector and the mission system for matching entities by sprite.
+function World:asset_file(class_idx)
+  local cls = self.stage.classes[class_idx + 1]
+  local a   = cls and cls.asset and self.stage.assets[cls.asset + 1]
+  return a and a.file or nil
+end
+
+-- The phase objective block exported into the stage JSON, or nil. Drives the
+-- on-map markers and the objective banner (see Renderer:_draw_objectives).
+function World:objectives()
+  return self.stage and self.stage.objectives
+end
+
+-- World position the player spawns at: the friendly base pad (basecirc.bin, or
+-- the h.bin heliport stamped on it in missions 0/3), otherwise the world center.
 function World:player_start()
-  for _, e in ipairs(self.entities) do
-    local cls = self.stage.classes[e.class_idx + 1]
-    local file = cls and cls.asset and self.stage.assets[cls.asset + 1]
-    local fname = file and file.file
-    if fname == "h.bin" or fname == "lh.bin" then
-      return e.x, e.y
-    end
-  end
+  if self.home_entity then return self.home_entity.x, self.home_entity.y end
   local c = self.stage.world_size / 2
   return c, c
+end
+
+-- Position of the friendly base pad, or nil if the stage has none. The mission
+-- system uses this as the return-to-base landing point.
+function World:home_base()
+  local e = self.home_entity
+  if not e then return nil end
+  return e.x, e.y
 end
 
 -- True if a circle at (x, y) with the given radius overlaps a solid entity.
