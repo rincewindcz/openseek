@@ -65,16 +65,29 @@ function World:load(name)
 
   self.images = {}
   local cache = {}
+  local function load_img(file)
+    local path = "assets/" .. name .. "/" .. file
+    if not cache[path] and love.filesystem.getInfo(path) then
+      cache[path] = love.graphics.newImage(path)
+      cache[path]:setFilter("nearest", "nearest")
+    end
+    return cache[path]
+  end
   for i, c in ipairs(self.stage.classes) do
     if c.render then
-      local path = "assets/" .. name .. "/" .. c.render.image
-      if not cache[path] and love.filesystem.getInfo(path) then
-        cache[path] = love.graphics.newImage(path)
-        cache[path]:setFilter("nearest", "nearest")
+      local img = load_img(c.render.image)
+      if img then
+        local entry = { img = img, ox = c.render.ox, oy = c.render.oy }
+        -- Unit kinds (soldiers) carry a sibling dead-pose frame, exported as
+        -- {stem}_f{frame_base + dead_frame_offset}.png; load it as the corpse.
+        local off = Entity.type_for(c.kind_name).dead_frame_offset
+        if off then
+          local dframe = math.max(0, c.frame_base or 0) + off
+          local dfile  = c.render.image:gsub("_f%d+%.png$", "_f" .. dframe .. ".png")
+          entry.dead = load_img(dfile)
+        end
+        self.images[i] = entry
       end
-      self.images[i] = cache[path] and
-        { img = cache[path], ox = c.render.ox, oy = c.render.oy }
-        or nil
     end
   end
 

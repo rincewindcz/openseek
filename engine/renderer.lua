@@ -252,16 +252,24 @@ end
 function Renderer:_draw_unit(e)
   local g  = love.graphics
   local td = e.type_data
-  local clip_name = e:is_alive() and td.sprite or (td.dead_sprite or td.sprite)
-  local clip = Animation.clip(clip_name)
-  local img  = clip and clip.frames[1]
+  local x, y = e.x + e.death_ox, e.y + e.death_oy
+  local rot  = (e.aim_angle + (td.sprite_rot or 0)) * math.pi / 180
+
+  -- Prefer the stage's own asset sprite (frame 0 alive, dead-pose frame as the
+  -- corpse) so every stage shows its own unit art; fall back to the named clip
+  -- only if the stage lacks a render image.
+  local r   = self.world.images[e.class_idx + 1]
+  local img = r and (e:is_alive() and r.img or (r.dead or r.img)) or nil
+  if not img then
+    local clip = Animation.clip(e:is_alive() and td.sprite or (td.dead_sprite or td.sprite))
+    img = clip and clip.frames[1] or nil
+  end
   if img then
     local iw, ih = img:getDimensions()
-    local rot = (e.aim_angle + (td.sprite_rot or 0)) * math.pi / 180
     g.setColor(1, 1, 1)
-    g.draw(img, e.x + e.death_ox, e.y + e.death_oy, rot, 1, 1, iw / 2, ih / 2)
+    g.draw(img, x, y, rot, 1, 1, iw / 2, ih / 2)
     if e == self.highlight then
-      self:_glow(img, e.x + e.death_ox, e.y + e.death_oy, rot, 1, 1, iw / 2, ih / 2)
+      self:_glow(img, x, y, rot, 1, 1, iw / 2, ih / 2)
     end
   end
   if e:is_alive() then self:_draw_smokes(e) end

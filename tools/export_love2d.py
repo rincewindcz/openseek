@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 """
-Export Seek and Destroy stages for the Love2D renderer in love2d/.
+Export Seek and Destroy stages for the Love2D renderer (assets/).
 
 Stage files are data/STAGE{M}{P}.BIN where M = mission 0-4, P = phase 0-3
 (loader format string "data\\stage%d%d.bin"). Mission M uses the assets and
 palette of the STAGE0{M}/ directory.
 
-Rotation-arc frames are pre-rotated copies offset by one step: frame k is
-the true pose rotated clockwise by (k+1) * 360/angle_steps degrees, so
-frame_base (the spawn pose) is one step off axis and carries rotation
-deformities like every non-90-degree copy. The only lossless copy is the
-arc's exact 90 degree frame, frame_base + (steps/4 - 1) << stride (f15 for
-steps=64, f7 for steps=32). That frame is exported here and the viewer
-rotates it back by -90 degrees at draw time (see LEVELS.md / SPRITES.md).
-Classes with angle_steps == 1 export frame_base as-is.
+Rotation-arc frames are pre-rotated copies, one rotation step apart, with
+frame 0 the exact axis-aligned pose (it lives at offset H; the +4 table
+holds frames 1..n, so a container has n+1 frames - see ARTICLE_8.md). An
+entity carries no angle, so its canonical pose is simply the class's
+frame_base, drawn as-is with no rotation. Orientation variants of one asset
+(road pieces, rocks) are separate classes pointing at different frame_base
+values, so frame_base alone selects the right pose for every class.
 
 Each exported frame is decoded with the exact blitter decoder into
-love2d/assets/stage{M}{P}/<name>_f<N>.png, and the stage JSON gets a
+assets/stage{M}{P}/<name>_f<N>.png, and the stage JSON gets a
 per-class "render" entry: image name plus the top-left draw offset from
 the entity position (ox, oy), derived from the engine's center anchors in
 the frame header (hdr+6, hdr+8) and the decoded pixel bounding box.
@@ -41,7 +40,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import decode_blitter as db
 
 ROOT = Path(__file__).resolve().parent.parent
-LOVE_ASSETS = ROOT / "love2d" / "assets"
+ASSETS = ROOT / "assets"
+
+# Kinds that draw a unit sprite (soldiers) carry a dead pose a fixed frame offset
+# past their alive frame in the same arc-pair BIN (ENEMY.BIN: alive arc 0-31,
+# dead arc 32-63). Exported as a sibling {stem}_f{frame+offset}.png that the
+# engine derives by name; no extra JSON field needed.
+def _dead_frame_offsets():
+    import json as _json
+    types = _json.loads((ROOT / "data" / "entity_types.json").read_text())
+    return {k: v["dead_frame_offset"] for k, v in types.items()
+            if isinstance(v, dict) and "dead_frame_offset" in v}
 
 
 def find_bin(name: str, source_dir: int, mission: int) -> Path | None:
@@ -79,8 +88,8 @@ def render_class_frame(bin_path: Path, frame: int, palette: bytes):
 def export_stage(mission: int, phase: int) -> None:
     tag = f"stage{mission}{phase}"
     stage_bin = ROOT / "data" / f"STAGE{mission}{phase}.BIN"
-    out_json = LOVE_ASSETS / f"{tag}.json"
-    sprite_dir = LOVE_ASSETS / tag
+    out_json = ASSETS / f"{tag}.json"
+    sprite_dir = ASSETS / tag
     sprite_dir.mkdir(parents=True, exist_ok=True)
 
     import decode_level
@@ -100,14 +109,13 @@ def export_stage(mission: int, phase: int) -> None:
         seg["color"] = [(c << 2) | (c >> 4) for c in pal1[i:i + 3]]
 
     used_classes = sorted({e["class"] for e in level["entities"]})
+    dead_offsets = _dead_frame_offsets()
     ok, failed = 0, []
     rendered = {}  # (asset, frame) -> render info
     for ci in used_classes:
         cls = level["classes"][ci]
         asset = level["assets"][cls["asset"]]
-        steps = cls["angle_steps"]
-        pose = max(0, steps // 4 - 1) if steps > 1 else 0
-        frame = max(0, cls["frame_base"]) + (pose << max(0, cls["frame_stride"]))
+        frame = max(0, cls["frame_base"])
         key = (cls["asset"], frame)
         if key not in rendered:
             src = find_bin(asset["file"], asset["source_dir"], mission)
@@ -127,6 +135,22 @@ def export_stage(mission: int, phase: int) -> None:
                     ok += 1
         if rendered[key]:
             cls["render"] = rendered[key]
+            # Unit kinds also export their dead pose (same arc-pair BIN, frame
+            # offset away). The engine derives the filename, so no JSON field.
+            off = dead_offsets.get(cls.get("kind_name"))
+            if off:
+                dframe = frame + off
+                dkey = (cls["asset"], dframe)
+                if dkey not in rendered:
+                    src = find_bin(asset["file"], asset["source_dir"], mission)
+                    # Only export a real dead frame; skip assets whose arc is too
+                    # short (e.g. mine.bin filed as a unit kind has no dead pose).
+                    n = len(db.read_frames(src.read_bytes())) if src else 0
+                    dimg = render_class_frame(src, dframe, palette)[0] if dframe < n else None
+                    if dimg is not None:
+                        stem = asset["file"].rsplit(".", 1)[0]
+                        dimg.save(sprite_dir / f"{stem}_f{dframe}.png")
+                    rendered[dkey] = bool(dimg)
 
     out_json.write_text(json.dumps(level, indent=2))
     print(f"{tag}: {ok} class frames, {len(level['entities'])} entities "
