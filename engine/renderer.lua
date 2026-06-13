@@ -13,6 +13,18 @@ function Renderer:init(world, camera)
   self.kind_index    = 1          -- cursor in kind panel
   self.hidden_kinds  = {}         -- set: kind_name -> true means hidden
   self._kinds        = {}         -- ordered list of {name, count} for the panel
+  self.highlight     = nil        -- Entity to tint (debug selection / hover)
+end
+
+-- Pulsing additive pass over a just-drawn sprite to mark the debug selection.
+function Renderer:_glow(img, x, y, rot, sx, sy, ox, oy)
+  local g = love.graphics
+  local p = 0.30 + 0.18 * math.sin(love.timer.getTime() * 6)
+  g.setBlendMode("add")
+  g.setColor(p * 0.5, p * 0.8, p, 1)
+  g.draw(img, x, y, rot, sx, sy, ox, oy)
+  g.setBlendMode("alpha")
+  g.setColor(1, 1, 1)
 end
 
 -- Called after a stage load to rebuild the kind list.
@@ -72,6 +84,7 @@ end
 function Renderer:draw()
   self:_draw_world()
   self:_draw_hud()
+  if not self.in_game then self:_draw_objective_banner() end
   if self.picker      then self:_draw_stage_picker() end
   if self.kind_picker then self:_draw_kind_picker()  end
 end
@@ -98,6 +111,7 @@ function Renderer:_draw_world()
   end
 
   self:_draw_entities(w.objects, vp)
+  self:_draw_objectives(vp)
 
   if self.show_grid then
     g.setColor(0, 0, 0, 0.2)
@@ -141,6 +155,9 @@ function Renderer:_draw_entities(list, vp)
         local rot = (e.turret_render and not e.route_points) and 0
           or e:draw_angle_rad(cls.angle_steps)
         g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+        if e == self.highlight then
+          self:_glow(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+        end
       else
         g.setColor(1, 0, 1)
         g.circle("fill", e.x, e.y, 3)
@@ -152,7 +169,7 @@ function Renderer:_draw_entities(list, vp)
       if e.turret_render then
         if e.turret_alive then
           local tr  = e.turret_render
-          local rot = (e.aim_angle - 90) * math.pi / 180
+          local rot = e.aim_angle * math.pi / 180
           g.draw(tr.img, e.x, e.y, rot, 1, 1, tr.ax, tr.ay)
         end
         if e.turret_fx then
@@ -243,8 +260,100 @@ function Renderer:_draw_unit(e)
     local rot = (e.aim_angle + (td.sprite_rot or 0)) * math.pi / 180
     g.setColor(1, 1, 1)
     g.draw(img, e.x + e.death_ox, e.y + e.death_oy, rot, 1, 1, iw / 2, ih / 2)
+    if e == self.highlight then
+      self:_glow(img, e.x + e.death_ox, e.y + e.death_oy, rot, 1, 1, iw / 2, ih / 2)
+    end
   end
   if e:is_alive() then self:_draw_smokes(e) end
+end
+
+-- Four L-shaped corners forming a target reticle around (cx, cy).
+function Renderer:_corner_box(cx, cy, hw, hh)
+  local g = love.graphics
+  local l = math.max(3, math.min(hw, hh) * 0.5)
+  local x0, y0, x1, y1 = cx - hw, cy - hh, cx + hw, cy + hh
+  g.line(x0, y0, x0 + l, y0); g.line(x0, y0, x0, y0 + l)
+  g.line(x1, y0, x1 - l, y0); g.line(x1, y0, x1, y0 + l)
+  g.line(x0, y1, x0 + l, y1); g.line(x0, y1, x0, y1 - l)
+  g.line(x1, y1, x1 - l, y1); g.line(x1, y1, x1, y1 - l)
+end
+
+-- Objective overlay (world space): bracket every live destroy-target and ring
+-- the POW landing zones / civilians on rescue phases. The entity lists come
+-- from the stage JSON objectives block (collected in World:load).
+function Renderer:_draw_objectives(vp)
+  local w   = self.world
+  local obj = w.stage.objectives
+  if not obj then return end
+  local g = love.graphics
+  g.setLineWidth(2 / self.camera:zoom())
+
+  if obj.destroy then
+    g.setColor(1, 0.3, 0.2, 0.7 + 0.3 * math.sin(love.timer.getTime() * 5))
+    for _, e in ipairs(w.targets) do
+      if e:is_alive() and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
+        local hw, hh, cx, cy = 9, 9, e.x, e.y
+        local r = w.images[e.class_idx + 1]
+        if r and r.img then
+          local iw, ih = r.img:getDimensions()
+          hw, hh = iw / 2 + 4, ih / 2 + 4
+          cx, cy = e.x + r.ox + iw / 2, e.y + r.oy + ih / 2
+        end
+        self:_corner_box(cx, cy, hw, hh)
+      end
+    end
+  end
+
+  if obj.rescue then
+    local pulse = 0.6 + 0.4 * math.sin(love.timer.getTime() * 4)
+    g.setColor(0.3, 1, 0.55, pulse)
+    for _, e in ipairs(w.rescue_zones) do
+      if e:is_alive() and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
+        g.circle("line", e.x, e.y, 18)
+        g.circle("line", e.x, e.y, 11)
+      end
+    end
+    g.setColor(0.55, 0.9, 1, pulse)
+    for _, e in ipairs(w.rescue_people) do
+      if e:is_alive() and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
+        g.polygon("line", e.x, e.y - 7, e.x + 7, e.y, e.x, e.y + 7, e.x - 7, e.y)
+      end
+    end
+  end
+
+  g.setColor(1, 1, 1)
+  g.setLineWidth(1)
+end
+
+-- One-line objective summary (screen space, top-center) with live counts. Shown
+-- in the viewer and in game mode; phases with no destroy/rescue goal show nothing.
+function Renderer:_draw_objective_banner()
+  local obj = self.world.stage.objectives
+  if not obj or not (obj.destroy or obj.rescue) then return end
+  local g  = love.graphics
+  local sw = g.getDimensions()
+  local text, col
+  if obj.destroy then
+    local rem = 0
+    for _, e in ipairs(self.world.targets) do if e:is_alive() then rem = rem + 1 end end
+    text = string.format("OBJECTIVE: DESTROY  -  %d target%s remaining", rem, rem == 1 and "" or "s")
+    if obj.special_end then text = text .. "  [COMMANDERS BUILDING]" end
+    col = { 1, 0.55, 0.3 }
+  else
+    local n = #self.world.rescue_people
+    text = n > 0
+      and string.format("OBJECTIVE: RESCUE  -  %d POW%s to recover", n, n == 1 and "" or "s")
+      or  "OBJECTIVE: RESCUE  -  reach the marked POW landing zones"
+    col = { 0.4, 1, 0.6 }
+  end
+  local font = g.getFont()
+  local tw   = font:getWidth(text)
+  local bx   = (sw - tw) / 2
+  g.setColor(0, 0, 0, 0.6)
+  g.rectangle("fill", bx - 8, 44, tw + 16, 18)
+  g.setColor(col[1], col[2], col[3], 1)
+  g.print(text, bx, 46)
+  g.setColor(1, 1, 1)
 end
 
 function Renderer:_draw_hud()

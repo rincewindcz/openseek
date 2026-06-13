@@ -7,6 +7,7 @@ local Player       = require "engine.player"
 local Hud          = require "engine.hud"
 local CombatSystem = require "engine.combat"
 local Powerups     = require "engine.powerups"
+local Mission      = require "engine.mission"
 local json         = require "lib.json"
 
 local world
@@ -17,6 +18,7 @@ local hud
 local player
 local combat
 local powerups
+local mission
 local game_mode    = false
 local sandbox_mode = false
 local death_enabled = false   -- optional game-over (chopper falls, tank burns)
@@ -160,6 +162,10 @@ local function draw_game_over()
   draw_overlay_text("GAME OVER", "R - restart level     F1 - exit to overview", { 1, 0.25, 0.2 })
 end
 
+local function draw_victory()
+  draw_overlay_text("MISSION COMPLETE", "R - restart level     F1 - exit to overview", { 0.4, 1, 0.5 })
+end
+
 -- ── mode transitions ──────────────────────────────────────────────────────────
 
 local function after_stage_load()
@@ -196,12 +202,15 @@ local function spawn_player()
   combat.projectiles = {}
   combat.effects     = {}
   powerups:reset(player)
+  mission = Mission.for_stage(world, player, world.stage_name)
+  player:take_off()   -- chopper lifts off automatically; no-op for the tank
 end
 
 local function enter_game_mode()
   viewer_zi  = camera.zi
   game_mode  = true
   paused     = false
+  renderer.in_game = true
   camera:set_zoom(6)
   spawn_player()
   love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
@@ -220,12 +229,14 @@ local function leave_game_mode()
   game_mode         = false
   sandbox_mode      = false
   paused            = false
+  renderer.in_game  = false
   player            = nil
   hud.player        = nil
   combat.player     = nil
   combat.projectiles = {}
   combat.effects     = {}
   powerups:reset(nil)
+  mission           = nil
   camera.angle      = nil
   camera.view_oy    = 0
   camera:set_zoom(viewer_zi)
@@ -266,6 +277,7 @@ function love.load(args)
   hud.world = world
   combat   = CombatSystem:new(world, camera)
   combat:load("data/weapons.json")
+  Mission.load("data/missions.json")
   powerups = Powerups:new(world, camera, combat.weapons)
   renderer:refresh_kinds()
   love.window.setTitle(world:title())
@@ -294,6 +306,7 @@ function love.update(dt)
     if not player.death then _try_fire(dt) end
     combat:update(dt)
     powerups:update(dt)
+    if mission then mission:update(dt) end
     camera.x     = player.x
     camera.y     = player.y
     camera.angle = player:camera_angle()
@@ -315,6 +328,7 @@ function love.update(dt)
 end
 
 function love.draw()
+  renderer.highlight = dbg.enabled and (dbg.selected or dbg.hovered) or nil
   renderer:draw()
 
   if game_mode and player then
@@ -340,6 +354,7 @@ function love.draw()
     g.print(string.format("Q:%s(%s) E:lv%d/%d ammo:%s ctrl:fire %s%s  R:restart",
       short, player.weapon_name, player.weapon_level, n_lvl, ammo_s, mod, flags), 4, 24)
     g.setColor(1, 1, 1)
+    if mission and mission.state == "won" then draw_victory() end
     if player:death_done() then draw_game_over() end
     if paused then draw_pause() end
     if sandbox_mode then
