@@ -25,8 +25,9 @@ local RADAR_BUILDING = {
   structure = true,
   radar     = true,
 }
-local RADAR_COLOR_ENEMY    = { 1.0, 0.15, 0.15 }
-local RADAR_COLOR_BUILDING = { 0.33, 0.18, 0.07 }
+local RADAR_COLOR_ENEMY     = { 1.0, 0.15, 0.15 }
+local RADAR_COLOR_BUILDING  = { 0.33, 0.18, 0.07 }
+local RADAR_COLOR_OBJECTIVE = { 1.0, 1.0, 1.0 }
 
 function Hud:init()
   self.player = nil
@@ -218,8 +219,11 @@ function Hud:_draw_radar(g, item, x, y)
     if e:is_alive() then
       local cls  = classes[e.class_idx + 1]
       local kind = cls.kind_name
+      -- Objective targets / POW zones override the kind color with a white dot
+      -- (same size as the others) so the mission goal stands out on the scanner.
       local c
-      if     RADAR_ENEMY[kind]    then c = RADAR_COLOR_ENEMY
+      if     e.objective          then c = RADAR_COLOR_OBJECTIVE
+      elseif RADAR_ENEMY[kind]    then c = RADAR_COLOR_ENEMY
       elseif RADAR_BUILDING[kind] then c = RADAR_COLOR_BUILDING
       end
       if c then

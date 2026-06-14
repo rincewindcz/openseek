@@ -4,11 +4,11 @@ local Animation = require "engine.animation"
 local Player = Class()
 
 -- sprite frame constants (0-indexed, matching exported assets)
-local PIT_NEUTRAL = 6    -- choppit1 neutral frame
-local PIT_FRAMES  = 14
-local BNK_NEUTRAL = 3    -- chopbnk1 neutral frame
-local BNK_MAX_R   = 6    -- chopbnk1 max-right frame used
-local DRP_FRAMES  = 5    -- chopdrp1 total frames
+local PIT_NEUTRAL = 7    -- choppit1 neutral frame
+local PIT_FRAMES  = 15
+local BNK_NEUTRAL = 4    -- chopbnk1 neutral frame
+local BNK_MAX_R   = 7    -- chopbnk1 max-right frame used
+local DRP_FRAMES  = 6    -- chopdrp1 total frames
 local STRAFE_THR  = 5    -- |strafe| threshold to switch bank/pitch mode
 local ROTOR_MIN_S = 0.65  -- rotor scale factor when grounded (scales up to 1 airborne)
 
@@ -37,6 +37,7 @@ function Player:init(x, y)
   self.ammo         = {}      -- weapon_name -> rounds left (absent = infinite)
   self.unlimited    = false   -- god mode: skip ammo/fuel/armor consumption
   self.medals       = 0
+  self.pows         = 0       -- people (POWs/allies) currently carried
   self.death        = nil     -- death sequence state (set by start_death)
 
   self.turret_offset    = 0    -- tank turret heading relative to the hull (deg)
@@ -465,6 +466,13 @@ function Player:repair(amount)
   self.armor = math.min(self.max_armor, self.armor + (amount or self.max_armor))
 end
 
+-- Settled enough to load/unload people or plant a charge: a chopper must be
+-- grounded; a tank must be nearly stopped (manual: land on or stop over a zone).
+function Player:is_stationary()
+  if self:is_flyer() then return self.land_state == "grounded" end
+  return math.abs(self.speed) < 5
+end
+
 function Player:is_dead()
   if self.unlimited then return false end
   return self.armor <= 0 or self.fuel <= 0
@@ -584,12 +592,12 @@ function Player:_draw_tank(g, cx, cy, s)
   local body_img    = body_frames[self._tank_anim.frame] or body_frames[1]
   self:_draw_centered(g, body_img, cx, cy, s)
   if self.death and self.death.turret_exploded then return end
-  -- Turret: axis-aligned frame 15 (barrel east), runtime-rotated to the turret
+  -- Turret: axis-aligned frame 0 (barrel north), runtime-rotated to the turret
   -- heading relative to the hull. Anchored on its art center to spin in place.
-  local img = self:_frames("tanktop")[16]  -- frame 15
+  local img = self:_frames("tanktop")[1]  -- frame 0
   if img then
-    local ax, ay = Animation.frame_anchor("tanktop", 16)
-    local rot    = (self.turret_offset - 90) * math.pi / 180
+    local ax, ay = Animation.frame_anchor("tanktop", 1)
+    local rot    = self.turret_offset * math.pi / 180
     g.draw(img, cx, cy, rot, s, s, ax, ay)
   end
 end

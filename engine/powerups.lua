@@ -8,17 +8,17 @@ local BLINK_AT   = 4.0   -- starts blinking after this to warn it is leaving
 local PICK_RANGE = 22    -- collection radius added to the player's own radius
 
 -- Pickup kinds mapped to PICKUPS.BIN frames, with spawn weights. Ammo kinds
--- carry a weapon name; the medal kind animates by toggling frames 7/8.
+-- carry a weapon name; the medal kind animates by toggling frames 8/9.
 local KINDS = {
-  { frame = 3,  weight = 3, kind = "fuel"  },
-  { frame = 4,  weight = 3, kind = "armor" },
-  { frame = 7,  weight = 1, kind = "medal" },
-  { frame = 0,  weight = 1, kind = "ammo", weapon = "air_to_air"   },
-  { frame = 1,  weight = 1, kind = "ammo", weapon = "napalm"       },
-  { frame = 2,  weight = 1, kind = "ammo", weapon = "rockets"      },
-  { frame = 9,  weight = 1, kind = "ammo", weapon = "shells"       },
-  { frame = 11, weight = 1, kind = "ammo", weapon = "bomb"         },
-  { frame = 12, weight = 1, kind = "ammo", weapon = "mega_missile" },
+  { frame = 4,  weight = 3, kind = "fuel"  },
+  { frame = 5,  weight = 3, kind = "armor" },
+  { frame = 8,  weight = 1, kind = "medal" },
+  { frame = 1,  weight = 1, kind = "ammo", weapon = "air_to_air"   },
+  { frame = 2,  weight = 1, kind = "ammo", weapon = "napalm"       },
+  { frame = 3,  weight = 1, kind = "ammo", weapon = "rockets"      },
+  { frame = 10, weight = 1, kind = "ammo", weapon = "shells"       },
+  { frame = 12, weight = 1, kind = "ammo", weapon = "bomb"         },
+  { frame = 13, weight = 1, kind = "ammo", weapon = "mega_missile" },
 }
 local TOTAL_WEIGHT = 0
 for _, k in ipairs(KINDS) do TOTAL_WEIGHT = TOTAL_WEIGHT + k.weight end
@@ -129,7 +129,7 @@ function Powerups:draw()
     if visible then
       local fi = pu.def.frame
       if pu.def.kind == "medal" then
-        fi = (math.floor(pu.age * 3) % 2 == 0) and 7 or 8
+        fi = (math.floor(pu.age * 3) % 2 == 0) and 8 or 9
       end
       local img = frames[fi + 1]
       if img then

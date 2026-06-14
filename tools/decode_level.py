@@ -84,6 +84,11 @@ def parse_class(rec: bytes, index: int) -> dict:
         "frame_stride": f[4],     # +0x08 rot index shift (frames per pose)
         "angle_steps": f[5],      # +0x0a rotation steps (32/64; 1 = static)
         "flags": f[7],            # +0x0e copied to entity +0x52
+        # entity flag bit 0x1 marks a primary "destroy" objective target: when
+        # one dies the engine decrements the target counter at 0x290e58
+        # (death handler 0x1fe781), and the phase completes when it hits 0
+        # (0x2104cb -> "MISSION COMPLETE - RETURN TO BASE").
+        "is_target": bool(f[7] & 0x1),
         "hit_points": f[8],       # +0x10
         "kind": f[11],            # +0x16 entity behaviour class (init switch)
         "frame_shift": struct.unpack_from("<h", rec, 0x1c)[0],  # angle >> shift
@@ -125,7 +130,17 @@ def parse_stage(data: bytes) -> dict:
         })
 
     name = r.cstr(r.u16())
-    unknown_word = r.u16()
+    # The stage init (0x20f660) passes 0x2909e8 as this loader's struct base
+    # (0x20f788: mov edx,0x2909e8; call 0x1f5860), so the next word lands at
+    # 0x2909e8 - the phase objective-flag byte the engine tests throughout the
+    # win/fail logic - and the 6 words after it land at 0x290e4a.. (objective
+    # state). Confirmed bits: 0x2 = allies/POWs must survive ("ALLIES
+    # EXTERMINATED - PHASE FAILED", 0x1fe699); 0x1 = special completion path
+    # (suppresses the generic "MISSION COMPLETE" auto-message at 0x21050d and
+    # enables the "DESTROY THE COMMANDERS BUILDING" reminder, 0x1fe7d1; set
+    # only on the commander phase). The general destroy objective is carried
+    # by the is_target entities below, not this bit. Other bits unresolved.
+    objective_flags = r.u16()
     globals_ = [r.u16() for _ in range(6)]
 
     n_classes = r.u16()
@@ -154,11 +169,26 @@ def parse_stage(data: bytes) -> dict:
     if leftover:
         print(f"WARNING: {leftover} unparsed bytes at end of file", file=sys.stderr)
 
+    # Objective summary derived from the phase flags and the placed entities.
+    used = {e["class"] for e in entities}
+    target_classes = sorted(c["index"] for c in classes
+                            if c["is_target"] and c["index"] in used)
+    n_targets = sum(1 for e in entities if classes[e["class"]]["is_target"])
+    objectives = {
+        "flags": objective_flags & 0xFF,
+        "destroy": n_targets > 0,                 # must destroy all is_target entities
+        "rescue": bool(objective_flags & 0x2),    # allies/POWs must survive
+        "special_end": bool(objective_flags & 0x1),  # commander-building completion variant
+        "target_classes": target_classes,         # classes the player must destroy
+        "n_target_entities": n_targets,            # seeds the 0x290e58 counter
+    }
+
     return {
         "world_size": WORLD_SIZE,
         "header": header,
         "name": name,
-        "unknown_word": unknown_word,
+        "objective_flags": objective_flags,
+        "objectives": objectives,
         "globals": globals_,
         "assets": assets,
         "classes": classes,
@@ -171,10 +201,22 @@ def parse_stage(data: bytes) -> dict:
 def summarize(stage: dict) -> str:
     from collections import Counter
     counts = Counter(e["class"] for e in stage["entities"])
+    obj = stage["objectives"]
+    kinds = []
+    if obj["destroy"]:
+        kinds.append("DESTROY")
+    if obj["rescue"]:
+        kinds.append("RESCUE/PROTECT")
+    tgt = ", ".join(
+        f"{stage['assets'][stage['classes'][ci]['asset']]['file']}"
+        f" x{sum(1 for e in stage['entities'] if e['class'] == ci)}"
+        for ci in obj["target_classes"]) or "none"
     lines = [
         f"world: {stage['world_size']}x{stage['world_size']} px, "
         f"{len(stage['assets'])} assets, {len(stage['classes'])} classes, "
         f"{len(stage['entities'])} entities, {len(stage['segments'])} segments",
+        f"objective: flags={obj['flags']:#04x} [{'+'.join(kinds) or 'clear-area'}]"
+        f"  destroy-targets: {tgt}",
         "entity classes by count:",
     ]
     for cls, n in counts.most_common():

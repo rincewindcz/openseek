@@ -132,12 +132,16 @@ def decode_frame(data, frame_off, frame_end=None, max_pairs=20000):
 
 
 def read_frames(data):
+    # The engine computes a frame pointer as base + u32[base + 4*k] (see
+    # 0x1ffe25 in SEEK.EXE), so the u32 at offset 0 - nominally the header
+    # size H - doubles as frame 0's offset: frame 0 lives at H. The table at
+    # +4 holds frames 1..n, giving n+1 frames total. Reading the table alone
+    # drops frame 0 (the axis-aligned 0 deg pose).
     hdr = struct.unpack_from('<I', data, 0)[0]
     n = (hdr - 4) // 4
-    if n == 0:
-        return [(4, len(data))]
-    offs = [struct.unpack_from('<I', data, 4 + i * 4)[0] for i in range(n)]
-    return [(offs[i], offs[i + 1] if i + 1 < n else len(data)) for i in range(n)]
+    offs = [struct.unpack_from('<I', data, 4 * k)[0] for k in range(n + 1)]
+    return [(offs[i], offs[i + 1] if i + 1 < len(offs) else len(data))
+            for i in range(len(offs))]
 
 
 def frame_header(data, frame_off):

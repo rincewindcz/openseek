@@ -283,10 +283,12 @@ function Entity:_patrol(dt)
   end
 end
 
--- Returns rotation in radians for g.draw().
+-- Rotation in radians for g.draw(). The canonical sprite is the axis-aligned
+-- frame 0 (pointing north), so a static entity (angle 0) draws unrotated and a
+-- moving one rotates clockwise by its heading. Single-frame classes never turn.
 function Entity:draw_angle_rad(angle_steps)
   if angle_steps <= 1 then return 0 end
-  return (self.angle - 90) * math.pi / 180
+  return self.angle * math.pi / 180
 end
 
 return Entity

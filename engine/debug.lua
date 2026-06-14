@@ -323,7 +323,7 @@ function Debug:_draw_inspector(ent)
   local td  = ent.type_data or {}
   local sel = (self.selected == ent)
 
-  local n_info  = 8
+  local n_info  = 10
   local n_type  = #TYPE_FIELDS + 2
   local n_act   = 4
   local total_h = PAD
@@ -345,6 +345,8 @@ function Debug:_draw_inspector(ent)
   y = draw_info_row(g, "id",    ent.id,                                    bx, y)
   y = draw_info_row(g, "class", ent.class_idx,                             bx, y)
   y = draw_info_row(g, "kind",  cls.kind_name or "?",                      bx, y)
+  y = draw_info_row(g, "asset", self.world:asset_file(ent.class_idx) or "-", bx, y)
+  y = draw_info_row(g, "sprite", cls.render and cls.render.image or "-",   bx, y)
   y = draw_info_row(g, "pos",   string.format("%d, %d", ent.x, ent.y),    bx, y)
   y = draw_info_row(g, "angle", string.format("%.1f", ent.angle),          bx, y)
   local hp_pct = ent.max_hp > 0 and ent.hp / ent.max_hp or 0

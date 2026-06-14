@@ -21,18 +21,20 @@ REPO_ROOT = THIS_DIR.parent
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 
-# (BIN stem in data/, output prefix)
+# (BIN stem in data/, output prefix, frames to keep). The chopper pitch/bank/drop
+# and rotor sets are state/spin animations (keep all); tanktop is a rotation arc and
+# the port draws its axis-aligned frame 0 runtime-rotated, so keep only frame 0.
 PLAYER_SPRITES = [
-    ("CHOPPIT1", "choppit1"),
-    ("CHOPBNK1", "chopbnk1"),
-    ("CHOPDRP1", "chopdrp1"),
-    ("BLADE",    "blade"),
-    ("BLADEB",   "bladeb"),
-    ("BLADEP",   "bladep"),
-    ("TANKBGRN", "tankbgrn"),
-    ("TANKTOP",  "tanktop"),
-    ("CHOPSHAD", "chopshad"),
-    ("TANKSHAD", "tankshad"),
+    ("CHOPPIT1", "choppit1", None),
+    ("CHOPBNK1", "chopbnk1", None),
+    ("CHOPDRP1", "chopdrp1", None),
+    ("BLADE",    "blade",    None),
+    ("BLADEB",   "bladeb",   None),
+    ("BLADEP",   "bladep",   None),
+    ("TANKBGRN", "tankbgrn", None),
+    ("TANKTOP",  "tanktop",  {0}),
+    ("CHOPSHAD", "chopshad", None),
+    ("TANKSHAD", "tankshad", None),
 ]
 
 
@@ -89,7 +91,7 @@ def render_frame_on_canvas(canvas, palette, x_min, y_min, w, h):
     return img
 
 
-def export_sprite_group(src_path, prefix, out_dir, palette):
+def export_sprite_group(src_path, prefix, out_dir, palette, keep=None):
     data     = src_path.read_bytes()
     canvases = decode_all_frames(data)
     if not canvases:
@@ -107,12 +109,14 @@ def export_sprite_group(src_path, prefix, out_dir, palette):
 
     names = []
     for i, canvas in enumerate(canvases):
+        if keep is not None and i not in keep:
+            continue
         img   = render_frame_on_canvas(canvas, palette, x_min, y_min, w, h)
         fname = f"{prefix}_f{i:02d}.png"
         img.save(out_dir / fname)
         names.append(fname)
 
-    print(f"  {src_path.name}: {len(names)} frames, canvas {w}x{h} -> assets/player/")
+    print(f"  {src_path.name}: {len(names)}/{len(canvases)} frames kept, canvas {w}x{h} -> assets/player/")
     return names
 
 
@@ -134,12 +138,12 @@ def main():
     print(f"Output:   {out_dir}")
     print()
 
-    for stem, prefix in PLAYER_SPRITES:
+    for stem, prefix, keep in PLAYER_SPRITES:
         src = game_dir / "data" / (stem + ".BIN")
         if not src.exists():
             print(f"  skip {stem}: not found")
             continue
-        export_sprite_group(src, prefix, out_dir, palette)
+        export_sprite_group(src, prefix, out_dir, palette, keep)
 
 
 if __name__ == "__main__":

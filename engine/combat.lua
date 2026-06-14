@@ -282,7 +282,9 @@ function CombatSystem:_update_ai(dt)
         if can_fire and math.abs(diff) < LOCK_DEG and d2 <= atk * atk then
           e.reload = e.reload - dt
           if e.reload <= 0 then
-            self:fire(e.x, e.y, e.aim_angle, weapon, "enemy", 1, atk * 1.3)
+            -- owner is the firing entity so alternate_side / swing toggles are
+            -- tracked per turret (e.g. each sgun alternates its own L/R barrel).
+            self:fire(e.x, e.y, e.aim_angle, weapon, e, 1, atk * 1.3)
             local w = self.weapons[weapon]
             e.reload = 1 / ((w and w.fire_rate) or 1)
           end
