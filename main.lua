@@ -341,6 +341,7 @@ local function leave_split()
   combat.effects     = {}
   powerups:reset(nil)
   hud.player = nil
+  hud.coplayer, hud.coplayer_color = nil, nil
   hud.view_w, hud.view_h = nil, nil
   sp_players = {}
   sp_cameras = {}
@@ -370,10 +371,20 @@ local function draw_split()
     powerups:draw()
     p:draw_world()
     combat:draw()
-    p:draw()
+    -- Draw both vehicles back-to-front by world y so the southern one is on top,
+    -- identically in both halves (the local one is centered, the teammate placed
+    -- by projection). Without this the teammate always covered the local player.
+    if other and other.y < p.y then
+      other:draw_remote(g, cam, MP_COLORS[3 - i])
+      p:draw()
+    else
+      p:draw()
+      if other then other:draw_remote(g, cam, MP_COLORS[3 - i]) end
+    end
     p:draw_world_front()
-    if other then other:draw_remote(g, cam, MP_COLORS[3 - i]) end  -- co-op teammate
-    hud.player = p
+    hud.player          = p
+    hud.coplayer        = other
+    hud.coplayer_color  = other and MP_COLORS[3 - i] or nil
     hud.view_w, hud.view_h = vw, H
     hud:draw()
     g.setScissor()
@@ -690,12 +701,14 @@ end
 
 function love.keypressed(key)
   -- 2P setup menu captures all keys while open. SPACE starts the game.
+  -- Both arrows and WASD navigate so either player can drive the setup.
   if menu_open then
     if key == "escape" then menu_open = false
     elseif key == "space" then enter_split()
-    elseif key == "up"   then menu_cursor = (menu_cursor - 2) % MENU_ROWS + 1
-    elseif key == "down" then menu_cursor = menu_cursor % MENU_ROWS + 1
-    elseif key == "left" or key == "right" or key == "return" or key == "kpenter" then
+    elseif key == "up"   or key == "w" then menu_cursor = (menu_cursor - 2) % MENU_ROWS + 1
+    elseif key == "down" or key == "s" then menu_cursor = menu_cursor % MENU_ROWS + 1
+    elseif key == "left" or key == "right" or key == "a" or key == "d"
+        or key == "return" or key == "kpenter" then
       menu_change(1)
     end
     return

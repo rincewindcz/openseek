@@ -240,6 +240,20 @@ function Hud:_draw_radar(g, item, x, y)
     end
   end
 
+  -- Co-op teammate (split screen): a larger dot in the teammate's color.
+  local mate = self.coplayer
+  if mate and (mate.armor or 0) > 0 and not mate.death then
+    local dx = (mate.x - p.x) * px_per_unit
+    local dy = (mate.y - p.y) * px_per_unit
+    local rx = dx * cos_pa - dy * sin_pa
+    local ry = dx * sin_pa + dy * cos_pa
+    if rx * rx + ry * ry <= r * r then
+      local col = self.coplayer_color or { 1, 1, 1 }
+      local dr  = dot_r * 1.8
+      g.setColor(col[1], col[2], col[3], 1)
+      g.rectangle("fill", cx + rx - dr, cy + ry - dr, dr * 2, dr * 2)
+    end
+  end
 end
 
 return Hud
