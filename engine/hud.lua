@@ -249,9 +249,8 @@ function Hud:_draw_radar(g, item, x, y)
     local ry = dx * sin_pa + dy * cos_pa
     if rx * rx + ry * ry <= r * r then
       local col = self.coplayer_color or { 1, 1, 1 }
-      local dr  = dot_r * 1.8
       g.setColor(col[1], col[2], col[3], 1)
-      g.rectangle("fill", cx + rx - dr, cy + ry - dr, dr * 2, dr * 2)
+      g.rectangle("fill", cx + rx - dot_r, cy + ry - dot_r, dot_r * 2, dot_r * 2)
     end
   end
 end

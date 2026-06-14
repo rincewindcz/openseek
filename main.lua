@@ -30,7 +30,6 @@ local vehicle_defs = {}
 -- ── split-screen two-player (extra mode, not in the original game) ───────────────
 local split_mode  = false
 local menu_open   = false          -- the 2P setup menu overlay
-local menu_cursor = 1
 local sp_players  = {}             -- two Player instances
 local sp_cameras  = {}             -- two Camera instances, one per screen half
 local mp_setup    = { vehicle = { "chopper", "tank" }, god = false, ff = false }
@@ -424,8 +423,6 @@ local function draw_split()
   end
 end
 
-local MENU_ROWS = 4   -- 1=P1 vehicle, 2=P2 vehicle, 3=god, 4=friendly fire
-
 -- Draw a representative vehicle sprite (chopper body or tank hull+turret),
 -- centered and scaled to fit a menu box.
 local function draw_vehicle_icon(g, vehicle, cx, cy, scale)
@@ -450,30 +447,22 @@ local function draw_vehicle_icon(g, vehicle, cx, cy, scale)
   end
 end
 
--- One player's vehicle selection box: a square in the player's color holding
--- the vehicle icon, brighter/thicker while that row is focused.
-local function draw_player_box(g, idx, bx, by, bw, bh, focused)
+-- One player's vehicle selection box: a square in the player's color holding the
+-- current vehicle icon. Each player toggles their own box independently, so both
+-- boxes are always live (no cursor / focus).
+local function draw_player_box(g, idx, bx, by, bw, bh)
   local col = MP_COLORS[idx]
   g.setColor(0, 0, 0, 0.5)
   g.rectangle("fill", bx, by, bw, bh)
-  g.setColor(col[1], col[2], col[3], focused and 1 or 0.6)
-  g.setLineWidth(focused and 4 or 2)
+  g.setColor(col[1], col[2], col[3], 1)
+  g.setLineWidth(4)
   g.rectangle("line", bx, by, bw, bh)
   g.setLineWidth(1)
-  g.setColor(col[1], col[2], col[3], 1)
   g.print("PLAYER " .. idx, bx + 8, by + 6)
   draw_vehicle_icon(g, mp_setup.vehicle[idx], bx + bw / 2, by + bh / 2 + 6, 2)
   g.setColor(1, 1, 1, 1)
   local name = mp_setup.vehicle[idx]:upper()
   g.print("< " .. name .. " >", bx + bw / 2 - 40, by + bh - 22)
-end
-
--- One full-width toggle row (god mode / friendly fire).
-local function draw_toggle_row(g, label, on, x, y, focused)
-  g.setColor(focused and 1 or 0.82, focused and 1 or 0.82, focused and 0.2 or 0.82, 1)
-  if focused then g.print(">", x - 18, y) end
-  g.print(string.format("%-16s < %s >", label, on and "ON" or "OFF"), x, y)
-  g.setColor(1, 1, 1)
 end
 
 local function draw_2p_menu()
@@ -489,34 +478,25 @@ local function draw_2p_menu()
   local bw, bh = 200, 150
   local gap    = 40
   local boxy   = sh / 2 - 150
-  local x1     = sw / 2 - bw - gap / 2
-  local x2     = sw / 2 + gap / 2
-  draw_player_box(g, 1, x1, boxy, bw, bh, menu_cursor == 1)
-  draw_player_box(g, 2, x2, boxy, bw, bh, menu_cursor == 2)
+  draw_player_box(g, 1, sw / 2 - bw - gap / 2, boxy, bw, bh)
+  draw_player_box(g, 2, sw / 2 + gap / 2,      boxy, bw, bh)
 
-  local tx = sw / 2 - 120
   local ty = boxy + bh + 36
-  draw_toggle_row(g, "God mode",      mp_setup.god, tx, ty,      menu_cursor == 3)
-  draw_toggle_row(g, "Friendly fire", mp_setup.ff,  tx, ty + 30, menu_cursor == 4)
+  g.setColor(1, 1, 1, 1)
+  g.print(string.format("[G] God mode:     < %s >", mp_setup.god and "ON" or "OFF"), sw / 2 - 120, ty)
+  g.print(string.format("[F] Friendly fire: < %s >", mp_setup.ff and "ON" or "OFF"), sw / 2 - 120, ty + 30)
 
   g.setColor(0.6, 0.6, 0.6, 1)
   local fy = ty + 78
-  g.print("Up/Down select    Left/Right change    SPACE start    Esc cancel", sw / 2 - 230, fy)
-  g.print("P1 (blue):   WASD move, L-Shift strafe/turret, L-Ctrl fire, Q weapon, E land",   sw / 2 - 230, fy + 24)
-  g.print("P2 (orange): Arrows move, R-Shift strafe/turret, R-Ctrl fire, Num0 weapon, NumEnter land", sw / 2 - 230, fy + 44)
+  g.print("P1 (blue): A/D pick vehicle      P2 (orange): Left/Right pick vehicle", sw / 2 - 240, fy)
+  g.print("G god mode      F friendly fire      SPACE start      Esc cancel", sw / 2 - 240, fy + 22)
+  g.print("In game  P1: WASD + L-Shift/L-Ctrl/Q/E    P2: Arrows + R-Shift/R-Ctrl/Num0/NumEnter",
+    sw / 2 - 240, fy + 46)
   g.setColor(1, 1, 1)
 end
 
-local function menu_change(delta)
-  if menu_cursor == 1 then
-    mp_setup.vehicle[1] = (mp_setup.vehicle[1] == "chopper") and "tank" or "chopper"
-  elseif menu_cursor == 2 then
-    mp_setup.vehicle[2] = (mp_setup.vehicle[2] == "chopper") and "tank" or "chopper"
-  elseif menu_cursor == 3 then
-    mp_setup.god = not mp_setup.god
-  elseif menu_cursor == 4 then
-    mp_setup.ff = not mp_setup.ff
-  end
+local function toggle_vehicle(idx)
+  mp_setup.vehicle[idx] = (mp_setup.vehicle[idx] == "chopper") and "tank" or "chopper"
 end
 
 -- ── love callbacks ────────────────────────────────────────────────────────────
@@ -700,16 +680,15 @@ function love.wheelmoved(_, dy)
 end
 
 function love.keypressed(key)
-  -- 2P setup menu captures all keys while open. SPACE starts the game.
-  -- Both arrows and WASD navigate so either player can drive the setup.
+  -- 2P setup menu. Each player toggles their own vehicle with their own keys at
+  -- any time (no cursor); G/F toggle god/friendly-fire; SPACE starts.
   if menu_open then
-    if key == "escape" then menu_open = false
-    elseif key == "space" then enter_split()
-    elseif key == "up"   or key == "w" then menu_cursor = (menu_cursor - 2) % MENU_ROWS + 1
-    elseif key == "down" or key == "s" then menu_cursor = menu_cursor % MENU_ROWS + 1
-    elseif key == "left" or key == "right" or key == "a" or key == "d"
-        or key == "return" or key == "kpenter" then
-      menu_change(1)
+    if     key == "escape" then menu_open = false
+    elseif key == "space"  then enter_split()
+    elseif key == "g"      then mp_setup.god = not mp_setup.god
+    elseif key == "f"      then mp_setup.ff  = not mp_setup.ff
+    elseif key == P1_CONTROLS.left or key == P1_CONTROLS.right then toggle_vehicle(1)
+    elseif key == P2_CONTROLS.left or key == P2_CONTROLS.right then toggle_vehicle(2)
     end
     return
   end
@@ -733,8 +712,7 @@ function love.keypressed(key)
   end
 
   if key == "f7" and not game_mode then
-    menu_open   = true
-    menu_cursor = 1
+    menu_open = true
     return
   end
 
