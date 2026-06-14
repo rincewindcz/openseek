@@ -46,6 +46,16 @@ function Player:init(x, y)
   self.world            = nil  -- set in game mode for collision queries
   self.camera           = nil  -- set in game mode for screen placement
 
+  -- Movement key bindings. A binding is a key name or a list of names (any
+  -- held counts). The single-player default accepts WASD and the arrows; split
+  -- screen assigns each player a distinct set. fire / weapon / action keys are
+  -- read by main.lua, not here.
+  self.controls = {
+    up    = { "w", "up" },    down  = { "s", "down" },
+    left  = { "a", "left" },  right = { "d", "right" },
+    modifier = { "lshift", "rshift" },
+  }
+
   -- vehicle params (defaults; overridden by load_vehicle_def)
   self.sprite_scale = 3
   self.rotor_y_off  = 0
@@ -346,14 +356,25 @@ function Player:_update_altitude(dt)
   end
 end
 
+-- True if any key bound to the named action is held.
+function Player:_held(action)
+  local b = self.controls and self.controls[action]
+  if not b then return false end
+  if type(b) == "table" then
+    for _, k in ipairs(b) do
+      if love.keyboard.isDown(k) then return true end
+    end
+    return false
+  end
+  return love.keyboard.isDown(b)
+end
+
 function Player:_apply_input(dt)
-  local kb = love.keyboard.isDown
-
   local rotate   = 0
-  if kb("a") or kb("left")  then rotate = rotate - 1 end
-  if kb("d") or kb("right") then rotate = rotate + 1 end
+  if self:_held("left")  then rotate = rotate - 1 end
+  if self:_held("right") then rotate = rotate + 1 end
 
-  local modifier = kb("lshift") or kb("rshift")
+  local modifier = self:_held("modifier")
 
   if self.vehicle == "tank" then
     -- shift + turn rotates the turret; otherwise the hull
@@ -369,8 +390,8 @@ function Player:_apply_input(dt)
     -- chopper: smooth strafe toward target while shift is held
     local strafe_target = 0
     if modifier then
-      if kb("a") or kb("left")  then strafe_target = -self.strafe_speed end
-      if kb("d") or kb("right") then strafe_target =  self.strafe_speed end
+      if self:_held("left")  then strafe_target = -self.strafe_speed end
+      if self:_held("right") then strafe_target =  self.strafe_speed end
     end
     local sa = self.strafe_accel > 0 and self.strafe_accel or 9999
     if self.strafe < strafe_target then
@@ -389,9 +410,9 @@ function Player:_apply_input(dt)
   local max_fwd = self.max_fwd * self.speed_factor
   local max_rev = self.max_rev * self.speed_factor
 
-  if kb("w") or kb("up") then
+  if self:_held("up") then
     self.speed = math.min(self.speed + self.accel * self.speed_factor * dt, max_fwd)
-  elseif kb("s") or kb("down") then
+  elseif self:_held("down") then
     self.speed = math.max(self.speed - self.brake * dt, -max_rev)
   else
     if self.speed > 0 then

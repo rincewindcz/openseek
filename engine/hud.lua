@@ -78,6 +78,7 @@ function Hud:draw()
   if not self.player then return end
   local g      = love.graphics
   local sw, sh = g.getDimensions()
+  if self.view_w then sw, sh = self.view_w, self.view_h end
   for _, item in ipairs(self.items) do
     local fn     = ANCHOR[item.anchor or "top_left"]
     local ax, ay = fn(sw, sh)

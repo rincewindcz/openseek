@@ -11,12 +11,21 @@ function Camera:init(world_size)
   self.zi    = 4     -- index into ZOOMS; default 1x
   self.angle = nil   -- radians; nil = no rotation (viewer mode)
   self.view_oy = 0   -- screen-space vertical offset of the focus point (px)
+  self.vw    = nil   -- viewport size; nil = full window (split screen sets these)
+  self.vh    = nil
+end
+
+-- Viewport size this camera renders into: the full window, unless a split-screen
+-- half has been assigned (vw/vh). The caller translates to the viewport origin.
+function Camera:dims()
+  if self.vw then return self.vw, self.vh end
+  return love.graphics.getDimensions()
 end
 
 -- Screen pixel the focus point (camera x,y) maps to. In game mode the vehicle
 -- sits below center so more of the world ahead is visible.
 function Camera:screen_center()
-  local w, h = love.graphics.getDimensions()
+  local w, h = self:dims()
   return w / 2, h / 2 + self.view_oy
 end
 
@@ -27,7 +36,7 @@ end
 function Camera:set_zoom(zi, mx, my)
   zi = math.max(1, math.min(#ZOOMS, zi))
   if zi == self.zi then return end
-  local w, h = love.graphics.getDimensions()
+  local w, h = self:dims()
   mx = mx or w / 2
   my = my or h / 2
   local old_z = self:zoom()
@@ -76,7 +85,7 @@ end
 -- Viewport in world coordinates (expanded for rotation so culling stays correct).
 function Camera:viewport(margin)
   margin = margin or 64
-  local w, h = love.graphics.getDimensions()
+  local w, h = self:dims()
   local z = self:zoom()
   if self.angle then
     -- Rotated viewport: expand margin to cover the full screen diagonal.

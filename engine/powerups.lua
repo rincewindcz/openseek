@@ -28,14 +28,24 @@ function Powerups:init(world, camera, weapons)
   self.camera    = camera
   self.weapons   = weapons or {}
   self.player    = nil
+  self.players   = {}   -- all players that can collect (1 normally, 2 in split)
   self.list      = {}
   self.easy_mode = true   -- fly-over pickup; false = must land the chopper on it
   self._frames   = nil
 end
 
 function Powerups:reset(player)
-  self.player = player
-  self.list   = {}
+  self.player  = player
+  self.players = player and { player } or {}
+  self.list    = {}
+end
+
+-- Use an explicit list of collectors (split screen). reset() covers the single
+-- player case.
+function Powerups:set_players(players)
+  self.players = players or {}
+  self.player  = players and players[1] or nil
+  self.list    = {}
 end
 
 function Powerups:_pickup_frames()
@@ -78,12 +88,11 @@ function Powerups:update(dt)
     end
   end
 
-  local p    = self.player
   local live = {}
   for _, pu in ipairs(self.list) do
     pu.age = pu.age + dt
     local taken = false
-    if p then
+    for _, p in ipairs(self.players) do
       local dx = p.x - pu.x
       local dy = p.y - pu.y
       local rr = PICK_RANGE + (p.collision_radius or 8)
@@ -92,8 +101,9 @@ function Powerups:update(dt)
         -- always grounded, so it collects either way).
         local grounded = (not p.is_flyer) or (not p:is_flyer()) or p.land_state == "grounded"
         if self.easy_mode or grounded then
-          self:_apply(pu.def)
+          self:_apply(pu.def, p)
           taken = true
+          break
         end
       end
     end
@@ -102,8 +112,8 @@ function Powerups:update(dt)
   self.list = live
 end
 
-function Powerups:_apply(def)
-  local p = self.player
+function Powerups:_apply(def, p)
+  p = p or self.player
   if not p then return end
   if def.kind == "fuel" then
     p:refuel()

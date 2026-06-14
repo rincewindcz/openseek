@@ -78,6 +78,7 @@ function CombatSystem:init(world, camera)
   self.world       = world
   self.camera      = camera
   self.player      = nil
+  self.players     = {}   -- all controllable players (1 normally, 2 in split screen)
   self.projectiles = {}
   self.effects     = {}   -- transient world anims (missile trails, napalm fire)
   self.weapons     = {}
@@ -245,13 +246,26 @@ local LOCK_DEG = 8
 -- How long before its next shot a patrolling tank slows to a stop (then resumes).
 local STOP_LEAD = 0.8
 
+-- Nearest live player to a point, or nil if every player is down. Split screen
+-- has two; enemies engage whichever is closer.
+function CombatSystem:_nearest_player(ex, ey)
+  local best, best_d2
+  for _, p in ipairs(self.players) do
+    if p and not p.death and (p.armor or 0) > 0 then
+      local dx, dy = p.x - ex, p.y - ey
+      local d2 = dx * dx + dy * dy
+      if not best_d2 or d2 < best_d2 then best, best_d2 = p, d2 end
+    end
+  end
+  return best
+end
+
 -- Drive enemy aiming and firing. Each combatant rotates its aim toward the
--- player at its turn_speed, and fires its weapon when locked and in range.
+-- nearest player at its turn_speed, and fires its weapon when locked and in range.
 function CombatSystem:_update_ai(dt)
-  local p = self.player
-  if not p or p.death then return end   -- stop tracking/firing once the player is down
   for _, e in ipairs(self.world.combatants) do
-    if e:is_alive() then
+    local p = e:is_alive() and self:_nearest_player(e.x, e.y) or nil
+    if p then
       local td  = e.type_data
       local dx  = p.x - e.x
       local dy  = p.y - e.y
@@ -380,14 +394,15 @@ function CombatSystem:_check_hit(proj)
       end
     end
   else
-    local p = self.player
-    if p and p.armor > 0 then
-      local dx = p.x - proj.x
-      local dy = p.y - proj.y
-      local pr = (p.collision_radius or 12) + proj.radius
-      if dx * dx + dy * dy < pr * pr then
-        if not p.unlimited then p.armor = math.max(0, p.armor - proj.damage) end
-        return true
+    for _, p in ipairs(self.players) do
+      if p and p.armor > 0 and not p.death then
+        local dx = p.x - proj.x
+        local dy = p.y - proj.y
+        local pr = (p.collision_radius or 12) + proj.radius
+        if dx * dx + dy * dy < pr * pr then
+          if not p.unlimited then p.armor = math.max(0, p.armor - proj.damage) end
+          return true
+        end
       end
     end
   end
