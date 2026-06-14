@@ -14,7 +14,20 @@ end
 function Mission.for_stage(world, player, stage_name)
   local def = defs[stage_name]
   if not def then return nil end
-  return Mission:new(world, player, def)
+  return Mission:new(world, { player }, def)
+end
+
+-- Build a shared co-op objective straight from the stage's decoded objectives
+-- block (destroy all targets / rescue all people, then return to base). Returns
+-- nil when the stage has no destroy/rescue goal (pure free play). Both players
+-- contribute to the same objectives.
+function Mission.coop(world, players)
+  local obj = world.stage.objectives
+  if not obj or not (obj.destroy or obj.rescue) then return nil end
+  local def = { objectives = {} }
+  if obj.destroy then def.objectives[#def.objectives + 1] = { type = "destroy_targets" } end
+  if obj.rescue  then def.objectives[#def.objectives + 1] = { type = "rescue_people"  } end
+  return Mission:new(world, players, def)
 end
 
 -- True if entity e satisfies a spec's filters: asset (.bin) filename, kind_name,
@@ -37,9 +50,10 @@ local function entity_matches(world, e, spec)
   return true
 end
 
-function Mission:init(world, player, def)
+function Mission:init(world, players, def)
   self.world       = world
-  self.player      = player
+  self.players     = players
+  self.player      = players[1]
   self.def         = def
   self.briefing    = def.briefing
   self.home_radius  = def.home_radius or 48
@@ -90,10 +104,22 @@ function Mission:_make_objective(spec)
     o.deployed    = 0
     o.evacuated   = 0
     o.detonated   = false
+  elseif spec.type == "destroy_targets" then
+    -- Co-op: every is_target entity collected by World:load.
+    o.list   = self.world.targets
+    o.target = #o.list
+  elseif spec.type == "rescue_people" then
+    -- Co-op: powhere landing zones if any, otherwise the civilians themselves.
+    o.list      = (#self.world.rescue_zones > 0) and self.world.rescue_zones
+      or self.world.rescue_people
+    o.collected = {}
+    o.radius    = spec.radius or 40
+    o.target    = #o.list
   end
   -- An objective with nothing to act on is satisfied so it can never block a win.
-  if (o.target == 0) or (spec.type == "sabotage" and #o.targets == 0)
-  or not (spec.type == "destroy" or spec.type == "rescue" or spec.type == "sabotage") then
+  local known = o.type == "destroy" or o.type == "rescue" or o.type == "sabotage"
+    or o.type == "destroy_targets" or o.type == "rescue_people"
+  if not known or o.target == 0 or (o.type == "sabotage" and #o.targets == 0) then
     o.done = true
   end
   return o
@@ -101,9 +127,18 @@ end
 
 -- ── per-frame progress ─────────────────────────────────────────────────────────
 
+-- Co-op fail only when every player is down (a lone survivor can still finish).
+function Mission:_all_dead()
+  if #self.players == 0 then return false end
+  for _, p in ipairs(self.players) do
+    if not p.death then return false end
+  end
+  return true
+end
+
 function Mission:update(dt)
   if self.state == "won" or self.state == "failed" then return end
-  if self.player.death then self.state = "failed"; return end
+  if self:_all_dead() then self.state = "failed"; return end
 
   local all_done = true
   for _, o in ipairs(self.objectives) do
@@ -120,9 +155,39 @@ function Mission:update(dt)
 end
 
 function Mission:_update_objective(o, dt)
-  if     o.type == "destroy"  then self:_update_destroy(o)
-  elseif o.type == "rescue"   then self:_update_rescue(o)
-  elseif o.type == "sabotage" then self:_update_sabotage(o, dt) end
+  if     o.type == "destroy"         then self:_update_destroy(o)
+  elseif o.type == "rescue"          then self:_update_rescue(o)
+  elseif o.type == "sabotage"        then self:_update_sabotage(o, dt)
+  elseif o.type == "destroy_targets" then self:_update_destroy_targets(o)
+  elseif o.type == "rescue_people"   then self:_update_rescue_people(o) end
+end
+
+function Mission:_update_destroy_targets(o)
+  local rem = 0
+  for _, e in ipairs(o.list) do
+    if e:is_alive() then rem = rem + 1 end
+  end
+  o.progress = o.target - rem
+  if rem == 0 then o.done = true end
+end
+
+function Mission:_update_rescue_people(o)
+  for _, p in ipairs(self.players) do
+    if p:is_stationary() then
+      for _, z in ipairs(o.list) do
+        if z:is_alive() and not o.collected[z.id] then
+          local dx, dy = p.x - z.x, p.y - z.y
+          if dx * dx + dy * dy <= o.radius * o.radius then
+            o.collected[z.id] = true
+            o.progress = o.progress + 1
+            p.pows  = (p.pows or 0) + 1
+            p.score = (p.score or 0) + 150
+          end
+        end
+      end
+    end
+  end
+  if o.progress >= o.target then o.done = true end
 end
 
 function Mission:_update_destroy(o)
@@ -192,9 +257,13 @@ end
 
 function Mission:_at_home_base()
   if not self.home_x then return true end   -- no pad on this stage: win on objectives
-  if not self.player:is_stationary() then return false end
-  local dx, dy = self.player.x - self.home_x, self.player.y - self.home_y
-  return dx * dx + dy * dy <= self.home_radius * self.home_radius
+  for _, p in ipairs(self.players) do
+    if p:is_stationary() then
+      local dx, dy = p.x - self.home_x, p.y - self.home_y
+      if dx * dx + dy * dy <= self.home_radius * self.home_radius then return true end
+    end
+  end
+  return false
 end
 
 -- ── presentation ───────────────────────────────────────────────────────────────
@@ -211,8 +280,23 @@ function Mission:objective_label(o)
       return string.format("%s  %d/%d planted", s.label or "Plant charges", o.deployed, #o.targets)
     end
     return string.format("Evacuate units  %d/%d", o.evacuated, #o.targets)
+  elseif o.type == "destroy_targets" then
+    return string.format("DESTROY TARGETS  %d/%d", o.progress, o.target)
+  elseif o.type == "rescue_people" then
+    return string.format("RESCUE  %d/%d", o.progress, o.target)
   end
   return s.label or o.type
+end
+
+-- Short shared-state line for the co-op banner: the first unfinished objective,
+-- or the return-to-base prompt once they are all done.
+function Mission:status_line()
+  if self.state == "won"    then return "MISSION COMPLETE" end
+  if self.state == "failed" then return "MISSION FAILED" end
+  for _, o in ipairs(self.objectives) do
+    if not o.done then return self:objective_label(o) end
+  end
+  return "RETURN TO BASE"
 end
 
 return Mission

@@ -17,6 +17,7 @@ function Projectile:init(p)
   self.damage    = p.damage
   self.aoe       = p.aoe  or 0
   self.owner     = p.owner
+  self.shooter   = p.shooter   -- firing Player (player rounds only), for score / friendly fire
   self.ttl       = p.ttl
   self.radius    = p.radius
   self.wdef      = p.wdef
@@ -79,6 +80,7 @@ function CombatSystem:init(world, camera)
   self.camera      = camera
   self.player      = nil
   self.players     = {}   -- all controllable players (1 normally, 2 in split screen)
+  self.friendly_fire = false  -- co-op option: player rounds can hit the other player
   self.projectiles = {}
   self.effects     = {}   -- transient world anims (missile trails, napalm fire)
   self.weapons     = {}
@@ -114,7 +116,7 @@ function CombatSystem:load(path)
   self.weapons = json.decode(raw)
 end
 
-function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range_override)
+function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range_override, shooter)
   local wdef = self.weapons[weapon_name]
   if not wdef then return end
   level_idx = level_idx or 1
@@ -198,6 +200,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
       damage    = level.damage    or wdef.damage    or 10,
       aoe       = wdef.aoe        or 0,
       owner     = owner,
+      shooter   = shooter,
       ttl       = wdef.ttl        or 2,
       radius    = wdef.proj_radius or 3,
       wdef      = wdef,
@@ -376,6 +379,11 @@ function CombatSystem:_update_effects(dt)
   self.effects = live
 end
 
+-- Score awarded to the player who lands the killing hit.
+function CombatSystem:_kill_points(e)
+  return 50 + (e.max_hp or 0)
+end
+
 function CombatSystem:_check_hit(proj)
   if proj.owner == "player" then
     for _, e in ipairs(self.world.entities) do
@@ -388,6 +396,23 @@ function CombatSystem:_check_hit(proj)
             e:on_hit()
             e:take_damage(proj.damage, proj.vx, proj.vy)
             if proj.aoe > 0 then self:_apply_aoe(proj) end
+            if proj.shooter and not e:is_alive() then
+              proj.shooter.score = (proj.shooter.score or 0) + self:_kill_points(e)
+            end
+            return true
+          end
+        end
+      end
+    end
+    -- Friendly fire (co-op option): a player round can hit the other player.
+    if self.friendly_fire then
+      for _, p in ipairs(self.players) do
+        if p ~= proj.shooter and p.armor > 0 and not p.death then
+          local dx = p.x - proj.x
+          local dy = p.y - proj.y
+          local pr = (p.collision_radius or 12) + proj.radius
+          if dx * dx + dy * dy < pr * pr then
+            if not p.unlimited then p.armor = math.max(0, p.armor - proj.damage) end
             return true
           end
         end

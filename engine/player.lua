@@ -38,6 +38,7 @@ function Player:init(x, y)
   self.unlimited    = false   -- god mode: skip ammo/fuel/armor consumption
   self.medals       = 0
   self.pows         = 0       -- people (POWs/allies) currently carried
+  self.score        = 0       -- own kill/rescue score (co-op split screen)
   self.death        = nil     -- death sequence state (set by start_death)
 
   self.turret_offset    = 0    -- tank turret heading relative to the hull (deg)
@@ -606,6 +607,53 @@ function Player:_draw_chopper(g, cx, cy, s)
   local rotor_img = self._active_rotor:current_image()
   local rs = s * (ROTOR_MIN_S + (1 - ROTOR_MIN_S) * self.altitude)
   self:_draw_centered(g, rotor_img, cx, cy + self.rotor_y_off, rs)
+end
+
+-- Draw this player as the co-op teammate, seen from another player's camera.
+-- Positioned at our world point projected into cam, rotated to our heading in
+-- that camera's frame (frame 0 points north; cam.angle re-aligns it). A ring in
+-- the player's color makes the teammate easy to spot.
+function Player:draw_remote(g, cam, color)
+  if self.death then return end
+  local sx, sy = cam:project(self.x, self.y)
+  local s      = self.sprite_scale
+  local base   = self.angle * math.pi / 180 + (cam.angle or 0)
+
+  g.setColor(1, 1, 1)
+  if self.vehicle == "tank" then
+    local body_frames = self:_frames("tankbgrn")
+    local body_img    = body_frames[self._tank_anim.frame] or body_frames[1]
+    if body_img then
+      local w, h = body_img:getDimensions()
+      g.draw(body_img, sx, sy, base, s, s, w / 2, h / 2)
+    end
+    local turret = self:_frames("tanktop")[1]
+    if turret then
+      local ax, ay = Animation.frame_anchor("tanktop", 1)
+      local trot   = (self.angle + self.turret_offset) * math.pi / 180 + (cam.angle or 0)
+      g.draw(turret, sx, sy, trot, s, s, ax, ay)
+    end
+  else
+    local body = self:_chopper_body_frame()
+    if body then
+      local w, h = body:getDimensions()
+      g.draw(body, sx, sy, base, s, s, w / 2, h / 2)
+    end
+    local rotor = self._active_rotor:current_image()
+    if rotor then
+      local w, h = rotor:getDimensions()
+      local rs   = s * (ROTOR_MIN_S + (1 - ROTOR_MIN_S) * self.altitude)
+      g.draw(rotor, sx, sy, base, rs, rs, w / 2, h / 2)
+    end
+  end
+
+  if color then
+    g.setColor(color[1], color[2], color[3], 0.9)
+    g.setLineWidth(2)
+    g.circle("line", sx, sy, 14 * s / 3 + 6)
+    g.setLineWidth(1)
+  end
+  g.setColor(1, 1, 1)
 end
 
 function Player:_draw_tank(g, cx, cy, s)

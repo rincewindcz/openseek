@@ -82,6 +82,18 @@ function Camera:apply()
   love.graphics.translate(-self.x, -self.y)
 end
 
+-- World point -> screen pixel under this camera (inverse of the math baked into
+-- apply()). Used to place an off-center sprite, e.g. the co-op teammate.
+function Camera:project(wx, wy)
+  local cx, cy = self:screen_center()
+  local z = self:zoom()
+  local dx, dy = wx - self.x, wy - self.y
+  local a = self.angle or 0
+  local rx = dx * math.cos(a) - dy * math.sin(a)
+  local ry = dx * math.sin(a) + dy * math.cos(a)
+  return cx + rx * z, cy + ry * z
+end
+
 -- Viewport in world coordinates (expanded for rotation so culling stays correct).
 function Camera:viewport(margin)
   margin = margin or 64

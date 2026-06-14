@@ -33,7 +33,8 @@ local menu_open   = false          -- the 2P setup menu overlay
 local menu_cursor = 1
 local sp_players  = {}             -- two Player instances
 local sp_cameras  = {}             -- two Camera instances, one per screen half
-local mp_setup    = { vehicle = { "chopper", "tank" }, god = false }
+local mp_setup    = { vehicle = { "chopper", "tank" }, god = false, ff = false }
+local MP_COLORS   = { { 0.30, 0.65, 1.0 }, { 1.0, 0.55, 0.15 } }  -- P1 blue, P2 orange
 
 -- Distinct key sets so both players share one keyboard. fire / weapon / action
 -- are read here in main.lua; the movement keys feed Player.controls.
@@ -316,12 +317,14 @@ local function enter_split()
     p:take_off()   -- choppers lift off; no-op for the tank
   end
 
-  combat.players     = sp_players
-  combat.player      = sp_players[1]
-  combat.projectiles = {}
-  combat.effects     = {}
+  combat.players      = sp_players
+  combat.player       = sp_players[1]
+  combat.friendly_fire = mp_setup.ff
+  combat.projectiles  = {}
+  combat.effects      = {}
   powerups:set_players(sp_players)
-  mission = nil   -- split screen is free play; no objectives
+  -- Shared co-op objective from the stage's decoded objectives (nil = free play).
+  mission = Mission.coop(world, sp_players)
   love.window.setTitle(world:title() .. "  [2P SPLIT]")
 end
 
@@ -333,6 +336,7 @@ local function leave_split()
   powerups.camera  = camera
   combat.players   = {}
   combat.player    = nil
+  combat.friendly_fire = false
   combat.projectiles = {}
   combat.effects     = {}
   powerups:reset(nil)
@@ -351,9 +355,10 @@ local function draw_split()
   local W, H = g.getDimensions()
   local hw   = math.floor(W / 2)
   for i, p in ipairs(sp_players) do
-    local vx  = (i - 1) * hw
-    local vw  = (i == 2) and (W - hw) or hw
-    local cam = sp_cameras[i]
+    local vx    = (i - 1) * hw
+    local vw    = (i == 2) and (W - hw) or hw
+    local cam   = sp_cameras[i]
+    local other = sp_players[3 - i]
     cam.vw, cam.vh  = vw, H
     renderer.camera = cam
     combat.camera   = cam
@@ -367,59 +372,127 @@ local function draw_split()
     combat:draw()
     p:draw()
     p:draw_world_front()
+    if other then other:draw_remote(g, cam, MP_COLORS[3 - i]) end  -- co-op teammate
     hud.player = p
     hud.view_w, hud.view_h = vw, H
     hud:draw()
     g.setScissor()
     g.pop()
 
-    -- Per-half status line (screen space, above the viewport)
-    local wdef   = combat.weapons[p.weapon_name]
-    local ammo   = p.ammo[p.weapon_name]
-    g.setColor(0, 0, 0, 0.55)
-    g.rectangle("fill", vx, 0, 190, 20)
-    g.setColor(1, 1, 0.3, 1)
-    g.print(string.format("P%d %s  %s:%s%s", i, p.vehicle,
+    -- Per-half status line (screen space, above the viewport), in player color.
+    local wdef = combat.weapons[p.weapon_name]
+    local ammo = p.ammo[p.weapon_name]
+    local col  = MP_COLORS[i]
+    g.setColor(0, 0, 0, 0.6)
+    g.rectangle("fill", vx, 0, vw, 20)
+    g.setColor(col[1], col[2], col[3], 1)
+    g.print(string.format("P%d %s   %s:%s   PTS:%d%s", i, p.vehicle,
       (wdef and wdef.short) or "?", ammo and tostring(ammo) or "inf",
-      p.unlimited and "  [GOD]" or ""), vx + 4, 3)
+      p.score or 0, p.unlimited and "   [GOD]" or ""), vx + 6, 3)
     g.setColor(1, 1, 1)
   end
   -- Center divider
   g.setColor(0, 0, 0, 1)
   g.rectangle("fill", hw - 1, 0, 2, H)
   g.setColor(1, 1, 1)
+
+  -- Shared co-op objective banner (top center, spanning both halves).
+  if mission then
+    local line = mission:status_line()
+    local tw   = g.getFont():getWidth(line)
+    g.setColor(0, 0, 0, 0.6)
+    g.rectangle("fill", W / 2 - tw / 2 - 10, 22, tw + 20, 20)
+    g.setColor(1, 1, 0.4, 1)
+    g.print(line, W / 2 - tw / 2, 25)
+    g.setColor(1, 1, 1)
+    if mission.state == "won" then
+      draw_overlay_text("MISSION COMPLETE", "R - restart    F1 - exit", { 0.4, 1, 0.5 })
+    elseif mission.state == "failed" then
+      draw_overlay_text("MISSION FAILED", "R - restart    F1 - exit", { 1, 0.25, 0.2 })
+    end
+  end
 end
 
-local MENU_ROWS = 4
+local MENU_ROWS = 4   -- 1=P1 vehicle, 2=P2 vehicle, 3=god, 4=friendly fire
+
+-- Draw a representative vehicle sprite (chopper body or tank hull+turret),
+-- centered and scaled to fit a menu box.
+local function draw_vehicle_icon(g, vehicle, cx, cy, scale)
+  local function img(clip, idx)
+    local c = Animation.clip(clip)
+    return c and c.frames[idx]
+  end
+  g.setColor(1, 1, 1)
+  if vehicle == "tank" then
+    local hull = img("tankbgrn", 1)
+    if hull then local w, h = hull:getDimensions(); g.draw(hull, cx, cy, 0, scale, scale, w/2, h/2) end
+    local top = img("tanktop", 1)
+    if top then
+      local ax, ay = Animation.frame_anchor("tanktop", 1)
+      g.draw(top, cx, cy, 0, scale, scale, ax, ay)
+    end
+  else
+    local body = img("choppit1", 8)   -- neutral pitch frame
+    if body then local w, h = body:getDimensions(); g.draw(body, cx, cy, 0, scale, scale, w/2, h/2) end
+    local rotor = img("bladep", 1)
+    if rotor then local w, h = rotor:getDimensions(); g.draw(rotor, cx, cy, 0, scale, scale, w/2, h/2) end
+  end
+end
+
+-- One player's vehicle selection box: a square in the player's color holding
+-- the vehicle icon, brighter/thicker while that row is focused.
+local function draw_player_box(g, idx, bx, by, bw, bh, focused)
+  local col = MP_COLORS[idx]
+  g.setColor(0, 0, 0, 0.5)
+  g.rectangle("fill", bx, by, bw, bh)
+  g.setColor(col[1], col[2], col[3], focused and 1 or 0.6)
+  g.setLineWidth(focused and 4 or 2)
+  g.rectangle("line", bx, by, bw, bh)
+  g.setLineWidth(1)
+  g.setColor(col[1], col[2], col[3], 1)
+  g.print("PLAYER " .. idx, bx + 8, by + 6)
+  draw_vehicle_icon(g, mp_setup.vehicle[idx], bx + bw / 2, by + bh / 2 + 6, 2)
+  g.setColor(1, 1, 1, 1)
+  local name = mp_setup.vehicle[idx]:upper()
+  g.print("< " .. name .. " >", bx + bw / 2 - 40, by + bh - 22)
+end
+
+-- One full-width toggle row (god mode / friendly fire).
+local function draw_toggle_row(g, label, on, x, y, focused)
+  g.setColor(focused and 1 or 0.82, focused and 1 or 0.82, focused and 0.2 or 0.82, 1)
+  if focused then g.print(">", x - 18, y) end
+  g.print(string.format("%-16s < %s >", label, on and "ON" or "OFF"), x, y)
+  g.setColor(1, 1, 1)
+end
 
 local function draw_2p_menu()
   local g      = love.graphics
   local sw, sh = g.getDimensions()
-  g.setColor(0, 0, 0, 0.82)
+  g.setColor(0, 0, 0, 0.85)
   g.rectangle("fill", 0, 0, sw, sh)
-  local bx, by = sw / 2 - 220, sh / 2 - 140
+
   g.setColor(0.5, 0.9, 1, 1)
-  g.print("SPLIT SCREEN  -  2 PLAYERS", bx, by, 0, 2, 2)
-  local rows = {
-    "Player 1 vehicle:   " .. mp_setup.vehicle[1]:upper(),
-    "Player 2 vehicle:   " .. mp_setup.vehicle[2]:upper(),
-    "God mode:           " .. (mp_setup.god and "ON" or "OFF"),
-    "START GAME",
-  }
-  for i, r in ipairs(rows) do
-    local y = by + 54 + (i - 1) * 34
-    if i == menu_cursor then
-      g.setColor(1, 1, 0.2, 1)
-      g.print(">", bx - 18, y)
-    else
-      g.setColor(0.82, 0.82, 0.82, 1)
-    end
-    g.print(r, bx, y)
-  end
+  local title = "SPLIT SCREEN CO-OP"
+  g.print(title, sw / 2 - g.getFont():getWidth(title) * 1.5 / 2, sh / 2 - 200, 0, 1.5, 1.5)
+
+  local bw, bh = 200, 150
+  local gap    = 40
+  local boxy   = sh / 2 - 150
+  local x1     = sw / 2 - bw - gap / 2
+  local x2     = sw / 2 + gap / 2
+  draw_player_box(g, 1, x1, boxy, bw, bh, menu_cursor == 1)
+  draw_player_box(g, 2, x2, boxy, bw, bh, menu_cursor == 2)
+
+  local tx = sw / 2 - 120
+  local ty = boxy + bh + 36
+  draw_toggle_row(g, "God mode",      mp_setup.god, tx, ty,      menu_cursor == 3)
+  draw_toggle_row(g, "Friendly fire", mp_setup.ff,  tx, ty + 30, menu_cursor == 4)
+
   g.setColor(0.6, 0.6, 0.6, 1)
-  g.print("Up/Down select    Left/Right or Enter change    Esc cancel", bx, by + 210)
-  g.print("P1: WASD move, L-Shift strafe/turret, L-Ctrl fire, Q weapon, E land", bx, by + 236)
-  g.print("P2: Arrows move, R-Shift strafe/turret, R-Ctrl fire, Num0 weapon, NumEnter land", bx, by + 256)
+  local fy = ty + 78
+  g.print("Up/Down select    Left/Right change    SPACE start    Esc cancel", sw / 2 - 230, fy)
+  g.print("P1 (blue):   WASD move, L-Shift strafe/turret, L-Ctrl fire, Q weapon, E land",   sw / 2 - 230, fy + 24)
+  g.print("P2 (orange): Arrows move, R-Shift strafe/turret, R-Ctrl fire, Num0 weapon, NumEnter land", sw / 2 - 230, fy + 44)
   g.setColor(1, 1, 1)
 end
 
@@ -430,6 +503,8 @@ local function menu_change(delta)
     mp_setup.vehicle[2] = (mp_setup.vehicle[2] == "chopper") and "tank" or "chopper"
   elseif menu_cursor == 3 then
     mp_setup.god = not mp_setup.god
+  elseif menu_cursor == 4 then
+    mp_setup.ff = not mp_setup.ff
   end
 end
 
@@ -473,7 +548,7 @@ local function fire_for(p, dt)
   if not p:has_ammo(p.weapon_name) then return end
   local level = wdef.levels and wdef.levels[p.weapon_level] or wdef
   combat:tick_swing("player", p.weapon_name)
-  combat:fire(p.x, p.y, p:fire_angle(), p.weapon_name, "player", p.weapon_level)
+  combat:fire(p.x, p.y, p:fire_angle(), p.weapon_name, "player", p.weapon_level, nil, p)
   p:consume_ammo(p.weapon_name, wdef.ammo_cost or 1)
   p.fire_timer = 1.0 / (level.fire_rate or wdef.fire_rate or 10)
 end
@@ -520,6 +595,7 @@ function love.update(dt)
     end
     combat:update(dt)
     powerups:update(dt)
+    if mission then mission:update(dt) end
     world:update(dt)
     return
   end
@@ -613,14 +689,14 @@ function love.wheelmoved(_, dy)
 end
 
 function love.keypressed(key)
-  -- 2P setup menu captures all keys while open.
+  -- 2P setup menu captures all keys while open. SPACE starts the game.
   if menu_open then
     if key == "escape" then menu_open = false
+    elseif key == "space" then enter_split()
     elseif key == "up"   then menu_cursor = (menu_cursor - 2) % MENU_ROWS + 1
     elseif key == "down" then menu_cursor = menu_cursor % MENU_ROWS + 1
-    elseif key == "left" or key == "right" then menu_change(1)
-    elseif key == "return" or key == "space" or key == "kpenter" then
-      if menu_cursor == MENU_ROWS then enter_split() else menu_change(1) end
+    elseif key == "left" or key == "right" or key == "return" or key == "kpenter" then
+      menu_change(1)
     end
     return
   end
