@@ -1,0 +1,82 @@
+{
+  "stage02": {
+    "briefing": "Wipe out the chemical weapons plants.",
+    "objectives": [
+      { "type": "destroy", "target": "deschem.bin", "count": "all", "label": "DESTROY CHEMICAL PLANTS" }
+    ]
+  },
+  "stage03": {
+    "briefing": "Raze every enemy hut in the sector.",
+    "objectives": [
+      { "type": "destroy", "target": "powhut.bin", "count": "all", "label": "DESTROY ENEMY HUTS" }
+    ]
+  },
+  "stage10": {
+    "briefing": "Destroy the arctic chemical plants.",
+    "objectives": [
+      { "type": "destroy", "target": "snowchem.bin", "count": "all", "label": "DESTROY CHEMICAL PLANTS" }
+    ]
+  },
+  "stage12": {
+    "briefing": "Take out the hidden missile silos.",
+    "objectives": [
+      { "type": "destroy", "target": "snuke.bin", "count": "all", "label": "DESTROY MISSILE SILOS" }
+    ]
+  },
+  "stage20": {
+    "briefing": "Knock out the forward helipads.",
+    "objectives": [
+      { "type": "destroy", "target": "helipad.bin", "count": "all", "label": "DESTROY HELIPADS" }
+    ]
+  },
+  "stage21": {
+    "briefing": "Blind the enemy: destroy their radar stations.",
+    "objectives": [
+      { "type": "destroy_targets", "label": "DESTROY RADAR STATIONS" }
+    ]
+  },
+  "stage23": {
+    "briefing": "Level the fortified road bunkers.",
+    "objectives": [
+      { "type": "destroy", "target": "fourway.bin", "count": "all", "label": "DESTROY ROAD BUNKERS" }
+    ]
+  },
+  "stage30": {
+    "briefing": "Destroy the bunkers and stop the convoy.",
+    "objectives": [
+      { "type": "destroy", "target": "powhut.bin", "count": "all", "label": "DESTROY BUNKERS" },
+      { "type": "destroy", "target": "truck.bin",  "count": "all", "label": "DESTROY CONVOY" }
+    ]
+  },
+  "stage33": {
+    "briefing": "Demolish the enemy base structures.",
+    "objectives": [
+      { "type": "destroy", "target": "badhsz1.bin", "count": "all", "label": "DESTROY ENEMY BASE" }
+    ]
+  },
+  "stage40": {
+    "briefing": "Destroy the jets before they scramble.",
+    "objectives": [
+      { "type": "destroy", "target": "jet.bin", "count": "all", "label": "DESTROY PARKED JETS" }
+    ]
+  },
+  "stage41": {
+    "briefing": "Intercept and destroy the convoy.",
+    "objectives": [
+      { "type": "destroy", "target": "truck.bin", "count": "all", "label": "DESTROY THE CONVOY" }
+    ]
+  },
+  "stage42": {
+    "briefing": "Flatten the enemy factories.",
+    "objectives": [
+      { "type": "destroy", "target": "factory.bin", "count": "all", "label": "DESTROY FACTORIES" }
+    ]
+  },
+  "stage43": {
+    "briefing": "Eliminate all troops and destroy the commander HQ.",
+    "objectives": [
+      { "type": "destroy", "target": "enemy.bin",   "count": "all", "label": "ELIMINATE ALL TROOPS" },
+      { "type": "destroy", "target": "cmdrhut.bin", "count": "all", "label": "DESTROY COMMANDER HQ" }
+    ]
+  }
+}

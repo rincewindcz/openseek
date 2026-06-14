@@ -652,7 +652,19 @@ function love.draw()
     g.print(string.format("Q:%s(%s) E:lv%d/%d ammo:%s ctrl:fire %s%s  R:restart",
       short, player.weapon_name, player.weapon_level, n_lvl, ammo_s, mod, flags), 4, 24)
     g.setColor(1, 1, 1)
+    -- Objective banner (top center) for the active mission.
+    if mission then
+      local line = mission:status_line()
+      local sw   = g.getDimensions()
+      local tw   = g.getFont():getWidth(line)
+      g.setColor(0, 0, 0, 0.6)
+      g.rectangle("fill", sw / 2 - tw / 2 - 10, 22, tw + 20, 20)
+      g.setColor(1, 1, 0.4, 1)
+      g.print(line, sw / 2 - tw / 2, 25)
+      g.setColor(1, 1, 1)
+    end
     if mission and mission.state == "won" then draw_victory() end
+    if mission and mission.state == "failed" then draw_game_over() end
     if player:death_done() then draw_game_over() end
     if paused then draw_pause() end
     if sandbox_mode then

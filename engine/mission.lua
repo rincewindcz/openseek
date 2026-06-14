@@ -57,6 +57,7 @@ function Mission:init(world, players, def)
   self.def         = def
   self.briefing    = def.briefing
   self.home_radius  = def.home_radius or 48
+  self.age         = 0          -- seconds since start (briefing shows while young)
   self.state       = "active"   -- active -> return_to_base -> won | failed
   self.objectives  = {}
   for _, spec in ipairs(def.objectives or {}) do
@@ -138,6 +139,7 @@ end
 
 function Mission:update(dt)
   if self.state == "won" or self.state == "failed" then return end
+  self.age = self.age + dt
   if self:_all_dead() then self.state = "failed"; return end
 
   local all_done = true
@@ -281,7 +283,7 @@ function Mission:objective_label(o)
     end
     return string.format("Evacuate units  %d/%d", o.evacuated, #o.targets)
   elseif o.type == "destroy_targets" then
-    return string.format("DESTROY TARGETS  %d/%d", o.progress, o.target)
+    return string.format("%s  %d/%d", s.label or "DESTROY TARGETS", o.progress, o.target)
   elseif o.type == "rescue_people" then
     return string.format("RESCUE  %d/%d", o.progress, o.target)
   end
@@ -293,6 +295,7 @@ end
 function Mission:status_line()
   if self.state == "won"    then return "MISSION COMPLETE" end
   if self.state == "failed" then return "MISSION FAILED" end
+  if self.briefing and self.age < 5 then return self.briefing end
   for _, o in ipairs(self.objectives) do
     if not o.done then return self:objective_label(o) end
   end
