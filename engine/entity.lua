@@ -143,10 +143,10 @@ function Entity:_start_death(dx, dy)
       self._death_t    = 0
     end
   end
-  -- Only large static buildings leave a crater (set on the entity at load).
+  -- Only large static buildings leave a crater. The per-mission crater sprite is
+  -- assigned to the entity at load (crater_src); reveal it now that it has died.
   if self.crater_eligible then
-    local clip = Animation.clip("crater")
-    self.crater_img = clip and clip.frames[1] or nil
+    self.crater_img = self.crater_src
   end
   -- Power-up drop: a forced kind always drops (e.g. bunker -> medal); otherwise
   -- large buildings drop a random pickup most of the time.

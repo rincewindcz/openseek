@@ -343,13 +343,6 @@
     "fps": 1,
     "loop": false
   },
-  "crater": {
-    "frames": [
-      "stage00/hole_f16.png"
-    ],
-    "fps": 1,
-    "loop": false
-  },
   "pickup": {
     "frames": [
       "stage00/pickup_f00.png",

@@ -91,6 +91,11 @@ function World:load(name)
     end
   end
 
+  -- Destruction-crater art is per-mission: each world ships its own HOLE4038
+  -- variant, exported into that mission's phase-0 dir. Pick it by the stage's
+  -- mission digit, falling back to mission 0 for worlds without their own.
+  self.crater_img = self:_load_crater(name)
+
   -- A tank is stored as two co-located entities: the hull (kind "tank") and a
   -- separate top on top of a hull (tank turret, radar dish). Classify each class
   -- as a turret-top (-> its TURRET_DEF) or a hull candidate so we can fold them.
@@ -146,7 +151,10 @@ function World:load(name)
     local r = self.images[raw.class + 1]
     if cls.kind_name == "structure" and r and r.img then
       local w, h = r.img:getDimensions()
-      if math.max(w, h) >= 28 then entity.crater_eligible = true end
+      if math.max(w, h) >= 28 then
+        entity.crater_eligible = true
+        entity.crater_src      = self.crater_img
+      end
     end
     -- Per-sprite enemy weapon override (e.g. gun1 fires rockets, sguntop fires fire).
     local af = cls.asset and self.stage.assets[cls.asset + 1]
@@ -219,6 +227,21 @@ function World:load(name)
   end
   table.sort(self.decals,  by_y)
   table.sort(self.objects, by_y)
+end
+
+-- Crater sprite for the stage's mission. HOLE4038 is exported per mission into
+-- assets/stage{M}0/; missions without their own variant reuse mission 0's.
+function World:_load_crater(name)
+  local mission = name:match("^stage(%d)")
+  local function try(m)
+    local path = "assets/stage" .. m .. "0/hole_f16.png"
+    if love.filesystem.getInfo(path) then
+      local img = love.graphics.newImage(path)
+      img:setFilter("nearest", "nearest")
+      return img
+    end
+  end
+  return (mission and try(mission)) or try("0")
 end
 
 function World:load_index(idx)

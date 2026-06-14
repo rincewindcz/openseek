@@ -18,27 +18,30 @@ REPO_ROOT = THIS_DIR.parent
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 
-# (BIN stem, output prefix, frames to keep, source stage). The port draws the
-# axis-aligned frame 0 and rotates at runtime, so the rotation-arc sets keep
-# only the frame(s) the game uses instead of the whole arc: missile/shell/ffr/
+# (BIN stem, output prefix, frames to keep, source stage, output stage). The port
+# draws the axis-aligned frame 0 and rotates at runtime, so the rotation-arc sets
+# keep only the frame(s) the game uses instead of the whole arc: missile/shell/ffr/
 # bomb -> frame 0, trace -> the axis-aligned growing streak, hole -> the settled
 # crater, enemy (soldier) -> the alive + dead poses. Pickups are an item atlas
 # (keep all). TRACE is 7 growth stages of 32-frame rotation arcs (224 frames);
 # the axis-aligned (vertical) pose of each stage is frame 0 of its arc, so the
-# growing streak the port rotates at runtime is frames 0,32,64,...,192. The
-# source stage selects the STAGE0{n}/ BIN and palette and the assets/stage0{n}/
-# output dir (sgun's BULLET ships in STAGE01). Pass keep=None to export every
-# frame (e.g. when inspecting an arc).
+# growing streak the port rotates at runtime is frames 0,32,64,...,192. The source
+# stage selects the STAGE0{n}/ BIN and palette; the output stage selects the
+# assets/stage{NN}/ dir (usually the same, but the crater is per-mission art: each
+# world ships its own HOLE4038, exported into that mission's phase-0 dir so the
+# engine can pick it by mission. sgun's BULLET ships in STAGE01). Pass keep=None
+# to export every frame (e.g. when inspecting an arc).
 PROJECTILE_SPRITES = [
-    ("MISSLE",   "missle", {0},                    0),
-    ("SHELL",    "shell",  {0},                    0),
-    ("FFR",      "ffr",    {0},                    0),
-    ("BOMB",     "bomb",   {0},                    0),
-    ("TRACE",    "trace",  set(range(0, 224, 32)), 0),
-    ("HOLE4038", "hole",   {16},                   0),
-    ("ENEMY",    "enemy",  {16, 32},               0),
-    ("PICKUPS",  "pickup", None,                   0),
-    ("BULLET",   "bullet", {0},                    1),
+    ("MISSLE",   "missle", {0},                    0,  0),
+    ("SHELL",    "shell",  {0},                    0,  0),
+    ("FFR",      "ffr",    {0},                    0,  0),
+    ("BOMB",     "bomb",   {0},                    0,  0),
+    ("TRACE",    "trace",  set(range(0, 224, 32)), 0,  0),
+    ("HOLE4038", "hole",   {16},                   0,  0),
+    ("HOLE4038", "hole",   {16},                   1, 10),
+    ("ENEMY",    "enemy",  {16, 32},               0,  0),
+    ("PICKUPS",  "pickup", None,                   0,  0),
+    ("BULLET",   "bullet", {0},                    1,  1),
 ]
 
 
@@ -138,17 +141,17 @@ def main():
     print()
 
     palettes = {}   # stage -> palette bytes (one PAL.BIN read per source stage)
-    for stem, prefix, keep, stage in PROJECTILE_SPRITES:
-        stage_dir = game_dir / f"STAGE{stage:02d}"
+    for stem, prefix, keep, src_stage, out_stage in PROJECTILE_SPRITES:
+        stage_dir = game_dir / f"STAGE{src_stage:02d}"
         src = stage_dir / (stem + ".BIN")
         if not src.exists():
             print(f"  skip {stem}: not found")
             continue
-        if stage not in palettes:
-            palettes[stage] = (stage_dir / "PAL.BIN").read_bytes()
-        out_dir = REPO_ROOT / "assets" / f"stage{stage:02d}"
+        if src_stage not in palettes:
+            palettes[src_stage] = (stage_dir / "PAL.BIN").read_bytes()
+        out_dir = REPO_ROOT / "assets" / f"stage{out_stage:02d}"
         out_dir.mkdir(parents=True, exist_ok=True)
-        export_sprite(src, prefix, out_dir, palettes[stage], keep)
+        export_sprite(src, prefix, out_dir, palettes[src_stage], keep)
 
 
 if __name__ == "__main__":
