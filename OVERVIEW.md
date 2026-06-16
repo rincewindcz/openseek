@@ -62,8 +62,9 @@ HUD) have been re-exported with the fixed decoder.
   fire faster). Enemy helicopters (`engine/enemy_heli.lua`) spawn off-screen at the
   stage's `badheli` marker points (one airborne per marker), fly in toward the
   player and circle it, firing one random weapon (chaingun / FFR / homing
-  air_to_air / tracers) when lined up; they smoke when hurt and fall-and-explode
-  when downed, like the player. Radar
+  air_to_air / tracers) when lined up; they have a spinning rotor, smoke when hurt
+  and fall-and-explode when downed, like the player, and show on the radar as
+  pinkish blips. Radar
   stations are two-part like tanks (a `radar.bin` base with a `radarsp` dish that
   spins continuously and must be destroyed first). The chopper arsenal includes a
   napalm that sweeps tongues of fire outward from the chopper (1 ahead / a
@@ -130,7 +131,7 @@ Engine modules (`engine/`), all built on the tiny `class.lua` helper:
 | `combat.lua` | Weapons, projectiles, firing geometry (spread/streams/swing/side offset), hit detection, AoE. Loads `data/weapons.json`. Tracer weapons resolve their streak sprite to the loaded stage's mission variant (`trace`/`strace`/`jtrace`/`rtrace`). The `bomb_drop` weapon glides forward then falls and detonates with shrapnel + full-damage AoE. Homing missiles (player `locking` levels, enemy `homing` weapons) steer toward a target at a capped `turn_rate` so they can be dodged (`_steer_homing`). |
 | `camera.lua` | Zoom, pan, world-rotation transform, viewport culling, game-mode vertical focus offset (`view_oy`, `screen_center`). |
 | `renderer.lua` | Draws world layers bottom-to-top: ground dust (lowest), decals, segments, objects (y-sorted, culled), objective markers (destroy reticles, POW landing rings) and banner, grid, pickers, viewer HUD bar. Flying shrapnel is a separate overlay (`draw_debris`) drawn after the explosion effects so the chunks stay on top of the blast. |
-| `hud.lua` | Sprite-based gauges, weapon icon, acceleration box, and radar from `data/hud.json`. The radar draws dots by priority (buildings, then enemies, then objectives on top in white) so the goal is never hidden. The acceleration box uses the original `BOX.BIN` art with a green dot driven by speed/strafe plus a small turn nudge. Per mission it prefers override art in `assets/hud/stage{m}/` when present (mission 3 ships a full custom armour/fuel/weapons/scanner/box set, 1-2 only armour), falling back per item to the shared `assets/hud/` set (`Hud:set_mission`). |
+| `hud.lua` | Sprite-based gauges, weapon icon, acceleration box, and radar from `data/hud.json`. The radar draws dots by priority (buildings, then enemies, then airborne helicopters in pink from `world.air_units`, then objectives on top in white) so the goal is never hidden. The acceleration box uses the original `BOX.BIN` art with a green dot driven by speed/strafe plus a small turn nudge. Per mission it prefers override art in `assets/hud/stage{m}/` when present (mission 3 ships a full custom armour/fuel/weapons/scanner/box set, 1-2 only armour), falling back per item to the shared `assets/hud/` set (`Hud:set_mission`). |
 | `powerups.lua` | Power-up drops from destroyed large buildings: spawn, ttl/blink, fly-over vs land-on collection, and effect application. Frames from the `pickup` clip. |
 | `mission.lua` | Per-stage win conditions: destroy / rescue / sabotage objectives, progress tracking, and the return-to-base landing requirement. Data-driven from `data/missions.json`. |
 | `animation.lua` | Shared immutable `AnimClip` definitions plus per-instance `AnimState` playback. Loads `data/animations.json`. |

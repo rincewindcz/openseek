@@ -93,6 +93,7 @@ function HeliSystem:_spawn_one(player)
     phase = math.random() * math.pi * 2,
     reload = 0.8,
     smoke = {}, smoke_t = 0,
+    rotor = Animation.new("blade"),
     hit_radius = HIT_RADIUS,
     state = "alive",
   }
@@ -143,6 +144,7 @@ function HeliSystem:_advance(h, dt, factor)
 end
 
 function HeliSystem:_update_heli(h, dt)
+  if h.rotor then h.rotor:update(dt) end
   self:_update_smoke(h, dt)
   if h.state == "dying" then return self:_update_dying(h, dt) end
 
@@ -288,6 +290,12 @@ function HeliSystem:draw()
         local sc  = 1 - 0.5 * (h.fall or 0)
         g.setColor(1, 1, 1)
         g.draw(self.sprite, h.x, h.y, rot, sc, sc, iw / 2, ih / 2)
+        -- Spinning rotor disc on top (top-down 8-frame blur).
+        local rimg = h.rotor and h.rotor:current_image()
+        if rimg then
+          local rw, rh = rimg:getDimensions()
+          g.draw(rimg, h.x, h.y, 0, sc, sc, rw / 2, rh / 2)
+        end
       end
     end
     g.pop()

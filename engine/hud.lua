@@ -28,6 +28,7 @@ local RADAR_BUILDING = {
 local RADAR_COLOR_ENEMY     = { 1.0, 0.15, 0.15 }
 local RADAR_COLOR_BUILDING  = { 0.33, 0.18, 0.07 }
 local RADAR_COLOR_OBJECTIVE = { 1.0, 1.0, 1.0 }
+local RADAR_COLOR_AIR       = { 1.0, 0.4, 0.8 }   -- enemy helicopters (pinkish)
 
 function Hud:init()
   self.player = nil
@@ -262,7 +263,16 @@ function Hud:_draw_radar(g, item, x, y)
   -- Bucket blips by priority and draw low-to-high so the mission goal is never
   -- hidden under a building/enemy dot: buildings (brown) first, enemies (red)
   -- next, objectives (white) last on top.
-  local buildings, enemies, objectives = {}, {}, {}
+  local buildings, enemies, objectives, air = {}, {}, {}, {}
+
+  local function plot(bucket, ex, ey)
+    local wdx, wdy = self.world:delta(ex, ey, p.x, p.y)
+    local dx = wdx * px_per_unit
+    local dy = wdy * px_per_unit
+    local rx = dx * cos_pa - dy * sin_pa
+    local ry = dx * sin_pa + dy * cos_pa
+    if rx * rx + ry * ry <= r * r then bucket[#bucket + 1] = { rx, ry } end
+  end
   for _, e in ipairs(self.world.entities) do
     if e:is_alive() then
       local cls  = classes[e.class_idx + 1]
@@ -272,17 +282,13 @@ function Hud:_draw_radar(g, item, x, y)
       elseif RADAR_ENEMY[kind]    then bucket = enemies
       elseif RADAR_BUILDING[kind] then bucket = buildings
       end
-      if bucket then
-        local wdx, wdy = self.world:delta(e.x, e.y, p.x, p.y)
-        local dx = wdx * px_per_unit
-        local dy = wdy * px_per_unit
-        local rx = dx * cos_pa - dy * sin_pa
-        local ry = dx * sin_pa + dy * cos_pa
-        if rx * rx + ry * ry <= r * r then
-          bucket[#bucket + 1] = { rx, ry }
-        end
-      end
+      if bucket then plot(bucket, e.x, e.y) end
     end
+  end
+
+  -- Airborne enemy helicopters live outside world.entities (heli system).
+  for _, h in ipairs(self.world.air_units or {}) do
+    if h.state == "alive" then plot(air, h.x, h.y) end
   end
 
   local function draw_blips(blips, c)
@@ -293,6 +299,7 @@ function Hud:_draw_radar(g, item, x, y)
   end
   draw_blips(buildings,  RADAR_COLOR_BUILDING)
   draw_blips(enemies,    RADAR_COLOR_ENEMY)
+  draw_blips(air,        RADAR_COLOR_AIR)
   draw_blips(objectives, RADAR_COLOR_OBJECTIVE)
 
   -- Co-op teammate (split screen): a larger dot in the teammate's color.
