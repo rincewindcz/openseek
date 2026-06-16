@@ -153,6 +153,8 @@ function World:load(name)
   self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
   self.debris        = {}   -- flying explosion shrapnel {anim, x, y, vx, vy, age, ttl}
   self.ground_fx     = {}   -- dust left on the ground when shrapnel lands {anim, x, y}
+  self.heli_spawns   = {}   -- {x, y} spawn markers for enemy helicopters (not drawn)
+  self.air_units     = {}   -- live enemy helicopters (owned by the heli system)
 
   -- First pass: build every entity and index hulls by exact position.
   local created = {}
@@ -219,6 +221,12 @@ function World:load(name)
         hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy }, tdef.spin)
         goto continue
       end
+    end
+    -- Enemy helicopters are not placed units: each marks a spawn point for the
+    -- airborne heli system and is never drawn or hit in place.
+    if cls.kind_name == "enemy_helicopter" then
+      self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y }
+      goto continue
     end
     self.entities[#self.entities + 1] = entity
     local list = cls.kind == 15 and self.decals or self.objects

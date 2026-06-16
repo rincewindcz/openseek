@@ -6,6 +6,7 @@ local Animation    = require "engine.animation"
 local Player       = require "engine.player"
 local Hud          = require "engine.hud"
 local CombatSystem = require "engine.combat"
+local HeliSystem   = require "engine.enemy_heli"
 local Powerups     = require "engine.powerups"
 local Mission      = require "engine.mission"
 local Screen       = require "engine.screen"
@@ -18,6 +19,7 @@ local dbg
 local hud
 local player
 local combat
+local helis
 local powerups
 local mission
 local screen
@@ -229,6 +231,7 @@ local function spawn_player()
   combat.players = { player }
   combat.projectiles = {}
   combat.effects     = {}
+  helis:reset()
   powerups:reset(player)
   mission = Mission.for_stage(world, player, world.stage_name)
   camera.x, camera.y = player.x, player.y
@@ -287,6 +290,7 @@ local function leave_game_mode()
   combat.players    = {}
   combat.projectiles = {}
   combat.effects     = {}
+  helis:clear()
   powerups:reset(nil)
   mission           = nil
   camera.angle      = nil
@@ -353,6 +357,7 @@ local function enter_split()
   combat.friendly_fire = mp_setup.ff
   combat.projectiles  = {}
   combat.effects      = {}
+  helis:reset()
   powerups:set_players(sp_players)
   -- Shared co-op objective from the stage's decoded objectives (nil = free play).
   mission = Mission.coop(world, sp_players)
@@ -370,6 +375,7 @@ local function leave_split()
   combat.friendly_fire = false
   combat.projectiles = {}
   combat.effects     = {}
+  helis:clear()
   powerups:reset(nil)
   hud.player = nil
   hud.coplayer, hud.coplayer_color = nil, nil
@@ -403,6 +409,7 @@ local function draw_split()
     p:draw_world()
     combat:draw()
     renderer:draw_debris()   -- shrapnel above the explosion effects
+    helis:draw()             -- airborne enemy helicopters
     -- Draw both vehicles back-to-front by world y so the southern one is on top,
     -- identically in both halves (the local one is centered, the teammate placed
     -- by projection). Without this the teammate always covered the local player.
@@ -610,6 +617,8 @@ function love.load(args)
   hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
   combat   = CombatSystem:new(world, camera)
   combat:load("data/weapons.json")
+  helis    = HeliSystem:new(world, combat)
+  combat.heli_sys = helis
   Mission.load("data/missions.json")
   powerups = Powerups:new(world, camera, combat.weapons)
   renderer:refresh_kinds()
@@ -677,6 +686,7 @@ function love.update(dt)
       c.angle  = p:camera_angle()
     end
     combat:update(dt)
+    helis:update(dt)
     powerups:update(dt)
     if mission then mission:update(dt) end
     world:update(dt)
@@ -703,6 +713,7 @@ function love.update(dt)
     end
     if not player.death then _try_fire(dt) end
     combat:update(dt)
+    helis:update(dt)
     powerups:update(dt)
     if mission then mission:update(dt) end
     camera.x     = player.x
@@ -751,6 +762,7 @@ function love.draw()
     player:draw_world()
     combat:draw()
     renderer:draw_debris()   -- shrapnel above the explosion effects
+    helis:draw()             -- airborne enemy helicopters
     player:draw()
     player:draw_world_front()
     hud:draw()

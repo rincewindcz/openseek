@@ -59,7 +59,11 @@ HUD) have been re-exported with the fixed decoder.
   sprite (`data/enemy_overrides.json`): gun1 fires slow homing missiles, sguntop
   spits fireballs; sgun fireballs flak-burst on impact while tracers fade out.
   GUN1's fire rate is set per stage in `data/enemy_fire_rates.json` (later phases
-  fire faster). Radar
+  fire faster). Enemy helicopters (`engine/enemy_heli.lua`) spawn off-screen at the
+  stage's `badheli` marker points (one airborne per marker), fly in toward the
+  player and circle it, firing one random weapon (chaingun / FFR / homing
+  air_to_air / tracers) when lined up; they smoke when hurt and fall-and-explode
+  when downed, like the player. Radar
   stations are two-part like tanks (a `radar.bin` base with a `radarsp` dish that
   spins continuously and must be destroyed first). The chopper arsenal includes a
   napalm that sweeps tongues of fire outward from the chopper (1 ahead / a
@@ -119,9 +123,10 @@ Engine modules (`engine/`), all built on the tiny `class.lua` helper:
 
 | Module | Responsibility |
 |--------|----------------|
-| `world.lua` | Loads a stage JSON, instantiates entities (including per-stage unit alive/dead images), owns the entity list, ground color, y-sorting, the friendly-base spawn point (`player_start`, detected from `basecirc.bin`/`h.bin`), the solid-entity collision query (`blocked`), the objective entity lists (`targets`, `rescue_zones`, `rescue_people`, `objectives`), and the shared explosion shrapnel + ground-dust systems (`spawn_debris`, `add_ground_dust`). |
+| `world.lua` | Loads a stage JSON, instantiates entities (including per-stage unit alive/dead images), owns the entity list, ground color, y-sorting, the friendly-base spawn point (`player_start`, detected from `basecirc.bin`/`h.bin`), the solid-entity collision query (`blocked`), the objective entity lists (`targets`, `rescue_zones`, `rescue_people`, `objectives`), the enemy-helicopter spawn markers (`heli_spawns`, collected from placed `enemy_helicopter` entities which are never drawn), and the shared explosion shrapnel + ground-dust systems (`spawn_debris`, `add_ground_dust`). |
 | `entity.lua` | One world object: HP, state machine (idle/animating/exploding/dead), damage smoke, hit effects, destruction crater. Loads shared type data from `data/entity_types.json`. |
 | `player.lua` | Player vehicle: movement and collision, altitude/landing state (chopper only), independent tank turret, fuel, sprite frame selection per speed/strafe, weapon selection state. The rotor sheets (`bladep`/`bladeb`) are 8-frame spin cycles grouped by pitch/bank position; the active group tracks the hull tilt and only its 8 frames spin, so the blades rotate smoothly. |
+| `enemy_heli.lua` | Airborne enemy helicopters: spawns them off-screen at the stage's `badheli` markers (`World.heli_spawns`, count = simultaneous cap), flies them toward the player and circles, fires one random weapon when the nose lines up, smokes when damaged, and falls/explodes when downed. Its live list is exposed as `world.air_units` for `combat.lua` hit detection. |
 | `combat.lua` | Weapons, projectiles, firing geometry (spread/streams/swing/side offset), hit detection, AoE. Loads `data/weapons.json`. Tracer weapons resolve their streak sprite to the loaded stage's mission variant (`trace`/`strace`/`jtrace`/`rtrace`). The `bomb_drop` weapon glides forward then falls and detonates with shrapnel + full-damage AoE. Homing missiles (player `locking` levels, enemy `homing` weapons) steer toward a target at a capped `turn_rate` so they can be dodged (`_steer_homing`). |
 | `camera.lua` | Zoom, pan, world-rotation transform, viewport culling, game-mode vertical focus offset (`view_oy`, `screen_center`). |
 | `renderer.lua` | Draws world layers bottom-to-top: ground dust (lowest), decals, segments, objects (y-sorted, culled), objective markers (destroy reticles, POW landing rings) and banner, grid, pickers, viewer HUD bar. Flying shrapnel is a separate overlay (`draw_debris`) drawn after the explosion effects so the chunks stay on top of the blast. |

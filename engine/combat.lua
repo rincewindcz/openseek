@@ -120,6 +120,7 @@ function CombatSystem:init(world, camera)
   self.camera      = camera
   self.player      = nil
   self.players     = {}   -- all controllable players (1 normally, 2 in split screen)
+  self.heli_sys    = nil  -- enemy helicopter system (set by main); its helis are hittable
   self.friendly_fire = false  -- co-op option: player rounds can hit the other player
   self.projectiles = {}
   self.effects     = {}   -- transient world anims (missile trails, napalm fire)
@@ -533,6 +534,20 @@ function CombatSystem:_check_hit(proj)
             if proj.shooter and not e:is_alive() then
               proj.shooter.score = (proj.shooter.score or 0) + self:_kill_points(e)
             end
+            return true
+          end
+        end
+      end
+    end
+    -- Airborne enemy helicopters (owned by the heli system, not world.entities).
+    if self.heli_sys then
+      for _, h in ipairs(self.heli_sys.helis) do
+        if h.state == "alive" then
+          local dx, dy = self.world:delta(h.x, h.y, proj.x, proj.y)
+          local pr = (h.hit_radius or 13) + proj.radius
+          if dx * dx + dy * dy < pr * pr then
+            self.heli_sys:hit(h, proj.damage, proj.shooter)
+            if proj.aoe > 0 then self:_apply_aoe(proj) end
             return true
           end
         end
