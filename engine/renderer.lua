@@ -98,7 +98,29 @@ function Renderer:_draw_world()
   g.push()
   self.camera:apply()
 
-  self:_draw_entities(w.decals,  vp)
+  -- Draw the world once per overlapping map copy so it reads as seamless across
+  -- the wrapped (toroidal) edges; culling uses the copy-local viewport.
+  for _, t in ipairs(self.camera:tiles()) do
+    g.push()
+    g.translate(t.ox, t.oy)
+    self:_draw_world_layers({
+      x0 = vp.x0 - t.ox, x1 = vp.x1 - t.ox,
+      y0 = vp.y0 - t.oy, y1 = vp.y1 - t.oy,
+    })
+    g.pop()
+  end
+
+  g.pop()
+end
+
+function Renderer:_draw_world_layers(vp)
+  local g = love.graphics
+  local w = self.world
+
+  -- Lowest layer: dust kicked up where shrapnel landed, under decals and trees.
+  self:_draw_ground_fx(vp)
+
+  self:_draw_entities(w.decals, vp)
 
   if self.show_segments then
     g.setLineStyle("rough")
@@ -123,8 +145,6 @@ function Renderer:_draw_world()
     end
     g.setColor(1, 1, 1)
   end
-
-  g.pop()
 end
 
 function Renderer:_draw_entities(list, vp)
@@ -225,6 +245,57 @@ function Renderer:_draw_entities(list, vp)
     end
 
     ::continue::
+  end
+end
+
+-- Ground dust (lowest layer): drawn before decals so even trees sit above it.
+function Renderer:_draw_ground_fx(vp)
+  local g = love.graphics
+  for _, fx in ipairs(self.world.ground_fx) do
+    if fx.x >= vp.x0 and fx.x <= vp.x1 and fx.y >= vp.y0 and fx.y <= vp.y1 then
+      local img = fx.anim:current_image()
+      if img then
+        local iw, ih = img:getDimensions()
+        g.setColor(1, 1, 1)
+        g.draw(img, fx.x, fx.y, 0, 1, 1, iw / 2, ih / 2)
+      end
+    end
+  end
+end
+
+-- Flying iron/metal shrapnel from explosions (buildings and bombs). Drawn as its
+-- own overlay (after the explosion effects) so the chunks stay visible on top of
+-- the blast; tiled like the world so it wraps at the seam.
+function Renderer:draw_debris()
+  local w = self.world
+  if #w.debris == 0 then return end
+  local g  = love.graphics
+  local vp = self.camera:viewport()
+  g.push()
+  self.camera:apply()
+  for _, t in ipairs(self.camera:tiles()) do
+    g.push()
+    g.translate(t.ox, t.oy)
+    self:_draw_debris({
+      x0 = vp.x0 - t.ox, x1 = vp.x1 - t.ox,
+      y0 = vp.y0 - t.oy, y1 = vp.y1 - t.oy,
+    })
+    g.pop()
+  end
+  g.pop()
+end
+
+function Renderer:_draw_debris(vp)
+  local g = love.graphics
+  for _, d in ipairs(self.world.debris) do
+    if d.x >= vp.x0 and d.x <= vp.x1 and d.y >= vp.y0 and d.y <= vp.y1 then
+      local img = d.anim:current_image()
+      if img then
+        local iw, ih = img:getDimensions()
+        g.setColor(1, 1, 1)
+        g.draw(img, d.x, d.y, 0, 1, 1, iw / 2, ih / 2)
+      end
+    end
   end
 end
 

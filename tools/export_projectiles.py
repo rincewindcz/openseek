@@ -37,6 +37,11 @@ PROJECTILE_SPRITES = [
     ("FFR",      "ffr",    {0},                    0,  0),
     ("BOMB",     "bomb",   {0},                    0,  0),
     ("TRACE",    "trace",  set(range(0, 224, 32)), 0,  0),
+    # The enemy tracer is per mission under a different BIN name (mission 3 has
+    # none): STRACE/JTRACE/RTRACE, same 7-growth x 32-rotation layout as TRACE.
+    ("STRACE",   "strace", set(range(0, 224, 32)), 1, 10),
+    ("JTRACE",   "jtrace", set(range(0, 224, 32)), 2, 20),
+    ("RTRACE",   "rtrace", set(range(0, 224, 32)), 4, 40),
     ("HOLE4038", "hole",   {16},                   0,  0),
     ("HOLE4038", "hole",   {16},                   1, 10),
     ("ENEMY",    "enemy",  {16, 32},               0,  0),

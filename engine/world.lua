@@ -1,6 +1,13 @@
-local Class  = require "engine.class"
-local json   = require "lib.json"
-local Entity = require "engine.entity"
+local Class     = require "engine.class"
+local json      = require "lib.json"
+local Entity    = require "engine.entity"
+local Animation = require "engine.animation"
+
+-- Tumbling iron/metal shrapnel flung out by an explosion (buildings and bombs).
+-- The clips loop, so each piece is bounded by its own ttl. When a piece lands a
+-- dust puff is left on the ground.
+local DEBRIS_CLIPS = { "ironsz", "iron2sz", "metal8", "metalrt", "metalsz" }
+local DUST_CLIPS   = { "dust0", "dust1", "dust2" }
 
 -- Ground fill colors per mission (palette entry 49 of STAGE0M/PAL1.BIN, 6-bit DAC to 8-bit).
 local MISSION_GROUND = {
@@ -39,6 +46,12 @@ function World:init()
   self.building_drops = {}     -- asset filename -> forced pickup kind
   local braw = love.filesystem.read("data/building_drops.json")
   if braw then self.building_drops = json.decode(braw) end
+  self.fire_rate_overrides = {}  -- stage name -> { asset filename -> shots/sec }
+  local fraw = love.filesystem.read("data/enemy_fire_rates.json")
+  if fraw then self.fire_rate_overrides = json.decode(fraw) end
+  self.muzzle_overrides = {}     -- asset filename -> forward muzzle offset (px)
+  local mraw = love.filesystem.read("data/enemy_muzzle.json")
+  if mraw then self.muzzle_overrides = json.decode(mraw) end
   self:_discover()
 end
 
@@ -138,6 +151,8 @@ function World:load(name)
   self.rescue_zones  = {}   -- powhere.bin landing markers (kind 9)
   self.rescue_people = {}   -- pow.bin / people.bin civilians to rescue (kind 11)
   self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
+  self.debris        = {}   -- flying explosion shrapnel {anim, x, y, vx, vy, age, ttl}
+  self.ground_fx     = {}   -- dust left on the ground when shrapnel lands {anim, x, y}
 
   -- First pass: build every entity and index hulls by exact position.
   local created = {}
@@ -145,6 +160,7 @@ function World:load(name)
   for id, raw in ipairs(self.stage.entities) do
     local cls    = self.stage.classes[raw.class + 1]
     local entity = Entity:new(id, raw, cls)
+    entity.world = self   -- backref so a dying building can spawn world shrapnel
     -- Craters are for large static buildings only. Keying on kind "structure"
     -- excludes vehicles/turrets (tank, truck, flak), and the size gate excludes
     -- small machinery filed under "structure" (jeeps, ammo packs).
@@ -162,6 +178,11 @@ function World:load(name)
       local fn = af.file:lower()
       entity.weapon    = self.weapon_overrides[fn]
       entity.drop_kind = self.building_drops[fn]
+      -- Per-stage fire-rate override (e.g. GUN1 fires faster in later phases).
+      local fr = self.fire_rate_overrides[self.stage_name]
+      entity.fire_rate = fr and fr[fn] or nil
+      -- Forward muzzle offset so shots leave the barrel, not the hull center.
+      entity.muzzle_offset = self.muzzle_overrides[fn]
       -- Friendly base / spawn pad. Every stage marks it with basecirc.bin at a
       -- fixed spot (~2180,2171); the home one is the first basecirc (later ones
       -- sit under landhere/lh objective zones). Missions 0 and 3 also stamp an
@@ -227,6 +248,37 @@ function World:load(name)
   end
   table.sort(self.decals,  by_y)
   table.sort(self.objects, by_y)
+
+  self:_fit_wrap_period()
+end
+
+-- Some stages (mission 0 phases 0-2) inset their content ~48px from the world
+-- edges: the field spans e.g. [48, 4047] inside a 4096 world. Wrapped at 4096
+-- that leaves a bare band straddling each seam. The field width is the natural
+-- wrap period (the right edge continues into the left: 4047 + 1 == 48 mod 4000),
+-- so shrink world_size to the field extent and every system that wraps on it
+-- (player movement, World:delta, Camera:tiles, the renderer passes) lines up and
+-- the seam disappears. Full-bleed stages already reach the edges and keep 4096.
+function World:_fit_wrap_period()
+  local s = self.stage.world_size
+  local lo_x, lo_y, hi_x, hi_y = s, s, 0, 0
+  local function bounds(list)
+    for _, e in ipairs(list) do
+      if e.x < lo_x then lo_x = e.x end
+      if e.x > hi_x then hi_x = e.x end
+      if e.y < lo_y then lo_y = e.y end
+      if e.y > hi_y then hi_y = e.y end
+    end
+  end
+  bounds(self.decals); bounds(self.objects)
+  if hi_x <= lo_x or hi_y <= lo_y then return end
+
+  -- Use the smaller axis extent so the period never exceeds the content on
+  -- either axis (a too-large period reopens a gap; a smaller one only overlaps).
+  local period = math.min(hi_x - lo_x + 1, hi_y - lo_y + 1)
+  if period < s - 32 then
+    self.stage.world_size = period
+  end
 end
 
 -- Crater sprite for the stage's mission. HOLE4038 is exported per mission into
@@ -246,6 +298,18 @@ end
 
 function World:load_index(idx)
   self:load(self.stages[idx])
+end
+
+-- Shortest signed per-axis delta (a - b) on the seamlessly wrapped (toroidal)
+-- map, so distance checks keep working across the map edges. b (or a) may sit
+-- outside [0, world_size); the modulo folds it back.
+function World:delta(ax, ay, bx, by)
+  local s  = self.stage.world_size
+  local dx = (ax - bx) % s
+  if dx > s * 0.5 then dx = dx - s end
+  local dy = (ay - by) % s
+  if dy > s * 0.5 then dy = dy - s end
+  return dx, dy
 end
 
 -- Asset (.bin) filename backing a class index, or nil. Shared by the debug
@@ -287,8 +351,7 @@ function World:blocked(x, y, radius, ignore)
       local td = e.type_data
       if td and td.solid then
         local cr = td.collision_radius or 8
-        local dx = e.x - x
-        local dy = e.y - y
+        local dx, dy = self:delta(e.x, e.y, x, y)
         local rr = radius + cr
         if dx * dx + dy * dy < rr * rr then
           return true, e
@@ -299,9 +362,64 @@ function World:blocked(x, y, radius, ignore)
   return false
 end
 
+-- Fling a burst of tumbling iron/metal shrapnel from (x, y), e.g. a building or
+-- bomb blowing up. spread scales the scatter radius (default tight).
+function World:spawn_debris(x, y, n, spread)
+  n = n or (4 + math.random(0, 3))
+  spread = spread or 1
+  for _ = 1, n do
+    local anim = Animation.new(DEBRIS_CLIPS[math.random(#DEBRIS_CLIPS)])
+    if not anim:is_done() then
+      local a  = math.random() * 2 * math.pi
+      local sp = (40 + math.random() * 80) * spread
+      self.debris[#self.debris + 1] = {
+        anim = anim, x = x, y = y,
+        vx = math.cos(a) * sp, vy = math.sin(a) * sp,
+        age = 0, ttl = 0.6 + math.random() * 0.6,
+      }
+    end
+  end
+end
+
+-- A dust puff settling on the ground where a shrapnel piece landed.
+function World:add_ground_dust(x, y)
+  local anim = Animation.new(DUST_CLIPS[math.random(#DUST_CLIPS)])
+  if anim:is_done() then return end
+  self.ground_fx[#self.ground_fx + 1] = { anim = anim, x = x, y = y }
+end
+
 function World:update(dt)
   for _, e in ipairs(self.entities) do
     e:update(dt)
+  end
+
+  -- Shrapnel flies on, decelerating; when a piece's life ends it kicks up dust.
+  if #self.debris > 0 then
+    local live = {}
+    for _, d in ipairs(self.debris) do
+      d.age = d.age + dt
+      d.x   = d.x + d.vx * dt
+      d.y   = d.y + d.vy * dt
+      local damp = math.max(0, 1 - dt * 2)
+      d.vx, d.vy = d.vx * damp, d.vy * damp
+      d.anim:update(dt)
+      if d.age < d.ttl then
+        live[#live + 1] = d
+      else
+        self:add_ground_dust(d.x, d.y)
+      end
+    end
+    self.debris = live
+  end
+
+  -- Ground dust plays once then clears.
+  if #self.ground_fx > 0 then
+    local live = {}
+    for _, fx in ipairs(self.ground_fx) do
+      fx.anim:update(dt)
+      if not fx.anim:is_done() then live[#live + 1] = fx end
+    end
+    self.ground_fx = live
   end
 end
 

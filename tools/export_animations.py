@@ -28,6 +28,12 @@ ANIMATIONS = [
     ("SMOKE",    "smoke",     8, False),
     ("SMOKE2",   "smoke2",    8, False),
     ("MISSSMK0", "misssmk0", 10, False),
+    # Tumbling iron/metal debris thrown when metal structures are destroyed.
+    ("IRONSZ",   "ironsz",   18, True),
+    ("IRON2SZ",  "iron2sz",  18, True),
+    ("METAL8",   "metal8",   18, True),
+    ("METALRT",  "metalrt",  18, True),
+    ("METALSZ",  "metalsz",  18, True),
 ]
 
 
@@ -74,6 +80,64 @@ def export_anim(game_dir, out_dir, bin_stem, prefix, palette):
     return names
 
 
+# Per-mission unit / effect animations: these live in STAGE0{m}/ (not only
+# STAGE00) and are rendered with that mission's own palette. `keep` limits the
+# frame range (POW/NEWDUDE are multi-direction walk sheets; frames 0-15 are the
+# axis-aligned walk cycle the engine rotates at runtime). Each (stem, mission)
+# pair becomes a clip "{prefix}{m}" with files {prefix}{m}_f{NN}.png.
+MISSION_ANIMATIONS = [
+    ("DUST",    "dust",    12, False, None),
+    ("MINE",    "mine",    12, False, None),
+    ("POW",     "pow",     12, True,  range(0, 16)),
+    ("NEWDUDE", "newdude", 12, True,  range(0, 16)),
+]
+
+
+def export_mission_anim(game_dir, out_dir, bin_stem, prefix, mission, keep):
+    """Render a STAGE0{m} animation on a shared canvas so a sequence (e.g. a walk
+    cycle) keeps its frame-to-frame alignment. Returns the written file names."""
+    from PIL import Image
+    src      = game_dir / f"STAGE0{mission}" / (bin_stem + ".BIN")
+    pal_path = game_dir / f"STAGE0{mission}" / "PAL.BIN"
+    if not src.exists() or not pal_path.exists():
+        return []
+    palette = pal_path.read_bytes()
+    data    = src.read_bytes()
+    offs    = db.read_frames(data)
+    idxs    = [i for i in (keep if keep is not None else range(len(offs))) if i < len(offs)]
+    canvases = []
+    for i in idxs:
+        canvas, status = db.decode_frame(data, offs[i][0], offs[i][1])
+        canvases.append(canvas if (status == "ok" and canvas) else {})
+    xs = [c[0] for cv in canvases for c in cv]
+    ys = [c[1] for cv in canvases for c in cv]
+    if not xs:
+        return []
+    x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
+    w, h = x1 - x0 + 1, y1 - y0 + 1
+    names = []
+    for cv in canvases:
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        for (x, y), p in cv.items():
+            r, g, b = palette[p * 3] * 4, palette[p * 3 + 1] * 4, palette[p * 3 + 2] * 4
+            img.putpixel((x - x0, y - y0), (r, g, b, 255))
+        fname = f"{prefix}{mission}_f{len(names):02d}.png"
+        img.save(out_dir / fname)
+        names.append(fname)
+    print(f"  STAGE0{mission}/{bin_stem}: {len(names)} frames -> {prefix}{mission}")
+    return names
+
+
+def export_all_mission_anims(game_dir, out_dir):
+    results = {}
+    for bin_stem, prefix, fps, loop, keep in MISSION_ANIMATIONS:
+        for m in range(5):
+            names = export_mission_anim(game_dir, out_dir, bin_stem, prefix, m, keep)
+            if names:
+                results[f"{prefix}{m}"] = (names, fps, loop)
+    return results
+
+
 def main():
     ap = argparse.ArgumentParser(description="Export SEEK effect animations to assets/effects/")
     ap.add_argument("--game-dir", default=None)
@@ -96,6 +160,10 @@ def main():
     for bin_stem, prefix, fps, loop in ANIMATIONS:
         names = export_anim(game_dir, out_dir, bin_stem, prefix, palette)
         results[prefix] = (names, fps, loop)
+
+    print()
+    print("Per-mission animations:")
+    results.update(export_all_mission_anims(game_dir, out_dir))
 
     print()
     print("animations.json entries:")

@@ -1,0 +1,5 @@
+{
+  "stage01": { "gun1.bin": 0.45 },
+  "stage02": { "gun1.bin": 0.6 },
+  "stage03": { "gun1.bin": 0.8 }
+}

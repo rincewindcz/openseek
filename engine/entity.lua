@@ -107,11 +107,13 @@ function Entity:_destroy_turret()
   self.turret_fx = (not fx:is_done()) and fx or nil
 end
 
--- Spawn a one-shot SMOKE2 hit effect at the entity's position with a small random offset.
-function Entity:on_hit()
+-- Spawn a one-shot hit effect at the entity's position with a small random
+-- offset. Defaults to SMOKE2; the weapon may pass its own clip (e.g. FFR rockets
+-- alternate randomly between smoke and smoke2).
+function Entity:on_hit(clip)
   if not self:is_alive() then return end
   local Animation = require "engine.animation"
-  local anim = Animation.new("smoke2")
+  local anim = Animation.new(clip or "smoke2")
   if anim:is_done() then return end  -- clip not found / empty
   self._hit_smokes[#self._hit_smokes + 1] = {
     anim = anim,
@@ -147,6 +149,7 @@ function Entity:_start_death(dx, dy)
   -- assigned to the entity at load (crater_src); reveal it now that it has died.
   if self.crater_eligible then
     self.crater_img = self.crater_src
+    if self.world then self.world:spawn_debris(self.x, self.y) end
   end
   -- Power-up drop: a forced kind always drops (e.g. bunker -> medal); otherwise
   -- large buildings drop a random pickup most of the time.

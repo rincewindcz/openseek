@@ -93,8 +93,7 @@ function Powerups:update(dt)
     pu.age = pu.age + dt
     local taken = false
     for _, p in ipairs(self.players) do
-      local dx = p.x - pu.x
-      local dy = p.y - pu.y
+      local dx, dy = self.world:delta(p.x, p.y, pu.x, pu.y)
       local rr = PICK_RANGE + (p.collision_radius or 8)
       if dx * dx + dy * dy <= rr * rr then
         -- Easy: fly over. Hard: the chopper must be landed on it (a tank is
@@ -134,20 +133,25 @@ function Powerups:draw()
   local g = love.graphics
   g.push()
   self.camera:apply()
-  for _, pu in ipairs(self.list) do
-    local visible = (pu.age <= BLINK_AT) or (math.floor(pu.age * 8) % 2 == 0)
-    if visible then
-      local fi = pu.def.frame
-      if pu.def.kind == "medal" then
-        fi = (math.floor(pu.age * 3) % 2 == 0) and 8 or 9
-      end
-      local img = frames[fi + 1]
-      if img then
-        local iw, ih = img:getDimensions()
-        g.setColor(1, 1, 1)
-        g.draw(img, pu.x, pu.y, 0, 1, 1, iw / 2, ih / 2)
+  for _, t in ipairs(self.camera:tiles()) do
+    g.push()
+    g.translate(t.ox, t.oy)
+    for _, pu in ipairs(self.list) do
+      local visible = (pu.age <= BLINK_AT) or (math.floor(pu.age * 8) % 2 == 0)
+      if visible then
+        local fi = pu.def.frame
+        if pu.def.kind == "medal" then
+          fi = (math.floor(pu.age * 3) % 2 == 0) and 8 or 9
+        end
+        local img = frames[fi + 1]
+        if img then
+          local iw, ih = img:getDimensions()
+          g.setColor(1, 1, 1)
+          g.draw(img, pu.x, pu.y, 0, 1, 1, iw / 2, ih / 2)
+        end
       end
     end
+    g.pop()
   end
   g.setColor(1, 1, 1)
   g.pop()

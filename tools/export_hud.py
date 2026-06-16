@@ -26,6 +26,7 @@ HUD_SPRITES = [
     ("SCANNER",  "scanner",  "gov"),
     ("LIVES",    "lives",    "gov"),
     ("KILLICON", "killicon", "gov"),
+    ("BOX",      "box",      "gov"),
 ]
 
 
@@ -85,6 +86,33 @@ def main():
             print(f"  skip {stem}: not found")
             continue
         export_sprite(src, prefix, out_dir, palettes[pal_key])
+
+    export_mission_overrides(game_dir)
+
+
+# Some missions ship their own HUD art in STAGE0{m}/ (e.g. mission 3 has a full
+# custom armour/fuel/weapons/scanner set, missions 1-2 only armour). These use
+# the mission's in-game palette (STAGE0{m}/PAL1.BIN), not GOVPAL, since their
+# indices fall outside GOVPAL's valid range. Exported to assets/hud/stage{m}/ so
+# the engine can prefer them per mission and fall back to the shared set.
+def export_mission_overrides(game_dir):
+    for m in range(5):
+        sdir    = game_dir / f"STAGE0{m}"
+        pal_src = sdir / "PAL1.BIN"
+        if not sdir.exists() or not pal_src.exists():
+            continue
+        palette  = pal_src.read_bytes()
+        out_dir  = REPO_ROOT / "assets" / "hud" / f"stage{m}"
+        produced = False
+        for stem, prefix, _ in HUD_SPRITES:
+            src = sdir / (stem + ".BIN")
+            if not src.exists():
+                continue
+            if not produced:
+                out_dir.mkdir(parents=True, exist_ok=True)
+                print(f"\nMission {m} HUD overrides -> {out_dir}")
+                produced = True
+            export_sprite(src, prefix, out_dir, palette)
 
 
 if __name__ == "__main__":

@@ -46,15 +46,41 @@ function Hud:load(path)
   end
 end
 
-function Hud:_preload_item(item)
-  if item.sprite_pattern and item.sprite_count then
+-- Load an item's frames/background, optionally from a per-mission override dir
+-- (prefix, e.g. "hud/stage3/"). An item draws entirely from one source: if the
+-- override has it (frame 0 / the background exists) every frame comes from there,
+-- otherwise the shared "hud/" set. Frames are counted until the first gap, so an
+-- override with a different frame count (mission 3 weapons has 19 vs 14) works.
+function Hud:_preload_item(item, prefix)
+  local function over(path)
+    if not prefix then return path end
+    local o = path:gsub("^hud/", prefix)
+    return love.filesystem.getInfo("assets/" .. o) and o or path
+  end
+
+  if item.sprite_pattern then
     item._frames = {}
-    for i = 0, item.sprite_count - 1 do
-      item._frames[i + 1] = self:_img(string.format(item.sprite_pattern, i))
+    local override = over(string.format(item.sprite_pattern, 0)) ~= string.format(item.sprite_pattern, 0)
+    local i = 0
+    while true do
+      local p = string.format(item.sprite_pattern, i)
+      if override then p = p:gsub("^hud/", prefix) end
+      if not love.filesystem.getInfo("assets/" .. p) then break end
+      item._frames[i + 1] = self:_img(p)
+      i = i + 1
     end
   end
   if item.background then
-    item._bg = self:_img(item.background)
+    item._bg = self:_img(over(item.background))
+  end
+end
+
+-- Switch HUD art to mission m's overrides (assets/hud/stage{m}/) where present,
+-- per item, falling back to the shared set. Called on each stage load.
+function Hud:set_mission(m)
+  local prefix = "hud/stage" .. tostring(m) .. "/"
+  for _, item in ipairs(self.items) do
+    self:_preload_item(item, prefix)
   end
 end
 
@@ -106,7 +132,9 @@ function Hud:_gauge_frame_index(item)
   else                       pct = 0
   end
   pct = math.max(0, math.min(1, pct))
-  return math.floor(pct * (item.sprite_count - 1) + 0.5) + 1
+  local n = item._frames and #item._frames or 0
+  if n == 0 then return 1 end
+  return math.floor(pct * (n - 1) + 0.5) + 1
 end
 
 function Hud:_gauge_pct(item)
@@ -151,23 +179,38 @@ end
 function Hud:_draw_cursor(g, item, x, y)
   local p     = self.player
   local s     = item.scale or 1
-  local size  = (item.size or 36) * s
-  local half  = size / 2
-  local wall  = math.max(2, math.floor(size / 8))
+  local size, half, inner, dot_sz
 
-  -- thick black border, transparent interior
-  g.setColor(0, 0, 0, 1.0)
-  g.setLineWidth(wall)
-  g.rectangle("line", x + wall/2, y + wall/2, size - wall, size - wall)
-  g.setLineWidth(1)
+  -- Original game art (DATA/BOX.BIN, per-mission override under hud/stage{m}/)
+  -- when present; otherwise the engine-drawn black frame.
+  if item._bg then
+    local bw, bh = item._bg:getWidth(), item._bg:getHeight()
+    size   = bw * s
+    half   = size / 2
+    inner  = half - 3 * s
+    dot_sz = math.max(3, math.floor(bw / 6) * s)
+    g.setColor(1, 1, 1)
+    g.draw(item._bg, x, y, 0, s, s)
+  else
+    size = (item.size or 36) * s
+    half = size / 2
+    local wall = math.max(2, math.floor(size / 8))
+    g.setColor(0, 0, 0, 1.0)
+    g.setLineWidth(wall)
+    g.rectangle("line", x + wall/2, y + wall/2, size - wall, size - wall)
+    g.setLineWidth(1)
+    inner  = half - wall - 3 * s
+    dot_sz = math.max(3, math.floor(size / 7))
+  end
 
-  -- large green square dot
+  -- Green dot: forward/back maps to Y, strafe to X, plus a lateral push from
+  -- turning. A sustained turn drives the dot all the way to the box edge (and to
+  -- the corner together with forward motion), like the original.
   local max_s  = p.max_fwd      or 260
   local max_r  = p.strafe_speed or 140
-  local inner  = half - wall - 3*s
-  local dx     = (p.strafe or 0) / max_r * inner
+  local fx     = math.max(-1, math.min(1, (p.strafe or 0) / max_r + (p.turn_cursor or 0)))
+  local dx     = fx * inner
   local dy     = -(p.speed or 0) / max_s * inner
-  local dot_sz = math.max(3, math.floor(size / 7))
   local dot_x  = x + half + dx - dot_sz / 2
   local dot_y  = y + half + dy - dot_sz / 2
 
@@ -216,35 +259,48 @@ function Hud:_draw_radar(g, item, x, y)
   local classes = self.world.stage.classes
   local dot_r   = math.max(0.8, s * 0.8)
 
+  -- Bucket blips by priority and draw low-to-high so the mission goal is never
+  -- hidden under a building/enemy dot: buildings (brown) first, enemies (red)
+  -- next, objectives (white) last on top.
+  local buildings, enemies, objectives = {}, {}, {}
   for _, e in ipairs(self.world.entities) do
     if e:is_alive() then
       local cls  = classes[e.class_idx + 1]
       local kind = cls.kind_name
-      -- Objective targets / POW zones override the kind color with a white dot
-      -- (same size as the others) so the mission goal stands out on the scanner.
-      local c
-      if     e.objective          then c = RADAR_COLOR_OBJECTIVE
-      elseif RADAR_ENEMY[kind]    then c = RADAR_COLOR_ENEMY
-      elseif RADAR_BUILDING[kind] then c = RADAR_COLOR_BUILDING
+      local bucket
+      if     e.objective          then bucket = objectives
+      elseif RADAR_ENEMY[kind]    then bucket = enemies
+      elseif RADAR_BUILDING[kind] then bucket = buildings
       end
-      if c then
-        local dx = (e.x - p.x) * px_per_unit
-        local dy = (e.y - p.y) * px_per_unit
+      if bucket then
+        local wdx, wdy = self.world:delta(e.x, e.y, p.x, p.y)
+        local dx = wdx * px_per_unit
+        local dy = wdy * px_per_unit
         local rx = dx * cos_pa - dy * sin_pa
         local ry = dx * sin_pa + dy * cos_pa
         if rx * rx + ry * ry <= r * r then
-          g.setColor(c[1], c[2], c[3], 0.95)
-          g.rectangle("fill", cx + rx - dot_r, cy + ry - dot_r, dot_r*2, dot_r*2)
+          bucket[#bucket + 1] = { rx, ry }
         end
       end
     end
   end
 
+  local function draw_blips(blips, c)
+    g.setColor(c[1], c[2], c[3], 0.95)
+    for _, b in ipairs(blips) do
+      g.rectangle("fill", cx + b[1] - dot_r, cy + b[2] - dot_r, dot_r * 2, dot_r * 2)
+    end
+  end
+  draw_blips(buildings,  RADAR_COLOR_BUILDING)
+  draw_blips(enemies,    RADAR_COLOR_ENEMY)
+  draw_blips(objectives, RADAR_COLOR_OBJECTIVE)
+
   -- Co-op teammate (split screen): a larger dot in the teammate's color.
   local mate = self.coplayer
   if mate and (mate.armor or 0) > 0 and not mate.death then
-    local dx = (mate.x - p.x) * px_per_unit
-    local dy = (mate.y - p.y) * px_per_unit
+    local wdx, wdy = self.world:delta(mate.x, mate.y, p.x, p.y)
+    local dx = wdx * px_per_unit
+    local dy = wdy * px_per_unit
     local rx = dx * cos_pa - dy * sin_pa
     local ry = dx * sin_pa + dy * cos_pa
     if rx * rx + ry * ry <= r * r then

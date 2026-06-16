@@ -8,6 +8,7 @@ local Hud          = require "engine.hud"
 local CombatSystem = require "engine.combat"
 local Powerups     = require "engine.powerups"
 local Mission      = require "engine.mission"
+local Screen       = require "engine.screen"
 local json         = require "lib.json"
 
 local world
@@ -19,6 +20,11 @@ local player
 local combat
 local powerups
 local mission
+local screen
+local anim_gallery = false      -- test overlay: plays every animation clip at once
+local gallery      = nil        -- lazily built { items = {{name, state}, ...} }
+local death_timer  = nil       -- counts ~3s after a fatal crash before the end picture
+local pending_takeoff = false   -- chopper lifts off once the level-start zoom-in ends
 local game_mode    = false
 local sandbox_mode = false
 local death_enabled = false   -- optional game-over (chopper falls, tank burns)
@@ -158,10 +164,10 @@ local function draw_sandbox_panel()
   end
 end
 
-local function draw_overlay_text(title, hint, title_color)
+local function draw_overlay_text(title, hint, title_color, dim)
   local g      = love.graphics
   local sw, sh = g.getDimensions()
-  g.setColor(0, 0, 0, 0.55)
+  g.setColor(0, 0, 0, dim or 0.55)
   g.rectangle("fill", 0, 0, sw, sh)
   g.setColor(title_color[1], title_color[2], title_color[3], 1)
   local font = g.getFont()
@@ -174,7 +180,7 @@ local function draw_overlay_text(title, hint, title_color)
 end
 
 local function draw_pause()
-  draw_overlay_text("PAUSE", "P - resume", { 0.6, 0.8, 1 })
+  draw_overlay_text("PAUSE", "P - resume", { 0.6, 0.8, 1 }, 0.72)
 end
 
 local function draw_game_over()
@@ -193,6 +199,7 @@ local function after_stage_load()
   renderer:refresh_kinds()
   dbg.world = world
   hud.world = world
+  hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
   love.window.setTitle(world:title())
   if player then
     player.world_size = world.stage.world_size
@@ -205,6 +212,7 @@ local function spawn_player()
   local sx, sy = world:player_start()
   player = Player:new(sx, sy)
   player.world_size   = world.stage.world_size
+  player.home_x, player.home_y = sx, sy
   player.vehicle      = sel_vehicle
   player.world        = world
   player.camera       = camera
@@ -223,21 +231,42 @@ local function spawn_player()
   combat.effects     = {}
   powerups:reset(player)
   mission = Mission.for_stage(world, player, world.stage_name)
-  player:take_off()   -- chopper lifts off automatically; no-op for the tank
+  camera.x, camera.y = player.x, player.y
+  camera:start_zoom_intro(1.5, 1.0)   -- smooth zoom-in as the level opens
+  pending_takeoff = true              -- chopper takes off when the zoom-in ends
 end
 
 local function enter_game_mode()
   viewer_zi  = camera.zi
   game_mode  = true
   paused     = false
+  death_timer = nil
   renderer.in_game = true
   camera:set_zoom(6)
   spawn_player()
   love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
 end
 
+-- The per-mission briefing picture (STAGE0X_MPIC) for the loaded stage. Stage
+-- names are stage{mission}{phase}, so the first digit selects the picture.
+local function mission_pic()
+  local m = world.stage_name and world.stage_name:match("^stage(%d)")
+  return m and ("STAGE0" .. m .. "_MPIC") or nil
+end
+
+-- Show the mission briefing picture, then drop into the live game.
+local function begin_game_mode()
+  local pic = mission_pic()
+  if pic then
+    screen:show(pic, { fade_in = 0.3, hold = 0.75, fade_out = 0.3, on_done = enter_game_mode })
+  else
+    enter_game_mode()
+  end
+end
+
 -- Reload the current stage and respawn the player (R in game mode).
 local function restart_level()
+  death_timer = nil
   local name = world.stage_name
   world:load(name)
   after_stage_load()
@@ -249,6 +278,8 @@ local function leave_game_mode()
   game_mode         = false
   sandbox_mode      = false
   paused            = false
+  death_timer       = nil
+  pending_takeoff   = false
   renderer.in_game  = false
   player            = nil
   hud.player        = nil
@@ -304,6 +335,7 @@ local function enter_split()
     make_split_player(1, sx - 40, sy),
     make_split_player(2, sx + 40, sy),
   }
+  for _, p in ipairs(sp_players) do p.home_x, p.home_y = sx, sy end
   sp_cameras = { Camera:new(world.stage.world_size), Camera:new(world.stage.world_size) }
   local _, sh = love.graphics.getDimensions()
   for i, p in ipairs(sp_players) do
@@ -370,6 +402,7 @@ local function draw_split()
     powerups:draw()
     p:draw_world()
     combat:draw()
+    renderer:draw_debris()   -- shrapnel above the explosion effects
     -- Draw both vehicles back-to-front by world y so the southern one is on top,
     -- identically in both halves (the local one is centered, the teammate placed
     -- by projection). Without this the teammate always covered the local player.
@@ -499,6 +532,59 @@ local function toggle_vehicle(idx)
   mp_setup.vehicle[idx] = (mp_setup.vehicle[idx] == "chopper") and "tank" or "chopper"
 end
 
+-- ── animation gallery (test overlay) ────────────────────────────────────────────
+-- Plays every clip in data/animations.json at once in a labelled grid so new
+-- effects (e.g. the iron/metal debris) can be eyeballed. Non-looping clips are
+-- restarted when they finish so they keep playing.
+
+local function gallery_build()
+  gallery = { items = {} }
+  for _, name in ipairs(Animation.clip_names()) do
+    gallery.items[#gallery.items + 1] = { name = name, state = Animation.new(name) }
+  end
+end
+
+local function gallery_update(dt)
+  if not gallery then return end
+  for _, it in ipairs(gallery.items) do
+    it.state:update(dt)
+    if it.state:is_done() then it.state:reset() end
+  end
+end
+
+local function draw_anim_gallery()
+  local g      = love.graphics
+  local sw, sh = g.getDimensions()
+  g.setColor(0.06, 0.06, 0.09, 1)
+  g.rectangle("fill", 0, 0, sw, sh)
+  g.setColor(0.6, 0.9, 1, 1)
+  g.print("ANIMATION GALLERY  -  every clip in data/animations.json, looping.   F8 / Esc: close", 10, 8)
+
+  local items = gallery and gallery.items or {}
+  local cols  = 8
+  local rows  = math.max(1, math.ceil(#items / cols))
+  local top   = 30
+  local cw, ch = sw / cols, (sh - top) / rows
+  for i, it in ipairs(items) do
+    local r  = math.floor((i - 1) / cols)
+    local c  = (i - 1) % cols
+    local cx = c * cw + cw / 2
+    local cy = top + r * ch + (ch - 16) / 2
+    g.setColor(1, 1, 1, 0.05)
+    g.rectangle("line", c * cw + 2, top + r * ch + 2, cw - 4, ch - 4)
+    local img = it.state:current_image()
+    if img then
+      local iw, ih = img:getDimensions()
+      local s = math.max(1, math.min(6, math.min((cw - 16) / iw, (ch - 30) / ih)))
+      g.setColor(1, 1, 1, 1)
+      g.draw(img, cx, cy, 0, s, s, iw / 2, ih / 2)
+    end
+    g.setColor(0.8, 0.85, 0.9, 1)
+    g.print(it.name, cx - g.getFont():getWidth(it.name) / 2, top + r * ch + ch - 15)
+  end
+  g.setColor(1, 1, 1)
+end
+
 -- ── love callbacks ────────────────────────────────────────────────────────────
 
 function love.load(args)
@@ -521,12 +607,16 @@ function love.load(args)
   hud      = Hud:new()
   hud:load("data/hud.json")
   hud.world = world
+  hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
   combat   = CombatSystem:new(world, camera)
   combat:load("data/weapons.json")
   Mission.load("data/missions.json")
   powerups = Powerups:new(world, camera, combat.weapons)
   renderer:refresh_kinds()
   love.window.setTitle(world:title())
+
+  screen = Screen:new()
+  screen:show("TITLE", { fade_in = 0.6, hold = 2.0, fade_out = 0.6 })
 end
 
 -- Fire p's current weapon if its reload is up and it has ammo. owner stays the
@@ -572,6 +662,8 @@ local function toggle_land(p)
 end
 
 function love.update(dt)
+  if screen then screen:update(dt) end
+  if anim_gallery then gallery_update(dt); return end
   if paused then return end
   if split_mode then
     for _, p in ipairs(sp_players) do
@@ -595,6 +687,20 @@ function love.update(dt)
     if death_enabled and not player.death and player:is_dead() then
       player:start_death()
     end
+    -- After the crash animation finishes, wait ~3s then bring up the end
+    -- picture (DEATHPIC for the chopper, TANKEND for the tank); a key restarts.
+    if player:death_done() and not screen:is_active() then
+      if death_timer == nil then
+        death_timer = 3.0
+      elseif death_timer > 0 then
+        death_timer = death_timer - dt
+        if death_timer <= 0 then
+          death_timer = 0
+          local pic = (player.vehicle == "tank") and "TANKEND" or "DEATHPIC"
+          screen:show(pic, { fade_in = 0.6, wait_key = true, on_done = restart_level })
+        end
+      end
+    end
     if not player.death then _try_fire(dt) end
     combat:update(dt)
     powerups:update(dt)
@@ -602,8 +708,14 @@ function love.update(dt)
     camera.x     = player.x
     camera.y     = player.y
     camera.angle = player:camera_angle()
+    camera:tick_zoom(dt)
+    if pending_takeoff and not camera.zoom_anim then
+      player:take_off()   -- no-op for the tank
+      pending_takeoff = false
+    end
   else
-    if not renderer.picker and not renderer.kind_picker and not menu_open then
+    if not renderer.picker and not renderer.kind_picker and not menu_open
+    and not dbg:captures_arrows() then
       camera:update(dt)
     end
   end
@@ -620,19 +732,25 @@ function love.update(dt)
 end
 
 function love.draw()
+  if anim_gallery then
+    draw_anim_gallery()
+    return
+  end
   if split_mode then
     draw_split()
     if paused then draw_pause() end
+    if screen then screen:draw() end
     return
   end
 
-  renderer.highlight = dbg.enabled and (dbg.selected or dbg.hovered) or nil
+  renderer.highlight = dbg:highlight_entity()
   renderer:draw()
 
   if game_mode and player then
     powerups:draw()
     player:draw_world()
     combat:draw()
+    renderer:draw_debris()   -- shrapnel above the explosion effects
     player:draw()
     player:draw_world_front()
     hud:draw()
@@ -665,24 +783,25 @@ function love.draw()
     end
     if mission and mission.state == "won" then draw_victory() end
     if mission and mission.state == "failed" then draw_game_over() end
-    if player:death_done() then draw_game_over() end
     if paused then draw_pause() end
     if sandbox_mode then
       draw_sandbox_panel()
     end
   else
+    renderer:draw_debris()   -- shrapnel above any explosion (e.g. F2 kills)
     -- vehicle / sandbox hint below the renderer bar
     local g = love.graphics
     g.setColor(0, 0, 0, 0.55)
-    g.rectangle("fill", 0, 22, 470, 20)
+    g.rectangle("fill", 0, 22, 560, 20)
     g.setColor(1, 1, 1, 0.9)
-    g.print(string.format("V: [%s]  F1: play  F3: sandbox  F7: 2P split  O: game-over [%s]",
+    g.print(string.format("V: [%s]  F1: play  F3: sandbox  F7: 2P split  F8: anims  O: game-over [%s]",
       sel_vehicle, death_enabled and "ON" or "OFF"), 4, 24)
     g.setColor(1, 1, 1)
   end
 
   if menu_open then draw_2p_menu() end
   dbg:draw()
+  if screen then screen:draw() end
 end
 
 function love.wheelmoved(_, dy)
@@ -692,6 +811,30 @@ function love.wheelmoved(_, dy)
 end
 
 function love.keypressed(key)
+  -- A fullscreen overlay (title / briefing / crash picture) swallows input. Esc
+  -- skips the image immediately and drops back to the overview; a wait_key
+  -- picture (the crash end screen) otherwise advances on any key.
+  if screen and screen:is_active() then
+    if key == "escape" then
+      screen:cancel()
+      if split_mode then leave_split() elseif game_mode then leave_game_mode() end
+      return
+    end
+    screen:keypressed(key)
+    return
+  end
+
+  -- Animation gallery test overlay: F8 toggles it from the overview, Esc/F8 close.
+  if anim_gallery then
+    if key == "f8" or key == "escape" then anim_gallery = false end
+    return
+  end
+  if key == "f8" and not game_mode and not split_mode then
+    if not gallery then gallery_build() end
+    anim_gallery = true
+    return
+  end
+
   -- 2P setup menu. Each player toggles their own vehicle with their own keys at
   -- any time (no cursor); G/F toggle god/friendly-fire; SPACE starts.
   if menu_open then
@@ -755,7 +898,7 @@ function love.keypressed(key)
   end
 
   if key == "f1" then
-    if game_mode then leave_game_mode() else enter_game_mode() end
+    if game_mode then leave_game_mode() else begin_game_mode() end
     return
   end
   if key == "f3" and not game_mode then
@@ -822,7 +965,10 @@ function love.keypressed(key)
     return
   end
 
-  if key == "escape" then love.event.quit() end
+  if key == "escape" then
+    if game_mode then leave_game_mode() end
+    return
+  end
   if key == "tab"    then renderer.picker      = true end
   if key == "k"      then renderer:toggle_kind_picker() end
 

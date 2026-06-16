@@ -178,7 +178,7 @@ function Mission:_update_rescue_people(o)
     if p:is_stationary() then
       for _, z in ipairs(o.list) do
         if z:is_alive() and not o.collected[z.id] then
-          local dx, dy = p.x - z.x, p.y - z.y
+          local dx, dy = self.world:delta(p.x, p.y, z.x, z.y)
           if dx * dx + dy * dy <= o.radius * o.radius then
             o.collected[z.id] = true
             o.progress = o.progress + 1
@@ -206,7 +206,7 @@ function Mission:_update_rescue(o)
   if self.player:is_stationary() then
     for _, z in ipairs(o.zones) do
       if not o.collected[z.id] then
-        local dx, dy = self.player.x - z.x, self.player.y - z.y
+        local dx, dy = self.world:delta(self.player.x, self.player.y, z.x, z.y)
         if dx * dx + dy * dy <= o.radius * o.radius then
           o.collected[z.id] = true
           o.progress = o.progress + 1
@@ -225,7 +225,7 @@ function Mission:_update_sabotage(o, dt)
   local near = nil
   if self.player:is_stationary() then
     for _, t in ipairs(o.targets) do
-      local dx, dy = self.player.x - t.ent.x, self.player.y - t.ent.y
+      local dx, dy = self.world:delta(self.player.x, self.player.y, t.ent.x, t.ent.y)
       if dx * dx + dy * dy <= o.radius * o.radius then near = t; break end
     end
   end
@@ -261,7 +261,7 @@ function Mission:_at_home_base()
   if not self.home_x then return true end   -- no pad on this stage: win on objectives
   for _, p in ipairs(self.players) do
     if p:is_stationary() then
-      local dx, dy = p.x - self.home_x, p.y - self.home_y
+      local dx, dy = self.world:delta(p.x, p.y, self.home_x, self.home_y)
       if dx * dx + dy * dy <= self.home_radius * self.home_radius then return true end
     end
   end

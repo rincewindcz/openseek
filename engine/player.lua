@@ -75,11 +75,20 @@ function Player:init(x, y)
 
   self._smoke_puffs = {}     -- {x, y, anim} — world-space smoke left behind as a trail
   self._smoke_timer = 0
+  self._hit_fx      = {}     -- {anim, age, ttl} — scorch bursts on top of the vehicle when hit
+
+  self.home_x     = nil      -- friendly base / heliport spawn; parking here refuels
+  self.home_y     = nil
+  self.home_r     = 48
+  self.refuel_mode = "continuous"  -- "continuous" (refuel_rate/sec) or "instant" (original)
+  self.refuel_rate = 25      -- fuel/sec restored while parked on the base
+
+  self.turn_cursor = 0       -- HUD accel box: a small lateral nudge while the hull turns
 
   self._tank_anim    = Animation.new("tankbgrn")
-  self._rotor_pitch  = Animation.new("bladep")
-  self._rotor_bank   = Animation.new("bladeb")
-  self._active_rotor = self._rotor_pitch
+  self._rotor_spin   = 0          -- spin phase within an 8-frame group (continuous)
+  self._rotor_clip   = "bladep"   -- bladep (pitch) or bladeb (bank)
+  self._rotor_group  = 0          -- active 8-frame group, by pitch/bank position
 
   self:_apply_config()
 end
@@ -167,8 +176,50 @@ function Player:update(dt)
   end
   self:_update_anims(dt)
   self:_update_damage_smoke(dt)
+  self:_update_hit_fx(dt)
+  self:_update_base_refuel(dt)
   if self.fire_timer > 0 then
     self.fire_timer = self.fire_timer - dt
+  end
+end
+
+-- Scorch bursts (fire / smoke) that play on top of the vehicle when an enemy
+-- round connects. Looping clips (fire) expire on their ttl; one-shot clips when
+-- their animation ends.
+function Player:add_hit_fx(clip, ttl)
+  self._hit_fx[#self._hit_fx + 1] = {
+    anim = Animation.new(clip), age = 0, ttl = ttl,
+    ox = (math.random() - 0.5) * 24, oy = (math.random() - 0.5) * 24,
+  }
+end
+
+function Player:_update_hit_fx(dt)
+  if #self._hit_fx == 0 then return end
+  local live = {}
+  for _, fx in ipairs(self._hit_fx) do
+    fx.anim:update(dt)
+    fx.age = fx.age + dt
+    local expired = (fx.ttl and fx.age >= fx.ttl) or fx.anim:is_done()
+    if not expired then live[#live + 1] = fx end
+  end
+  self._hit_fx = live
+end
+
+-- Parking on the friendly base (the spawn heliport) tops the fuel back up.
+function Player:_update_base_refuel(dt)
+  if not (self.home_x and self:is_stationary()) then return end
+  local dx, dy
+  if self.world then
+    dx, dy = self.world:delta(self.x, self.y, self.home_x, self.home_y)
+  else
+    dx, dy = self.x - self.home_x, self.y - self.home_y
+  end
+  if dx * dx + dy * dy <= self.home_r * self.home_r then
+    if self.refuel_mode == "instant" then
+      self.fuel = self.max_fuel
+    else
+      self:refuel(self.refuel_rate * dt)
+    end
   end
 end
 
@@ -187,6 +238,8 @@ function Player:_update_damage_smoke(dt)
   local live = {}
   for _, pf in ipairs(self._smoke_puffs) do
     pf.anim:update(dt)
+    pf.x = pf.x + pf.vx * dt
+    pf.y = pf.y + pf.vy * dt
     if not pf.anim:is_done() then live[#live + 1] = pf end
   end
   self._smoke_puffs = live
@@ -195,9 +248,19 @@ function Player:_update_damage_smoke(dt)
     self._smoke_timer = self._smoke_timer - dt
     if self._smoke_timer <= 0 then
       self._smoke_timer = 0.04 + math.random() * 0.10
+      -- Puffs drift along the vehicle's heading at a fraction of its current
+      -- speed so the trail streams out behind a moving vehicle instead of
+      -- hanging stationary in the air.
+      local rad   = (self.angle - 90) * math.pi / 180
+      local sr    = rad + math.pi / 2
+      local vx    = math.cos(rad) * self.speed + math.cos(sr) * self.strafe
+      local vy    = math.sin(rad) * self.speed + math.sin(sr) * self.strafe
+      local drift = 0.25 + math.random() * 0.5
       self._smoke_puffs[#self._smoke_puffs + 1] = {
         x     = self.x + (math.random() - 0.5) * 30,
         y     = self.y + (math.random() - 0.5) * 30,
+        vx    = vx * drift,
+        vy    = vy * drift,
         front = math.random() < 0.5,
         anim  = Animation.new("smoke"),
       }
@@ -213,6 +276,29 @@ end
 -- Smoke that sits on top of the vehicle (drawn after the player sprite).
 function Player:draw_world_front()
   self:_draw_smoke_layer(true)
+  self:_draw_hit_fx()
+end
+
+function Player:_draw_hit_fx()
+  if not self.camera or #self._hit_fx == 0 then return end
+  local g = love.graphics
+  g.push()
+  self.camera:apply()
+  for _, t in ipairs(self.camera:tiles()) do
+    g.push()
+    g.translate(t.ox, t.oy)
+    for _, fx in ipairs(self._hit_fx) do
+      local img = fx.anim:current_image()
+      if img then
+        local w, h = img:getDimensions()
+        g.setColor(1, 1, 1)
+        g.draw(img, self.x + fx.ox, self.y + fx.oy, 0, 1, 1, w / 2, h / 2)
+      end
+    end
+    g.pop()
+  end
+  g.setColor(1, 1, 1)
+  g.pop()
 end
 
 function Player:_draw_smoke_layer(front)
@@ -220,15 +306,20 @@ function Player:_draw_smoke_layer(front)
   local g = love.graphics
   g.push()
   self.camera:apply()
-  for _, pf in ipairs(self._smoke_puffs) do
-    if pf.front == front then
-      local img = pf.anim:current_image()
-      if img then
-        local w, h = img:getDimensions()
-        g.setColor(1, 1, 1, 0.8)
-        g.draw(img, pf.x, pf.y, 0, 1.2, 1.2, w / 2, h / 2)
+  for _, t in ipairs(self.camera:tiles()) do
+    g.push()
+    g.translate(t.ox, t.oy)
+    for _, pf in ipairs(self._smoke_puffs) do
+      if pf.front == front then
+        local img = pf.anim:current_image()
+        if img then
+          local w, h = img:getDimensions()
+          g.setColor(1, 1, 1, 0.8)
+          g.draw(img, pf.x, pf.y, 0, 1.2, 1.2, w / 2, h / 2)
+        end
       end
     end
+    g.pop()
   end
   g.setColor(1, 1, 1)
   g.pop()
@@ -247,8 +338,7 @@ function Player:_death_blast()
   local r2 = BLAST_R * BLAST_R
   for _, e in ipairs(self.world.entities) do
     if e:is_alive() and e.type_data and (e.type_data.hit_radius or 0) > 0 then
-      local dx = e.x - self.x
-      local dy = e.y - self.y
+      local dx, dy = self.world:delta(e.x, e.y, self.x, self.y)
       if dx * dx + dy * dy < r2 then
         e:take_damage(BLAST_DMG, dx, dy)
       end
@@ -376,6 +466,7 @@ function Player:_apply_input(dt)
   if self:_held("right") then rotate = rotate + 1 end
 
   local modifier = self:_held("modifier")
+  local hull_turn = 0
 
   if self.vehicle == "tank" then
     -- shift + turn rotates the turret; otherwise the hull
@@ -385,6 +476,7 @@ function Player:_apply_input(dt)
       end
     elseif rotate ~= 0 then
       self.angle = (self.angle + rotate * self.turn_rate * dt) % 360
+      hull_turn = rotate
     end
     self.strafe = 0
   else
@@ -403,8 +495,14 @@ function Player:_apply_input(dt)
     -- rotation only when shift is not held
     if not modifier and rotate ~= 0 then
       self.angle = (self.angle + rotate * self.turn_rate * dt) % 360
+      hull_turn = rotate
     end
   end
+
+  -- The accel box dot drifts a little toward the turn while the hull is rotating,
+  -- as if turning carried a small lateral acceleration; it eases back to center
+  -- when the turn stops.
+  self.turn_cursor = self.turn_cursor + (hull_turn - self.turn_cursor) * math.min(1, 5 * dt)
 
   if self:is_flyer() and self.land_state ~= "airborne" then return end
 
@@ -443,8 +541,9 @@ function Player:_move(dt)
     self.y = self.y + dy
   end
 
-  self.x = math.max(0, math.min(self.world_size, self.x))
-  self.y = math.max(0, math.min(self.world_size, self.y))
+  -- Seamless wrap: leaving one edge re-enters from the opposite one.
+  self.x = self.x % self.world_size
+  self.y = self.y % self.world_size
 end
 
 function Player:_drain_fuel(dt)
@@ -457,12 +556,18 @@ function Player:_update_anims(dt)
     if math.abs(self.speed) > 1 then self._tank_anim:update(dt) end
     return
   end
-  -- always spin rotor; switch bank/pitch based on strafe state
-  local next_rotor = math.abs(self.strafe) > STRAFE_THR
-    and self._rotor_bank or self._rotor_pitch
-  self._active_rotor = next_rotor
+  -- The rotor sheets are grouped into 8-frame spin cycles, one cycle per pitch
+  -- (bladep) or bank (bladeb) position. Pick the group matching the body's
+  -- current pitch/bank, then spin only within that group's 8 frames so the blades
+  -- rotate smoothly instead of jumping between positions each cycle.
+  local bank = self:_using_bank()
+  self._rotor_clip = bank and "bladeb" or "bladep"
+  local clip   = Animation.clip(self._rotor_clip)
+  local groups = clip and math.max(1, math.floor(clip:frame_count() / 8)) or 1
+  local level  = bank and self:_bank_level01() or self:_pitch_level01()
+  self._rotor_group = math.max(0, math.min(groups - 1, math.floor(level * (groups - 1) + 0.5)))
   if self.rotor_fps > 0 then
-    self._active_rotor:update(dt * (self.rotor_fps / 40.0))
+    self._rotor_spin = (self._rotor_spin + dt * self.rotor_fps) % 8
   end
 end
 
@@ -515,6 +620,31 @@ function Player:_using_bank()
   return math.abs(self.strafe) > STRAFE_THR
 end
 
+-- Normalized pitch/bank position in [0,1] (0.5 = neutral), shared by the body
+-- frame and the rotor group so the spinning rotor tracks the hull's tilt.
+function Player:_pitch_level01()
+  if self.speed >= 0 then
+    local t = self.speed / math.max(1, self.max_fwd * self.speed_factor)
+    return 0.5 - 0.5 * math.min(1, t)
+  end
+  local t = (-self.speed) / math.max(1, self.max_rev * self.speed_factor)
+  return 0.5 + 0.5 * math.min(1, t)
+end
+
+function Player:_bank_level01()
+  local t = self.strafe_speed > 0 and (self.strafe / self.strafe_speed) or 0
+  return math.max(0, math.min(1, (t + 1) * 0.5))
+end
+
+-- Current rotor frame: the active group's base plus the spin phase, wrapped.
+function Player:_rotor_image()
+  local clip = Animation.clip(self._rotor_clip)
+  if not clip or clip:is_empty() then return nil end
+  local n   = clip:frame_count()
+  local idx = self._rotor_group * 8 + (math.floor(self._rotor_spin) % 8)
+  return clip.frames[(idx % n) + 1]
+end
+
 function Player:_chopper_body_frame()
   if self.land_state == "landing" or self.land_state == "taking_off"
   or self.land_state == "grounded" then
@@ -555,6 +685,7 @@ function Player:draw()
     cx, cy = sw / 2, sh / 2
   end
   local s = self.sprite_scale
+  if self.camera then s = s * self.camera:zoom_ratio() end
 
   g.setColor(1, 1, 1)
   if self.death then
@@ -604,7 +735,7 @@ end
 
 function Player:_draw_chopper(g, cx, cy, s)
   self:_draw_centered(g, self:_chopper_body_frame(), cx, cy, s)
-  local rotor_img = self._active_rotor:current_image()
+  local rotor_img = self:_rotor_image()
   local rs = s * (ROTOR_MIN_S + (1 - ROTOR_MIN_S) * self.altitude)
   self:_draw_centered(g, rotor_img, cx, cy + self.rotor_y_off, rs)
 end
@@ -639,7 +770,7 @@ function Player:draw_remote(g, cam, color)
       local w, h = body:getDimensions()
       g.draw(body, sx, sy, base, s, s, w / 2, h / 2)
     end
-    local rotor = self._active_rotor:current_image()
+    local rotor = self:_rotor_image()
     if rotor then
       local w, h = rotor:getDimensions()
       local rs   = s * (ROTOR_MIN_S + (1 - ROTOR_MIN_S) * self.altitude)

@@ -27,8 +27,11 @@ local C = {
   log_sel  = { 0.2,  0.5,  1,    1     },
 }
 
-local TYPE_FIELDS = { "speed", "turn_speed", "attack_range", "detection_radius", "hit_radius" }
-local TYPE_STEP   = { speed=5, turn_speed=5, attack_range=10, detection_radius=10, hit_radius=1 }
+-- Step size for numeric type_data fields; anything not listed steps by 1.
+local TYPE_STEP = {
+  speed=5, turn_speed=5, attack_range=10, detection_radius=10, hit_radius=1,
+  patrol_speed=5, patrol_turn=5, collision_radius=1, sprite_rot=15,
+}
 
 -- lower number = picked first (before ground decals / scenery)
 local KIND_PRIORITY = { ground_decal=0, scenery=1, tree=1 }
@@ -114,6 +117,7 @@ function Debug:init(world, camera)
   self.enabled  = false
   self.hovered  = nil
   self.selected = nil
+  self.fields   = {}       -- {name, kind} rows built from the selected type_data
   self.field_i  = 1
   self.show_radii = true
 
@@ -135,6 +139,70 @@ function Debug:init(world, camera)
   self._status_ttl = 0
 
   self.entity_types_path = "data/entity_types.json"
+end
+
+-- Every type_data key of the entity as an editable row, sorted for a stable
+-- layout. kind drives how Left/Right edits it: numbers step, bools toggle,
+-- strings cycle through known choices.
+function Debug:_build_fields(ent)
+  local td    = ent.type_data or {}
+  local names = {}
+  for k in pairs(td) do names[#names + 1] = k end
+  table.sort(names)
+  local fields = {}
+  for _, name in ipairs(names) do
+    local t    = type(td[name])
+    local kind = (t == "boolean" and "bool") or (t == "number" and "number") or "string"
+    fields[#fields + 1] = { name = name, kind = kind }
+  end
+  return fields
+end
+
+-- Candidate values for a cyclable string field (built lazily). Returns nil for
+-- free-form strings, which are then left read-only.
+function Debug:_string_choices(fname)
+  if fname == "weapon" then
+    if not self._weapon_names then
+      self._weapon_names = {}
+      local raw = love.filesystem.read("data/weapons.json")
+      if raw then
+        for k in pairs(json.decode(raw)) do self._weapon_names[#self._weapon_names + 1] = k end
+        table.sort(self._weapon_names)
+      end
+    end
+    return self._weapon_names
+  elseif fname == "explosion" or fname == "turret_explosion" then
+    if not self._explosion_names then
+      local set = { none = true }
+      for _, n in ipairs(Animation.clip_names()) do
+        local s = n:match("^explosion_(.+)$")
+        if s then set[s] = true end
+      end
+      self._explosion_names = {}
+      for k in pairs(set) do self._explosion_names[#self._explosion_names + 1] = k end
+      table.sort(self._explosion_names)
+    end
+    return self._explosion_names
+  elseif fname == "sprite" or fname == "dead_sprite" then
+    return Animation.clip_names()
+  end
+  return nil
+end
+
+function Debug:_edit_field(td, f, dir)
+  if f.kind == "number" then
+    local step = TYPE_STEP[f.name] or 1
+    td[f.name] = math.max(0, (td[f.name] or 0) + dir * step)
+  elseif f.kind == "bool" then
+    td[f.name] = not td[f.name]
+  else
+    local choices = self:_string_choices(f.name)
+    if choices and #choices > 0 then
+      local idx = 1
+      for i, c in ipairs(choices) do if c == td[f.name] then idx = i; break end end
+      td[f.name] = choices[(idx - 1 + dir) % #choices + 1]
+    end
+  end
 end
 
 function Debug:toggle()
@@ -161,6 +229,22 @@ function Debug:_set_status(msg)
   self._status_ttl = 2.5
 end
 
+-- The entity to glow in the world: the overlapping candidate currently under the
+-- pick-list cursor (so the user sees which one Enter will pick), else the
+-- selection / hover.
+function Debug:highlight_entity()
+  if not self.enabled then return nil end
+  if self.pick_list then return self.pick_list[self.pick_index] end
+  return self.selected or self.hovered
+end
+
+-- True while F2 is steering its own UI with the arrow keys (pick list, animation
+-- picker, or a selected entity's field editor), so the overview camera must not
+-- pan at the same time.
+function Debug:captures_arrows()
+  return self.enabled and (self.pick_list ~= nil or self.anim_picker or self.selected ~= nil)
+end
+
 -- ── input ─────────────────────────────────────────────────────────────────────
 
 function Debug:keypressed(key)
@@ -177,25 +261,26 @@ function Debug:keypressed(key)
 
   if not self.selected then return false end
 
-  if key == "up" then
-    self.field_i = (self.field_i - 2) % #TYPE_FIELDS + 1
-    return true
-  end
-  if key == "down" then
-    self.field_i = self.field_i % #TYPE_FIELDS + 1
-    return true
-  end
-
-  local fname = TYPE_FIELDS[self.field_i]
-  local step  = TYPE_STEP[fname] or 1
-  local td    = self.selected.type_data or {}
-  if key == "right" or key == "=" or key == "+" or key == "kp+" then
-    td[fname] = (td[fname] or 0) + step
-    return true
-  end
-  if key == "left" or key == "-" or key == "kp-" then
-    td[fname] = math.max(0, (td[fname] or 0) - step)
-    return true
+  local n = #self.fields
+  if n > 0 then
+    if key == "up" then
+      self.field_i = (self.field_i - 2) % n + 1
+      return true
+    end
+    if key == "down" then
+      self.field_i = self.field_i % n + 1
+      return true
+    end
+    local f  = self.fields[self.field_i]
+    local td = self.selected.type_data
+    if f and td then
+      if key == "right" or key == "=" or key == "+" or key == "kp+" then
+        self:_edit_field(td, f, 1); return true
+      end
+      if key == "left" or key == "-" or key == "kp-" then
+        self:_edit_field(td, f, -1); return true
+      end
+    end
   end
 
   if key == "p" then self:_open_anim_picker(); return true end
@@ -271,6 +356,8 @@ end
 
 function Debug:_select(ent)
   self.selected = ent
+  self.fields   = self:_build_fields(ent)
+  self.field_i  = 1
   -- add to log
   local cls = self.world.stage.classes[ent.class_idx + 1]
   local entry = {
@@ -323,8 +410,10 @@ function Debug:_draw_inspector(ent)
   local td  = ent.type_data or {}
   local sel = (self.selected == ent)
 
+  local fields = sel and self.fields or self:_build_fields(ent)
+
   local n_info  = 10
-  local n_type  = #TYPE_FIELDS + 2
+  local n_type  = math.max(1, #fields)
   local n_act   = 4
   local total_h = PAD
     + SECT_H + n_info * LINE_H
@@ -358,11 +447,15 @@ function Debug:_draw_inspector(ent)
   y = draw_info_row(g, "route", ent.route or "none",  bx, y)
 
   y = draw_section(g, "Type data  (shared by kind)", bx, y, PANEL_W)
-  for i, fname in ipairs(TYPE_FIELDS) do
-    y = draw_row(g, fname, td[fname] or 0, bx, y, sel and i == self.field_i)
+  if #fields == 0 then
+    y = draw_info_row(g, "(no fields)", "", bx, y)
+  else
+    for i, f in ipairs(fields) do
+      local v = td[f.name]
+      if v == nil then v = "-" end
+      y = draw_row(g, f.name, tostring(v), bx, y, sel and i == self.field_i)
+    end
   end
-  y = draw_info_row(g, "weapon",    td.weapon    or "none", bx, y)
-  y = draw_info_row(g, "explosion", td.explosion or "none", bx, y)
 
   y = draw_section(g, "Actions", bx, y, PANEL_W)
   local function action_row(key, label)
