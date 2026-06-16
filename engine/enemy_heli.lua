@@ -5,19 +5,21 @@ local atan2 = math.atan2 or math.atan
 
 -- Each spawned heli gets exactly one of these, picked at random. air_to_air uses
 -- its locking level so the missile homes (the original game's heli weapon);
--- machine_gun is the per-mission tracer streak.
+-- machine_gun is the per-mission tracer streak. Firing is bursty: it looses a
+-- volley of `burst` shots `intra` seconds apart, then waits `cooldown` seconds so
+-- the player gets a clear window to dodge and shoot back.
 local WEAPON_POOL = {
-  { weapon = "chaingun",    level = 1 },
-  { weapon = "rockets",     level = 1 },
-  { weapon = "air_to_air",  level = 2 },
-  { weapon = "machine_gun", level = 1 },
+  { weapon = "chaingun",    level = 1, burst = 3, intra = 0.13, cooldown = 1.8 },
+  { weapon = "rockets",     level = 1, burst = 3, intra = 0.20, cooldown = 2.4 },
+  { weapon = "air_to_air",  level = 2, burst = 1, intra = 0,    cooldown = 3.0 },
+  { weapon = "machine_gun", level = 1, burst = 4, intra = 0.11, cooldown = 2.0 },
 }
 
-local SPEED      = 165    -- forward cruise (px/s); slower than the player so it can be engaged
-local TURN_RATE  = 170    -- deg/s heading slew
-local ORBIT_R    = 230    -- radius it tries to circle the player at
+local SPEED      = 110    -- forward cruise (px/s); slower than the player so it can be engaged
+local TURN_RATE  = 120    -- deg/s heading slew
+local ORBIT_R    = 270    -- radius it tries to circle the player at
 local ATTACK_R   = 360    -- range within which it will fire
-local FIRE_CONE  = 34     -- deg; the nose must be this close to the player to shoot
+local FIRE_CONE  = 32     -- deg; the nose must be this close to the player to shoot
 local HIT_RADIUS = 13
 local MAX_HP     = 60
 local SPAWN_DELAY = 2.5   -- gap between spawns while below the cap
@@ -61,13 +63,6 @@ function HeliSystem:clear()
   self.world.air_units = self.helis
 end
 
-function HeliSystem:_fire_interval(h)
-  local w = self.combat.weapons[h.weapon]
-  if not w then return 1 end
-  local lvl = (w.levels and w.levels[h.level]) or w
-  return 1 / (lvl.fire_rate or w.fire_rate or 2)
-end
-
 function HeliSystem:_view_radius()
   local cam = self.combat.camera
   local vw, vh = cam:dims()
@@ -92,9 +87,11 @@ function HeliSystem:_spawn_one(player)
     heading = (math.deg(atan2(dy, dx)) + 90) % 360,
     hp = MAX_HP, max_hp = MAX_HP,
     weapon = pick.weapon, level = pick.level,
+    burst = pick.burst, intra = pick.intra, cooldown = pick.cooldown,
+    burst_left = pick.burst,
     dir = (math.random() < 0.5) and 1 or -1,
     phase = math.random() * math.pi * 2,
-    reload = 0.4,
+    reload = 0.8,
     smoke = {}, smoke_t = 0,
     hit_radius = HIT_RADIUS,
     state = "alive",
@@ -175,11 +172,23 @@ function HeliSystem:_update_heli(h, dt)
   self:_advance(h, dt)
 
   h.reload = h.reload - dt
-  local face = math.abs(((toplayer - h.heading + 180) % 360) - 180)
-  if dist <= ATTACK_R and face <= FIRE_CONE and h.reload <= 0 then
+  local face   = math.abs(((toplayer - h.heading + 180) % 360) - 180)
+  local mid    = h.burst_left < h.burst                  -- already firing this volley
+  local can_start = dist <= ATTACK_R and face <= FIRE_CONE
+  -- A volley only starts when the nose is on the player and in range; once it has,
+  -- it commits to all `burst` rounds (the burst is brief, so the nose barely
+  -- drifts) and then waits out the long cooldown. That makes a clear shoot/pause
+  -- rhythm instead of a constant stream.
+  if h.reload <= 0 and (mid or can_start) then
     self.combat:tick_swing(h, h.weapon)
     self.combat:fire(h.x, h.y, h.heading, h.weapon, h, h.level, ATTACK_R * 1.2)
-    h.reload = self:_fire_interval(h)
+    h.burst_left = h.burst_left - 1
+    if h.burst_left > 0 then
+      h.reload = h.intra
+    else
+      h.burst_left = h.burst
+      h.reload = h.cooldown
+    end
   end
 end
 
