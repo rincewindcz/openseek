@@ -3,6 +3,8 @@ local json      = require "lib.json"
 local Entity    = require "engine.entity"
 local Animation = require "engine.animation"
 
+local atan2 = math.atan2 or math.atan
+
 -- Tumbling iron/metal shrapnel flung out by an explosion (buildings and bombs).
 -- The clips loop, so each piece is bounded by its own ttl. When a piece lands a
 -- dust puff is left on the ground.
@@ -389,6 +391,29 @@ function World:spawn_debris(x, y, n, spread)
   end
 end
 
+-- Fast shrapnel flung along a heading (e.g. METAL8 pieces thrown by an FFR rocket
+-- impact, in the missile's travel direction). Unlike spawn_debris these fly fast,
+-- fade out over their final frames, and vanish in the air instead of kicking up
+-- ground dust.
+function World:spawn_directional_debris(x, y, dx, dy, n, clip)
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len == 0 then dx, dy = 0, -1 else dx, dy = dx / len, dy / len end
+  local base = atan2(dy, dx)
+  for _ = 1, n do
+    local anim = Animation.new(clip or "metal8")
+    if not anim:is_done() then
+      local a  = base + (math.random() - 0.5) * 0.5
+      local sp = 280 + math.random() * 180
+      self.debris[#self.debris + 1] = {
+        anim = anim, x = x, y = y,
+        vx = math.cos(a) * sp, vy = math.sin(a) * sp,
+        age = 0, ttl = 0.5 + math.random() * 0.35,
+        fade = true, fade_time = 0.22, alpha = 1,
+      }
+    end
+  end
+end
+
 -- A dust puff settling on the ground where a shrapnel piece landed.
 function World:add_ground_dust(x, y)
   local anim = Animation.new(DUST_CLIPS[math.random(#DUST_CLIPS)])
@@ -411,9 +436,12 @@ function World:update(dt)
       local damp = math.max(0, 1 - dt * 2)
       d.vx, d.vy = d.vx * damp, d.vy * damp
       d.anim:update(dt)
+      if d.fade then
+        d.alpha = math.min(1, (d.ttl - d.age) / d.fade_time)
+      end
       if d.age < d.ttl then
         live[#live + 1] = d
-      else
+      elseif not d.fade then
         self:add_ground_dust(d.x, d.y)
       end
     end

@@ -10,6 +10,7 @@ local HeliSystem   = require "engine.enemy_heli"
 local Powerups     = require "engine.powerups"
 local Mission      = require "engine.mission"
 local Screen       = require "engine.screen"
+local Config       = require "engine.config"
 local json         = require "lib.json"
 
 local world
@@ -592,6 +593,83 @@ local function draw_anim_gallery()
   g.setColor(1, 1, 1)
 end
 
+-- ── overview setup panel ──────────────────────────────────────────────────────
+-- Pre-game (overview) UI: vehicle/option setup and the mode-launch keys, grouped
+-- into titled boxes. Toggles here also feed the live game (Config compat options).
+
+local OV = {
+  bg    = { 0,    0,    0,    0.82 },
+  sect  = { 0.16, 0.18, 0.24, 1    },
+  key   = { 0.45, 0.85, 1,    1    },
+  label = { 0.80, 0.80, 0.82, 1    },
+  value = { 1,    1,    0.35, 1    },
+  on    = { 0.35, 0.90, 0.40, 1    },
+  off   = { 0.55, 0.55, 0.55, 1    },
+  title = { 0.50, 0.90, 1,    1    },
+}
+
+local OV_W   = 252
+local OV_ROW = 17
+
+local function ov_section(g, label, x, y)
+  g.setColor(OV.sect)
+  g.rectangle("fill", x, y, OV_W, 18, 2)
+  g.setColor(OV.title)
+  g.print(label, x + 8, y + 2)
+  return y + 22
+end
+
+local function ov_row(g, key, label, value, vcolor, x, y)
+  g.setColor(OV.key);   g.print(key, x + 8, y)
+  g.setColor(OV.label); g.print(label, x + 78, y)
+  if value then
+    g.setColor(vcolor or OV.value)
+    local tw = g.getFont():getWidth(value)
+    g.print(value, x + OV_W - tw - 10, y)
+  end
+  return y + OV_ROW
+end
+
+local function draw_overview_ui()
+  local g = love.graphics
+  local x = 8
+  local y = 30
+
+  -- SETUP box
+  local setup_h = 22 + 4 * OV_ROW + 6
+  g.setColor(OV.bg); g.rectangle("fill", x, y, OV_W, setup_h, 4)
+  local yy = ov_section(g, "SETUP", x, y + 4)
+  yy = ov_row(g, "[V]", "Vehicle",   sel_vehicle:upper(),
+        OV.value, x, yy)
+  yy = ov_row(g, "[O]", "Game over", death_enabled and "ON" or "OFF",
+        death_enabled and OV.on or OV.off, x, yy)
+  yy = ov_row(g, "[C]", "Pickups",   Config.axis_aligned_pickups and "AXIS-ALIGNED" or "ROTATED",
+        OV.value, x, yy)
+  yy = ov_row(g, "[ / ]", "Speed",   string.format("%.2f", Config.speed_scale),
+        OV.value, x, yy)
+
+  -- START box
+  y = y + setup_h + 6
+  local start_h = 22 + 4 * OV_ROW + 6
+  g.setColor(OV.bg); g.rectangle("fill", x, y, OV_W, start_h, 4)
+  yy = ov_section(g, "START", x, y + 4)
+  yy = ov_row(g, "[F1]", "Play",              nil, nil, x, yy)
+  yy = ov_row(g, "[F3]", "Sandbox",           nil, nil, x, yy)
+  yy = ov_row(g, "[F7]", "2P split screen",   nil, nil, x, yy)
+  yy = ov_row(g, "[F8]", "Animation gallery", nil, nil, x, yy)
+
+  -- VIEW box
+  y = y + start_h + 6
+  local view_h = 22 + 3 * OV_ROW + 6
+  g.setColor(OV.bg); g.rectangle("fill", x, y, OV_W, view_h, 4)
+  yy = ov_section(g, "VIEW", x, y + 4)
+  yy = ov_row(g, "[Tab]/[K]", "stage / kinds",    nil, nil, x, yy)
+  yy = ov_row(g, "[L]/[G]",   "segments / grid",  nil, nil, x, yy)
+  yy = ov_row(g, "[+/-]",     "zoom",             nil, nil, x, yy)
+
+  g.setColor(1, 1, 1)
+end
+
 -- ── love callbacks ────────────────────────────────────────────────────────────
 
 function love.load(args)
@@ -801,14 +879,7 @@ function love.draw()
     end
   else
     renderer:draw_debris()   -- shrapnel above any explosion (e.g. F2 kills)
-    -- vehicle / sandbox hint below the renderer bar
-    local g = love.graphics
-    g.setColor(0, 0, 0, 0.55)
-    g.rectangle("fill", 0, 22, 560, 20)
-    g.setColor(1, 1, 1, 0.9)
-    g.print(string.format("V: [%s]  F1: play  F3: sandbox  F7: 2P split  F8: anims  O: game-over [%s]",
-      sel_vehicle, death_enabled and "ON" or "OFF"), 4, 24)
-    g.setColor(1, 1, 1)
+    draw_overview_ui()
   end
 
   if menu_open then draw_2p_menu() end
@@ -998,6 +1069,9 @@ function love.keypressed(key)
       sel_vehicle = (sel_vehicle == "chopper") and "tank" or "chopper"
     end
     if key == "o" then death_enabled = not death_enabled end
+    if key == "c" then Config.axis_aligned_pickups = not Config.axis_aligned_pickups end
+    if key == "[" then Config.speed_scale = math.max(0.1, Config.speed_scale - 0.05) end
+    if key == "]" then Config.speed_scale = math.min(2.0, Config.speed_scale + 0.05) end
     if key == "l" then renderer.show_segments = not renderer.show_segments end
     if key == "g" then renderer.show_grid     = not renderer.show_grid     end
     if key == "+" or key == "=" or key == "kp+" then camera:set_zoom(camera.zi + 1) end

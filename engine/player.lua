@@ -1,5 +1,6 @@
 local Class     = require "engine.class"
 local Animation = require "engine.animation"
+local Config    = require "engine.config"
 
 local Player = Class()
 
@@ -461,6 +462,9 @@ function Player:_held(action)
 end
 
 function Player:_apply_input(dt)
+  -- Turn rates are gameplay speeds, so they take the global multiplier (movement
+  -- is scaled in _move); acceleration ramps below stay on real dt.
+  local tdt = dt * Config.speed_scale
   local rotate   = 0
   if self:_held("left")  then rotate = rotate - 1 end
   if self:_held("right") then rotate = rotate + 1 end
@@ -472,10 +476,10 @@ function Player:_apply_input(dt)
     -- shift + turn rotates the turret; otherwise the hull
     if modifier then
       if rotate ~= 0 then
-        self.turret_offset = (self.turret_offset + rotate * self.turret_rate * dt) % 360
+        self.turret_offset = (self.turret_offset + rotate * self.turret_rate * tdt) % 360
       end
     elseif rotate ~= 0 then
-      self.angle = (self.angle + rotate * self.turn_rate * dt) % 360
+      self.angle = (self.angle + rotate * self.turn_rate * tdt) % 360
       hull_turn = rotate
     end
     self.strafe = 0
@@ -494,7 +498,7 @@ function Player:_apply_input(dt)
     end
     -- rotation only when shift is not held
     if not modifier and rotate ~= 0 then
-      self.angle = (self.angle + rotate * self.turn_rate * dt) % 360
+      self.angle = (self.angle + rotate * self.turn_rate * tdt) % 360
       hull_turn = rotate
     end
   end
@@ -523,10 +527,11 @@ function Player:_apply_input(dt)
 end
 
 function Player:_move(dt)
+  local sdt = dt * Config.speed_scale
   local rad = (self.angle - 90) * math.pi / 180
   local sr  = rad + math.pi / 2
-  local dx  = (math.cos(rad) * self.speed + math.cos(sr) * self.strafe) * dt
-  local dy  = (math.sin(rad) * self.speed + math.sin(sr) * self.strafe) * dt
+  local dx  = (math.cos(rad) * self.speed + math.cos(sr) * self.strafe) * sdt
+  local dy  = (math.sin(rad) * self.speed + math.sin(sr) * self.strafe) * sdt
 
   if self.world and not self:is_flyer() then
     -- Axis-separated so the tank slides along obstacles instead of sticking.

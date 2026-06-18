@@ -1,6 +1,7 @@
 local Class     = require "engine.class"
 local json      = require "lib.json"
 local Animation = require "engine.animation"
+local Config    = require "engine.config"
 
 -- LuaJIT (LÖVE) has math.atan2; Lua 5.3+ folds it into math.atan(y, x).
 local atan2 = math.atan2 or math.atan
@@ -75,8 +76,9 @@ function Projectile:update(dt)
       self.vy = self.vy / sp * nsp
     end
   end
-  local dx = self.vx * dt
-  local dy = self.vy * dt
+  local sdt = dt * Config.speed_scale
+  local dx = self.vx * sdt
+  local dy = self.vy * sdt
   self.x = self.x + dx
   self.y = self.y + dy
   local step = math.sqrt(dx * dx + dy * dy)
@@ -369,7 +371,7 @@ function CombatSystem:_steer_homing(proj, dt)
   local desired  = atan2(dy, dx)
   local cur      = atan2(proj.vy, proj.vx)
   local diff     = ((desired - cur + math.pi) % (2 * math.pi)) - math.pi
-  local maxstep  = math.rad(proj.turn_rate) * dt
+  local maxstep  = math.rad(proj.turn_rate) * dt * Config.speed_scale
   if diff >  maxstep then diff =  maxstep end
   if diff < -maxstep then diff = -maxstep end
   local na = cur + diff
@@ -393,7 +395,7 @@ function CombatSystem:_update_ai(dt)
       if det > 0 and d2 <= det * det then
         local target = (math.deg(atan2(dy, dx)) + 90) % 360
         local diff   = ((target - e.aim_angle + 180) % 360) - 180
-        local step   = (td.turn_speed or 90) * dt
+        local step   = (td.turn_speed or 90) * dt * Config.speed_scale
         if math.abs(diff) <= step then
           e.aim_angle = target
         else
@@ -456,7 +458,10 @@ function CombatSystem:update(dt)
       -- Bombs do not collide in flight; they detonate when their fall completes.
       if proj.alive then alive[#alive + 1] = proj else self:_bomb_detonate(proj) end
     elseif proj.alive then
-      if self:_check_hit(proj) then ended = true else alive[#alive + 1] = proj end
+      if self:_check_hit(proj) then
+        ended = true
+        self:_ffr_shrapnel(proj)
+      else alive[#alive + 1] = proj end
     else
       ended = true
     end
@@ -465,6 +470,16 @@ function CombatSystem:update(dt)
   self.projectiles = alive
 
   self:_update_effects(dt)
+end
+
+-- FFR (the rockets/"ffr" projectile) throws 1-3 fast METAL8 shards along its
+-- travel direction wherever it connects, matching the original game's impact.
+function CombatSystem:_ffr_shrapnel(proj)
+  if proj.wdef.proj_sprite ~= "ffr" then return end
+  local n = math.random(0, 2)
+  if n > 0 then
+    self.world:spawn_directional_debris(proj.x, proj.y, proj.vx, proj.vy, n, "metal8")
+  end
 end
 
 -- An enemy round bursts into its explosion clip when it hits the player or fades

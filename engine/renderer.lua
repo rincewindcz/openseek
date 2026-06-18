@@ -292,11 +292,12 @@ function Renderer:_draw_debris(vp)
       local img = d.anim:current_image()
       if img then
         local iw, ih = img:getDimensions()
-        g.setColor(1, 1, 1)
+        g.setColor(1, 1, 1, d.alpha or 1)
         g.draw(img, d.x, d.y, 0, 1, 1, iw / 2, ih / 2)
       end
     end
   end
+  g.setColor(1, 1, 1)
 end
 
 -- Persistent damage smoke and one-shot hit smoke for an entity.

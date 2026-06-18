@@ -1,5 +1,6 @@
 local Class     = require "engine.class"
 local Animation = require "engine.animation"
+local Config    = require "engine.config"
 
 local Powerups = Class()
 
@@ -133,6 +134,9 @@ function Powerups:draw()
   local g = love.graphics
   g.push()
   self.camera:apply()
+  -- Optionally keep pickups screen-upright (original behaviour) by cancelling the
+  -- camera's world rotation; otherwise they rotate with the world.
+  local rot = Config.axis_aligned_pickups and -(self.camera.angle or 0) or 0
   for _, t in ipairs(self.camera:tiles()) do
     g.push()
     g.translate(t.ox, t.oy)
@@ -147,7 +151,7 @@ function Powerups:draw()
         if img then
           local iw, ih = img:getDimensions()
           g.setColor(1, 1, 1)
-          g.draw(img, pu.x, pu.y, 0, 1, 1, iw / 2, ih / 2)
+          g.draw(img, pu.x, pu.y, rot, 1, 1, iw / 2, ih / 2)
         end
       end
     end

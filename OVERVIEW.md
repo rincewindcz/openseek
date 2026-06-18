@@ -132,9 +132,10 @@ Engine modules (`engine/`), all built on the tiny `class.lua` helper:
 | `camera.lua` | Zoom, pan, world-rotation transform, viewport culling, game-mode vertical focus offset (`view_oy`, `screen_center`). |
 | `renderer.lua` | Draws world layers bottom-to-top: ground dust (lowest), decals, segments, objects (y-sorted, culled), objective markers (destroy reticles, POW landing rings) and banner, grid, pickers, viewer HUD bar. Flying shrapnel is a separate overlay (`draw_debris`) drawn after the explosion effects so the chunks stay on top of the blast. |
 | `hud.lua` | Sprite-based gauges, weapon icon, acceleration box, and radar from `data/hud.json`. The radar draws dots by priority (buildings, then enemies, then airborne helicopters in pink from `world.air_units`, then objectives on top in white) so the goal is never hidden. The acceleration box uses the original `BOX.BIN` art with a green dot driven by speed/strafe plus a small turn nudge. Per mission it prefers override art in `assets/hud/stage{m}/` when present (mission 3 ships a full custom armour/fuel/weapons/scanner/box set, 1-2 only armour), falling back per item to the shared `assets/hud/` set (`Hud:set_mission`). |
-| `powerups.lua` | Power-up drops from destroyed large buildings: spawn, ttl/blink, fly-over vs land-on collection, and effect application. Frames from the `pickup` clip. |
+| `powerups.lua` | Power-up drops from destroyed large buildings: spawn, ttl/blink, fly-over vs land-on collection, and effect application. Frames from the `pickup` clip. Honors `Config.axis_aligned_pickups` (draws them screen-upright, like the original engine, instead of rotating with the world). |
 | `mission.lua` | Per-stage win conditions: destroy / rescue / sabotage objectives, progress tracking, and the return-to-base landing requirement. Data-driven from `data/missions.json`. |
 | `animation.lua` | Shared immutable `AnimClip` definitions plus per-instance `AnimState` playback. Loads `data/animations.json`. |
+| `config.lua` | Optional compatibility / gameplay tuning shared across systems, set from the overview SETUP panel before launching a level. `axis_aligned_pickups` keeps pickups screen-upright; `speed_scale` is a global multiplier on gameplay motion (player/heli/enemy movement and turning, projectile and homing speeds) applied at each motion-integration site, deliberately leaving animation playback unscaled so the game looks the same at a different pace. |
 | `screen.lua` | Fullscreen image overlay with fade-in / hold / fade-out (one at a time): the `TITLE` card at launch, the per-mission briefing picture (`STAGE0X_MPIC`) before a level starts, and the crash end screen (`DEATHPIC` chopper / `TANKEND` tank). Images live in `assets/fullscreen/`. |
 | `debug.lua` | Debug overlay (`F2`): click to select an entity (overlap pick-list), inspect it, and edit every `type_data` field (numbers step, bools toggle, string fields cycle known values). `[S]` saves all fields per kind to `data/entity_types.json`. While the pick-list / picker / field editor is open the overview camera is held still (`captures_arrows`) and the focused overlapping entity glows in the world (`highlight_entity`). |
 
@@ -146,8 +147,11 @@ with `Space` (it bounces back up if it tries to land on a solid obstacle). Holdi
 rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `E` cycles weapon level.
 `F5` toggles unlimited ammo/fuel/armor (god mode); `F6` toggles power-up pickup
 between easy (fly-over) and hard (land-on); `R` restarts the current level; `P`
-pauses. In the overview screen, `O` toggles optional game-over (death) on or off,
-and `F8` opens the animation gallery: a test overlay that plays every clip in
+pauses. The overview screen presents a SETUP panel (top-left, in titled boxes):
+`V` switches vehicle, `O` toggles optional game-over (death), `C` toggles
+axis-aligned vs world-rotated pickups, and `[` / `]` step the `speed_scale`
+gameplay-motion multiplier (all of these feed `engine/config.lua` and the live
+game). `F8` opens the animation gallery: a test overlay that plays every clip in
 `data/animations.json` at once in a labelled grid (`Esc`/`F8` to close).
 
 A fade-in `TITLE` card shows at launch. Pressing `F1` first shows the loaded

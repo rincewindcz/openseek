@@ -1,5 +1,6 @@
 local Class     = require "engine.class"
 local Animation = require "engine.animation"
+local Config    = require "engine.config"
 
 local atan2 = math.atan2 or math.atan
 
@@ -10,7 +11,7 @@ local atan2 = math.atan2 or math.atan
 -- the player gets a clear window to dodge and shoot back.
 local WEAPON_POOL = {
   { weapon = "chaingun",    level = 1, burst = 3, intra = 0.13, cooldown = 1.8 },
-  { weapon = "rockets",     level = 1, burst = 3, intra = 0.20, cooldown = 2.4 },
+  { weapon = "homing_missile", level = 1, burst = 1, intra = 0,    cooldown = 3.2 },
   { weapon = "air_to_air",  level = 2, burst = 1, intra = 0,    cooldown = 3.0 },
   { weapon = "machine_gun", level = 1, burst = 4, intra = 0.11, cooldown = 2.0 },
 }
@@ -27,6 +28,7 @@ local DYING_TIME = 1.1    -- fall/burn time before the wreck blows, like the pla
 local BLAST_R    = 70
 local BLAST_DMG  = 40
 local SPRITE_ROT = 0      -- extra rotation if the badheli frame 0 is not nose-north
+local ROTOR_SPEED = 15    -- rad/s the rotor disc spins (one blade frame, rotated)
 
 local HeliSystem = Class()
 
@@ -38,6 +40,8 @@ function HeliSystem:init(world, combat)
   self.sprite = nil
   self.max    = 0
   self.timer  = SPAWN_DELAY
+  self.rotor_img = nil
+  self.rotor_ax, self.rotor_ay = 0, 0
 end
 
 -- Read the stage's spawn markers and the badheli render image. Called on each
@@ -54,6 +58,13 @@ function HeliSystem:reset()
       local r = self.world.images[c.index + 1]
       if r and r.img then self.sprite = r.img; break end
     end
+  end
+  -- Single rotor frame, spun with love2d rotation rather than cycling the blur
+  -- arc frames (which looked wrong top-down). Anchor on the blade's art center.
+  local clip = Animation.clip("blade")
+  if clip and clip.frames[1] then
+    self.rotor_img = clip.frames[1]
+    self.rotor_ax, self.rotor_ay = clip:anchor(1)
   end
 end
 
@@ -92,8 +103,8 @@ function HeliSystem:_spawn_one(player)
     dir = (math.random() < 0.5) and 1 or -1,
     phase = math.random() * math.pi * 2,
     reload = 0.8,
-    smoke = {}, smoke_t = 0,
-    rotor = Animation.new("blade"),
+    smoke = {}, smoke_t = 0, hitfx = {},
+    rotor_spin = math.random() * math.pi * 2,
     hit_radius = HIT_RADIUS,
     state = "alive",
   }
@@ -104,6 +115,14 @@ end
 function HeliSystem:hit(h, dmg, shooter)
   if h.state ~= "alive" then return end
   h.hp = h.hp - dmg
+  -- A scorch burst on the hull at each hit, like the original (fire loops, so it
+  -- needs a ttl; smoke2 plays once and culls itself).
+  local clip = math.random() < 0.5 and "fire" or "smoke2"
+  h.hitfx[#h.hitfx + 1] = {
+    anim = Animation.new(clip), age = 0,
+    ttl  = clip == "fire" and 0.5 or nil,
+    ox = (math.random() - 0.5) * 18, oy = (math.random() - 0.5) * 18,
+  }
   if h.hp <= 0 then
     h.hp    = 0
     h.state = "dying"
@@ -137,15 +156,16 @@ end
 
 function HeliSystem:_advance(h, dt, factor)
   local rad  = (h.heading - 90) * math.pi / 180
-  local step = SPEED * (factor or 1) * dt
+  local step = SPEED * (factor or 1) * dt * Config.speed_scale
   local s    = self.world.stage.world_size
   h.x = (h.x + math.cos(rad) * step) % s
   h.y = (h.y + math.sin(rad) * step) % s
 end
 
 function HeliSystem:_update_heli(h, dt)
-  if h.rotor then h.rotor:update(dt) end
+  h.rotor_spin = (h.rotor_spin + dt * ROTOR_SPEED) % (math.pi * 2)
   self:_update_smoke(h, dt)
+  self:_update_hitfx(h, dt)
   if h.state == "dying" then return self:_update_dying(h, dt) end
 
   local p = self.combat:_nearest_player(h.x, h.y)
@@ -161,13 +181,13 @@ function HeliSystem:_update_heli(h, dt)
   if dist > ORBIT_R * 1.25 then
     target = toplayer
   else
-    h.phase = h.phase + dt * 1.7
+    h.phase = h.phase + dt * 1.7 * Config.speed_scale
     local offset = 55 + 50 * math.sin(h.phase)   -- 5..105 deg off the player
     target = (toplayer + h.dir * offset) % 360
   end
 
   local diff = ((target - h.heading + 180) % 360) - 180
-  local step = TURN_RATE * dt
+  local step = TURN_RATE * dt * Config.speed_scale
   if math.abs(diff) <= step then h.heading = target
   else h.heading = (h.heading + (diff > 0 and step or -step)) % 360 end
 
@@ -230,6 +250,19 @@ function HeliSystem:_blast(h)
   end
 end
 
+-- One-shot fire/smoke2 scorches riding on the hull where rounds connect.
+function HeliSystem:_update_hitfx(h, dt)
+  if #h.hitfx == 0 then return end
+  local live = {}
+  for _, fx in ipairs(h.hitfx) do
+    fx.anim:update(dt)
+    fx.age = fx.age + dt
+    local expired = (fx.ttl and fx.age >= fx.ttl) or fx.anim:is_done()
+    if not expired then live[#live + 1] = fx end
+  end
+  h.hitfx = live
+end
+
 function HeliSystem:_update_smoke(h, dt)
   local live = {}
   for _, s in ipairs(h.smoke) do
@@ -290,11 +323,18 @@ function HeliSystem:draw()
         local sc  = 1 - 0.5 * (h.fall or 0)
         g.setColor(1, 1, 1)
         g.draw(self.sprite, h.x, h.y, rot, sc, sc, iw / 2, ih / 2)
-        -- Spinning rotor disc on top (top-down 8-frame blur).
-        local rimg = h.rotor and h.rotor:current_image()
-        if rimg then
-          local rw, rh = rimg:getDimensions()
-          g.draw(rimg, h.x, h.y, 0, sc, sc, rw / 2, rh / 2)
+        -- Spinning rotor disc on top: one blade frame rotated, not the blur arc.
+        if self.rotor_img then
+          g.draw(self.rotor_img, h.x, h.y, h.rotor_spin, sc, sc,
+            self.rotor_ax, self.rotor_ay)
+        end
+        -- Hit scorches (fire / smoke2) ride on top of the hull.
+        for _, fx in ipairs(h.hitfx) do
+          local img = fx.anim:current_image()
+          if img then
+            local fw, fh = img:getDimensions()
+            g.draw(img, h.x + fx.ox, h.y + fx.oy, 0, 1, 1, fw / 2, fh / 2)
+          end
         end
       end
     end
