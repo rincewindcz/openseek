@@ -18,7 +18,7 @@ local RescueSystem = Class()
 local POW_CLIPS  = { "newdude0", "pow0", "pow1" }
 local DWELL_TIME = 1.0   -- seconds the vehicle must hold the land pad before POWs emerge
 local SPAWN_GAP  = 0.7   -- seconds between successive POWs leaving the building
-local WALK_SPEED = 32    -- px/s a POW walks
+local WALK_SPEED = 26    -- px/s a POW walks
 local LAND_R     = 40    -- vehicle must be stationary within this of the land marker
 local REACH_R    = 6     -- distance at which a POW reaches the door / vehicle
 local POW_HIT_R  = 6     -- a POW's collision radius when shot
@@ -27,6 +27,8 @@ local POW_ROT    = 0     -- rest-pose facing offset (deg) added to the walk head
 local LH_FADE    = 0.2   -- seconds for the land pad to fade out/in
 local ZONE_FADE  = 0.3   -- seconds for the POWHERE marker to fade out once emptied
 local EXIT_GAP   = 4     -- px the POW emerges outside the building edge
+local CORPSE_PUSH = 5    -- px a shot POW's body slides in the shot direction
+local SLIDE_TIME = 0.12  -- seconds for that slide to settle
 
 function RescueSystem:init(world, combat)
   self.world      = world
@@ -98,6 +100,7 @@ function RescueSystem:reset()
       rescued  = 0,
       lost     = 0,       -- POWs shot while outside
       pows     = {},      -- POWs currently walking
+      corpses  = {},      -- bodies of POWs shot in the open (persist on the ground)
       dwell     = 0,
       spawn_t   = 0,
       lh_alpha  = 1,      -- land pad opacity (fades out while a vehicle holds it)
@@ -128,6 +131,15 @@ end
 function RescueSystem:clear()
   self.sites  = {}
   self.active = false
+end
+
+-- The shared dead-soldier pose, used as the corpse of a shot POW (cached).
+function RescueSystem:_dead_image()
+  if self._dead_img == nil then
+    local clip = Animation.clip("soldier_dead")
+    self._dead_img = (clip and clip.frames[1]) or false
+  end
+  return self._dead_img or nil
 end
 
 -- ── progress ────────────────────────────────────────────────────────────────────
@@ -190,6 +202,20 @@ function RescueSystem:_update_pow(pow, site, dt, lander)
   pow.y = (pow.y + dy / d * step) % s
 end
 
+-- A shot POW drops where it stood: a dead-soldier body that slides a little in the
+-- shot direction and then lies there, plus a small hit puff, like a felled soldier.
+function RescueSystem:_kill_pow(site, pow, hx, hy)
+  local px, py = 0, 0
+  local dx, dy = self.world:delta(pow.x, pow.y, hx, hy)   -- impact toward POW = push dir
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len > 0 then px, py = dx / len * CORPSE_PUSH, dy / len * CORPSE_PUSH end
+  site.corpses[#site.corpses + 1] = {
+    x = pow.x, y = pow.y, ox = 0, oy = 0, px = px, py = py, t = 0,
+    heading = pow.heading or 0,
+  }
+  if self.combat then self.combat:add_effect("smoke2", pow.x, pow.y, {}) end
+end
+
 function RescueSystem:_clear_site(site)
   site.cleared = true
   for _, b in ipairs(site.buildings) do b.protected = false end
@@ -200,6 +226,13 @@ function RescueSystem:update(dt)
   if not self.active then return end
   local players = self.combat.players or {}
   for _, site in ipairs(self.sites) do
+    for _, c in ipairs(site.corpses) do
+      if c.t < 1 then
+        c.t = math.min(1, c.t + dt / SLIDE_TIME)
+        local f = 1 - (1 - c.t) * (1 - c.t)
+        c.ox, c.oy = c.px * f, c.py * f
+      end
+    end
     if site.cleared then
       -- Marker keeps fading after the renderer hands it off (rescue_hidden).
       if site.zone_alpha > 0 then
@@ -259,7 +292,7 @@ function RescueSystem:projectile_hit(x, y, radius, from_player)
           if dx * dx + dy * dy < rr * rr then
             pow.done  = true
             site.lost = site.lost + 1
-            if self.combat then self.combat:add_effect("smoke2", pow.x, pow.y, {}) end
+            self:_kill_pow(site, pow, x, y)
             return true
           end
         end
@@ -304,6 +337,18 @@ function RescueSystem:draw()
   for _, t in ipairs(cam:tiles()) do
     g.push()
     g.translate(t.ox, t.oy)
+    -- Corpses of shot POWs lie on the ground under the live markers/walkers.
+    local dead = self:_dead_image()
+    if dead then
+      local dw, dh = dead:getDimensions()
+      for _, site in ipairs(self.sites) do
+        for _, c in ipairs(site.corpses) do
+          local rot = (c.heading + POW_ROT) * math.pi / 180
+          g.setColor(1, 1, 1)
+          g.draw(dead, c.x + c.ox, c.y + c.oy, rot, 1, 1, dw / 2, dh / 2)
+        end
+      end
+    end
     -- Emptied POWHERE markers fade out (the renderer stopped drawing them at clear).
     for _, site in ipairs(self.sites) do
       if site.cleared and site.zone_alpha > 0.01 then
