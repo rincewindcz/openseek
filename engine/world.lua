@@ -126,6 +126,10 @@ function World:load(name)
   local target_class        = {}
   local rescue_zone_class   = {}
   local rescue_people_class = {}
+  local land_zone_class     = {}
+  -- lh.bin "land here" pads are only meaningful on rescue stages; elsewhere they
+  -- stay ordinary scenery so non-rescue maps are unchanged.
+  local is_rescue = self.stage.objectives and self.stage.objectives.rescue
   for _, c in ipairs(self.stage.classes) do
     local a     = c.asset and self.stage.assets[c.asset + 1]
     local fname = a and a.file and a.file:lower()
@@ -146,6 +150,9 @@ function World:load(name)
       if c.kind == 11 and (fname:match("^pow") or fname:match("people")) then
         rescue_people_class[c.index] = true
       end
+      if is_rescue and c.kind == 14 and fname:match("^lh") then
+        land_zone_class[c.index] = true
+      end
     end
   end
 
@@ -156,6 +163,7 @@ function World:load(name)
   self.targets       = {}   -- destroy-objective entities (class is_target)
   self.rescue_zones  = {}   -- powhere.bin landing markers (kind 9)
   self.rescue_people = {}   -- pow.bin / people.bin civilians to rescue (kind 11)
+  self.land_zones    = {}   -- lh.bin "land here" pads on rescue stages (owned by RescueSystem)
   self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
   self.debris        = {}   -- flying explosion shrapnel {anim, x, y, vx, vy, age, ttl}
   self.ground_fx     = {}   -- dust left on the ground when shrapnel lands {anim, x, y}
@@ -232,6 +240,11 @@ function World:load(name)
     -- airborne heli system and is never drawn or hit in place.
     if cls.kind_name == "enemy_helicopter" then
       self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y }
+      goto continue
+    end
+    -- Land-here pads are drawn and removed by the RescueSystem, not the world.
+    if land_zone_class[raw.class] then
+      self.land_zones[#self.land_zones + 1] = { ent = entity }
       goto continue
     end
     self.entities[#self.entities + 1] = entity

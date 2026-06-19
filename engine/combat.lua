@@ -568,6 +568,10 @@ function CombatSystem:_check_hit(proj)
         end
       end
     end
+    -- The player's own fire can kill a walking POW when that option is on.
+    if self.world.rescue and self.world.rescue:projectile_hit(proj.x, proj.y, proj.radius, true) then
+      return true
+    end
     -- Friendly fire (co-op option): a player round can hit the other player.
     if self.friendly_fire then
       for _, p in ipairs(self.players) do
@@ -592,6 +596,10 @@ function CombatSystem:_check_hit(proj)
           return true
         end
       end
+    end
+    -- Enemy rounds always cut down a walking POW caught in the open.
+    if self.world.rescue and self.world.rescue:projectile_hit(proj.x, proj.y, proj.radius, false) then
+      return true
     end
   end
   return false

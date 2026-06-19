@@ -10,24 +10,42 @@ function Mission.load(path)
   defs = raw and json.decode(raw) or {}
 end
 
--- Build a mission for the named stage, or nil if it has no defined objectives.
-function Mission.for_stage(world, player, stage_name)
-  local def = defs[stage_name]
-  if not def then return nil end
-  return Mission:new(world, { player }, def)
-end
-
--- Build a shared co-op objective straight from the stage's decoded objectives
--- block (destroy all targets / rescue all people, then return to base). Returns
--- nil when the stage has no destroy/rescue goal (pure free play). Both players
--- contribute to the same objectives.
-function Mission.coop(world, players)
-  local obj = world.stage.objectives
+-- Build a generic objective def from the stage's decoded objectives block
+-- (destroy all targets / rescue all people, then return to base), or nil when
+-- the stage has no destroy/rescue goal (pure free play).
+local function objectives_from_stage(obj)
   if not obj or not (obj.destroy or obj.rescue) then return nil end
   local def = { objectives = {} }
   if obj.destroy then def.objectives[#def.objectives + 1] = { type = "destroy_targets" } end
   if obj.rescue  then def.objectives[#def.objectives + 1] = { type = "rescue_people"  } end
+  return def
+end
+
+-- Build a mission for the named stage: an explicit missions.json def if one
+-- exists, otherwise the stage's own decoded objectives. nil when neither yields
+-- an objective.
+function Mission.for_stage(world, player, stage_name)
+  local def = defs[stage_name]
+  if not (def and def.objectives) then
+    def = objectives_from_stage(world.stage.objectives)
+  end
+  if not def then return nil end
+  return Mission:new(world, { player }, def)
+end
+
+-- Shared co-op objective from the stage's decoded objectives block; both players
+-- contribute to the same goals.
+function Mission.coop(world, players)
+  local def = objectives_from_stage(world.stage.objectives)
+  if not def then return nil end
   return Mission:new(world, players, def)
+end
+
+-- Optional per-building POW counts for a rescue stage (missions.json
+-- rescue_pow_counts, in powhere load order); nil falls back to a random 1-3.
+function Mission.rescue_counts(stage_name)
+  local def = defs[stage_name]
+  return def and def.rescue_pow_counts or nil
 end
 
 -- True if entity e satisfies a spec's filters: asset (.bin) filename, kind_name,
@@ -110,12 +128,17 @@ function Mission:_make_objective(spec)
     o.list   = self.world.targets
     o.target = #o.list
   elseif spec.type == "rescue_people" then
-    -- Co-op: powhere landing zones if any, otherwise the civilians themselves.
-    o.list      = (#self.world.rescue_zones > 0) and self.world.rescue_zones
-      or self.world.rescue_people
-    o.collected = {}
-    o.radius    = spec.radius or 40
-    o.target    = #o.list
+    -- POWHERE buildings drive the walking-POW RescueSystem; loose civilians fall
+    -- back to simple fly-over collection.
+    o.use_system = (#self.world.rescue_zones > 0) and self.world.rescue ~= nil
+    if o.use_system then
+      o.target = self.world.rescue:required_count()
+    else
+      o.list      = self.world.rescue_people
+      o.collected = {}
+      o.radius    = spec.radius or 40
+      o.target    = #o.list
+    end
   end
   -- An objective with nothing to act on is satisfied so it can never block a win.
   local known = o.type == "destroy" or o.type == "rescue" or o.type == "sabotage"
@@ -174,6 +197,13 @@ function Mission:_update_destroy_targets(o)
 end
 
 function Mission:_update_rescue_people(o)
+  if o.use_system then
+    local r = self.world.rescue
+    o.progress = r:rescued_count()
+    o.target   = r:required_count()
+    if r:all_cleared() then o.done = true end
+    return
+  end
   for _, p in ipairs(self.players) do
     if p:is_stationary() then
       for _, z in ipairs(o.list) do

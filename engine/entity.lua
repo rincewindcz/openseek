@@ -70,6 +70,8 @@ end
 
 function Entity:take_damage(amount, dx, dy)
   if not self:is_alive() then return end
+  -- A POW building stays indestructible while it still holds prisoners.
+  if self.protected then return end
   -- While the turret stands it absorbs all incoming damage; the hull is only
   -- vulnerable once the turret is gone.
   if self.turret_alive then

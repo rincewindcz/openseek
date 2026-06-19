@@ -158,6 +158,7 @@ function Renderer:_draw_entities(list, vp)
     local in_vp = e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1
     if not in_vp then goto continue end
     if hidden[cls.kind_name] then goto continue end
+    if e.rescue_hidden then goto continue end   -- emptied POW building marker
 
     -- Units with explicit alive/dead sprites (soldiers) draw axis-aligned and
     -- persist as a corpse once dead.
@@ -385,14 +386,9 @@ function Renderer:_draw_objectives(vp)
   end
 
   if obj.rescue then
+    -- POWHERE buildings are marked in-world by their own sprite and land pad (the
+    -- RescueSystem), so only loose civilians get a world reticle here.
     local pulse = 0.6 + 0.4 * math.sin(love.timer.getTime() * 4)
-    g.setColor(0.3, 1, 0.55, pulse)
-    for _, e in ipairs(w.rescue_zones) do
-      if e:is_alive() and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
-        g.circle("line", e.x, e.y, 18)
-        g.circle("line", e.x, e.y, 11)
-      end
-    end
     g.setColor(0.55, 0.9, 1, pulse)
     for _, e in ipairs(w.rescue_people) do
       if e:is_alive() and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then

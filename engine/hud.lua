@@ -1,5 +1,6 @@
-local Class = require "engine.class"
-local json  = require "lib.json"
+local Class  = require "engine.class"
+local json   = require "lib.json"
+local Config = require "engine.config"
 
 local Hud = Class()
 
@@ -106,17 +107,21 @@ function Hud:draw()
   local g      = love.graphics
   local sw, sh = g.getDimensions()
   if self.view_w then sw, sh = self.view_w, self.view_h end
+  -- The global HUD scale grows each element and its inset from the anchored edge
+  -- together, so a corner-anchored item stays in its corner as it gets bigger.
+  local hs = Config.hud_scale or 1
   for _, item in ipairs(self.items) do
     local fn     = ANCHOR[item.anchor or "top_left"]
     local ax, ay = fn(sw, sh)
-    local ox     = item.offset and item.offset[1] or 0
-    local oy     = item.offset and item.offset[2] or 0
+    local ox     = (item.offset and item.offset[1] or 0) * hs
+    local oy     = (item.offset and item.offset[2] or 0) * hs
     local x, y   = ax + ox, ay + oy
+    local s      = (item.scale or 1) * hs
     local t      = item.type
-    if     t == "gauge"  then self:_draw_gauge(g, item, x, y)
-    elseif t == "weapon" then self:_draw_weapon(g, item, x, y)
-    elseif t == "cursor" then self:_draw_cursor(g, item, x, y)
-    elseif t == "radar"  then self:_draw_radar(g, item, x, y)
+    if     t == "gauge"  then self:_draw_gauge(g, item, x, y, s)
+    elseif t == "weapon" then self:_draw_weapon(g, item, x, y, s)
+    elseif t == "cursor" then self:_draw_cursor(g, item, x, y, s)
+    elseif t == "radar"  then self:_draw_radar(g, item, x, y, s)
     end
   end
   g.setColor(1, 1, 1)
@@ -146,9 +151,8 @@ function Hud:_gauge_pct(item)
   return 0
 end
 
-function Hud:_draw_gauge(g, item, x, y)
+function Hud:_draw_gauge(g, item, x, y, s)
   if not item._frames then return end
-  local s   = item.scale or 1
   -- Low gauges (< 25%) blink to warn the player.
   if self:_gauge_pct(item) < 0.25 and (math.floor(love.timer.getTime() * 4) % 2 == 0) then
     return
@@ -163,9 +167,8 @@ end
 
 -- ── weapon icon ───────────────────────────────────────────────────────────────
 
-function Hud:_draw_weapon(g, item, x, y)
+function Hud:_draw_weapon(g, item, x, y, s)
   if not item._frames then return end
-  local s   = item.scale or 1
   local p   = self.player
   local fi  = math.max(1, math.min(#item._frames, (p.weapon_icon or 0) + 1))
   local img = item._frames[fi]
@@ -177,9 +180,8 @@ end
 
 -- ── movement cursor ───────────────────────────────────────────────────────────
 
-function Hud:_draw_cursor(g, item, x, y)
+function Hud:_draw_cursor(g, item, x, y, s)
   local p     = self.player
-  local s     = item.scale or 1
   local size, half, inner, dot_sz
 
   -- Original game art (DATA/BOX.BIN, per-mission override under hud/stage{m}/)
@@ -225,9 +227,8 @@ end
 
 -- ── radar ─────────────────────────────────────────────────────────────────────
 
-function Hud:_draw_radar(g, item, x, y)
+function Hud:_draw_radar(g, item, x, y, s)
   local p     = self.player
-  local s     = item.scale or 1
   local r     = (item.radius or 88) * s
   local range = item.world_range or 900
 

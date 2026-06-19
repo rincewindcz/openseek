@@ -8,6 +8,7 @@ local Hud          = require "engine.hud"
 local CombatSystem = require "engine.combat"
 local HeliSystem   = require "engine.enemy_heli"
 local Powerups     = require "engine.powerups"
+local RescueSystem = require "engine.rescue"
 local Mission      = require "engine.mission"
 local Screen       = require "engine.screen"
 local Config       = require "engine.config"
@@ -22,6 +23,7 @@ local player
 local combat
 local helis
 local powerups
+local rescue
 local mission
 local screen
 local anim_gallery = false      -- test overlay: plays every animation clip at once
@@ -234,6 +236,8 @@ local function spawn_player()
   combat.effects     = {}
   helis:reset()
   powerups:reset(player)
+  rescue.pow_counts = Mission.rescue_counts(world.stage_name)
+  rescue:reset()
   mission = Mission.for_stage(world, player, world.stage_name)
   camera.x, camera.y = player.x, player.y
   camera:start_zoom_intro(1.5, 1.0)   -- smooth zoom-in as the level opens
@@ -293,6 +297,7 @@ local function leave_game_mode()
   combat.effects     = {}
   helis:clear()
   powerups:reset(nil)
+  rescue:clear()
   mission           = nil
   camera.angle      = nil
   camera.view_oy    = 0
@@ -360,6 +365,8 @@ local function enter_split()
   combat.effects      = {}
   helis:reset()
   powerups:set_players(sp_players)
+  rescue.pow_counts = Mission.rescue_counts(world.stage_name)
+  rescue:reset()
   -- Shared co-op objective from the stage's decoded objectives (nil = free play).
   mission = Mission.coop(world, sp_players)
   love.window.setTitle(world:title() .. "  [2P SPLIT]")
@@ -406,6 +413,7 @@ local function draw_split()
     g.translate(vx, 0)
     g.setScissor(vx, 0, vw, H)
     renderer:_draw_world()
+    rescue:draw()            -- land pads + walking POWs, on the ground under everything
     powerups:draw()
     helis:draw_shadows()     -- aircraft ground shadows, under the flyers
     p:draw_shadow()
@@ -639,7 +647,7 @@ local function draw_overview_ui()
   local y = 30
 
   -- SETUP box
-  local setup_h = 22 + 4 * OV_ROW + 6
+  local setup_h = 22 + 6 * OV_ROW + 6
   g.setColor(OV.bg); g.rectangle("fill", x, y, OV_W, setup_h, 4)
   local yy = ov_section(g, "SETUP", x, y + 4)
   yy = ov_row(g, "[V]", "Vehicle",   sel_vehicle:upper(),
@@ -647,6 +655,10 @@ local function draw_overview_ui()
   yy = ov_row(g, "[O]", "Game over", death_enabled and "ON" or "OFF",
         death_enabled and OV.on or OV.off, x, yy)
   yy = ov_row(g, "[C]", "Pickups",   Config.axis_aligned_pickups and "AXIS-ALIGNED" or "ROTATED",
+        OV.value, x, yy)
+  yy = ov_row(g, "[P]", "POW friendly fire", Config.friendly_fire_pows and "ON" or "OFF",
+        Config.friendly_fire_pows and OV.on or OV.off, x, yy)
+  yy = ov_row(g, "[H]", "HUD scale", string.format("%.2f", Config.hud_scale),
         OV.value, x, yy)
   yy = ov_row(g, "[ / ]", "Speed",   string.format("%.2f", Config.speed_scale),
         OV.value, x, yy)
@@ -702,6 +714,7 @@ function love.load(args)
   combat.heli_sys = helis
   Mission.load("data/missions.json")
   powerups = Powerups:new(world, camera, combat.weapons)
+  rescue   = RescueSystem:new(world, combat)
   renderer:refresh_kinds()
   love.window.setTitle(world:title())
 
@@ -769,6 +782,7 @@ function love.update(dt)
     combat:update(dt)
     helis:update(dt)
     powerups:update(dt)
+    rescue:update(dt)
     if mission then mission:update(dt) end
     world:update(dt)
     return
@@ -796,6 +810,7 @@ function love.update(dt)
     combat:update(dt)
     helis:update(dt)
     powerups:update(dt)
+    rescue:update(dt)
     if mission then mission:update(dt) end
     camera.x     = player.x
     camera.y     = player.y
@@ -839,6 +854,7 @@ function love.draw()
   renderer:draw()
 
   if game_mode and player then
+    rescue:draw()            -- land pads + walking POWs, on the ground under everything
     powerups:draw()
     helis:draw_shadows()     -- aircraft ground shadows, under the flyers
     player:draw_shadow()
@@ -1075,6 +1091,13 @@ function love.keypressed(key)
     end
     if key == "o" then death_enabled = not death_enabled end
     if key == "c" then Config.axis_aligned_pickups = not Config.axis_aligned_pickups end
+    if key == "p" then Config.friendly_fire_pows = not Config.friendly_fire_pows end
+    if key == "h" then
+      local steps = { 1.0, 1.25, 1.5, 2.0, 2.5 }
+      local i = 1
+      for k, v in ipairs(steps) do if math.abs(v - Config.hud_scale) < 0.01 then i = k end end
+      Config.hud_scale = steps[i % #steps + 1]
+    end
     if key == "[" then Config.speed_scale = math.max(0.1, Config.speed_scale - 0.05) end
     if key == "]" then Config.speed_scale = math.min(2.0, Config.speed_scale + 0.05) end
     if key == "l" then renderer.show_segments = not renderer.show_segments end
