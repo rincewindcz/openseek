@@ -18,12 +18,15 @@ local RescueSystem = Class()
 local POW_CLIPS  = { "newdude0", "pow0", "pow1" }
 local DWELL_TIME = 1.0   -- seconds the vehicle must hold the land pad before POWs emerge
 local SPAWN_GAP  = 0.7   -- seconds between successive POWs leaving the building
-local WALK_SPEED = 42    -- px/s a POW walks
+local WALK_SPEED = 32    -- px/s a POW walks
 local LAND_R     = 40    -- vehicle must be stationary within this of the land marker
-local REACH_R    = 6     -- distance at which a POW reaches the vehicle / re-enters
+local REACH_R    = 6     -- distance at which a POW reaches the door / vehicle
 local POW_HIT_R  = 6     -- a POW's collision radius when shot
 local COLOCATE_R = 12    -- a building this close under the marker is its paired hull
-local POW_ROT    = 180   -- the walk sprite faces south at rest; offset to its heading
+local POW_ROT    = 0     -- rest-pose facing offset (deg) added to the walk heading
+local LH_FADE    = 0.2   -- seconds for the land pad to fade out/in
+local ZONE_FADE  = 0.3   -- seconds for the POWHERE marker to fade out once emptied
+local EXIT_GAP   = 4     -- px the POW emerges outside the building edge
 
 function RescueSystem:init(world, combat)
   self.world      = world
@@ -79,22 +82,47 @@ function RescueSystem:reset()
     local buildings = self:_paired_buildings(zone)
     for _, b in ipairs(buildings) do b.protected = true end
     local total = self:_count_for(idx)
+    local lx = land and land.ent.x or zone.x
+    local ly = land and land.ent.y or zone.y
+    local ex, ey = self:_exit_point(zone, buildings[1], lx, ly)
     self.sites[#self.sites + 1] = {
       zone      = zone,
       land      = land,
-      lx        = land and land.ent.x or zone.x,
-      ly        = land and land.ent.y or zone.y,
+      lx        = lx,
+      ly        = ly,
+      ex        = ex,    -- where POWs emerge / re-enter (the building edge by the pad)
+      ey        = ey,
       buildings = buildings,
-      total   = total,
-      inside  = total,   -- POWs still in the building
-      rescued = 0,
-      lost    = 0,       -- POWs shot while outside
-      pows    = {},      -- POWs currently walking
-      dwell   = 0,
-      spawn_t = 0,
-      cleared = false,
+      total    = total,
+      inside   = total,   -- POWs still in the building
+      rescued  = 0,
+      lost     = 0,       -- POWs shot while outside
+      pows     = {},      -- POWs currently walking
+      dwell     = 0,
+      spawn_t   = 0,
+      lh_alpha  = 1,      -- land pad opacity (fades out while a vehicle holds it)
+      zone_alpha = 1,     -- POWHERE marker opacity (fades out once emptied)
+      cleared   = false,
     }
   end
+end
+
+-- A point just outside the building's edge on the side facing the land pad, so
+-- POWs appear next to the building rather than on top of it.
+function RescueSystem:_exit_point(zone, building, lx, ly)
+  local brad = 12
+  if building then
+    local r = self.world.images[building.class_idx + 1]
+    if r and r.img then
+      local iw, ih = r.img:getDimensions()
+      brad = math.max(iw, ih) / 2
+    end
+  end
+  local ddx, ddy = self.world:delta(lx, ly, zone.x, zone.y)   -- building toward pad
+  local dl = math.sqrt(ddx * ddx + ddy * ddy)
+  if dl <= 0 then return zone.x, zone.y end
+  local off = math.max(8, math.min(brad + EXIT_GAP, dl - 8))
+  return zone.x + ddx / dl * off, zone.y + ddy / dl * off
 end
 
 function RescueSystem:clear()
@@ -113,7 +141,7 @@ end
 function RescueSystem:_emerge(site, target)
   site.inside = site.inside - 1
   site.pows[#site.pows + 1] = {
-    x = site.zone.x, y = site.zone.y,
+    x = site.ex, y = site.ey,
     state   = "out",
     target  = target,
     heading = 0,
@@ -136,7 +164,7 @@ function RescueSystem:_update_pow(pow, site, dt, lander)
     gx, gy = pow.target.x, pow.target.y
     reach  = (pow.target.collision_radius or 8) + REACH_R
   else
-    gx, gy = site.zone.x, site.zone.y
+    gx, gy = site.ex, site.ey   -- back to the door, not the building center
     reach  = REACH_R
   end
 
@@ -172,13 +200,26 @@ function RescueSystem:update(dt)
   if not self.active then return end
   local players = self.combat.players or {}
   for _, site in ipairs(self.sites) do
-    if not site.cleared then
+    if site.cleared then
+      -- Marker keeps fading after the renderer hands it off (rescue_hidden).
+      if site.zone_alpha > 0 then
+        site.zone_alpha = math.max(0, site.zone_alpha - dt / ZONE_FADE)
+      end
+    else
       local lander
       for _, p in ipairs(players) do
         if p and not p.death and self:_landed_in_zone(p, site) then lander = p; break end
       end
 
       if lander then site.dwell = site.dwell + dt else site.dwell = 0 end
+
+      -- The land pad vanishes the moment a vehicle sits on it and fades back in if
+      -- the vehicle leaves before the building is emptied.
+      local target = lander and 0 or 1
+      local fade   = dt / LH_FADE
+      site.lh_alpha = (site.lh_alpha < target)
+        and math.min(target, site.lh_alpha + fade)
+        or  math.max(target, site.lh_alpha - fade)
 
       if lander and site.dwell >= DWELL_TIME and site.inside > 0 then
         site.spawn_t = site.spawn_t - dt
@@ -263,12 +304,23 @@ function RescueSystem:draw()
   for _, t in ipairs(cam:tiles()) do
     g.push()
     g.translate(t.ox, t.oy)
+    -- Emptied POWHERE markers fade out (the renderer stopped drawing them at clear).
     for _, site in ipairs(self.sites) do
-      if not site.cleared and site.land then
+      if site.cleared and site.zone_alpha > 0.01 then
+        local e = site.zone
+        local r = self.world.images[e.class_idx + 1]
+        if r and r.img then
+          g.setColor(1, 1, 1, site.zone_alpha)
+          g.draw(r.img, e.x, e.y, 0, 1, 1, -r.ox, -r.oy)
+        end
+      end
+    end
+    for _, site in ipairs(self.sites) do
+      if not site.cleared and site.land and site.lh_alpha > 0.01 then
         local r = self.world.images[site.land.ent.class_idx + 1]
         if r and r.img then
           local iw, ih = r.img:getDimensions()
-          g.setColor(1, 1, 1)
+          g.setColor(1, 1, 1, site.lh_alpha)
           g.draw(r.img, site.land.ent.x + r.ox + iw / 2, site.land.ent.y + r.oy + ih / 2,
             mrot, 1, 1, iw / 2, ih / 2)
         end
