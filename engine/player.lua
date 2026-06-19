@@ -1,6 +1,7 @@
 local Class     = require "engine.class"
 local Animation = require "engine.animation"
 local Config    = require "engine.config"
+local Shadow    = require "engine.shadow"
 
 local Player = Class()
 
@@ -680,6 +681,39 @@ end
 
 -- ── draw ─────────────────────────────────────────────────────────────────────
 
+-- Ground shadow cast by the chopper, drawn before the vehicle and its smoke so it
+-- sits on the terrain. The body is drawn upright at screen center (the world spins
+-- around it), so the silhouette is upright too; the cast direction is the fixed
+-- world bottom-right rotated by the camera angle, sliding out and fading in with
+-- altitude (a landed chopper casts none). Skipped for tanks and night missions.
+function Player:draw_shadow()
+  if not self:is_flyer() then return end
+  if not (self.world and self.world:shadows_enabled()) then return end
+  local alt = self.altitude
+  if alt <= 0 then return end
+  local body = self:_chopper_body_frame()
+  if not body then return end
+
+  local g = love.graphics
+  local cx, cy
+  if self.camera then
+    cx, cy = self.camera:screen_center()
+  else
+    local sw, sh = g.getDimensions()
+    cx, cy = sw / 2, sh / 2
+  end
+  local s = self.sprite_scale
+  if self.camera then s = s * self.camera:zoom_ratio() end
+
+  local a  = (self.camera and self.camera.angle) or 0
+  local dx = Shadow.DIR_X * math.cos(a) - Shadow.DIR_Y * math.sin(a)
+  local dy = Shadow.DIR_X * math.sin(a) + Shadow.DIR_Y * math.cos(a)
+  local off = Shadow.OFFSET * s * alt
+  local w, h = body:getDimensions()
+  Shadow.draw(body, cx + dx * off, cy + dy * off, 0, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
+  g.setColor(1, 1, 1)
+end
+
 function Player:draw()
   local g      = love.graphics
   local cx, cy
@@ -789,6 +823,32 @@ function Player:draw_remote(g, cam, color)
     g.circle("line", sx, sy, 14 * s / 3 + 6)
     g.setLineWidth(1)
   end
+  g.setColor(1, 1, 1)
+end
+
+-- Ground shadow for this player seen as the co-op teammate in another player's
+-- camera. Mirrors draw_remote's placement (projected to our world point, the body
+-- silhouette turned to our heading in that camera's frame); the cast direction is
+-- the fixed world bottom-right rotated by the camera angle, sliding out and fading
+-- in with altitude. Skipped for tanks, night missions, and grounded/dead flyers.
+function Player:draw_remote_shadow(g, cam)
+  if self.death then return end
+  if not self:is_flyer() then return end
+  if not (self.world and self.world:shadows_enabled()) then return end
+  local alt = self.altitude
+  if alt <= 0 then return end
+  local body = self:_chopper_body_frame()
+  if not body then return end
+
+  local sx, sy = cam:project(self.x, self.y)
+  local s      = self.sprite_scale
+  local base   = self.angle * math.pi / 180 + (cam.angle or 0)
+  local a  = cam.angle or 0
+  local dx = Shadow.DIR_X * math.cos(a) - Shadow.DIR_Y * math.sin(a)
+  local dy = Shadow.DIR_X * math.sin(a) + Shadow.DIR_Y * math.cos(a)
+  local off  = Shadow.OFFSET * s * alt
+  local w, h = body:getDimensions()
+  Shadow.draw(body, sx + dx * off, sy + dy * off, base, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
   g.setColor(1, 1, 1)
 end
 

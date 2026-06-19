@@ -1,6 +1,7 @@
 local Class     = require "engine.class"
 local Animation = require "engine.animation"
 local Config    = require "engine.config"
+local Shadow    = require "engine.shadow"
 
 local atan2 = math.atan2 or math.atan
 
@@ -297,6 +298,39 @@ function HeliSystem:_update_smoke(h, dt)
       }
     end
   end
+end
+
+-- Ground shadows for every live heli, drawn before the hulls (a flat black body
+-- silhouette slid out in the fixed world bottom-right). The offset is in world
+-- space so the camera rotation swings it around like the player's; a downed heli's
+-- shadow shrinks to nothing as it falls. Disabled on night missions.
+function HeliSystem:draw_shadows()
+  if #self.helis == 0 or not self.sprite then return end
+  if not self.world:shadows_enabled() then return end
+  local g   = love.graphics
+  local cam = self.combat.camera
+  local iw, ih = self.sprite:getDimensions()
+  g.push()
+  cam:apply()
+  for _, t in ipairs(cam:tiles()) do
+    g.push()
+    g.translate(t.ox, t.oy)
+    for _, h in ipairs(self.helis) do
+      if h.state ~= "removed" then
+        local alt = 1 - (h.fall or 0)
+        if alt > 0 then
+          local off = Shadow.OFFSET * alt
+          local rot = (h.heading + (h.spin or 0) + SPRITE_ROT) * math.pi / 180
+          local sc  = 1 - 0.5 * (h.fall or 0)
+          Shadow.draw(self.sprite, h.x + Shadow.DIR_X * off, h.y + Shadow.DIR_Y * off,
+            rot, sc, sc, iw / 2, ih / 2, Shadow.ALPHA * alt)
+        end
+      end
+    end
+    g.pop()
+  end
+  g.setColor(1, 1, 1)
+  g.pop()
 end
 
 function HeliSystem:draw()

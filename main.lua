@@ -407,6 +407,9 @@ local function draw_split()
     g.setScissor(vx, 0, vw, H)
     renderer:_draw_world()
     powerups:draw()
+    helis:draw_shadows()     -- aircraft ground shadows, under the flyers
+    p:draw_shadow()
+    if other then other:draw_remote_shadow(g, cam) end
     p:draw_world()
     combat:draw()
     renderer:draw_debris()   -- shrapnel above the explosion effects
@@ -837,6 +840,8 @@ function love.draw()
 
   if game_mode and player then
     powerups:draw()
+    helis:draw_shadows()     -- aircraft ground shadows, under the flyers
+    player:draw_shadow()
     player:draw_world()
     combat:draw()
     renderer:draw_debris()   -- shrapnel above the explosion effects

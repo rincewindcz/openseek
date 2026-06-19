@@ -21,6 +21,10 @@ local MISSION_GROUND = {
 }
 local DEFAULT_GROUND = { 0.3, 0.5, 0 }
 
+-- Missions rendered without a sun (the volcanic phases): helicopter ground
+-- shadows are disabled there. Keyed by mission digit, like MISSION_GROUND.
+local NIGHT_MISSIONS = { ["3"] = true }
+
 local World = Class()
 
 -- Two-part objects folded at load: a co-located top sprite riding a hull. top is
@@ -462,6 +466,12 @@ end
 function World:ground_color()
   local m = self.stage_name and self.stage_name:match("^stage(%d)")
   return MISSION_GROUND[m] or DEFAULT_GROUND
+end
+
+-- Whether aircraft cast ground shadows on this stage (off on night missions).
+function World:shadows_enabled()
+  local m = self.stage_name and self.stage_name:match("^stage(%d)")
+  return not NIGHT_MISSIONS[m]
 end
 
 function World:title()
