@@ -72,10 +72,10 @@
       "icon": "hud/score_f00.png",
       "anchor": "top_left",
       "offset": [8, 6],
-      "scale": 2,
-      "gap": 4,
+      "scale": 3,
+      "gap": 5,
       "icon_dy": -1,
-      "color": [1, 1, 1]
+      "color": [1, 0.82, 0.12]
     },
     {
       "id": "lives",
@@ -84,10 +84,10 @@
       "digits": 1,
       "icon": "hud/lives_f00.png",
       "anchor": "top_right",
-      "offset": [-200, 6],
-      "scale": 2,
-      "gap": 4,
-      "color": [1, 1, 1]
+      "offset": [-210, 6],
+      "scale": 3,
+      "gap": 5,
+      "color": [1, 0.82, 0.12]
     },
     {
       "id": "pows",
@@ -96,9 +96,9 @@
       "digits": 2,
       "hide_when_zero": true,
       "anchor": "bottom_left",
-      "offset": [150, -42],
-      "scale": 2,
-      "color": [0.6, 1, 0.6]
+      "offset": [150, -44],
+      "scale": 3,
+      "color": [1, 0.82, 0.12]
     },
     {
       "id": "ammo",
@@ -106,9 +106,9 @@
       "value": "ammo",
       "digits": 3,
       "anchor": "bottom_right",
-      "offset": [-46, -22],
-      "scale": 1.5,
-      "color": [1, 1, 0.4]
+      "offset": [-52, -26],
+      "scale": 2,
+      "color": [1, 0.82, 0.12]
     }
   ]
 }

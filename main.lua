@@ -923,22 +923,7 @@ function love.draw()
     player:draw()
     player:draw_world_front()
     hud:draw()
-    -- Weapon indicator (top-left, below renderer bar)
     local g = love.graphics
-    g.setColor(0, 0, 0, 0.55)
-    g.rectangle("fill", 0, 22, 470, 20)
-    g.setColor(1, 1, 0.2, 1)
-    local wdef   = combat.weapons[player.weapon_name]
-    local n_lvl  = wdef and wdef.levels and #wdef.levels or 1
-    local short  = wdef and wdef.short or "?"
-    local ammo   = player.ammo[player.weapon_name]
-    local ammo_s = ammo and tostring(ammo) or "inf"
-    local mod    = player.vehicle == "tank" and "shift+turn: turret" or "shift: strafe"
-    local flags  = (player.unlimited and " [GOD]" or "")
-      .. (powerups.easy_mode and "" or " [LAND]")
-    g.print(string.format("Q:%s(%s) E:lv%d/%d ammo:%s ctrl:fire %s%s  R:restart",
-      short, player.weapon_name, player.weapon_level, n_lvl, ammo_s, mod, flags), 4, 24)
-    g.setColor(1, 1, 1)
     -- Objective banner (top center) for the active mission.
     if mission then
       local line = mission:status_line()
