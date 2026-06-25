@@ -63,6 +63,52 @@
       "radius": 20,
       "world_range": 1800,
       "scale": 2.5
+    },
+    {
+      "id": "score",
+      "type": "number",
+      "value": "score",
+      "digits": 8,
+      "icon": "hud/score_f00.png",
+      "anchor": "top_left",
+      "offset": [8, 6],
+      "scale": 2,
+      "gap": 4,
+      "icon_dy": -1,
+      "color": [1, 1, 1]
+    },
+    {
+      "id": "lives",
+      "type": "number",
+      "value": "lives",
+      "digits": 1,
+      "icon": "hud/lives_f00.png",
+      "anchor": "top_right",
+      "offset": [-200, 6],
+      "scale": 2,
+      "gap": 4,
+      "color": [1, 1, 1]
+    },
+    {
+      "id": "pows",
+      "type": "number",
+      "value": "pows",
+      "digits": 2,
+      "hide_when_zero": true,
+      "anchor": "bottom_left",
+      "offset": [150, -42],
+      "scale": 2,
+      "color": [0.6, 1, 0.6]
+    },
+    {
+      "id": "ammo",
+      "type": "number",
+      "value": "ammo",
+      "digits": 3,
+      "anchor": "bottom_right",
+      "offset": [-46, -22],
+      "scale": 1.5,
+      "color": [1, 1, 0.4]
     }
   ]
 }

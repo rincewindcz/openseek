@@ -64,7 +64,8 @@ FONTS = {
     "phasenum": {"src": "data/PHASENUM.BIN", "mode": "mask", "charmap": "1234"},
     "gov":      {"src": "data/GOV.BIN",       "mode": "mask", "word": True},
     "gov2":     {"src": "data/GOV2.BIN",      "mode": "mask", "word": True},
-    "endchars": {"src": "data/ENDCHARS.BIN",  "mode": "mask"},
+    "endchars": {"src": "data/ENDCHARS.BIN",  "mode": "mask",
+                 "pal": "STAGE00/PAL.BIN", "key": [255, 0, 255]},
     "hichars":  {"src": "data/HICHARS.BIN",   "mode": "mask"},
     "hichars2": {"src": "data/HICHARS2.BIN",  "mode": "mask"},
     "keysfont": {"src": "data/KEYSFONT.BIN",  "mode": "mask"},
@@ -112,17 +113,29 @@ def decode_glyphs(data: bytes):
     return glyphs
 
 
-def intensity_ramp(glyphs):
-    """rank-normalize the font's used indices: lowest -> 1.0, highest -> MIN."""
+def mask_ramp(glyphs, palette, key):
+    """Per-index mask intensity. With a palette, derive it from real luminance
+    (brightest used index -> 1.0) and drop key-colored (transparent) pixels;
+    that handles 2-tone fonts (e.g. ENDCHARS: white glyph + magenta key) the
+    raw index rank would invert. Without a palette, rank-normalize the index
+    ramp (lowest -> 1.0, highest -> MIN). Returns (ramp, keyset)."""
     used = sorted({p for g in glyphs if g for p in g[0].values()})
+    if palette:
+        keyset = {i for i in used if key and palette[i] == tuple(key)}
+        lums = {i: 0.299 * palette[i][0] + 0.587 * palette[i][1]
+                   + 0.114 * palette[i][2]
+                for i in used if i not in keyset}
+        mx = max(lums.values()) if lums else 1.0
+        ramp = {i: max(MIN_INTENSITY, lum / (mx or 1.0)) for i, lum in lums.items()}
+        return ramp, keyset
     if len(used) <= 1:
-        return {i: 1.0 for i in used}
+        return {i: 1.0 for i in used}, set()
     span = len(used) - 1
-    return {idx: 1.0 - (rank / span) * (1.0 - MIN_INTENSITY)
-            for rank, idx in enumerate(used)}
+    return ({idx: 1.0 - (rank / span) * (1.0 - MIN_INTENSITY)
+             for rank, idx in enumerate(used)}, set())
 
 
-def render_glyph(glyph, mode, ramp, palette):
+def render_glyph(glyph, mode, ramp, keyset, palette):
     canvas, min_x, min_y, w, h = glyph
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     px = img.load()
@@ -130,6 +143,8 @@ def render_glyph(glyph, mode, ramp, palette):
         if mode == "truecolor":
             r, g, b = palette[idx]
         else:
+            if idx in keyset:
+                continue
             v = int(round(ramp.get(idx, 1.0) * 255))
             r = g = b = v
         px[x - min_x, y - min_y] = (r, g, b, 255)
@@ -166,16 +181,17 @@ def export_font(name, cfg, game_dir):
         return
     data = src.read_bytes()
     glyphs = decode_glyphs(data)
-    palette = None
+    palette = load_palette(game_dir / cfg["pal"]) if cfg.get("pal") else None
     if cfg["mode"] == "truecolor":
-        palette = load_palette(game_dir / cfg["pal"])
-    ramp = intensity_ramp(glyphs)
+        ramp, keyset = {}, set()
+    else:
+        ramp, keyset = mask_ramp(glyphs, palette, cfg.get("key"))
 
     images = []
     for i, g in enumerate(glyphs):
         if not g:
             continue
-        img = render_glyph(g, cfg["mode"], ramp, palette)
+        img = render_glyph(g, cfg["mode"], ramp, keyset, palette)
         images.append((str(i), img, g[1], g[2]))
     if not images:
         print(f"  SKIP {name}: no decodable glyphs")

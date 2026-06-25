@@ -126,6 +126,15 @@ function Font:width(text, scale, tracking)
   return w
 end
 
+function Font:word_width(scale, tracking)
+  scale, tracking = scale or 1, tracking or 1
+  local w = 0
+  for _, idx in ipairs(self.sequence) do
+    w = w + (self.glyphs[idx].advance + tracking) * scale
+  end
+  return w
+end
+
 -- Draws a word font's whole glyph sequence left to right (gov -> GAMEOVER,
 -- overkill -> OVERKILL). opts: { scale, color, tracking }.
 function Font:print_word(x, y, opts)

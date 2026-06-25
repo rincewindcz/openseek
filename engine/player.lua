@@ -41,7 +41,11 @@ function Player:init(x, y)
   self.medals       = 0
   self.pows         = 0       -- people (POWs/allies) currently carried
   self.score        = 0       -- own kill/rescue score (co-op split screen)
+  self.lives        = 3       -- spare vehicles
   self.death        = nil     -- death sequence state (set by start_death)
+
+  self._kill_times    = {}    -- recent kill timestamps, for the overkill streak
+  self.overkill_until = 0     -- show the OVERKILL banner while time < this
 
   self.turret_offset    = 0    -- tank turret heading relative to the hull (deg)
   self.turret_rate      = 140
@@ -152,6 +156,25 @@ function Player:add_ammo(name, amount)
   if self.ammo[name] == nil then return end  -- not an ammo-tracked weapon
   local cap = self._ammo_max and self._ammo_max[name] or self.ammo[name] + amount
   self.ammo[name] = math.min(cap, self.ammo[name] + amount)
+end
+
+-- ── overkill streak ─────────────────────────────────────────────────────────
+-- Several kills inside OVERKILL_WINDOW trigger the blinking OVERKILL banner for
+-- OVERKILL_SHOW seconds. Values are placeholders to tune.
+local OVERKILL_WINDOW = 2.0
+local OVERKILL_KILLS  = 3
+local OVERKILL_SHOW   = 1.5
+
+function Player:register_kill(now)
+  now = now or love.timer.getTime()
+  local t = self._kill_times
+  t[#t + 1] = now
+  while t[1] and now - t[1] > OVERKILL_WINDOW do table.remove(t, 1) end
+  if #t >= OVERKILL_KILLS then self.overkill_until = now + OVERKILL_SHOW end
+end
+
+function Player:overkill_active(now)
+  return (now or love.timer.getTime()) < (self.overkill_until or 0)
 end
 
 function Player:_apply_config()

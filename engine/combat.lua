@@ -548,6 +548,7 @@ function CombatSystem:_check_hit(proj)
             if proj.aoe > 0 then self:_apply_aoe(proj) end
             if proj.shooter and not e:is_alive() then
               proj.shooter.score = (proj.shooter.score or 0) + self:_kill_points(e)
+              if proj.shooter.register_kill then proj.shooter:register_kill() end
             end
             return true
           end
@@ -632,6 +633,7 @@ function CombatSystem:_bomb_detonate(proj)
         e:take_damage(proj.damage, dx, dy)
         if proj.shooter and not e:is_alive() then
           proj.shooter.score = (proj.shooter.score or 0) + self:_kill_points(e)
+          if proj.shooter.register_kill then proj.shooter:register_kill() end
         end
       end
     end

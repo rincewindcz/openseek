@@ -198,6 +198,24 @@ local function draw_victory()
   draw_overlay_text("MISSION COMPLETE", "R - restart level     F1 - exit to overview", { 0.4, 1, 0.5 })
 end
 
+-- Slow-blinking "MISSION COMPLETE / RETURN TO BASE" once every objective is met
+-- and the player only has to fly home (mission state "return_to_base").
+local function draw_return_prompt()
+  if math.floor(love.timer.getTime() * 1.5) % 2 ~= 0 then return end
+  local g      = love.graphics
+  local sw, sh = g.getDimensions()
+  local font   = Font.get("endchars")
+  local s      = 4
+  local lines  = { { "MISSION COMPLETE", { 0.4, 1, 0.5 } },
+                   { "RETURN TO BASE",   { 1, 1, 0.4 } } }
+  local y      = sh / 2 - 70
+  for _, ln in ipairs(lines) do
+    local w = font:width(ln[1], s)
+    font:print(ln[1], (sw - w) / 2, y, { scale = s, color = ln[2] })
+    y = y + font.line_height * s + 10
+  end
+end
+
 -- ── mode transitions ──────────────────────────────────────────────────────────
 
 local function after_stage_load()
@@ -932,6 +950,7 @@ function love.draw()
       g.print(line, sw / 2 - tw / 2, 25)
       g.setColor(1, 1, 1)
     end
+    if mission and mission.state == "return_to_base" then draw_return_prompt() end
     if mission and mission.state == "won" then draw_victory() end
     if mission and mission.state == "failed" then draw_game_over() end
     if paused then draw_pause() end
