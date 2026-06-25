@@ -12,6 +12,7 @@ local RescueSystem = require "engine.rescue"
 local Mission      = require "engine.mission"
 local Screen       = require "engine.screen"
 local Config       = require "engine.config"
+local Font         = require "engine.font"
 local json         = require "lib.json"
 
 local world
@@ -28,6 +29,7 @@ local mission
 local screen
 local anim_gallery = false      -- test overlay: plays every animation clip at once
 local gallery      = nil        -- lazily built { items = {{name, state}, ...} }
+local font_gallery = false      -- test overlay: renders every original bitmap font
 local death_timer  = nil       -- counts ~3s after a fatal crash before the end picture
 local pending_takeoff = false   -- chopper lifts off once the level-start zoom-in ends
 local game_mode    = false
@@ -604,6 +606,39 @@ local function draw_anim_gallery()
   g.setColor(1, 1, 1)
 end
 
+-- ── font gallery (test overlay) ───────────────────────────────────────────────
+-- Renders every original bitmap font (assets/fonts/, from tools/export_fonts.py)
+-- so glyph decode, mapping, and runtime tinting can be eyeballed. Mask fonts are
+-- drawn tinted gold; the truecolor font (OVERKILL) keeps its own palette.
+
+local FONT_SAMPLE = "ABCDEFGHIJKLM NOPQRSTUVWXYZ 0123456789 .,:!?-+"
+local FONT_GOLD   = { 1.0, 0.78, 0.20 }
+
+local function draw_font_gallery()
+  local g      = love.graphics
+  local sw, sh = g.getDimensions()
+  g.setColor(0.06, 0.06, 0.09, 1)
+  g.rectangle("fill", 0, 0, sw, sh)
+  g.setColor(0.6, 0.9, 1, 1)
+  g.print("FONT GALLERY  -  original bitmap fonts, mask fonts tinted gold.   F9 / Esc: close", 10, 8)
+
+  local y     = 40
+  local scale = 2
+  for _, name in ipairs(Font.NAMES) do
+    local font = Font.get(name)
+    g.setColor(0.55, 0.6, 0.7, 1)
+    g.print(name, 10, y)
+    local x = 130
+    if font.word then
+      font:print_word(x, y, { scale = scale, color = FONT_GOLD })
+    else
+      font:print(FONT_SAMPLE, x, y, { scale = scale, color = FONT_GOLD })
+    end
+    y = y + font.line_height * scale + 16
+  end
+  g.setColor(1, 1, 1)
+end
+
 -- ── overview setup panel ──────────────────────────────────────────────────────
 -- Pre-game (overview) UI: vehicle/option setup and the mode-launch keys, grouped
 -- into titled boxes. Toggles here also feed the live game (Config compat options).
@@ -767,6 +802,7 @@ end
 function love.update(dt)
   if screen then screen:update(dt) end
   if anim_gallery then gallery_update(dt); return end
+  if font_gallery then return end
   if paused then return end
   if split_mode then
     for _, p in ipairs(sp_players) do
@@ -841,6 +877,10 @@ end
 function love.draw()
   if anim_gallery then
     draw_anim_gallery()
+    return
+  end
+  if font_gallery then
+    draw_font_gallery()
     return
   end
   if split_mode then
@@ -933,9 +973,17 @@ function love.keypressed(key)
     if key == "f8" or key == "escape" then anim_gallery = false end
     return
   end
+  if font_gallery then
+    if key == "f9" or key == "escape" then font_gallery = false end
+    return
+  end
   if key == "f8" and not game_mode and not split_mode then
     if not gallery then gallery_build() end
     anim_gallery = true
+    return
+  end
+  if key == "f9" and not game_mode and not split_mode then
+    font_gallery = true
     return
   end
 

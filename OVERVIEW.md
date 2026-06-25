@@ -155,6 +155,7 @@ Engine modules (`engine/`), all built on the tiny `class.lua` helper:
 | `shadow.lua` | Helicopter ground shadows: one light model (sun fixed at the top-left of the unrotated world, so shadows fall to the bottom-right and swing with the world rotation) and a `draw` helper that masks the body sprite to a flat black silhouette. Used by `player.lua` (screen space, offset scaled by draw size) and `enemy_heli.lua` (world space); both scale offset and opacity by altitude and skip night missions (`World:shadows_enabled`). |
 | `config.lua` | Optional compatibility / gameplay tuning shared across systems, set from the overview SETUP panel before launching a level. `axis_aligned_pickups` keeps pickups (and POW rescue land pads) screen-upright; `friendly_fire_pows` lets the player's own fire kill walking POWs; `hud_scale` scales the on-screen HUD (each element and its inset from the screen edge) toward the chunkier DOS size; `speed_scale` is a global multiplier on gameplay motion (player/heli/enemy movement and turning, projectile and homing speeds) applied at each motion-integration site, deliberately leaving animation playback unscaled so the game looks the same at a different pace. |
 | `screen.lua` | Fullscreen image overlay with fade-in / hold / fade-out (one at a time): the `TITLE` card at launch, the per-mission briefing picture (`STAGE0X_MPIC`) before a level starts, and the crash end screen (`DEATHPIC` chopper / `TANKEND` tank). Images live in `assets/fullscreen/`. |
+| `font.lua` | Original bitmap fonts (`assets/fonts/<name>.{png,json}`, exported by `tools/export_fonts.py`). Each font is one atlas plus per-glyph quad metrics; `Font.get(name)` caches an instance and `print` / `print_word` draw a string at a scale and tint color. The original glyph containers are ordinary blitter sprite frames (one frame per glyph), so they decode through `decode_blitter`; their pixels are a brightness ramp in a high palette region the stage palette leaves undefined, so the exporter renders them as white-on-alpha intensity **masks** (gradient preserved by rank-normalizing the ramp) that the engine tints at runtime. `OVERKILL` keeps its real per-stage palette (truecolor, drawn untinted). Full sets (`hichars`/`hichars2`/`savechar`/`endchars`/`keysfont`) are ASCII-indexed (frame == codepoint); `phasenum` is the digits `1234`; `gov`/`gov2`/`overkill` are word sequences. The `F9` gallery renders every font for testing. |
 | `debug.lua` | Debug overlay (`F2`): click to select an entity (overlap pick-list), inspect it, and edit every `type_data` field (numbers step, bools toggle, string fields cycle known values). `[S]` saves all fields per kind to `data/entity_types.json`. While the pick-list / picker / field editor is open the overview camera is held still (`captures_arrows`) and the focused overlapping entity glows in the world (`highlight_entity`). |
 
 ## Game controls
@@ -170,7 +171,9 @@ pauses. The overview screen presents a SETUP panel (top-left, in titled boxes):
 axis-aligned vs world-rotated pickups, and `[` / `]` step the `speed_scale`
 gameplay-motion multiplier (all of these feed `engine/config.lua` and the live
 game). `F8` opens the animation gallery: a test overlay that plays every clip in
-`data/animations.json` at once in a labelled grid (`Esc`/`F8` to close).
+`data/animations.json` at once in a labelled grid (`Esc`/`F8` to close). `F9`
+opens the font gallery: every original bitmap font in `assets/fonts/` rendered
+with a sample string, mask fonts tinted gold (`Esc`/`F9` to close).
 
 A fade-in `TITLE` card shows at launch. Pressing `F1` first shows the loaded
 stage's briefing picture (`STAGE0X_MPIC`, selected by the mission digit of the
@@ -274,6 +277,7 @@ the player must land on it to win.
 | `data/vehicles/*.json` | Player vehicle tuning. |
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |
 | `data/hud.json` | HUD layout and gauge sprites. |
+| `assets/fonts/<name>.{png,json}` | Original bitmap fonts: one glyph atlas plus per-glyph metrics (`x,y,w,h,oy,advance`), `charmap`/`word` mapping, and `mode` (`mask` or `truecolor`). Built by `tools/export_fonts.py` from the game's glyph containers. |
 
 ## Building assets
 
