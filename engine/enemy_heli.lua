@@ -43,6 +43,7 @@ function HeliSystem:init(world, combat)
   self.timer  = SPAWN_DELAY
   self.rotor_img = nil
   self.rotor_ax, self.rotor_ay = 0, 0
+  self.kills  = 0   -- enemy helicopters shot down (end-of-phase stats)
 end
 
 -- Read the stage's spawn markers and the badheli render image. Called on each
@@ -52,6 +53,7 @@ function HeliSystem:reset()
   self.spawns = self.world.heli_spawns or {}
   self.max    = #self.spawns
   self.timer  = SPAWN_DELAY
+  self.kills  = 0
   self.world.air_units = self.helis
   self.sprite = nil
   for _, c in ipairs(self.world.stage.classes) do
@@ -128,6 +130,7 @@ function HeliSystem:hit(h, dmg, shooter)
     h.hp    = 0
     h.state = "dying"
     h.die_t = 0
+    self.kills = (self.kills or 0) + 1
     if shooter then shooter.score = (shooter.score or 0) + 70 end
   end
 end

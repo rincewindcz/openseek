@@ -34,7 +34,7 @@
       "sprite_count": 14,
       "anchor": "bottom_right",
       "offset": [
-        -72,
+        -94,
         -48
       ],
       "scale": 2.5
@@ -107,7 +107,7 @@
       "value": "ammo",
       "digits": 3,
       "anchor": "bottom_right",
-      "offset": [-45, -15],
+      "offset": [-67, -15],
       "scale": 2.5
     }
   ]

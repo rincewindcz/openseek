@@ -19,6 +19,12 @@ local Config = {
   -- looks identical while playing at a different pace. 1.0 = current/modern
   -- speed; lower values slow the game toward the DOS original.
   speed_scale = 1.0,
+
+  -- End-of-phase DESTRUCTION STATS tally direction. The original counts each
+  -- line's percentage / tally down to zero while the bonus drains into TOTAL
+  -- SCORE. true builds the values up from zero instead (icons and percentages
+  -- rise as the score climbs), which reads more naturally.
+  endstats_count_up = true,
 }
 
 return Config

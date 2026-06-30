@@ -13,6 +13,7 @@ local Mission      = require "engine.mission"
 local Screen       = require "engine.screen"
 local Config       = require "engine.config"
 local Font         = require "engine.font"
+local EndStats     = require "engine.endstats"
 local json         = require "lib.json"
 
 local world
@@ -27,6 +28,9 @@ local powerups
 local rescue
 local mission
 local screen
+local endstats
+local won_timer    = nil   -- counts down MISSION COMPLETE before DESTRUCTION STATS
+local endstats_started = false
 local anim_gallery = false      -- test overlay: plays every animation clip at once
 local gallery      = nil        -- lazily built { items = {{name, state}, ...} }
 local font_gallery = false      -- test overlay: renders every original bitmap font
@@ -206,6 +210,45 @@ local function draw_return_prompt()
   end
 end
 
+-- ── end-of-phase stats ─────────────────────────────────────────────────────────
+
+local STAT_GROUND   = { tank = true, flak_turret = true, soldier = true,
+                        soldier_aggressive = true, truck = true }
+local STAT_BUILDING = { structure = true, radar = true }
+
+-- Tally the player's performance at mission completion for the DESTRUCTION STATS
+-- screen: ground / building destruction (alive vs total per category in the
+-- stage), choppers shot down (heli system counter), and POWs rescued.
+local function collect_stats()
+  local classes = world.stage.classes
+  local g_tot, g_kill, b_tot, b_kill = 0, 0, 0, 0
+  for _, e in ipairs(world.entities) do
+    local cls  = classes[e.class_idx + 1]
+    local kind = cls and cls.kind_name
+    local destructible = (e.type_data and (e.type_data.hit_radius or 0) > 0)
+      or (e.max_hp or 0) > 0
+    if destructible then
+      if STAT_GROUND[kind] then
+        g_tot = g_tot + 1
+        if not e:is_alive() then g_kill = g_kill + 1 end
+      elseif STAT_BUILDING[kind] then
+        b_tot = b_tot + 1
+        if not e:is_alive() then b_kill = b_kill + 1 end
+      end
+    end
+  end
+  local phase = tonumber((world.stage_name or ""):match("^stage%d(%d)")) or 0
+  return {
+    phase      = phase + 1,
+    ground     = { killed = g_kill, total = g_tot },
+    buildings  = { killed = b_kill, total = b_tot },
+    choppers   = helis.kills or 0,
+    rescues    = player.pows or 0,
+    base_score = player.score or 0,
+    player     = player,
+  }
+end
+
 -- ── mode transitions ──────────────────────────────────────────────────────────
 
 local function after_stage_load()
@@ -252,6 +295,9 @@ local function spawn_player()
   camera.x, camera.y = player.x, player.y
   camera:start_zoom_intro(1.5, 1.0)   -- smooth zoom-in as the level opens
   pending_takeoff = true              -- chopper takes off when the zoom-in ends
+  won_timer       = nil
+  endstats_started = false
+  if endstats then endstats.active = false end
 end
 
 local function enter_game_mode()
@@ -297,6 +343,9 @@ local function leave_game_mode()
   sandbox_mode      = false
   paused            = false
   death_timer       = nil
+  won_timer         = nil
+  endstats_started  = false
+  if endstats then endstats.active = false end
   pending_takeoff   = false
   renderer.in_game  = false
   player            = nil
@@ -742,6 +791,7 @@ function love.load(args)
   love.window.setTitle(world:title())
 
   screen = Screen:new()
+  endstats = EndStats:new()
   screen:show("TITLE", { fade_in = 0.6, hold = 2.0, fade_out = 0.6 })
 end
 
@@ -812,6 +862,11 @@ function love.update(dt)
     return
   end
   if game_mode and player then
+    if endstats:is_active() then
+      endstats:update(dt)
+      world:update(dt)
+      return
+    end
     player:update(dt)
     if death_enabled and not player.death and player:is_dead() then
       player:start_death()
@@ -836,6 +891,16 @@ function love.update(dt)
     powerups:update(dt)
     rescue:update(dt)
     if mission then mission:update(dt) end
+    -- Mission won: hold MISSION COMPLETE briefly, then the DESTRUCTION STATS.
+    if mission and mission.state == "won" then
+      if won_timer == nil then won_timer = 1.5 end
+      if won_timer > 0 then
+        won_timer = won_timer - dt
+      elseif not endstats_started then
+        endstats:start(collect_stats())
+        endstats_started = true
+      end
+    end
     camera.x     = player.x
     camera.y     = player.y
     camera.angle = player:camera_angle()
@@ -894,8 +959,9 @@ function love.draw()
     player:draw_world_front()
     hud:draw()
     if mission and mission.state == "return_to_base" then draw_return_prompt() end
-    if mission and mission.state == "won" then draw_victory() end
+    if mission and mission.state == "won" and not endstats:is_active() then draw_victory() end
     if mission and mission.state == "failed" then draw_game_over() end
+    if endstats:is_active() then endstats:draw() end
     if paused then draw_pause() end
     if sandbox_mode then
       draw_sandbox_panel()
@@ -1021,6 +1087,14 @@ function love.keypressed(key)
   end
 
   if game_mode and player then
+    if endstats:is_active() then
+      if key == "escape" then
+        endstats:keypressed(); endstats.active = false; leave_game_mode()
+      elseif endstats:keypressed() and not endstats:is_active() then
+        leave_game_mode()
+      end
+      return
+    end
     if key == "p"  then paused = not paused; return end
     if key == "r"  then paused = false; restart_level(); return end
     if key == "f5" then player.unlimited = not player.unlimited; return end
