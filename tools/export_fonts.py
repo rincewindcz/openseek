@@ -2,19 +2,20 @@
 """
 Export Seek and Destroy bitmap fonts for the Love2D engine (assets/fonts/).
 
-These fonts are ordinary blitter sprite containers, one frame per glyph
-(frame count = u32[0] / 4), decoded with the same exact decoder the stage
-exporter uses (tools/decode_blitter.py). The in-game body font CHARS.BIN is
-NOT one of these; it uses the unsolved HUD/height-dispatched routine and is
-excluded here.
+These fonts are sprite containers, one frame per glyph (frame count =
+u32[0] / 4). Most are world-sprite-format and decode with the exact stage
+decoder (tools/decode_blitter.py); the in-game body fonts CHARS.BIN and
+CHARSPOW.BIN are the raw planar HUD class and decode with decode_planar.py.
+Each font is routed to the right decoder automatically by decode_planar.is_planar.
 
-The glyph pixels are palette indices forming a brightness ramp in a high
-palette region the stage palette does not define, so a straight palette
-render comes out flat white or purple. We export each glyph as a white-on-
-alpha intensity MASK instead (rank-normalized over the font's index ramp,
-lower index = brighter), so the baked shading gradient survives and the
-engine can tint each font to any color at runtime (engine/font.lua). Fonts
-with correct in-file colors (OVERKILL, per stage) can be exported truecolor.
+Most glyph pixels are palette indices forming a brightness ramp the engine
+tints at runtime, so we export those as a white-on-alpha intensity MASK
+(rank-normalized over the index ramp, lower index = brighter) and let the
+engine tint each font to any color (engine/font.lua). Fonts that carry their
+real in-file colors are exported truecolor instead: OVERKILL (per stage), and
+the in-game body fonts CHARS/CHARSPOW, whose glyphs hold a fixed gold-on-black
+ramp (idx 16 black outline, 23-26 gold) under GOVPAL.BIN that the original HUD
+draws untinted. A flat tint loses the baked outline and gradient.
 
 Output per font:
   assets/fonts/<name>.png    one packed atlas of all glyphs
@@ -38,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import decode_blitter as db
+import decode_planar as dp
 
 try:
     from PIL import Image
@@ -61,6 +63,10 @@ BLIT_ORIGIN_Y = 100  # decode_frame anchors the blit at y0 = 100
 #           charmap: per-frame char string (frame i -> charmap[i]),
 #           word: True for sequence-only fonts }
 FONTS = {
+    "chars":    {"src": "data/CHARS.BIN",     "mode": "truecolor",
+                 "pal": "data/GOVPAL.BIN"},
+    "charspow": {"src": "data/CHARSPOW.BIN",  "mode": "truecolor",
+                 "pal": "data/GOVPAL.BIN"},
     "phasenum": {"src": "data/PHASENUM.BIN", "mode": "mask", "charmap": "1234"},
     "gov":      {"src": "data/GOV.BIN",       "mode": "mask", "word": True},
     "gov2":     {"src": "data/GOV2.BIN",      "mode": "mask", "word": True},
@@ -100,9 +106,10 @@ def load_palette(path: Path):
 
 def decode_glyphs(data: bytes):
     """Return [(canvas dict, min_x, min_y, w, h)] per frame, skipping empties."""
+    dec = dp if dp.is_planar(data) else db
     glyphs = []
-    for off, end in db.read_frames(data):
-        canvas, status = db.decode_frame(data, off, end)
+    for off, end in dec.read_frames(data):
+        canvas, status = dec.decode_frame(data, off, end)
         if not canvas or status != "ok":
             glyphs.append(None)
             continue

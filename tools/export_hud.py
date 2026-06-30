@@ -16,6 +16,7 @@ REPO_ROOT = THIS_DIR.parent
 
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
+import decode_planar as dp
 
 # (source BIN stem relative to data/, output prefix, palette key)
 # palette key: "gov" = GOVPAL.BIN (menus/HUD), "stage" = STAGE00/PAL.BIN
@@ -28,6 +29,17 @@ HUD_SPRITES = [
     ("SCORE",    "score",    "gov"),
     ("KILLICON", "killicon", "gov"),
     ("BOX",      "box",      "gov"),
+]
+
+# Menu cursors / selectors: the raw planar HUD class (decode_planar.py), drawn
+# in the menu palette (GOVPAL). The aiming reticle SIGHTS and the focus box
+# SELFOCUS share that palette; the in-game focus rings (FOCUS/INFOCUS/...) do
+# not and are left out here.
+MENU_SPRITES = [
+    ("DPOINT",   "dpoint",   "gov"),
+    ("SELPOINT", "selpoint", "gov"),
+    ("SELFOCUS", "selfocus", "gov"),
+    ("SIGHTS",   "sights",   "gov"),
 ]
 
 
@@ -50,13 +62,14 @@ def find_game_dir(hint):
 
 def export_sprite(src_path, prefix, out_dir, palette):
     data   = src_path.read_bytes()
-    frames = db.read_frames(data)
+    dec    = dp if dp.is_planar(data) else db
+    frames = dec.read_frames(data)
     names  = []
     for i, (off, end) in enumerate(frames):
-        canvas, status = db.decode_frame(data, off, end)
+        canvas, status = dec.decode_frame(data, off, end)
         if status != "ok" or not canvas:
             continue
-        img   = db.render(canvas, palette, scale=1)
+        img   = dec.render(canvas, palette, scale=1)
         fname = f"{prefix}_f{i:02d}.png"
         img.save(out_dir / fname)
         names.append(fname)
@@ -81,7 +94,7 @@ def main():
     print(f"Output:   {out_dir}")
     print()
 
-    for stem, prefix, pal_key in HUD_SPRITES:
+    for stem, prefix, pal_key in HUD_SPRITES + MENU_SPRITES:
         src = game_dir / "data" / (stem + ".BIN")
         if not src.exists():
             print(f"  skip {stem}: not found")

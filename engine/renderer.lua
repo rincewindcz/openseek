@@ -83,7 +83,7 @@ end
 
 function Renderer:draw()
   self:_draw_world()
-  self:_draw_hud()
+  if not self.in_game then self:_draw_hud() end
   if not self.in_game then self:_draw_objective_banner() end
   if self.picker      then self:_draw_stage_picker() end
   if self.kind_picker then self:_draw_kind_picker()  end

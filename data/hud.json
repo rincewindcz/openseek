@@ -74,8 +74,7 @@
       "offset": [8, 6],
       "scale": 3,
       "gap": 5,
-      "icon_dy": -1,
-      "color": [1, 0.82, 0.12]
+      "icon_dy": -1
     },
     {
       "id": "lives",
@@ -84,10 +83,9 @@
       "digits": 1,
       "icon": "hud/lives_f00.png",
       "anchor": "top_right",
-      "offset": [-210, 6],
+      "offset": [-248, 6],
       "scale": 3,
-      "gap": 5,
-      "color": [1, 0.82, 0.12]
+      "gap": 5
     },
     {
       "id": "pows",
@@ -96,19 +94,19 @@
       "digits": 2,
       "hide_when_zero": true,
       "anchor": "bottom_left",
-      "offset": [150, -44],
-      "scale": 3,
-      "color": [1, 0.82, 0.12]
+      "offset": [232, -44],
+      "scale": 3
     },
     {
       "id": "ammo",
       "type": "number",
       "value": "ammo",
       "digits": 3,
+      "prefix": "x",
+      "align": "right",
       "anchor": "bottom_right",
-      "offset": [-52, -26],
-      "scale": 2,
-      "color": [1, 0.82, 0.12]
+      "offset": [-10, -24],
+      "scale": 2.5
     }
   ]
 }

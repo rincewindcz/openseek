@@ -131,9 +131,12 @@ function Hud:draw()
 end
 
 -- ── numbers (score / lives / pows / ammo) ─────────────────────────────────────
--- A bitmap-font counter (ENDCHARS digits), optionally prefixed by a marker
--- sprite. value -> player field; ammo reads the current weapon's count (nil =
--- infinite, hidden). hide_when_zero hides the whole item at 0 (POW count).
+-- A bitmap-font counter (CHARS body font, as the original HUD), optionally with a
+-- marker sprite (icon) and/or a literal prefix string ("x" for the ammo count).
+-- value -> player field; ammo reads the current weapon's count (nil = infinite,
+-- hidden). hide_when_zero hides the whole item at 0 (POW count). align="right"
+-- pins the readout's right edge to the anchor so corner counters never drift or
+-- spill off-screen as the digit count changes.
 
 function Hud:_number_value(item)
   local p = self.player
@@ -153,18 +156,27 @@ function Hud:_draw_number(g, item, x, y, s)
   local digits = item.digits or 1
   local cap    = 10 ^ digits - 1
   local str    = string.format("%0" .. digits .. "d", math.max(0, math.min(val, cap)))
+  if item.prefix then str = item.prefix .. str end
 
-  local px = x
-  if item.icon then
-    local img = self:_img(item.icon)
-    if img then
-      g.setColor(1, 1, 1)
-      g.draw(img, x, y + (item.icon_dy or 0) * s, 0, s, s)
-      px = x + img:getWidth() * s + (item.gap or 2) * s
-    end
+  local font  = Font.get(item.font or "chars")
+  local icon  = item.icon and self:_img(item.icon)
+  local iconw = icon and (icon:getWidth() * s + (item.gap or 2) * s) or 0
+  local left  = x
+  if item.align == "right" then left = x - iconw - font:width(str, s) end
+
+  local px = left
+  if icon then
+    g.setColor(1, 1, 1)
+    g.draw(icon, left, y + (item.icon_dy or 0) * s, 0, s, s)
+    px = left + iconw
   end
-  Font.get(item.font or "endchars"):print(str, px, y + (item.text_dy or 0) * s,
-    { scale = s, color = item.color or { 1, 1, 1 } })
+  -- CHARS bakes its own black outline (truecolor); tinted mask fonts get a hard
+  -- black drop shadow (down-right) drawn first for legibility over terrain.
+  local ty = y + (item.text_dy or 0) * s
+  if not font.truecolor then
+    font:print(str, px + s, ty + s, { scale = s, color = { 0, 0, 0 } })
+  end
+  font:print(str, px, ty, { scale = s, color = item.color or { 1, 1, 1 } })
 end
 
 -- Blinking OVERKILL banner during a kill streak (Player:register_kill).

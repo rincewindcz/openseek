@@ -21,7 +21,7 @@ local cache = {}
 -- Fonts shipped by the exporter, in a stable order for the gallery.
 Font.NAMES = {
   "phasenum", "gov", "gov2", "overkill",
-  "hichars", "hichars2", "savechar", "endchars", "keysfont",
+  "chars", "charspow", "hichars", "hichars2", "savechar", "endchars", "keysfont",
 }
 
 function Font.get(name)
