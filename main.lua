@@ -171,47 +171,37 @@ local function draw_sandbox_panel()
   end
 end
 
-local function draw_overlay_text(title, hint, title_color, dim)
+-- Centered title in the game's bitmap body font (same as the score readout) over
+-- a dimmed screen. No subtitle / key hints: game mode shows game-font text only.
+local function draw_overlay_text(title, dim)
   local g      = love.graphics
   local sw, sh = g.getDimensions()
   g.setColor(0, 0, 0, dim or 0.55)
   g.rectangle("fill", 0, 0, sw, sh)
-  g.setColor(title_color[1], title_color[2], title_color[3], 1)
-  local font = g.getFont()
-  g.print(title, (sw - font:getWidth(title) * 3) / 2, sh / 2 - 40, 0, 3, 3)
-  if hint then
-    g.setColor(1, 1, 1, 0.9)
-    g.print(hint, (sw - font:getWidth(hint)) / 2, sh / 2 + 16)
-  end
+  local font = Font.get("chars")
+  local s    = 5
+  font:print(title, (sw - font:width(title, s)) / 2,
+    (sh - font.line_height * s) / 2, { scale = s })
   g.setColor(1, 1, 1)
 end
 
-local function draw_pause()
-  draw_overlay_text("PAUSE", "P - resume", { 0.6, 0.8, 1 }, 0.72)
-end
-
-local function draw_game_over()
-  draw_overlay_text("GAME OVER", "R - restart level     F1 - exit to overview", { 1, 0.25, 0.2 })
-end
-
-local function draw_victory()
-  draw_overlay_text("MISSION COMPLETE", "R - restart level     F1 - exit to overview", { 0.4, 1, 0.5 })
-end
+local function draw_pause()     draw_overlay_text("PAUSE")            end
+local function draw_game_over() draw_overlay_text("GAME OVER")        end
+local function draw_victory()   draw_overlay_text("MISSION COMPLETE") end
 
 -- Slow-blinking "MISSION COMPLETE / RETURN TO BASE" once every objective is met
--- and the player only has to fly home (mission state "return_to_base").
+-- and the player only has to fly home (mission state "return_to_base"). Uses the
+-- score font (CHARS), not the menu ENDCHARS face.
 local function draw_return_prompt()
   if math.floor(love.timer.getTime() * 1.5) % 2 ~= 0 then return end
   local g      = love.graphics
   local sw, sh = g.getDimensions()
-  local font   = Font.get("endchars")
+  local font   = Font.get("chars")
   local s      = 4
-  local lines  = { { "MISSION COMPLETE", { 0.4, 1, 0.5 } },
-                   { "RETURN TO BASE",   { 1, 1, 0.4 } } }
+  local lines  = { "MISSION COMPLETE", "RETURN TO BASE" }
   local y      = sh / 2 - 70
   for _, ln in ipairs(lines) do
-    local w = font:width(ln[1], s)
-    font:print(ln[1], (sw - w) / 2, y, { scale = s, color = ln[2] })
+    font:print(ln, (sw - font:width(ln, s)) / 2, y, { scale = s })
     y = y + font.line_height * s + 10
   end
 end
@@ -460,37 +450,17 @@ local function draw_split()
     hud:draw()
     g.setScissor()
     g.pop()
-
-    -- Per-half status line (screen space, above the viewport), in player color.
-    local wdef = combat.weapons[p.weapon_name]
-    local ammo = p.ammo[p.weapon_name]
-    local col  = MP_COLORS[i]
-    g.setColor(0, 0, 0, 0.6)
-    g.rectangle("fill", vx, 0, vw, 20)
-    g.setColor(col[1], col[2], col[3], 1)
-    g.print(string.format("P%d %s   %s:%s   PTS:%d%s", i, p.vehicle,
-      (wdef and wdef.short) or "?", ammo and tostring(ammo) or "inf",
-      p.score or 0, p.unlimited and "   [GOD]" or ""), vx + 6, 3)
-    g.setColor(1, 1, 1)
   end
   -- Center divider
   g.setColor(0, 0, 0, 1)
   g.rectangle("fill", hw - 1, 0, 2, H)
   g.setColor(1, 1, 1)
 
-  -- Shared co-op objective banner (top center, spanning both halves).
   if mission then
-    local line = mission:status_line()
-    local tw   = g.getFont():getWidth(line)
-    g.setColor(0, 0, 0, 0.6)
-    g.rectangle("fill", W / 2 - tw / 2 - 10, 22, tw + 20, 20)
-    g.setColor(1, 1, 0.4, 1)
-    g.print(line, W / 2 - tw / 2, 25)
-    g.setColor(1, 1, 1)
     if mission.state == "won" then
-      draw_overlay_text("MISSION COMPLETE", "R - restart    F1 - exit", { 0.4, 1, 0.5 })
+      draw_overlay_text("MISSION COMPLETE")
     elseif mission.state == "failed" then
-      draw_overlay_text("MISSION FAILED", "R - restart    F1 - exit", { 1, 0.25, 0.2 })
+      draw_overlay_text("MISSION FAILED")
     end
   end
 end
@@ -923,18 +893,6 @@ function love.draw()
     player:draw()
     player:draw_world_front()
     hud:draw()
-    local g = love.graphics
-    -- Objective banner (top center) for the active mission.
-    if mission then
-      local line = mission:status_line()
-      local sw   = g.getDimensions()
-      local tw   = g.getFont():getWidth(line)
-      g.setColor(0, 0, 0, 0.6)
-      g.rectangle("fill", sw / 2 - tw / 2 - 10, 22, tw + 20, 20)
-      g.setColor(1, 1, 0.4, 1)
-      g.print(line, sw / 2 - tw / 2, 25)
-      g.setColor(1, 1, 1)
-    end
     if mission and mission.state == "return_to_base" then draw_return_prompt() end
     if mission and mission.state == "won" then draw_victory() end
     if mission and mission.state == "failed" then draw_game_over() end

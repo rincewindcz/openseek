@@ -94,8 +94,9 @@
       "digits": 2,
       "hide_when_zero": true,
       "icon": "pow/powcount_f00.png",
-      "gap": 2,
-      "text_dy": 4,
+      "text_on_icon": true,
+      "text_dx": 14,
+      "text_dy": 7,
       "anchor": "bottom_left",
       "offset": [232, -50],
       "scale": 2.5
@@ -105,10 +106,8 @@
       "type": "number",
       "value": "ammo",
       "digits": 3,
-      "prefix": "x",
-      "align": "right",
       "anchor": "bottom_right",
-      "offset": [-10, -24],
+      "offset": [-45, -15],
       "scale": 2.5
     }
   ]

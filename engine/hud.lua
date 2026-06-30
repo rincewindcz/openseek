@@ -164,15 +164,23 @@ function Hud:_draw_number(g, item, x, y, s)
   local left  = x
   if item.align == "right" then left = x - iconw - font:width(str, s) end
 
-  local px = left
   if icon then
     g.setColor(1, 1, 1)
     g.draw(icon, left, y + (item.icon_dy or 0) * s, 0, s, s)
-    px = left + iconw
+  end
+  -- text_on_icon: the count sits in a slot inside the marker sprite (e.g. the
+  -- POWCOUNT "POW =" plate), placed by text_dx/text_dy in sprite pixels from the
+  -- icon's top-left. Otherwise it follows the icon, offset only vertically.
+  local px, ty
+  if item.text_on_icon then
+    px = left + (item.text_dx or 0) * s
+    ty = y    + (item.text_dy or 0) * s
+  else
+    px = icon and (left + iconw) or left
+    ty = y + (item.text_dy or 0) * s
   end
   -- CHARS bakes its own black outline (truecolor); tinted mask fonts get a hard
   -- black drop shadow (down-right) drawn first for legibility over terrain.
-  local ty = y + (item.text_dy or 0) * s
   if not font.truecolor then
     font:print(str, px + s, ty + s, { scale = s, color = { 0, 0, 0 } })
   end
