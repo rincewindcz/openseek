@@ -21,28 +21,35 @@ REPO_ROOT = THIS_DIR.parent
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 
-# (BIN stem in data/, output prefix, frames to keep). The chopper pitch/bank/drop
-# and rotor sets are state/spin animations (keep all); tanktop is a rotation arc and
-# the port draws its axis-aligned frame 0 runtime-rotated, so keep only frame 0.
+# (BIN stem in data/, output prefix, frames to keep, palette). The chopper
+# pitch/bank/drop and rotor sets are state/spin animations (keep all); tanktop is
+# a rotation arc and the port draws its axis-aligned frame 0 runtime-rotated, so
+# keep only frame 0. palette None uses the default stage palette; the alternate
+# choppers index a different palette region and take VSELECT (the vehicle-select
+# screen's palette, stored first in the file) instead.
+VSELECT = "VSELECT"
+
 PLAYER_SPRITES = [
-    ("CHOPPIT1", "choppit1", None),
-    ("CHOPBNK1", "chopbnk1", None),
-    ("CHOPDRP1", "chopdrp1", None),
-    # Alternate player choppers (CHOP*2 / CHOP*3): shipped but never selectable in
-    # the original; we expose them as playable skins (same pitch/bank/drop layout).
-    ("CHOPPIT2", "choppit2", None),
-    ("CHOPBNK2", "chopbnk2", None),
-    ("CHOPDRP2", "chopdrp2", None),
-    ("CHOPPIT3", "choppit3", None),
-    ("CHOPBNK3", "chopbnk3", None),
-    ("CHOPDRP3", "chopdrp3", None),
-    ("BLADE",    "blade",    None),
-    ("BLADEB",   "bladeb",   None),
-    ("BLADEP",   "bladep",   None),
-    ("TANKBGRN", "tankbgrn", None),
-    ("TANKTOP",  "tanktop",  {0}),
-    ("CHOPSHAD", "chopshad", None),
-    ("TANKSHAD", "tankshad", None),
+    ("CHOPPIT1", "choppit1", None, None),
+    ("CHOPBNK1", "chopbnk1", None, None),
+    ("CHOPDRP1", "chopdrp1", None, None),
+    # Alternate player choppers (CHOP*2 blue / CHOP*3 desert): shipped but never
+    # selectable in the original; exposed as playable skins (same pitch/bank/drop
+    # layout). Their pixels live in the 224-255 palette region, which only resolves
+    # to sane liveries under the VSELECT palette.
+    ("CHOPPIT2", "choppit2", None, VSELECT),
+    ("CHOPBNK2", "chopbnk2", None, VSELECT),
+    ("CHOPDRP2", "chopdrp2", None, VSELECT),
+    ("CHOPPIT3", "choppit3", None, VSELECT),
+    ("CHOPBNK3", "chopbnk3", None, VSELECT),
+    ("CHOPDRP3", "chopdrp3", None, VSELECT),
+    ("BLADE",    "blade",    None, None),
+    ("BLADEB",   "bladeb",   None, None),
+    ("BLADEP",   "bladep",   None, None),
+    ("TANKBGRN", "tankbgrn", None, None),
+    ("TANKTOP",  "tanktop",  {0},  None),
+    ("CHOPSHAD", "chopshad", None, None),
+    ("TANKSHAD", "tankshad", None, None),
 ]
 
 
@@ -141,17 +148,20 @@ def main():
     if not pal_path.exists():
         pal_path = game_dir / "data" / "GOVPAL.BIN"
     palette = pal_path.read_bytes()
+    # The vehicle-select screen palette stores its 768 bytes first in the file.
+    vselect = (game_dir / "data" / "VSELECT.BIN").read_bytes()[:768]
     print(f"Game dir: {game_dir}")
     print(f"Palette:  {pal_path.name}")
     print(f"Output:   {out_dir}")
     print()
 
-    for stem, prefix, keep in PLAYER_SPRITES:
+    for stem, prefix, keep, pal_name in PLAYER_SPRITES:
         src = game_dir / "data" / (stem + ".BIN")
         if not src.exists():
             print(f"  skip {stem}: not found")
             continue
-        export_sprite_group(src, prefix, out_dir, palette, keep)
+        pal = vselect if pal_name == VSELECT else palette
+        export_sprite_group(src, prefix, out_dir, pal, keep)
 
 
 if __name__ == "__main__":

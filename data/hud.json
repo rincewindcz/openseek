@@ -107,7 +107,7 @@
       "value": "ammo",
       "digits": 3,
       "relative_to": "weapon",
-      "offset": [27, 41],
+      "offset": [27, 33],
       "scale": 2.5
     }
   ]
