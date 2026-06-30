@@ -243,14 +243,6 @@ function Renderer:_draw_entities(list, vp)
           g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
         end
       end
-      -- Wreck fire: looping BURN flames over the crater (anchored at the base).
-      for _, b in ipairs(e._burns) do
-        local img = b.anim:current_image()
-        if img then
-          local iw, ih = img:getDimensions()
-          g.draw(img, e.x + b.ox, e.y + b.oy, 0, 1, 1, iw / 2, ih)
-        end
-      end
     end
 
     ::continue::

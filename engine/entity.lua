@@ -11,7 +11,6 @@ local Entity = Class()
 local DEATH_PUSH  = 5     -- px a unit corpse slides in the shot direction
 local DEATH_SLIDE = 0.12  -- seconds for the corpse slide to settle
 local DROP_CHANCE = 0.9   -- chance a destroyed large building drops a power-up
-local BURN_TIME   = 5     -- seconds a destroyed building's BURN flames keep going
 
 function Entity.load_types(path)
   local data = love.filesystem.read(path)
@@ -57,8 +56,6 @@ function Entity:init(id, stage_ent, stage_cls)
   -- Damage visual effects
   self._damage_smokes = {}   -- {anim, ox, oy} — persistent looping smoke per HP tier
   self._hit_smokes    = {}   -- {anim, ox, oy} — one-shot SMOKE2 on hit
-  self._burns         = {}   -- {anim, ox, oy} — looping BURN flames on a wreck
-  self._burn_t        = 0    -- seconds of burn left after a building is destroyed
 
   -- Corpse slide (units only): current draw offset and its animation state
   self.death_ox = 0
@@ -156,16 +153,6 @@ function Entity:_start_death(dx, dy)
   if self.crater_eligible then
     self.crater_img = self.crater_src
     if self.world then self.world:spawn_debris(self.x, self.y) end
-    -- The wreck burns: a cluster of looping BURN flames over the crater that
-    -- die down after BURN_TIME, leaving the bare crater behind.
-    self._burn_t = BURN_TIME
-    for i = 1, 3 do
-      self._burns[i] = {
-        anim = Animation.new(math.random() < 0.5 and "burn" or "burn2"),
-        ox   = (math.random() - 0.5) * 18,
-        oy   = (math.random() - 0.5) * 18,
-      }
-    end
   end
   -- Power-up drop: a forced kind always drops (e.g. bunker -> medal); otherwise
   -- large buildings drop a random pickup most of the time.
@@ -204,17 +191,6 @@ function Entity:update(dt)
         self.state = self.state_before or "idle"
         self.state_before = nil
       end
-    end
-  end
-
-  -- Wreck fire: keep the BURN flames looping (over a dead building's crater)
-  -- until their time runs out, then clear them. Runs while the entity is dead.
-  if self._burn_t > 0 then
-    self._burn_t = self._burn_t - dt
-    if self._burn_t <= 0 then
-      self._burns = {}
-    else
-      for _, b in ipairs(self._burns) do b.anim:update(dt) end
     end
   end
 

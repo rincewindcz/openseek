@@ -93,9 +93,12 @@
       "value": "pows",
       "digits": 2,
       "hide_when_zero": true,
+      "icon": "pow/powcount_f00.png",
+      "gap": 2,
+      "text_dy": 4,
       "anchor": "bottom_left",
-      "offset": [232, -44],
-      "scale": 3
+      "offset": [232, -50],
+      "scale": 2.5
     },
     {
       "id": "ammo",
