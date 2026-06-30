@@ -216,12 +216,11 @@ local STAT_GROUND   = { tank = true, flak_turret = true, soldier = true,
                         soldier_aggressive = true, truck = true }
 local STAT_BUILDING = { structure = true, radar = true }
 
--- Tally the player's performance at mission completion for the DESTRUCTION STATS
--- screen: ground / building destruction (alive vs total per category in the
--- stage), choppers shot down (heli system counter), and POWs rescued.
-local function collect_stats()
+-- Count the stage's destructible ground forces / buildings (total and how many
+-- are down), for the DESTRUCTION STATS percentages.
+local function destructible_totals()
   local classes = world.stage.classes
-  local g_tot, g_kill, b_tot, b_kill = 0, 0, 0, 0
+  local g_tot, g_down, b_tot, b_down = 0, 0, 0, 0
   for _, e in ipairs(world.entities) do
     local cls  = classes[e.class_idx + 1]
     local kind = cls and cls.kind_name
@@ -230,23 +229,51 @@ local function collect_stats()
     if destructible then
       if STAT_GROUND[kind] then
         g_tot = g_tot + 1
-        if not e:is_alive() then g_kill = g_kill + 1 end
+        if not e:is_alive() then g_down = g_down + 1 end
       elseif STAT_BUILDING[kind] then
         b_tot = b_tot + 1
-        if not e:is_alive() then b_kill = b_kill + 1 end
+        if not e:is_alive() then b_down = b_down + 1 end
       end
     end
   end
-  local phase = tonumber((world.stage_name or ""):match("^stage%d(%d)")) or 0
+  return g_tot, g_down, b_tot, b_down
+end
+
+local function stage_phase() return (tonumber((world.stage_name or ""):match("^stage%d(%d)")) or 0) + 1 end
+
+-- Single player: the whole stage's destruction is credited to the lone player
+-- (counted from alive vs total), choppers from the heli system counter.
+local function collect_stats()
+  local g_tot, g_down, b_tot, b_down = destructible_totals()
   return {
-    phase      = phase + 1,
-    ground     = { killed = g_kill, total = g_tot },
-    buildings  = { killed = b_kill, total = b_tot },
-    choppers   = helis.kills or 0,
-    rescues    = player.pows or 0,
-    base_score = player.score or 0,
-    player     = player,
+    phase = stage_phase(),
+    participants = { {
+      player    = player,
+      ground    = { killed = g_down, total = g_tot },
+      buildings = { killed = b_down, total = b_tot },
+      choppers  = helis.kills or 0,
+      rescues   = player.pows or 0,
+    } },
   }
+end
+
+-- Co-op: one column per player from their own attributed kills (combat /
+-- enemy_heli credit the shooter's stat_kills), against the shared stage totals.
+local function collect_coop_stats()
+  local g_tot, _gd, b_tot = destructible_totals()
+  local participants = {}
+  for i, p in ipairs(sp_players) do
+    local k = p.stat_kills or {}
+    participants[i] = {
+      player    = p,
+      color     = MP_COLORS[i],
+      ground    = { killed = k.ground or 0,   total = g_tot },
+      buildings = { killed = k.building or 0,  total = b_tot },
+      choppers  = k.chopper or 0,
+      rescues   = p.pows or 0,
+    }
+  end
+  return { phase = stage_phase(), participants = participants }
 end
 
 -- ── mode transitions ──────────────────────────────────────────────────────────
@@ -397,6 +424,9 @@ local function enter_split()
   split_mode = true
   game_mode  = false
   paused     = false
+  won_timer        = nil
+  endstats_started = false
+  if endstats then endstats.active = false end
   renderer.in_game = true
 
   local sx, sy = world:player_start()
@@ -433,6 +463,9 @@ end
 
 local function leave_split()
   split_mode       = false
+  won_timer        = nil
+  endstats_started = false
+  if endstats then endstats.active = false end
   renderer.in_game = false
   renderer.camera  = camera
   combat.camera    = camera
@@ -505,7 +538,9 @@ local function draw_split()
   g.rectangle("fill", hw - 1, 0, 2, H)
   g.setColor(1, 1, 1)
 
-  if mission then
+  if endstats:is_active() then
+    endstats:draw()
+  elseif mission then
     if mission.state == "won" then
       draw_overlay_text("MISSION COMPLETE")
     elseif mission.state == "failed" then
@@ -843,6 +878,11 @@ function love.update(dt)
   if font_gallery then return end
   if paused then return end
   if split_mode then
+    if endstats:is_active() then
+      endstats:update(dt)
+      world:update(dt)
+      return
+    end
     for _, p in ipairs(sp_players) do
       p:update(dt)
       if not p.death and p:_held("fire") then fire_for(p, dt) end
@@ -858,6 +898,15 @@ function love.update(dt)
     powerups:update(dt)
     rescue:update(dt)
     if mission then mission:update(dt) end
+    if mission and mission.state == "won" then
+      if won_timer == nil then won_timer = 1.5 end
+      if won_timer > 0 then
+        won_timer = won_timer - dt
+      elseif not endstats_started then
+        endstats:start(collect_coop_stats())
+        endstats_started = true
+      end
+    end
     world:update(dt)
     return
   end
@@ -1030,6 +1079,14 @@ function love.keypressed(key)
 
   -- Split-screen game keys.
   if split_mode then
+    if endstats:is_active() then
+      if key == "escape" then
+        endstats:keypressed(); endstats.active = false; leave_split()
+      elseif endstats:keypressed() and not endstats:is_active() then
+        leave_split()
+      end
+      return
+    end
     if key == "escape" or key == "f1" then leave_split(); return end
     if key == "p" then paused = not paused; return end
     if key == "r" then paused = false; enter_split(); return end

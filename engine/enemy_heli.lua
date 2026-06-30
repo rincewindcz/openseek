@@ -131,7 +131,12 @@ function HeliSystem:hit(h, dmg, shooter)
     h.state = "dying"
     h.die_t = 0
     self.kills = (self.kills or 0) + 1
-    if shooter then shooter.score = (shooter.score or 0) + 70 end
+    if shooter then
+      shooter.score = (shooter.score or 0) + 70
+      if shooter.stat_kills then
+        shooter.stat_kills.chopper = (shooter.stat_kills.chopper or 0) + 1
+      end
+    end
   end
 end
 

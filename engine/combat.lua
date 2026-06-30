@@ -526,6 +526,20 @@ function CombatSystem:_kill_points(e)
   return 50 + (e.max_hp or 0)
 end
 
+local STAT_GROUND   = { tank = true, flak_turret = true, soldier = true,
+                        soldier_aggressive = true, truck = true }
+local STAT_BUILDING = { structure = true, radar = true }
+
+-- DESTRUCTION STATS category of a killed entity ("ground" / "building" / nil),
+-- credited to the player who landed the killing hit (co-op per-player columns).
+function CombatSystem:_credit_kill(shooter, e)
+  if not (shooter and shooter.stat_kills) then return end
+  local cls  = self.world.stage.classes[e.class_idx + 1]
+  local kind = cls and cls.kind_name
+  local cat  = STAT_GROUND[kind] and "ground" or (STAT_BUILDING[kind] and "building")
+  if cat then shooter.stat_kills[cat] = (shooter.stat_kills[cat] or 0) + 1 end
+end
+
 -- The impact effect a weapon spawns on the entity it hits. A list picks at
 -- random per hit (FFR alternates smoke/smoke2); a string is used as-is; nil lets
 -- the entity fall back to its default.
@@ -548,6 +562,7 @@ function CombatSystem:_check_hit(proj)
             if proj.aoe > 0 then self:_apply_aoe(proj) end
             if proj.shooter and not e:is_alive() then
               proj.shooter.score = (proj.shooter.score or 0) + self:_kill_points(e)
+              self:_credit_kill(proj.shooter, e)
               if proj.shooter.register_kill then proj.shooter:register_kill() end
             end
             return true
@@ -633,6 +648,7 @@ function CombatSystem:_bomb_detonate(proj)
         e:take_damage(proj.damage, dx, dy)
         if proj.shooter and not e:is_alive() then
           proj.shooter.score = (proj.shooter.score or 0) + self:_kill_points(e)
+          self:_credit_kill(proj.shooter, e)
           if proj.shooter.register_kill then proj.shooter:register_kill() end
         end
       end

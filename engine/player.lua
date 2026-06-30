@@ -41,6 +41,7 @@ function Player:init(x, y)
   self.medals       = 0
   self.pows         = 0       -- people (POWs/allies) currently carried
   self.score        = 0       -- own kill/rescue score (co-op split screen)
+  self.stat_kills   = { ground = 0, building = 0, chopper = 0 }  -- per-player end-of-phase stats
   self.lives        = 3       -- spare vehicles
   self.death        = nil     -- death sequence state (set by start_death)
 
