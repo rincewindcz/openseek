@@ -278,6 +278,7 @@ the player must land on it to win.
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |
 | `data/hud.json` | HUD layout and gauge sprites. |
 | `assets/fonts/<name>.{png,json}` | Original bitmap fonts: one glyph atlas plus per-glyph metrics (`x,y,w,h,oy,advance`), `charmap`/`word` mapping, and `mode` (`mask` or `truecolor`). Built by `tools/export_fonts.py` from the game's glyph containers. |
+| `assets/{credits,hiscore,pow,phase}/*.png` + screen sprites in `assets/hud,effects` | Per-screen sprite batteries built by `tools/export_screens.py`, each in its own palette: credits/high-score scrollers, POW rescue widgets and medal, OVERKILL badge and kill icon, stage fire (BURN), and the objective briefing cards (PHASE1..4). Decoded but not yet wired into live UI. |
 
 ## Building assets
 

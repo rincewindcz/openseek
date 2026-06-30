@@ -27,7 +27,6 @@ HUD_SPRITES = [
     ("SCANNER",  "scanner",  "gov"),
     ("LIVES",    "lives",    "gov"),
     ("SCORE",    "score",    "gov"),
-    ("KILLICON", "killicon", "gov"),
     ("BOX",      "box",      "gov"),
 ]
 

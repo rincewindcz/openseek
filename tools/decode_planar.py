@@ -99,6 +99,9 @@ def main():
     ap.add_argument('file')
     ap.add_argument('--frame', default='all', help='frame index or "all"')
     ap.add_argument('--palette', default=None, help='768-byte VGA palette')
+    ap.add_argument('--pal-offset', type=int, default=0,
+                    help='byte offset of the palette in --palette (14 for a '
+                         'fullscreen image whose palette follows its header)')
     ap.add_argument('--out', default='.', help='output directory')
     ap.add_argument('--scale', type=int, default=4)
     ap.add_argument('--verify', action='store_true', help='parse only, no PNG')
@@ -107,7 +110,9 @@ def main():
     data = open(args.file, 'rb').read()
     frames = read_frames(data)
     sel = range(len(frames)) if args.frame == 'all' else [int(args.frame)]
-    palette = open(args.palette, 'rb').read() if args.palette else None
+    palette = None
+    if args.palette:
+        palette = open(args.palette, 'rb').read()[args.pal_offset:args.pal_offset + 768]
 
     base = os.path.splitext(os.path.basename(args.file))[0].lower()
     failures = 0
