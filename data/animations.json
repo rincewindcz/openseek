@@ -229,6 +229,100 @@
     "fps": 1,
     "loop": false
   },
+  "choppit2": {
+    "frames": [
+      "player/choppit2_f00.png",
+      "player/choppit2_f01.png",
+      "player/choppit2_f02.png",
+      "player/choppit2_f03.png",
+      "player/choppit2_f04.png",
+      "player/choppit2_f05.png",
+      "player/choppit2_f06.png",
+      "player/choppit2_f07.png",
+      "player/choppit2_f08.png",
+      "player/choppit2_f09.png",
+      "player/choppit2_f10.png",
+      "player/choppit2_f11.png",
+      "player/choppit2_f12.png",
+      "player/choppit2_f13.png",
+      "player/choppit2_f14.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "chopbnk2": {
+    "frames": [
+      "player/chopbnk2_f00.png",
+      "player/chopbnk2_f01.png",
+      "player/chopbnk2_f02.png",
+      "player/chopbnk2_f03.png",
+      "player/chopbnk2_f04.png",
+      "player/chopbnk2_f05.png",
+      "player/chopbnk2_f06.png",
+      "player/chopbnk2_f07.png",
+      "player/chopbnk2_f08.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "chopdrp2": {
+    "frames": [
+      "player/chopdrp2_f00.png",
+      "player/chopdrp2_f01.png",
+      "player/chopdrp2_f02.png",
+      "player/chopdrp2_f03.png",
+      "player/chopdrp2_f04.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "choppit3": {
+    "frames": [
+      "player/choppit3_f00.png",
+      "player/choppit3_f01.png",
+      "player/choppit3_f02.png",
+      "player/choppit3_f03.png",
+      "player/choppit3_f04.png",
+      "player/choppit3_f05.png",
+      "player/choppit3_f06.png",
+      "player/choppit3_f07.png",
+      "player/choppit3_f08.png",
+      "player/choppit3_f09.png",
+      "player/choppit3_f10.png",
+      "player/choppit3_f11.png",
+      "player/choppit3_f12.png",
+      "player/choppit3_f13.png",
+      "player/choppit3_f14.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "chopbnk3": {
+    "frames": [
+      "player/chopbnk3_f00.png",
+      "player/chopbnk3_f01.png",
+      "player/chopbnk3_f02.png",
+      "player/chopbnk3_f03.png",
+      "player/chopbnk3_f04.png",
+      "player/chopbnk3_f05.png",
+      "player/chopbnk3_f06.png",
+      "player/chopbnk3_f07.png",
+      "player/chopbnk3_f08.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "chopdrp3": {
+    "frames": [
+      "player/chopdrp3_f00.png",
+      "player/chopdrp3_f01.png",
+      "player/chopdrp3_f02.png",
+      "player/chopdrp3_f03.png",
+      "player/chopdrp3_f04.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
   "blade": {
     "frames": [
       "player/blade_f00.png",

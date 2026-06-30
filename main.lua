@@ -41,15 +41,30 @@ local sandbox_mode = false
 local death_enabled = false   -- optional game-over (chopper falls, tank burns)
 local paused        = false
 local sel_vehicle  = "chopper"
+local sel_chopper_skin = 1    -- player chopper variant (1 green, 2 magenta, 3 white)
 local viewer_zi    = 4
 local vehicle_defs = {}
+local CHOPPER_SKINS = 3
+
+-- The vehicle picker cycles chopper skin 1->2->3 then tank then back. Returns the
+-- next (vehicle, skin) pair; a label like "CHOPPER 2" / "TANK" for the UI.
+local function cycle_vehicle(vehicle, skin)
+  if vehicle == "tank" then return "chopper", 1 end
+  if skin < CHOPPER_SKINS then return "chopper", skin + 1 end
+  return "tank", skin
+end
+
+local function vehicle_label(vehicle, skin)
+  if vehicle == "tank" then return "TANK" end
+  return skin > 1 and ("CHOPPER " .. skin) or "CHOPPER"
+end
 
 -- ── split-screen two-player (extra mode, not in the original game) ───────────────
 local split_mode  = false
 local menu_open   = false          -- the 2P setup menu overlay
 local sp_players  = {}             -- two Player instances
 local sp_cameras  = {}             -- two Camera instances, one per screen half
-local mp_setup    = { vehicle = { "chopper", "tank" }, god = false, ff = false }
+local mp_setup    = { vehicle = { "chopper", "tank" }, skin = { 1, 1 }, god = false, ff = false }
 local MP_COLORS   = { { 0.30, 0.65, 1.0 }, { 1.0, 0.55, 0.15 } }  -- P1 blue, P2 orange
 
 -- Distinct key sets so both players share one keyboard. fire / weapon / action
@@ -299,6 +314,7 @@ local function spawn_player()
   player.world_size   = world.stage.world_size
   player.home_x, player.home_y = sx, sy
   player.vehicle      = sel_vehicle
+  player.chopper_skin = sel_chopper_skin
   player.world        = world
   player.camera       = camera
   local def = vehicle_defs[sel_vehicle]
@@ -407,6 +423,7 @@ local function make_split_player(idx, sx, sy)
   local p = Player:new(sx, sy)
   p.world_size = world.stage.world_size
   p.vehicle    = mp_setup.vehicle[idx]
+  p.chopper_skin = mp_setup.skin[idx]
   p.world      = world
   p.controls   = (idx == 1) and P1_CONTROLS or P2_CONTROLS
   local def = vehicle_defs[p.vehicle]
@@ -514,10 +531,18 @@ local function draw_split()
     combat:draw()
     renderer:draw_debris()   -- shrapnel above the explosion effects
     helis:draw()             -- airborne enemy helicopters
-    -- Draw both vehicles back-to-front by world y so the southern one is on top,
-    -- identically in both halves (the local one is centered, the teammate placed
-    -- by projection). Without this the teammate always covered the local player.
-    if other and other.y < p.y then
+    -- Draw both vehicles back-to-front: a chopper always sits above a tank (it is
+    -- airborne), and two of the same layer order by world y so the southern one is
+    -- on top, identically in both halves (the local one centered, the teammate
+    -- placed by projection). Without this the teammate always covered the local
+    -- player, and a tank could end up over a flying chopper.
+    local function layer(pl) return pl.vehicle == "tank" and 0 or 1 end
+    local p_front
+    if other then
+      if layer(p) ~= layer(other) then p_front = layer(p) > layer(other)
+      else p_front = p.y >= other.y end
+    end
+    if other and not p_front then
       other:draw_remote(g, cam, MP_COLORS[3 - i])
       p:draw()
     else
@@ -550,8 +575,8 @@ local function draw_split()
 end
 
 -- Draw a representative vehicle sprite (chopper body or tank hull+turret),
--- centered and scaled to fit a menu box.
-local function draw_vehicle_icon(g, vehicle, cx, cy, scale)
+-- centered and scaled to fit a menu box. skin picks the chopper variant.
+local function draw_vehicle_icon(g, vehicle, cx, cy, scale, skin)
   local function img(clip, idx)
     local c = Animation.clip(clip)
     return c and c.frames[idx]
@@ -566,7 +591,7 @@ local function draw_vehicle_icon(g, vehicle, cx, cy, scale)
       g.draw(top, cx, cy, 0, scale, scale, ax, ay)
     end
   else
-    local body = img("choppit1", 8)   -- neutral pitch frame
+    local body = img("choppit" .. (skin or 1), 8)   -- neutral pitch frame
     if body then local w, h = body:getDimensions(); g.draw(body, cx, cy, 0, scale, scale, w/2, h/2) end
     local rotor = img("bladep", 1)
     if rotor then local w, h = rotor:getDimensions(); g.draw(rotor, cx, cy, 0, scale, scale, w/2, h/2) end
@@ -585,9 +610,9 @@ local function draw_player_box(g, idx, bx, by, bw, bh)
   g.rectangle("line", bx, by, bw, bh)
   g.setLineWidth(1)
   g.print("PLAYER " .. idx, bx + 8, by + 6)
-  draw_vehicle_icon(g, mp_setup.vehicle[idx], bx + bw / 2, by + bh / 2 + 6, 2)
+  draw_vehicle_icon(g, mp_setup.vehicle[idx], bx + bw / 2, by + bh / 2 + 6, 2, mp_setup.skin[idx])
   g.setColor(1, 1, 1, 1)
-  local name = mp_setup.vehicle[idx]:upper()
+  local name = vehicle_label(mp_setup.vehicle[idx], mp_setup.skin[idx])
   g.print("< " .. name .. " >", bx + bw / 2 - 40, by + bh - 22)
 end
 
@@ -622,7 +647,8 @@ local function draw_2p_menu()
 end
 
 local function toggle_vehicle(idx)
-  mp_setup.vehicle[idx] = (mp_setup.vehicle[idx] == "chopper") and "tank" or "chopper"
+  mp_setup.vehicle[idx], mp_setup.skin[idx] =
+    cycle_vehicle(mp_setup.vehicle[idx], mp_setup.skin[idx])
 end
 
 -- ── animation gallery (test overlay) ────────────────────────────────────────────
@@ -757,7 +783,7 @@ local function draw_overview_ui()
   local setup_h = 22 + 6 * OV_ROW + 6
   g.setColor(OV.bg); g.rectangle("fill", x, y, OV_W, setup_h, 4)
   local yy = ov_section(g, "SETUP", x, y + 4)
-  yy = ov_row(g, "[V]", "Vehicle",   sel_vehicle:upper(),
+  yy = ov_row(g, "[V]", "Vehicle",   vehicle_label(sel_vehicle, sel_chopper_skin),
         OV.value, x, yy)
   yy = ov_row(g, "[O]", "Game over", death_enabled and "ON" or "OFF",
         death_enabled and OV.on or OV.off, x, yy)
@@ -1228,7 +1254,7 @@ function love.keypressed(key)
 
   if not game_mode then
     if key == "v" then
-      sel_vehicle = (sel_vehicle == "chopper") and "tank" or "chopper"
+      sel_vehicle, sel_chopper_skin = cycle_vehicle(sel_vehicle, sel_chopper_skin)
     end
     if key == "o" then death_enabled = not death_enabled end
     if key == "c" then Config.axis_aligned_pickups = not Config.axis_aligned_pickups end

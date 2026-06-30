@@ -44,9 +44,27 @@ function Hud:load(path)
   if not raw then error("hud: missing " .. path) end
   local def  = json.decode(raw)
   self.items = def.items or {}
+  self._by_id = {}
   for _, item in ipairs(self.items) do
+    if item.id then self._by_id[item.id] = item end
     self:_preload_item(item)
   end
+end
+
+-- An item's anchor and (design-space) offset, resolving relative_to so an item
+-- can be pinned to another's position (e.g. the ammo count rides the weapon
+-- sprite, moving with it when the weapon offset changes).
+function Hud:_anchor_offset(item)
+  local anchor = item.anchor or "top_left"
+  local ox = item.offset and item.offset[1] or 0
+  local oy = item.offset and item.offset[2] or 0
+  local ref = item.relative_to and self._by_id and self._by_id[item.relative_to]
+  if ref then
+    anchor = ref.anchor or anchor
+    ox = ox + (ref.offset and ref.offset[1] or 0)
+    oy = oy + (ref.offset and ref.offset[2] or 0)
+  end
+  return anchor, ox, oy
 end
 
 -- Load an item's frames/background, optionally from a per-mission override dir
@@ -112,10 +130,11 @@ function Hud:draw()
   -- together, so a corner-anchored item stays in its corner as it gets bigger.
   local hs = Config.hud_scale or 1
   for _, item in ipairs(self.items) do
-    local fn     = ANCHOR[item.anchor or "top_left"]
+    local anchor, offx, offy = self:_anchor_offset(item)
+    local fn     = ANCHOR[anchor]
     local ax, ay = fn(sw, sh)
-    local ox     = (item.offset and item.offset[1] or 0) * hs
-    local oy     = (item.offset and item.offset[2] or 0) * hs
+    local ox     = offx * hs
+    local oy     = offy * hs
     local x, y   = ax + ox, ay + oy
     local s      = (item.scale or 1) * hs
     local t      = item.type

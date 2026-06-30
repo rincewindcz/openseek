@@ -35,7 +35,7 @@
       "anchor": "bottom_right",
       "offset": [
         -94,
-        -48
+        -56
       ],
       "scale": 2.5
     },
@@ -106,8 +106,8 @@
       "type": "number",
       "value": "ammo",
       "digits": 3,
-      "anchor": "bottom_right",
-      "offset": [-67, -15],
+      "relative_to": "weapon",
+      "offset": [27, 41],
       "scale": 2.5
     }
   ]

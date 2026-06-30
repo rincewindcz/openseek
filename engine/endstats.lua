@@ -277,7 +277,7 @@ function EndStats:draw()
     local pn = self.phase_num[math.max(1, math.min(4, self.phase))]
     if pn then
       -- after the "PHASE" word, before the right wing
-      g.draw(pn, (DW + self.header:getWidth()) / 2 - 62, 2)
+      g.draw(pn, (DW + self.header:getWidth()) / 2 - 62, 4)
     end
   end
 

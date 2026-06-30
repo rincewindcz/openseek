@@ -32,6 +32,7 @@ function Player:init(x, y)
   self.weapon_idx   = 0       -- HUD sprite index (0-based)
   self.weapon_icon  = 0       -- WEAPONS.BIN frame for the current weapon
   self.vehicle      = "chopper"
+  self.chopper_skin = 1       -- player chopper variant (1 green, 2 magenta, 3 white)
   self.weapon_name  = "chaingun"
   self.weapon_level = 1
   self.fire_timer   = 0
@@ -676,17 +677,19 @@ function Player:_rotor_image()
 end
 
 function Player:_chopper_body_frame()
+  local skin = self.chopper_skin or 1
+
   if self.land_state == "landing" or self.land_state == "taking_off"
   or self.land_state == "grounded" then
     local fi = math.floor((1.0 - self.altitude) * (DRP_FRAMES - 1) + 0.5) + 1
-    local frames = self:_frames("chopdrp1")
+    local frames = self:_frames("chopdrp" .. skin)
     return frames[math.max(1, math.min(#frames, fi))]
   end
 
   if self:_using_bank() then
     local t  = self.strafe_speed > 0 and (self.strafe / self.strafe_speed) or 0
     local fi = math.floor(BNK_NEUTRAL + t * BNK_NEUTRAL + 0.5) + 1
-    local frames = self:_frames("chopbnk1")
+    local frames = self:_frames("chopbnk" .. skin)
     return frames[math.max(1, math.min(BNK_MAX_R + 1, fi))]
   end
 
@@ -699,7 +702,7 @@ function Player:_chopper_body_frame()
     local t = (-self.speed) / math.max(1, self.max_rev * self.speed_factor)
     fi = math.floor(n + (PIT_FRAMES - 1 - n) * t + 0.5) + 1
   end
-  local frames = self:_frames("choppit1")
+  local frames = self:_frames("choppit" .. skin)
   return frames[math.max(1, math.min(#frames, fi))]
 end
 

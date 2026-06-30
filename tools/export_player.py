@@ -28,6 +28,14 @@ PLAYER_SPRITES = [
     ("CHOPPIT1", "choppit1", None),
     ("CHOPBNK1", "chopbnk1", None),
     ("CHOPDRP1", "chopdrp1", None),
+    # Alternate player choppers (CHOP*2 / CHOP*3): shipped but never selectable in
+    # the original; we expose them as playable skins (same pitch/bank/drop layout).
+    ("CHOPPIT2", "choppit2", None),
+    ("CHOPBNK2", "chopbnk2", None),
+    ("CHOPDRP2", "chopdrp2", None),
+    ("CHOPPIT3", "choppit3", None),
+    ("CHOPBNK3", "chopbnk3", None),
+    ("CHOPDRP3", "chopdrp3", None),
     ("BLADE",    "blade",    None),
     ("BLADEB",   "bladeb",   None),
     ("BLADEP",   "bladep",   None),
