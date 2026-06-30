@@ -105,6 +105,34 @@
     "fps": 8,
     "loop": true
   },
+  "burn": {
+    "frames": [
+      "effects/burn_f00.png",
+      "effects/burn_f01.png",
+      "effects/burn_f02.png",
+      "effects/burn_f03.png",
+      "effects/burn_f04.png",
+      "effects/burn_f05.png",
+      "effects/burn_f06.png",
+      "effects/burn_f07.png"
+    ],
+    "fps": 12,
+    "loop": true
+  },
+  "burn2": {
+    "frames": [
+      "effects/burn2_f00.png",
+      "effects/burn2_f01.png",
+      "effects/burn2_f02.png",
+      "effects/burn2_f03.png",
+      "effects/burn2_f04.png",
+      "effects/burn2_f05.png",
+      "effects/burn2_f06.png",
+      "effects/burn2_f07.png"
+    ],
+    "fps": 12,
+    "loop": true
+  },
   "smoke": {
     "frames": [
       "effects/smoke_f00.png",

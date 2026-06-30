@@ -39,7 +39,8 @@ HUD) have been re-exported with the fixed decoder.
 - **HUD:** sprite-based gauges and a radar.
 - **Combat:** in progress. Player weapons fire range-limited projectiles that hit
   entities; entities take damage, show hit/damage smoke, explode, and large static
-  buildings leave a crater. Enemy soldiers are destructible and switch to a corpse
+  buildings leave a crater that burns (original `BURN`/`BURN2` flames) for a few
+  seconds before settling. Enemy soldiers are destructible and switch to a corpse
   sprite when killed, drawing their own stage's ENEMY.BIN art (alive frame 0,
   dead frame 32) so each mission's units match its theme rather than reusing
   stage00. The player tank turret aims and fires independently of the
@@ -141,7 +142,7 @@ Engine modules (`engine/`), all built on the tiny `class.lua` helper:
 | Module | Responsibility |
 |--------|----------------|
 | `world.lua` | Loads a stage JSON, instantiates entities (including per-stage unit alive/dead images), owns the entity list, ground color, the per-mission night flag (`shadows_enabled`, off on the volcanic mission 3), y-sorting, the friendly-base spawn point (`player_start`, detected from `basecirc.bin`/`h.bin`), the solid-entity collision query (`blocked`), the objective entity lists (`targets`, `rescue_zones`, `rescue_people`, `land_zones` for `lh.bin` rescue pads, `objectives`), the enemy-helicopter spawn markers (`heli_spawns`, collected from placed `enemy_helicopter` entities which are never drawn), and the shared explosion shrapnel + ground-dust systems (`spawn_debris`, `add_ground_dust`). |
-| `entity.lua` | One world object: HP, state machine (idle/animating/exploding/dead), damage smoke, hit effects, destruction crater. Loads shared type data from `data/entity_types.json`. |
+| `entity.lua` | One world object: HP, state machine (idle/animating/exploding/dead), damage smoke, hit effects, destruction crater with a timed `BURN` wreck fire. Loads shared type data from `data/entity_types.json`. |
 | `player.lua` | Player vehicle: movement and collision, altitude/landing state (chopper only), independent tank turret, fuel, sprite frame selection per speed/strafe, weapon selection state. The rotor sheets (`bladep`/`bladeb`) are 8-frame spin cycles grouped by pitch/bank position; the active group tracks the hull tilt and only its 8 frames spin, so the blades rotate smoothly. The chopper casts a ground shadow (`draw_shadow`, plus `draw_remote_shadow` for the co-op teammate seen in the other camera) that slides out and fades in with altitude. |
 | `enemy_heli.lua` | Airborne enemy helicopters: spawns them off-screen at the stage's `badheli` markers (`World.heli_spawns`, count = simultaneous cap), flies them toward the player and circles, fires one random weapon when the nose lines up, smokes when damaged, and falls/explodes when downed. They cast ground shadows (`draw_shadows`) like the player. Its live list is exposed as `world.air_units` for `combat.lua` hit detection. |
 | `combat.lua` | Weapons, projectiles, firing geometry (spread/streams/swing/side offset), hit detection, AoE. Loads `data/weapons.json`. Tracer weapons resolve their streak sprite to the loaded stage's mission variant (`trace`/`strace`/`jtrace`/`rtrace`). The `bomb_drop` weapon glides forward then falls and detonates with shrapnel + full-damage AoE. Homing missiles (player `locking` levels, enemy `homing` weapons) steer toward a target at a capped `turn_rate` so they can be dodged (`_steer_homing`). |
@@ -278,7 +279,7 @@ the player must land on it to win.
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |
 | `data/hud.json` | HUD layout and gauge sprites. |
 | `assets/fonts/<name>.{png,json}` | Original bitmap fonts: one glyph atlas plus per-glyph metrics (`x,y,w,h,oy,advance`), `charmap`/`word` mapping, and `mode` (`mask` or `truecolor`). Built by `tools/export_fonts.py` from the game's glyph containers. |
-| `assets/{credits,hiscore,pow,phase}/*.png` + screen sprites in `assets/hud,effects` | Per-screen sprite batteries built by `tools/export_screens.py`, each in its own palette: credits/high-score scrollers, POW rescue widgets and medal, OVERKILL badge and kill icon, stage fire (BURN), and the objective briefing cards (PHASE1..4). Decoded but not yet wired into live UI. |
+| `assets/{credits,hiscore,pow,phase}/*.png` + screen sprites in `assets/hud,effects` | Per-screen sprite batteries built by `tools/export_screens.py`, each in its own palette: the gold main-menu CREDITS/HIGH SCORES options (MAINP palette), the gold POW rescue widgets (GOVPAL), the OVERKILL badge and kill icon (PHASEPAL), the stage fire (BURN, wired to destroyed buildings via the `burn`/`burn2` clips), and the objective briefing cards (PHASE1..4). The credits/hiscore/POW art is decoded but not yet wired into live UI. |
 
 ## Building assets
 

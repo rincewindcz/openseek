@@ -10,23 +10,28 @@ decoder its container uses (world blitter or the raw planar HUD class, routed
 automatically by decode_planar.is_planar) and rendered in that screen's own
 palette:
 
-  credanim   credits scroller      CREDITS.BIN embedded palette   -> assets/credits/
-  hianim     high-score intro      HISCORE.BIN embedded palette   -> assets/hiscore/
-  pownums    POW count digits      POWUP.BIN embedded palette     -> assets/pow/
-  pownames   rescued weapon names  POWUP.BIN embedded palette     -> assets/pow/
-  powgads    POW screen buttons    POWUP.BIN embedded palette     -> assets/pow/
-  powcount   POW figure + label    POWUP.BIN embedded palette     -> assets/pow/
-  powmedal   awarded medal         GOVPAL.BIN (menu palette)      -> assets/pow/
-  killicon   kill tank icon        PHASEPAL.BIN                   -> assets/hud/
-  okbadge    OVERKILL badge        PHASEPAL.BIN                   -> assets/hud/
-  burn/burn2 stage fire animation  STAGE00 palette                -> assets/effects/
-  phase1..4  objective briefing    each STAGE0{m} palette         -> assets/phase/
+  credanim   menu CREDITS option    MAINP.BIN embedded palette    -> assets/credits/
+  hianim     menu HIGH SCORES opt.   MAINP.BIN embedded palette    -> assets/hiscore/
+  pownums    POW count digit font    GOVPAL.BIN (menu gold ramp)   -> assets/pow/
+  pownames   rescued weapon names    GOVPAL.BIN                    -> assets/pow/
+  powgads    POW screen buttons      GOVPAL.BIN                    -> assets/pow/
+  powcount   POW figure + label      GOVPAL.BIN                    -> assets/pow/
+  powmedal   awarded medal           GOVPAL.BIN                    -> assets/pow/
+  killicon   kill tank icon          PHASEPAL.BIN                  -> assets/hud/
+  okbadge    OVERKILL badge          PHASEPAL.BIN                  -> assets/hud/
+  burn/burn2 stage fire animation    STAGE00 palette               -> assets/effects/
+  phase1..4  objective briefing      each STAGE0{m} palette        -> assets/phase/
 
-A palette source is either a raw 768-byte VGA palette BIN (first 768 bytes) or
-a fullscreen image whose palette is embedded after a 14-byte header (POWUP /
-CREDITS / HISCORE). PEOPLE.BIN and HATCH.BIN are intentionally excluded: PEOPLE
+CREDANIM ("CREDITS") and HIANIM ("HIGH SCORES") are the animated main-menu
+options, so they take the MAINP.BIN menu palette (gold 3D text), not their
+backdrop screens' palettes. The POW rescue widgets draw in the gold GOVPAL menu
+ramp like the other in-game fonts. A palette source is either a raw 768-byte VGA
+palette BIN (first 768 bytes) or a fullscreen image whose palette is embedded
+after a 14-byte header (MAINP). PEOPLE.BIN and HATCH.BIN are excluded: PEOPLE
 dispatches to a different (still unsolved) per-width routine, and HATCH is the
-"Unavailable in Shareware Version" placeholder screen.
+"Unavailable in Shareware Version" placeholder screen. POWMEDAL stays messy in
+every palette (its indices do not map to the stage gold ramp); the clean gold
+medal is the in-game pickup PICKUPS frame 8/9 (assets/stageMP/, stage palette).
 """
 
 import argparse
@@ -81,12 +86,12 @@ def export_sprite(src_path, prefix, out_dir, palette):
 
 # (source BIN under data/, output prefix, out subdir, palette BIN, embedded?)
 JOBS = [
-    ("data/CREDANIM", "credanim", "credits", "data/CREDITS.BIN",  True),
-    ("data/HIANIM",   "hianim",   "hiscore", "data/HISCORE.BIN",  True),
-    ("data/POWNUMS",  "pownums",  "pow",     "data/POWUP.BIN",    True),
-    ("data/POWNAMES", "pownames", "pow",     "data/POWUP.BIN",    True),
-    ("data/POWGADS",  "powgads",  "pow",     "data/POWUP.BIN",    True),
-    ("data/POWCOUNT", "powcount", "pow",     "data/POWUP.BIN",    True),
+    ("data/CREDANIM", "credanim", "credits", "data/MAINP.BIN",    True),
+    ("data/HIANIM",   "hianim",   "hiscore", "data/MAINP.BIN",    True),
+    ("data/POWNUMS",  "pownums",  "pow",     "data/GOVPAL.BIN",   False),
+    ("data/POWNAMES", "pownames", "pow",     "data/GOVPAL.BIN",   False),
+    ("data/POWGADS",  "powgads",  "pow",     "data/GOVPAL.BIN",   False),
+    ("data/POWCOUNT", "powcount", "pow",     "data/GOVPAL.BIN",   False),
     ("data/POWMEDAL", "powmedal", "pow",     "data/GOVPAL.BIN",   False),
     ("data/KILLICON", "killicon", "hud",     "data/PHASEPAL.BIN", False),
     ("data/OKBADGE",  "okbadge",  "hud",     "data/PHASEPAL.BIN", False),
