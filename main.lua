@@ -11,6 +11,7 @@ local Powerups     = require "engine.powerups"
 local RescueSystem = require "engine.rescue"
 local Mission      = require "engine.mission"
 local Screen       = require "engine.screen"
+local Menu         = require "engine.menu"
 local Config       = require "engine.config"
 local Font         = require "engine.font"
 local EndStats     = require "engine.endstats"
@@ -28,6 +29,7 @@ local powerups
 local rescue
 local mission
 local screen
+local menu
 local endstats
 local won_timer    = nil   -- counts down MISSION COMPLETE before DESTRUCTION STATS
 local endstats_started = false
@@ -405,6 +407,13 @@ local function leave_game_mode()
   camera.view_oy    = 0
   camera:set_zoom(viewer_zi)
   love.window.setTitle(world:title())
+end
+
+-- Opens the main menu over whatever is currently running. RESUME is only
+-- selectable when a game is actually in progress behind it.
+local function open_menu()
+  menu:set_enabled("resume", game_mode)
+  menu:open()
 end
 
 local function enter_sandbox()
@@ -853,7 +862,8 @@ function love.load(args)
 
   screen = Screen:new()
   endstats = EndStats:new()
-  screen:show("TITLE", { fade_in = 0.6, hold = 2.0, fade_out = 0.6 })
+  menu = Menu:new()
+  screen:show("TITLE", { fade_in = 0.6, hold = 2.0, fade_out = 0.6, on_done = open_menu })
 end
 
 -- Fire p's current weapon if its reload is up and it has ammo. owner stays the
@@ -900,6 +910,7 @@ end
 
 function love.update(dt)
   if screen then screen:update(dt) end
+  if menu and menu:is_active() then menu:update(dt); return end
   if anim_gallery then gallery_update(dt); return end
   if font_gallery then return end
   if paused then return end
@@ -1003,6 +1014,11 @@ function love.update(dt)
 end
 
 function love.draw()
+  if menu and menu:is_active() then
+    menu:draw()
+    if screen then screen:draw() end
+    return
+  end
   if anim_gallery then
     draw_anim_gallery()
     return
@@ -1068,6 +1084,32 @@ function love.keypressed(key)
       return
     end
     screen:keypressed(key)
+    return
+  end
+
+  -- Main menu: Escape backs out to the running game if there is one (same as
+  -- selecting RESUME); otherwise it's swallowed so the menu stays up front.
+  if menu and menu:is_active() then
+    if key == "escape" then
+      if game_mode then menu:close() end
+      return
+    end
+    local sel = menu:keypressed(key)
+    if sel == "new_game" then
+      menu:close()
+      if game_mode then leave_game_mode() end
+      begin_game_mode()
+    elseif sel == "resume" then
+      menu:close()
+    elseif sel == "options" then
+      screen:show("OPTPIC", { fade_in = 0.3, wait_key = true, fade_out = 0.3 })
+    elseif sel == "credits" then
+      screen:show("CREDITS", { fade_in = 0.3, wait_key = true, fade_out = 0.3 })
+    elseif sel == "hiscores" then
+      screen:show("HISCORE", { fade_in = 0.3, wait_key = true, fade_out = 0.3 })
+    elseif sel == "exit" then
+      love.event.quit()
+    end
     return
   end
 
@@ -1237,7 +1279,7 @@ function love.keypressed(key)
   end
 
   if key == "escape" then
-    if game_mode then leave_game_mode() end
+    open_menu()
     return
   end
   if key == "tab"    then renderer.picker      = true end
