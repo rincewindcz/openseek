@@ -1,16 +1,20 @@
-local Class = require "engine.class"
+local Class    = require "engine.class"
+local MenuFont = require "engine.menufont"
+local Font     = require "engine.font"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
 -- OPTIONS / CREDITS / HIGH SCORES / LOAD / SAVE / ORDER INFO / EXIT over the
 -- MAINP backdrop, with a triangular cursor next to the highlighted entry).
--- Purely presentational: Menu:keypressed returns the id of a confirmed entry
--- and the caller (main.lua) decides what that means.
+-- Purely presentational: confirming an entry plays a short flash/fade-out and
+-- then calls self.on_select(id); the caller (main.lua) sets that callback and
+-- decides what each id means.
 --
 -- Entry labels and the selection arrow are the original's own pre-rendered
 -- art (MAINMEN.BIN word sprites plus the arrow cropped from MAINMENU.BMP,
 -- see tools/export_mainmen.py), not live-drawn: exported truecolor straight
 -- through the captured runtime menu palette, so they match the original screen
--- pixel for pixel.
+-- pixel for pixel. Entries with no baked word PNG (custom labels like EDITOR)
+-- are composed from a font sliced out of that same art (engine/menufont.lua).
 local Menu = Class()
 
 -- Design canvas (the original screen is 320x240); every offset below is in
@@ -28,6 +32,21 @@ local ARROW_H   = 13    -- fallback if arrow.png is missing
 local ARROW_GAP = 8     -- gap between the arrow tip and the label
 local ARROW_SPEED = 12  -- higher = snappier tween between rows
 
+-- Highlight animation for the selected row: a single soft blink each time the
+-- selection changes, plus the arrow slowly lunging toward the label.
+local SEL_BLINK_TIME  = 0.14 -- length of the one-shot blink on selection change
+local SEL_BLINK_DEPTH = 0.40 -- how far its alpha dips (0 = none, 1 = to black)
+local LUNGE_SPEED = 2.2  -- rad/s of the arrow bob/zoom (slow, non-distracting)
+local LUNGE_BOB   = 3    -- px the arrow slides toward the label at full lunge
+local LUNGE_ZOOM  = 0.15 -- extra arrow scale at full lunge
+
+-- Open fade-in and confirm fade-out (whole menu fades through black), and the
+-- heavy fast flash on the confirmed row.
+local OPEN_TIME    = 0.25
+local CONFIRM_TIME = 0.30
+local CONFIRM_FLASH = 100  -- rad/s of the confirmed row's fast on/off flash
+local CONFIRM_FLASH_LOW = 0.0
+
 local Menu_DEFAULT_ENTRIES = {
   { id = "new_game",   label = "NEW GAME" },
   { id = "resume",     label = "RESUME",     enabled = false },
@@ -36,7 +55,7 @@ local Menu_DEFAULT_ENTRIES = {
   { id = "hiscores",   label = "HIGH SCORES" },
   { id = "load",       label = "LOAD",       enabled = false },
   { id = "save",       label = "SAVE",       enabled = false },
-  { id = "order_info", label = "ORDER INFO", enabled = false, gap_after = 8 },
+  { id = "editor",     label = "EDITOR",     gap_after = 8 },
   { id = "exit",       label = "EXIT" },
 }
 
@@ -51,24 +70,37 @@ function Menu:init(entries)
   self.t       = 0
   self.active  = false
 
+  -- Font sliced from the same word art, used to render any entry that has no
+  -- baked word PNG (e.g. custom labels like EDITOR).
+  self.font = MenuFont:new()
+
   local y = ROW_Y0
   for _, e in ipairs(self.entries) do
     e.y = y
+    -- Prefer the original's pre-baked word art; fall back to composing the
+    -- label from the sliced font when there's no PNG for this id.
     local ok, img = pcall(love.graphics.newImage, "assets/mainmen/" .. e.id .. ".png")
     if ok then
       img:setFilter("nearest", "nearest")
       e.img = img
-    else
-      print("menu: missing assets/mainmen/" .. e.id .. ".png")
     end
-    e.mid_y = y + (img and img:getHeight() or ARROW_H) / 2
+    local h = (e.img and e.img:getHeight()) or self.font.height
+    e.mid_y = y + h / 2
     y = y + ROW_DY + (e.gap_after or 0)
   end
   self.arrow_y = self.entries[1] and self.entries[1].mid_y or ROW_Y0
 
+  -- Bottom-right build tag, drawn in the in-game CHARS font (truecolor gold).
+  self.version_font = Font.get("chars")
+  self.version_text = "OPENSEEK 0.9"
+
   local ok, img = pcall(love.graphics.newImage, "assets/fullscreen/MAINP.png")
   if ok then
-    img:setFilter("nearest", "nearest")
+    -- Linear (not nearest): the backdrop is continuously sub-pixel scaled by
+    -- the breathing zoom, and nearest sampling makes the seams between source
+    -- texels crawl/shimmer as the scale drifts. Only the backdrop needs this;
+    -- the crisp pixel-art labels and arrow stay nearest.
+    img:setFilter("linear", "linear")
     self.bg = img
   else
     print("menu: missing assets/fullscreen/MAINP.png")
@@ -93,6 +125,11 @@ function Menu:is_active() return self.active end
 function Menu:open()
   self.active = true
   self.t = 0
+  self.open_t = 0         -- drives the fade-in (see _fade())
+  self.held = false       -- true while an info screen is up over the menu
+  self.confirming = nil   -- pending confirmed id during the fade-out
+  self.confirm_t = 0
+  self.sel_blink_t = SEL_BLINK_TIME  -- start with no blink in progress
   if self.entries[self.cursor] and self.entries[self.cursor].enabled == false then
     self:_move(1)
   end
@@ -102,6 +139,13 @@ end
 
 function Menu:close()
   self.active = false
+end
+
+-- Keeps the menu active but fully faded to black behind a fullscreen screen
+-- launched from it, so the game underneath never shows through. Cleared by the
+-- next open() when the screen is dismissed.
+function Menu:hold()
+  self.held = true
 end
 
 function Menu:set_enabled(id, enabled)
@@ -120,30 +164,48 @@ function Menu:_move(dir)
   for _ = 1, n do
     i = ((i - 1 + dir) % n) + 1
     if self.entries[i].enabled ~= false then
+      if i ~= self.cursor then self.sel_blink_t = 0 end  -- one-shot blink
       self.cursor = i
       return
     end
   end
 end
 
--- Returns the id of a confirmed entry (Enter/Space on an enabled row), else
--- nil. Navigation keys are consumed internally and also return nil.
+-- Confirming an entry starts a short fade-out; the choice is delivered to
+-- self.on_select(id) when it finishes (see update()), not returned here, so
+-- the flash/fade plays before the caller acts. Input is ignored mid-confirm.
 function Menu:keypressed(key)
-  if not self.active then return nil end
+  if not self.active or self.confirming then return end
   if key == "up" then
     self:_move(-1)
   elseif key == "down" then
     self:_move(1)
   elseif key == "return" or key == "space" or key == "kpenter" then
     local e = self.entries[self.cursor]
-    if e and e.enabled ~= false then return e.id end
+    if e and e.enabled ~= false then
+      self.confirming = e.id
+      self.confirm_t = 0
+    end
   end
-  return nil
 end
 
 function Menu:update(dt)
-  if not self.active then return end
+  if not self.active or self.held then return end
   self.t = self.t + dt
+  if self.open_t < OPEN_TIME then self.open_t = self.open_t + dt end
+
+  if self.confirming then
+    self.confirm_t = self.confirm_t + dt
+    if self.confirm_t >= CONFIRM_TIME then
+      local id = self.confirming
+      self.confirming = nil
+      if self.on_select then self.on_select(id) end  -- may close/hold self
+    end
+    return  -- freeze the arrow tween while the choice resolves
+  end
+
+  if self.sel_blink_t < SEL_BLINK_TIME then self.sel_blink_t = self.sel_blink_t + dt end
+
   local e = self.entries[self.cursor]
   if e then
     -- Exponential ease toward the selected row instead of an instant jump.
@@ -152,26 +214,55 @@ function Menu:update(dt)
   end
 end
 
+-- Whole-menu opacity: black while held, fades in on open, out on confirm.
+function Menu:_fade()
+  if self.held then return 0 end
+  if self.confirming then
+    return math.max(0, 1 - self.confirm_t / CONFIRM_TIME)
+  end
+  if self.open_t and self.open_t < OPEN_TIME then
+    return self.open_t / OPEN_TIME
+  end
+  return 1
+end
+
 -- Original gold arrow sprite, right edge ARROW_GAP left of the label column,
--- tweened to self.arrow_y (see update()).
-function Menu:_draw_arrow(g)
+-- tweened to self.arrow_y and lunging toward the label (bob + zoom) on the
+-- shared highlight phase; scaled about its own center so the zoom stays put.
+function Menu:_draw_arrow(g, alpha)
   if not self.arrow then return end
   local aw, ah = self.arrow:getWidth(), self.arrow:getHeight()
-  g.setColor(1, 1, 1, 1)
-  g.draw(self.arrow, ROW_X - ARROW_GAP - aw, self.arrow_y - ah / 2)
+  local phase  = 0.5 + 0.5 * math.sin(self.t * LUNGE_SPEED)
+  local s      = 1 + LUNGE_ZOOM * phase
+  local cx     = ROW_X - ARROW_GAP - aw / 2 + LUNGE_BOB * phase
+  g.setColor(1, 1, 1, alpha)
+  g.draw(self.arrow, cx, self.arrow_y, 0, s, s, aw / 2, ah / 2)
+end
+
+-- Alpha for the highlighted row: a heavy fast on/off flash while confirming,
+-- otherwise a single soft blink that decays after each selection change.
+function Menu:_highlight_alpha()
+  if self.confirming then
+    return (math.sin(self.confirm_t * CONFIRM_FLASH) > 0) and 1 or CONFIRM_FLASH_LOW
+  end
+  if self.sel_blink_t and self.sel_blink_t < SEL_BLINK_TIME then
+    return 1 - SEL_BLINK_DEPTH * math.sin(self.sel_blink_t / SEL_BLINK_TIME * math.pi)
+  end
+  return 1
 end
 
 function Menu:draw()
   local g      = love.graphics
   local sw, sh = g.getDimensions()
+  local fade   = self:_fade()
 
   -- Backdrop: always stretched to fully cover the window (no letterbox bars),
   -- plus a slow breathing zoom that only ever zooms in so it can never expose
-  -- an edge.
+  -- an edge. Fades with the menu (open/confirm) through black.
   if self.bg then
     local breathe = 1 + 0.015 * (1 + math.sin(self.t * 0.5)) / 2
     local bw, bh  = sw * breathe, sh * breathe
-    g.setColor(1, 1, 1, 1)
+    g.setColor(fade, fade, fade, 1)
     g.draw(self.bg, (sw - bw) / 2, (sh - bh) / 2, 0,
       bw / self.bg:getWidth(), bh / self.bg:getHeight())
   else
@@ -186,18 +277,32 @@ function Menu:draw()
   g.translate((sw - DW * sc) / 2, (sh - DH * sc) / 2)
   g.scale(sc, sc)
 
+  local hl = self:_highlight_alpha()
   for i, e in ipairs(self.entries) do
+    local selected = (i == self.cursor)
+    local a = (e.enabled == false) and DIM_ALPHA or (selected and hl or 1)
     if e.img then
-      local a = (e.enabled == false) and DIM_ALPHA or 1
-      g.setColor(1, 1, 1, a)
+      g.setColor(1, 1, 1, a * fade)
       g.draw(e.img, ROW_X, e.y)
+    else
+      self.font:draw(e.label, ROW_X, e.y, a * fade)
     end
-    if i == self.cursor then
-      self:_draw_arrow(g)
+    if selected then
+      self:_draw_arrow(g, hl * fade)
     end
   end
 
   g.pop()
+
+  -- Build tag, bottom-right. Drawn in raw window pixels (outside the design
+  -- scale) so it stays a small crisp 8px tag instead of being blown up with
+  -- the menu. CHARS is truecolor (no alpha tint), so only show it once the
+  -- menu is fully up rather than leaving gold text over the fade-to-black.
+  if fade >= 1 then
+    local vw = self.version_font:width(self.version_text)
+    self.version_font:print(self.version_text, sw - vw - 4, sh - self.version_font.line_height - 3)
+  end
+
   g.setColor(1, 1, 1, 1)
 end
 

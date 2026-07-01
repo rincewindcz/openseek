@@ -346,6 +346,7 @@ local function spawn_player()
 end
 
 local function enter_game_mode()
+  if menu then menu:close() end  -- drop the held-black menu once the world is live
   viewer_zi  = camera.zi
   game_mode  = true
   paused     = false
@@ -412,8 +413,31 @@ end
 -- Opens the main menu over whatever is currently running. RESUME is only
 -- selectable when a game is actually in progress behind it.
 local function open_menu()
-  menu:set_enabled("resume", game_mode)
+  menu:set_enabled("resume", game_mode or false)  -- coerce nil -> disabled
   menu:open()
+end
+
+-- Runs a confirmed menu entry, fired by the menu once its confirm flash/fade
+-- has played (see engine/menu.lua). The info screens close the menu and
+-- reopen it when dismissed, so the menu fades back in behind them.
+local function menu_select(id)
+  if id == "new_game" then
+    menu:hold()  -- stay black behind the briefing; enter_game_mode() closes it
+    if game_mode then leave_game_mode() end
+    begin_game_mode()
+  elseif id == "resume" then
+    menu:close()
+  elseif id == "options" or id == "credits" or id == "hiscores" then
+    local pic = (id == "options" and "OPTPIC") or (id == "credits" and "CREDITS") or "HISCORE"
+    menu:hold()  -- stay active but black behind the screen so the game can't show through
+    screen:show(pic, { fade_in = 0.3, wait_key = true, fade_out = 0.3, on_done = open_menu })
+  elseif id == "editor" then
+    -- Drop into the overview (dev/editor) view. TODO: real level editor.
+    if game_mode then leave_game_mode() end
+    menu:close()
+  elseif id == "exit" then
+    love.event.quit()
+  end
 end
 
 local function enter_sandbox()
@@ -863,6 +887,11 @@ function love.load(args)
   screen = Screen:new()
   endstats = EndStats:new()
   menu = Menu:new()
+  menu.on_select = menu_select
+  -- Hold the menu black behind the title card so the overview never shows
+  -- during the intro; open_menu() fades it in once the title is done.
+  open_menu()
+  menu:hold()
   screen:show("TITLE", { fade_in = 0.6, hold = 2.0, fade_out = 0.6, on_done = open_menu })
 end
 
@@ -1079,8 +1108,15 @@ function love.keypressed(key)
   -- picture (the crash end screen) otherwise advances on any key.
   if screen and screen:is_active() then
     if key == "escape" then
-      screen:cancel()
-      if split_mode then leave_split() elseif game_mode then leave_game_mode() end
+      -- A screen launched from the menu (menu held black behind it) just backs
+      -- out to the menu; otherwise Esc skips it and drops back to the game.
+      if menu and menu:is_active() then
+        screen:cancel()
+        open_menu()
+      else
+        screen:cancel()
+        if split_mode then leave_split() elseif game_mode then leave_game_mode() end
+      end
       return
     end
     screen:keypressed(key)
@@ -1089,37 +1125,29 @@ function love.keypressed(key)
 
   -- Main menu: Escape backs out to the running game if there is one (same as
   -- selecting RESUME); otherwise it's swallowed so the menu stays up front.
+  -- The F8/F9 dev overlays stay reachable: they close the menu, fall through to
+  -- the openers below, and reopen it on exit.
   if menu and menu:is_active() then
     if key == "escape" then
       if game_mode then menu:close() end
       return
     end
-    local sel = menu:keypressed(key)
-    if sel == "new_game" then
+    if (key == "f8" or key == "f9") and not game_mode and not split_mode then
       menu:close()
-      if game_mode then leave_game_mode() end
-      begin_game_mode()
-    elseif sel == "resume" then
-      menu:close()
-    elseif sel == "options" then
-      screen:show("OPTPIC", { fade_in = 0.3, wait_key = true, fade_out = 0.3 })
-    elseif sel == "credits" then
-      screen:show("CREDITS", { fade_in = 0.3, wait_key = true, fade_out = 0.3 })
-    elseif sel == "hiscores" then
-      screen:show("HISCORE", { fade_in = 0.3, wait_key = true, fade_out = 0.3 })
-    elseif sel == "exit" then
-      love.event.quit()
+    else
+      menu:keypressed(key)  -- confirmed entries dispatch via menu.on_select
+      return
     end
-    return
   end
 
-  -- Animation gallery test overlay: F8 toggles it from the overview, Esc/F8 close.
+  -- Animation gallery test overlay: F8 toggles it from the overview, Esc/F8
+  -- close. Closing returns to the main menu it was opened from.
   if anim_gallery then
-    if key == "f8" or key == "escape" then anim_gallery = false end
+    if key == "f8" or key == "escape" then anim_gallery = false; open_menu() end
     return
   end
   if font_gallery then
-    if key == "f9" or key == "escape" then font_gallery = false end
+    if key == "f9" or key == "escape" then font_gallery = false; open_menu() end
     return
   end
   if key == "f8" and not game_mode and not split_mode then

@@ -26,6 +26,11 @@ The arrow cursor (a solid gold right-pointing triangle next to the highlighted
 entry) is not present as its own sprite file in the game data; it is cropped
 directly out of MAINMEN.BMP, keyed on the same gold ramp.
 
+Each rendered word is also sliced on its empty columns (letters sit 1px apart,
+words 21px) into a reusable per-letter font under assets/mainmen/font/, so new
+menu labels can be composed from the original art. Only the letters that occur
+in the menu words exist (A C D E F G H I L M N O P R S T U V W X).
+
 HIGH SCORES is wider than the others and its final "S" wraps around the Mode X
 virtual buffer (384 px = 96 bytes x 4 planes), decoding to negative x. unwrap()
 adds the buffer width back so the tail rejoins the word; keep_largest_cluster()
@@ -43,11 +48,22 @@ REPO_ROOT = THIS_DIR.parent
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 
-# On-screen order, matching MAINMEN.BIN's frame layout 1:1.
+# On-screen order, matching MAINMEN.BIN's frame layout 1:1, with the word each
+# entry spells (used to slice the word art into a reusable per-letter font).
 ENTRIES = [
-    "new_game", "resume", "options", "credits", "hiscores",
-    "load", "save", "order_info", "exit",
+    ("new_game",   "NEW GAME"),
+    ("resume",     "RESUME"),
+    ("options",    "OPTIONS"),
+    ("credits",    "CREDITS"),
+    ("hiscores",   "HIGH SCORES"),
+    ("load",       "LOAD"),
+    ("save",       "SAVE"),
+    ("order_info", "ORDER INFO"),
+    ("exit",       "EXIT"),
 ]
+
+FONT_H = 15  # canonical glyph height; every word is 15px tall (one 16px stray
+             # bottom row belongs only to HIGH SCORES' wrapped final S)
 
 CLUSTER_GAP = 40   # px; real inter-word gaps in a phrase measure ~22px
 MODEX_WIDTH = 384  # Mode X virtual buffer width (96 bytes x 4 planes)
@@ -111,6 +127,28 @@ def render_indexed(canvas, palette):
     return img
 
 
+def emit_glyphs(word_img, text, glyphs, font_dir):
+    # Slice a rendered word into per-letter glyphs on its empty columns (letters
+    # are 1px apart, words 21px), saving the first occurrence of each character.
+    W, H = word_img.size
+    px = word_img.load()
+    full = [any(px[x, y][3] > 0 for y in range(H)) for x in range(W)]
+    runs, x = [], 0
+    while x < W:
+        if full[x]:
+            s = x
+            while x < W and full[x]:
+                x += 1
+            runs.append((s, x - 1))
+        else:
+            x += 1
+    letters = [c for c in text if c != " "]
+    for (x0, x1), ch in zip(runs, letters):
+        if ch not in glyphs:
+            word_img.crop((x0, 0, x1 + 1, FONT_H)).save(font_dir / f"{ch}.png")
+            glyphs[ch] = True
+
+
 def export_arrow(bmp_path, palette, out_dir):
     from PIL import Image
     src = Image.open(bmp_path)
@@ -151,10 +189,14 @@ def main():
     if len(frames) != len(ENTRIES) * 3:
         sys.exit(f"expected {len(ENTRIES) * 3} frames, got {len(frames)}")
 
+    font_dir = out_dir / "font"
+    font_dir.mkdir(parents=True, exist_ok=True)
+
     print(f"Game dir: {game_dir}")
     print(f"Output:   {out_dir}\n")
 
-    for i, entry_id in enumerate(ENTRIES):
+    glyphs = {}  # char -> saved (first occurrence wins)
+    for i, (entry_id, text) in enumerate(ENTRIES):
         off, end = frames[i * 3]
         canvas, status = db.decode_frame(data, off, end)
         if status != "ok" or not canvas:
@@ -165,7 +207,9 @@ def main():
         fname = f"{entry_id}.png"
         img.save(out_dir / fname)
         print(f"  {entry_id}: {img.width}x{img.height} -> assets/mainmen/{fname}")
+        emit_glyphs(img, text, glyphs, font_dir)
 
+    print(f"\n  font: {len(glyphs)} glyphs [{''.join(sorted(glyphs))}] -> assets/mainmen/font/")
     export_arrow(bmp_path, palette, out_dir)
 
 
