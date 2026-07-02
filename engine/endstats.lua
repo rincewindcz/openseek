@@ -33,194 +33,194 @@ local BADGE_FPS    = 18
 local PTS = { ground = 10, buildings = 10, choppers = 100, rescues = 200, ok = 250 }
 
 function EndStats:init()
-  self.active = false
-  self._img   = {}
-  self.header = self:_load("header.png")
-  self.totalscore = self:_load("label_totalscore.png")
-  self.pct    = self:_load("pct.png")
-  self.phase_num = {}
-  for i = 0, 3 do self.phase_num[i + 1] = self:_load("phase_f" .. i .. ".png") end
-  self.digit = {}
-  for i = 0, 19 do self.digit[i] = self:_load(string.format("digit_f%02d.png", i)) end
-  self.killicon = {}
-  for i = 0, 3 do self.killicon[i] = self:_asset("hud/killicon_f" .. string.format("%02d", i) .. ".png") end
-  self.okbadge = {}
-  local i = 0
-  while true do
-    local img = self:_asset("hud/okbadge_f" .. string.format("%02d", i) .. ".png", true)
-    if not img then break end
-    self.okbadge[i + 1] = img
-    i = i + 1
-  end
+    self.active = false
+    self._img   = {}
+    self.header = self:_load("header.png")
+    self.totalscore = self:_load("label_totalscore.png")
+    self.pct    = self:_load("pct.png")
+    self.phase_num = {}
+    for i = 0, 3 do self.phase_num[i + 1] = self:_load("phase_f" .. i .. ".png") end
+    self.digit = {}
+    for i = 0, 19 do self.digit[i] = self:_load(string.format("digit_f%02d.png", i)) end
+    self.killicon = {}
+    for i = 0, 3 do self.killicon[i] = self:_asset("hud/killicon_f" .. string.format("%02d", i) .. ".png") end
+    self.okbadge = {}
+    local i = 0
+    while true do
+        local img = self:_asset("hud/okbadge_f" .. string.format("%02d", i) .. ".png", true)
+        if not img then break end
+        self.okbadge[i + 1] = img
+        i = i + 1
+    end
 end
 
 function EndStats:_load(name, quiet)
-  return self:_asset(DIR .. name, quiet)
+    return self:_asset(DIR .. name, quiet)
 end
 
 function EndStats:_asset(path, quiet)
-  if self._img[path] == nil then
-    local ok, img = pcall(love.graphics.newImage, "assets/" .. path)
-    if ok then
-      img:setFilter("nearest", "nearest")
-      self._img[path] = img
-    else
-      if not quiet then print("endstats: missing " .. path) end
-      self._img[path] = false
+    if self._img[path] == nil then
+        local ok, img = pcall(love.graphics.newImage, "assets/" .. path)
+        if ok then
+            img:setFilter("nearest", "nearest")
+            self._img[path] = img
+        else
+            if not quiet then print("endstats: missing " .. path) end
+            self._img[path] = false
+        end
     end
-  end
-  return self._img[path] or nil
+    return self._img[path] or nil
 end
 
--- ── lifecycle ──────────────────────────────────────────────────────────────
+-- lifecycle
 
 -- Build the per-line tally columns from one participant's figures. A single
 -- player yields one (gold) column; co-op yields one tinted column per player.
 -- A participant: { player, color, ground={killed,total}, buildings={killed,total},
 -- choppers, rescues }.
 local function participant_cols(p)
-  local function pct(c) return (c and c.total and c.total > 0) and (c.killed / c.total * 100) or 0 end
-  local ground   = math.floor(pct(p.ground) + 0.5)
-  local build    = math.floor(pct(p.buildings) + 0.5)
-  local choppers = p.choppers or 0
-  local rescues  = p.rescues  or 0
-  -- Provisional OK rating: one point per fully cleared objective category.
-  local ok = 0
-  if p.ground and p.ground.total > 0 and ground >= 100 then ok = ok + 1 end
-  if p.buildings and p.buildings.total > 0 and build >= 100 then ok = ok + 1 end
-  if choppers > 0 then ok = ok + 1 end
-  if rescues > 0 then ok = ok + 1 end
-  return {
-    ground    = { value = ground,   bonus = ground * PTS.ground },
-    buildings = { value = build,    bonus = build  * PTS.buildings },
-    choppers  = { value = choppers, bonus = choppers * PTS.choppers },
-    rescues   = { value = rescues,  bonus = rescues * PTS.rescues },
-    ok        = { value = ok,       bonus = ok * PTS.ok },
-  }
+    local function pct(c) return (c and c.total and c.total > 0) and (c.killed / c.total * 100) or 0 end
+    local ground   = math.floor(pct(p.ground) + 0.5)
+    local build    = math.floor(pct(p.buildings) + 0.5)
+    local choppers = p.choppers or 0
+    local rescues  = p.rescues  or 0
+    -- Provisional OK rating: one point per fully cleared objective category.
+    local ok = 0
+    if p.ground and p.ground.total > 0 and ground >= 100 then ok = ok + 1 end
+    if p.buildings and p.buildings.total > 0 and build >= 100 then ok = ok + 1 end
+    if choppers > 0 then ok = ok + 1 end
+    if rescues > 0 then ok = ok + 1 end
+    return {
+        ground    = { value = ground,   bonus = ground * PTS.ground },
+        buildings = { value = build,    bonus = build  * PTS.buildings },
+        choppers  = { value = choppers, bonus = choppers * PTS.choppers },
+        rescues   = { value = rescues,  bonus = rescues * PTS.rescues },
+        ok        = { value = ok,       bonus = ok * PTS.ok },
+    }
 end
 
 -- stats: { phase, participants = { {player, color, ground, buildings, choppers,
 -- rescues}, ... } } (one participant single player, two in co-op).
 function EndStats:start(stats)
-  local parts = stats.participants or {}
-  self.players_meta = {}
-  self.base_score   = 0
-  for _, p in ipairs(parts) do
-    p._cols = participant_cols(p)
-    p._base = (p.player and p.player.score) or 0
-    self.base_score = self.base_score + p._base
-    self.players_meta[#self.players_meta + 1] = p
-  end
-  self.coop = #parts > 1
-
-  local kinds = {
-    { kind = "ground",    pct = true, icon = 0 },
-    { kind = "buildings", pct = true, icon = 1 },
-    { kind = "choppers",  icon = 2 },
-    { kind = "rescues",   icon = 3 },
-    { kind = "ok",        badge = true },
-  }
-  self.rows = {}
-  for _, k in ipairs(kinds) do
-    local row = { kind = k.kind, pct = k.pct, icon = k.icon, badge = k.badge, cols = {} }
+    local parts = stats.participants or {}
+    self.players_meta = {}
+    self.base_score   = 0
     for _, p in ipairs(parts) do
-      local c = p._cols[k.kind]
-      row.cols[#row.cols + 1] = { value = c.value, bonus = c.bonus,
-                                  color = p.color, player = p.player }
+        p._cols = participant_cols(p)
+        p._base = (p.player and p.player.score) or 0
+        self.base_score = self.base_score + p._base
+        self.players_meta[#self.players_meta + 1] = p
     end
-    self.rows[#self.rows + 1] = row
-  end
+    self.coop = #parts > 1
 
-  self.phase       = stats.phase or 1
-  self.t           = 0
-  self.badge_t     = 0
-  self.active      = true
-  self.applied     = false
-  self._total_time = #self.rows * LINE_STAGGER + LINE_TIME + 0.6
+    local kinds = {
+        { kind = "ground",    pct = true, icon = 0 },
+        { kind = "buildings", pct = true, icon = 1 },
+        { kind = "choppers",  icon = 2 },
+        { kind = "rescues",   icon = 3 },
+        { kind = "ok",        badge = true },
+    }
+    self.rows = {}
+    for _, k in ipairs(kinds) do
+        local row = { kind = k.kind, pct = k.pct, icon = k.icon, badge = k.badge, cols = {} }
+        for _, p in ipairs(parts) do
+            local c = p._cols[k.kind]
+            row.cols[#row.cols + 1] = { value = c.value, bonus = c.bonus,
+                                        color = p.color, player = p.player }
+        end
+        self.rows[#self.rows + 1] = row
+    end
+
+    self.phase       = stats.phase or 1
+    self.t           = 0
+    self.badge_t     = 0
+    self.active      = true
+    self.applied     = false
+    self._total_time = #self.rows * LINE_STAGGER + LINE_TIME + 0.6
 end
 
 function EndStats:is_active() return self.active end
 
 -- progress 0..1 of row i (1-based), eased.
 function EndStats:_row_prog(i)
-  local start = (i - 1) * LINE_STAGGER
-  local p = (self.t - start) / LINE_TIME
-  if p <= 0 then return 0 end
-  if p >= 1 then return 1 end
-  return p * p * (3 - 2 * p)   -- smoothstep
+    local start = (i - 1) * LINE_STAGGER
+    local p = (self.t - start) / LINE_TIME
+    if p <= 0 then return 0 end
+    if p >= 1 then return 1 end
+    return p * p * (3 - 2 * p)   -- smoothstep
 end
 
 function EndStats:update(dt)
-  if not self.active then return end
-  self.t = self.t + dt
-  self.badge_t = self.badge_t + dt
-  if not self.applied and self.t >= self._total_time then
-    self:_apply_final()
-  end
+    if not self.active then return end
+    self.t = self.t + dt
+    self.badge_t = self.badge_t + dt
+    if not self.applied and self.t >= self._total_time then
+        self:_apply_final()
+    end
 end
 
 function EndStats:_total_score()
-  local s = self.base_score
-  for i, row in ipairs(self.rows) do
-    local prog = self:_row_prog(i)
-    for _, col in ipairs(row.cols) do
-      s = s + math.floor(col.bonus * prog + 0.5)
+    local s = self.base_score
+    for i, row in ipairs(self.rows) do
+        local prog = self:_row_prog(i)
+        for _, col in ipairs(row.cols) do
+            s = s + math.floor(col.bonus * prog + 0.5)
+        end
     end
-  end
-  return s
+    return s
 end
 
 -- Fold each player's earned bonus into their own score (co-op keeps the two
 -- scores separate); idempotent.
 function EndStats:_apply_final()
-  if self.applied then return end
-  self.applied = true
-  for _, p in ipairs(self.players_meta) do
-    if p.player then
-      local bonus = 0
-      for _, row in ipairs(self.rows) do
-        for _, col in ipairs(row.cols) do
-          if col.player == p.player then bonus = bonus + col.bonus end
+    if self.applied then return end
+    self.applied = true
+    for _, p in ipairs(self.players_meta) do
+        if p.player then
+            local bonus = 0
+            for _, row in ipairs(self.rows) do
+                for _, col in ipairs(row.cols) do
+                    if col.player == p.player then bonus = bonus + col.bonus end
+                end
+            end
+            p.player.score = p._base + bonus
         end
-      end
-      p.player.score = p._base + bonus
     end
-  end
 end
 
 -- Dismiss the screen (any key after the tally settles, or Esc at any time).
 function EndStats:keypressed()
-  if not self.active then return false end
-  if self.t < self._total_time then
-    self.t = self._total_time   -- first press snaps the tally to completion
+    if not self.active then return false end
+    if self.t < self._total_time then
+        self.t = self._total_time   -- first press snaps the tally to completion
+        return true
+    end
+    self.active = false
+    self:_apply_final()
     return true
-  end
-  self.active = false
-  self:_apply_final()
-  return true
 end
 
--- ── draw ─────────────────────────────────────────────────────────────────────
+-- draw
 
 -- Right-align a number's digits so the readout ends at design x = rx. The gold
 -- digit set (f10-19) draws untinted; the white set (f0-9) is tinted to a color
 -- so co-op can show each player's column in their HUD color.
 function EndStats:_draw_number(g, value, rx, ty, gold, color)
-  local base = gold and 10 or 0
-  local str  = tostring(math.max(0, math.floor(value + 0.5)))
-  local x    = rx
-  local c    = color or { 1, 1, 1 }
-  for i = #str, 1, -1 do
-    local d   = base + tonumber(str:sub(i, i))
-    local img = self.digit[d]
-    if img then
-      x = x - img:getWidth()
-      g.setColor(c[1], c[2], c[3])
-      g.draw(img, x, ty)
-      x = x - 1
+    local base = gold and 10 or 0
+    local str  = tostring(math.max(0, math.floor(value + 0.5)))
+    local x    = rx
+    local c    = color or { 1, 1, 1 }
+    for i = #str, 1, -1 do
+        local d   = base + tonumber(str:sub(i, i))
+        local img = self.digit[d]
+        if img then
+            x = x - img:getWidth()
+            g.setColor(c[1], c[2], c[3])
+            g.draw(img, x, ty)
+            x = x - 1
+        end
     end
-  end
-  return x
+    return x
 end
 
 -- Right edges of the value column(s): single gold column, or two tinted columns
@@ -229,104 +229,104 @@ end
 local COOP_RX = { 244, 300 }
 
 function EndStats:_draw_row_values(g, row, i, ry)
-  local prog = self:_row_prog(i)
-  for j, col in ipairs(row.cols) do
-    local shown = Config.endstats_count_up and (col.value * prog)
-      or (col.value * (1 - prog))
-    local rx, gold, color
-    if self.coop then
-      rx, gold, color = COOP_RX[j] or NUM_RX, false, col.color
-    else
-      rx, gold, color = NUM_RX, true, nil
+    local prog = self:_row_prog(i)
+    for j, col in ipairs(row.cols) do
+        local shown = Config.endstats_count_up and (col.value * prog)
+            or (col.value * (1 - prog))
+        local rx, gold, color
+        if self.coop then
+            rx, gold, color = COOP_RX[j] or NUM_RX, false, col.color
+        else
+            rx, gold, color = NUM_RX, true, nil
+        end
+        self:_draw_number(g, shown, rx, ry, gold, color)
+        if row.pct and self.pct then
+            g.setColor(1, 1, 1)
+            g.draw(self.pct, rx + 3, ry)
+        end
     end
-    self:_draw_number(g, shown, rx, ry, gold, color)
-    if row.pct and self.pct then
-      g.setColor(1, 1, 1)
-      g.draw(self.pct, rx + 3, ry)
-    end
-  end
 end
 
 function EndStats:_draw_icons(g, row, n_full)
-  local img = self.killicon[row.icon]
-  if not img then return end
-  local n = math.floor(n_full + 0.0001)
-  local w = img:getWidth()
-  for k = 0, n - 1 do
-    g.setColor(1, 1, 1)
-    g.draw(img, LX + k * (w + ICON_GAP), 0)
-  end
+    local img = self.killicon[row.icon]
+    if not img then return end
+    local n = math.floor(n_full + 0.0001)
+    local w = img:getWidth()
+    for k = 0, n - 1 do
+        g.setColor(1, 1, 1)
+        g.draw(img, LX + k * (w + ICON_GAP), 0)
+    end
 end
 
 function EndStats:draw()
-  if not self.active then return end
-  local g      = love.graphics
-  local sw, sh = g.getDimensions()
-  g.setColor(0, 0, 0, 0.6)
-  g.rectangle("fill", 0, 0, sw, sh)
+    if not self.active then return end
+    local g      = love.graphics
+    local sw, sh = g.getDimensions()
+    g.setColor(0, 0, 0, 0.6)
+    g.rectangle("fill", 0, 0, sw, sh)
 
-  local sc = math.min(sw / (DW + 8), sh / (DH + 8))
-  g.push()
-  g.translate((sw - DW * sc) / 2, (sh - DH * sc) / 2)
-  g.scale(sc, sc)
+    local sc = math.min(sw / (DW + 8), sh / (DH + 8))
+    g.push()
+    g.translate((sw - DW * sc) / 2, (sh - DH * sc) / 2)
+    g.scale(sc, sc)
 
-  -- Header + phase number.
-  if self.header then
-    g.setColor(1, 1, 1)
-    g.draw(self.header, (DW - self.header:getWidth()) / 2, 4)
-    local pn = self.phase_num[math.max(1, math.min(4, self.phase))]
-    if pn then
-      -- after the "PHASE" word, before the right wing
-      g.draw(pn, (DW + self.header:getWidth()) / 2 - 62, 4)
-    end
-  end
-
-  for i, row in ipairs(self.rows) do
-    local ry = ROW_Y0 + (i - 1) * ROW_DY
-
-    local label = self:_load("label_" .. (row.kind == "ok" and "total5" or row.kind) .. ".png")
-    if label then
-      g.setColor(1, 1, 1)
-      g.draw(label, LX, ry)
-    end
-
-    if row.badge then
-      -- OK rating: the spinning badge sits just right of the "5." marker. The
-      -- frames vary in width (the badge rotates), so center each on a fixed point
-      -- or it wobbles.
-      local frames = #self.okbadge
-      if frames > 0 then
-        local fi  = (math.floor(self.badge_t * BADGE_FPS) % frames) + 1
-        local img = self.okbadge[fi]
+    -- Header + phase number.
+    if self.header then
         g.setColor(1, 1, 1)
-        g.draw(img, LX + TEXT_DX + 16 - img:getWidth() / 2, ry - 4)
-      end
-    elseif not self.coop then
-      -- proportional kill-icon row under the label (single player only; co-op
-      -- shows two value columns instead).
-      local col   = row.cols[1]
-      local prog  = self:_row_prog(i)
-      local shown = Config.endstats_count_up and (col.value * prog) or (col.value * (1 - prog))
-      local frac  = (row.pct and (shown / 100) or (shown / MAX_ICONS))
-      g.push()
-      g.translate(0, ry + ICON_Y)
-      self:_draw_icons(g, row, math.min(MAX_ICONS, frac * MAX_ICONS))
-      g.pop()
+        g.draw(self.header, (DW - self.header:getWidth()) / 2, 4)
+        local pn = self.phase_num[math.max(1, math.min(4, self.phase))]
+        if pn then
+            -- after the "PHASE" word, before the right wing
+            g.draw(pn, (DW + self.header:getWidth()) / 2 - 62, 4)
+        end
     end
 
-    self:_draw_row_values(g, row, i, ry)
-  end
+    for i, row in ipairs(self.rows) do
+        local ry = ROW_Y0 + (i - 1) * ROW_DY
 
-  -- TOTAL SCORE row: label aligned to the body-text column (past the line
-  -- numbers), value aligned to the readout column like the line values.
-  if self.totalscore then
+        local label = self:_load("label_" .. (row.kind == "ok" and "total5" or row.kind) .. ".png")
+        if label then
+            g.setColor(1, 1, 1)
+            g.draw(label, LX, ry)
+        end
+
+        if row.badge then
+            -- OK rating: the spinning badge sits just right of the "5." marker. The
+            -- frames vary in width (the badge rotates), so center each on a fixed point
+            -- or it wobbles.
+            local frames = #self.okbadge
+            if frames > 0 then
+                local fi  = (math.floor(self.badge_t * BADGE_FPS) % frames) + 1
+                local img = self.okbadge[fi]
+                g.setColor(1, 1, 1)
+                g.draw(img, LX + TEXT_DX + 16 - img:getWidth() / 2, ry - 4)
+            end
+        elseif not self.coop then
+            -- proportional kill-icon row under the label (single player only; co-op
+            -- shows two value columns instead).
+            local col   = row.cols[1]
+            local prog  = self:_row_prog(i)
+            local shown = Config.endstats_count_up and (col.value * prog) or (col.value * (1 - prog))
+            local frac  = (row.pct and (shown / 100) or (shown / MAX_ICONS))
+            g.push()
+            g.translate(0, ry + ICON_Y)
+            self:_draw_icons(g, row, math.min(MAX_ICONS, frac * MAX_ICONS))
+            g.pop()
+        end
+
+        self:_draw_row_values(g, row, i, ry)
+    end
+
+    -- TOTAL SCORE row: label aligned to the body-text column (past the line
+    -- numbers), value aligned to the readout column like the line values.
+    if self.totalscore then
+        g.setColor(1, 1, 1)
+        g.draw(self.totalscore, LX + TEXT_DX, TOTAL_Y)
+    end
+    self:_draw_number(g, self:_total_score(), NUM_RX, TOTAL_Y, true)
+
+    g.pop()
     g.setColor(1, 1, 1)
-    g.draw(self.totalscore, LX + TEXT_DX, TOTAL_Y)
-  end
-  self:_draw_number(g, self:_total_score(), NUM_RX, TOTAL_Y, true)
-
-  g.pop()
-  g.setColor(1, 1, 1)
 end
 
 return EndStats

@@ -14,9 +14,9 @@ Shadow.OFFSET = 12     -- offset at full altitude (world px; scaled by draw size
 
 -- Draw an image as a flat black silhouette. Caller restores the draw color.
 function Shadow.draw(img, x, y, rot, sx, sy, ox, oy, alpha)
-  if not img then return end
-  love.graphics.setColor(0, 0, 0, alpha)
-  love.graphics.draw(img, x, y, rot, sx, sy, ox, oy)
+    if not img then return end
+    love.graphics.setColor(0, 0, 0, alpha)
+    love.graphics.draw(img, x, y, rot, sx, sy, ox, oy)
 end
 
 return Shadow
