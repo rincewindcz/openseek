@@ -131,12 +131,24 @@ HUD) have been re-exported with the fixed decoder.
 
 ## Architecture
 
-Love2D entry point is `main.lua`, which owns the three top-level modes:
+Love2D entry point is `main.lua`: it builds the shared systems into an `app`
+context table, registers the scenes with the stack-based scene manager
+(`core/scene_manager.lua`), and delegates every `love.*` callback to the
+fullscreen fade overlay plus the top scene. Each top-level mode is a scene in
+`engine/scenes/`:
 
-- **Viewer** (default): free-roam camera over the stage, stage/kind pickers.
-- **Game** (`F1`): camera locks to the player, world rotates so the player faces
-  up, combat runs.
-- **Sandbox** (`F3`): game mode plus a live vehicle-parameter editor.
+- **title** -> **main_menu**: the boot flow; the menu is also pushed over a
+  running game (Esc), where RESUME pops back.
+- **overview** (EDITOR entry): free-roam camera over the stage, stage/kind
+  pickers, the SETUP/START/VIEW panel, and the mode-launch keys.
+- **mission_briefing** / **mission_select**: the pre-mission menu and the
+  debug mission/phase picker.
+- **gameplay** (`F1`): camera locks to the player, world rotates so the player
+  faces up, combat runs. **sandbox** (`F3`) extends it with a live
+  vehicle-parameter editor.
+- **coop_setup** / **coop_gameplay** (`F7`): the 2P setup overlay and the
+  split-screen co-op mode.
+- **anim_gallery** / **font_gallery** (`F8`/`F9`): dev test overlays.
 
 Engine modules (`engine/`), all built on the tiny `core/class.lua` helper:
 
@@ -163,8 +175,17 @@ Engine modules (`engine/`), all built on the tiny `core/class.lua` helper:
 | `core/font.lua` | Original bitmap fonts (`assets/fonts/<name>.{png,json}`, exported by `tools/export_fonts.py`). Each font is one atlas plus per-glyph quad metrics; `Font.get(name)` caches an instance and `print` / `print_word` draw a string at a scale and tint color. Most glyph containers are ordinary blitter sprite frames (one frame per glyph) and decode through `decode_blitter`; the in-game body fonts `chars`/`charspow` are the raw planar HUD class and decode through `decode_planar` (the exporter routes each font automatically by `decode_planar.is_planar`). Their pixels are a brightness ramp in a high palette region the stage palette leaves undefined, so the exporter renders them as white-on-alpha intensity **masks** (gradient preserved by rank-normalizing the ramp) that the engine tints at runtime. `OVERKILL` keeps its real per-stage palette (truecolor, drawn untinted); `charstit` is the yellow-with-outline title font (truecolor under GOVPAL, idx 16 outline + idx 24 `(252,220,0)`) used for the mission-menu descriptions; `mainmen` is the main-menu word art sliced per letter and packed by `tools/export_mainmen.py` (truecolor, the whole menu renders from it). Truecolor fonts keep their baked RGB but still honor a passed alpha so the menu can fade/blink/dim them. Full sets (`chars`/`charspow`/`charstit`/`hichars`/`hichars2`/`savechar`/`endchars`/`keysfont`) are ASCII-indexed (frame == codepoint); `phasenum` is the digits `1234`; `gov`/`gov2`/`overkill` are word sequences. The `F9` gallery renders every font for testing. |
 | `dev/debug_panel.lua` | Debug overlay (`F2`): click to select an entity (overlap pick-list), inspect it, and edit every `type_data` field (numbers step, bools toggle, string fields cycle known values). `[S]` saves all fields per kind to `data/entity_types.json`. While the pick-list / picker / field editor is open the overview camera is held still (`captures_arrows`) and the focused overlapping entity glows in the world (`highlight_entity`). |
 | `core/mathx.lua` | Small math helpers shared across systems: the `atan2` LuaJIT/Lua 5.3 shim and `heading_deg` (screen heading in the deg 0 = north, clockwise-positive convention). |
+| `core/scene.lua` | Base class for scenes: no-op lifecycle hooks (`enter`/`leave`/`suspend`/`resume`), update/draw, and input handlers; `ui_pointer = true` marks menu-family scenes that own the SELPOINT cursor. |
+| `core/scene_manager.lua` | Stack-based scene manager: name registry (`register`), `switch`/`push`/`pop`/`replace`, and `dispatch` to the top scene only. Scenes address each other by name so they never require each other in cycles. |
+| `game/vehicles.lua` | Vehicle catalogue shared by the scenes: per-vehicle weapon cycle lists, the chopper-skin/tank picker cycle, and UI labels. |
 | `game/stats.lua` | Destruction-stats bookkeeping shared by gameplay and the end-of-phase screen: the ground/building kind tables, `kind_category`, `destructible_totals`, and `stage_phase`. |
 | `ui/layout.lua` | Shared 320x240 design space (`DESIGN_W`/`DESIGN_H`) and the `fit` letterbox transform (scale + centering offsets) used by every non-game screen and `ui/pointer.lua`. |
+
+Scene modules (`engine/scenes/`), one per top-level mode, all subclassing
+`core/scene.lua`: `title`, `main_menu`, `mission_briefing`, `mission_select`,
+`overview`, `gameplay_base` (shared firing / weapon cycling / landing /
+mission-won sequencing), `gameplay`, `sandbox` (extends gameplay),
+`coop_setup`, `coop_gameplay`, `anim_gallery`, `font_gallery`.
 
 ## Game controls
 
@@ -241,9 +262,9 @@ player's rounds hit the other. P1 uses WASD + L-Shift/L-Ctrl/Q/E, P2 uses arrows
   otherwise the AI aims it. `data/building_drops.json` forces a pickup kind on a
   building's death (asset filename -> kind, e.g. bunker -> medal).
 - Player ammo lives on `player.lua` (`seed_ammo`/`has_ammo`/`consume_ammo`/
-  `add_ammo`); `main.lua:_try_fire` gates on it. Weapons map to a `short` name and
+  `add_ammo`); the scenes' `fire_for` (`scenes/gameplay_base.lua`) gates on it. Weapons map to a `short` name and
   WEAPONS.BIN `icon` frame in `data/weapons.json`.
-- `main.lua:_try_fire` drives player firing from input and the weapon's fire rate.
+- `GameplayBase:fire_for` (`engine/scenes/gameplay_base.lua`) drives player firing from input and the weapon's fire rate.
 - `entity.lua` is the damage target: `take_damage`, `on_hit` (spawns smoke),
   the HP-tier damage smoke, and the death/explosion state machine.
 - `data/weapons.json` defines every weapon, including `enemy` weapons (`flak`,

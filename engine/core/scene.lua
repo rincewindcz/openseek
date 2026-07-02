@@ -1,0 +1,33 @@
+local Class = require "engine.core.class"
+
+-- Base class for scenes managed by engine/core/scene_manager.lua. Every hook
+-- is an overridable no-op so scenes only implement what they use. Update,
+-- draw, and input reach only the scene on top of the stack. Touch input is
+-- routed through the mouse handlers (the finger acts as the pointer), so
+-- scenes implement the mouse trio only.
+local Scene = Class()
+
+-- Menu-family scenes set this true: the app hides the OS cursor and draws the
+-- original SELPOINT pointer sprite instead while such a scene is on top.
+Scene.ui_pointer = false
+
+function Scene:init(app)
+    self.app = app
+end
+
+function Scene:enter() end
+function Scene:leave() end
+-- suspend/resume bracket another scene being pushed on top / popped off.
+function Scene:suspend() end
+function Scene:resume() end
+
+function Scene:update(_dt) end
+function Scene:draw() end
+
+function Scene:keypressed(_key) end
+function Scene:wheelmoved(_dx, _dy) end
+function Scene:mousemoved(_x, _y) end
+function Scene:mousepressed(_x, _y) end
+function Scene:mousereleased(_x, _y) end
+
+return Scene

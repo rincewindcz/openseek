@@ -25,18 +25,20 @@ function Screen:_img(name)
 end
 
 -- opts: fade_in, hold, fade_out (seconds); wait_key (hold until a key dismisses
--- it instead of timing out); on_done (called once fully faded out).
+-- it instead of timing out); on_done (called once fully faded out); on_cancel
+-- (called when the overlay is cancelled, so the shower decides where Esc goes).
 function Screen:show(name, opts)
     opts = opts or {}
     self.active = {
-        img      = self:_img(name),
-        fade_in  = opts.fade_in  or 0.5,
-        hold     = opts.hold     or 1.5,
-        fade_out = opts.fade_out or 0.5,
-        wait_key = opts.wait_key or false,
-        on_done  = opts.on_done,
-        phase    = "in",
-        t        = 0,
+        img       = self:_img(name),
+        fade_in   = opts.fade_in  or 0.5,
+        hold      = opts.hold     or 1.5,
+        fade_out  = opts.fade_out or 0.5,
+        wait_key  = opts.wait_key or false,
+        on_done   = opts.on_done,
+        on_cancel = opts.on_cancel,
+        phase     = "in",
+        t         = 0,
     }
 end
 
@@ -44,9 +46,12 @@ function Screen:is_active()
     return self.active ~= nil
 end
 
--- Drop the current overlay immediately without running its on_done callback.
+-- Drop the current overlay immediately without running its on_done callback;
+-- runs on_cancel instead when one was given.
 function Screen:cancel()
+    local overlay = self.active
     self.active = nil
+    if overlay and overlay.on_cancel then overlay.on_cancel() end
 end
 
 function Screen:update(dt)
