@@ -1,8 +1,7 @@
 local Class     = require "engine.class"
 local Animation = require "engine.animation"
 local Config    = require "engine.config"
-
-local atan2 = math.atan2 or math.atan
+local Mathx     = require "engine.core.mathx"
 
 -- POW rescue from POWHERE buildings. Each powhere.bin marker (World.rescue_zones)
 -- is a building holding one or more POWs and is paired with the nearest lh.bin
@@ -15,20 +14,20 @@ local atan2 = math.atan2 or math.atan
 -- are left to the mission's simple fly-over collection instead.
 local RescueSystem = Class()
 
-local POW_CLIPS  = { "newdude0", "pow0", "pow1" }
-local DWELL_TIME = 1.0   -- seconds the vehicle must hold the land pad before POWs emerge
-local SPAWN_GAP  = 0.7   -- seconds between successive POWs leaving the building
-local WALK_SPEED = 26    -- px/s a POW walks
-local LAND_R     = 40    -- vehicle must be stationary within this of the land marker
-local REACH_R    = 6     -- distance at which a POW reaches the door / vehicle
-local POW_HIT_R  = 6     -- a POW's collision radius when shot
-local COLOCATE_R = 12    -- a building this close under the marker is its paired hull
-local POW_ROT    = 0     -- rest-pose facing offset (deg) added to the walk heading
-local LH_FADE    = 0.2   -- seconds for the land pad to fade out/in
-local ZONE_FADE  = 0.3   -- seconds for the POWHERE marker to fade out once emptied
-local EXIT_GAP   = 4     -- px the POW emerges outside the building edge
-local CORPSE_PUSH = 5    -- px a shot POW's body slides in the shot direction
-local SLIDE_TIME = 0.12  -- seconds for that slide to settle
+local POW_CLIPS       = { "newdude0", "pow0", "pow1" }
+local DWELL_TIME      = 1.0  -- seconds the vehicle must hold the land pad before POWs emerge
+local SPAWN_GAP       = 0.7  -- seconds between successive POWs leaving the building
+local WALK_SPEED      = 26   -- px/s a POW walks
+local LAND_RADIUS     = 40   -- vehicle must be stationary within this of the land marker
+local REACH_RADIUS    = 6    -- distance at which a POW reaches the door / vehicle
+local POW_HIT_RADIUS  = 6    -- a POW's collision radius when shot
+local COLOCATE_RADIUS = 12   -- a building this close under the marker is its paired hull
+local POW_ROT         = 0    -- rest-pose facing offset (deg) added to the walk heading
+local LH_FADE         = 0.2  -- seconds for the land pad to fade out/in
+local ZONE_FADE       = 0.3  -- seconds for the POWHERE marker to fade out once emptied
+local EXIT_GAP        = 4    -- px the POW emerges outside the building edge
+local CORPSE_PUSH     = 5    -- px a shot POW's body slides in the shot direction
+local SLIDE_TIME      = 0.12 -- seconds for that slide to settle
 
 function RescueSystem:init(world, combat)
     self.world      = world
@@ -47,12 +46,12 @@ function RescueSystem:_count_for(idx)
 end
 
 function RescueSystem:_nearest_land(zone, taken)
-    local best, bd
-    for _, lz in ipairs(self.world.land_zones) do
-        if not taken[lz] then
-            local dx, dy = self.world:delta(lz.ent.x, lz.ent.y, zone.x, zone.y)
+    local best, best_dist
+    for _, land_zone in ipairs(self.world.land_zones) do
+        if not taken[land_zone] then
+            local dx, dy = self.world:delta(land_zone.ent.x, land_zone.ent.y, zone.x, zone.y)
             local d = dx * dx + dy * dy
-            if not bd or d < bd then best, bd = lz, d end
+            if not best_dist or d < best_dist then best, best_dist = land_zone, d end
         end
     end
     return best
@@ -67,7 +66,7 @@ function RescueSystem:_paired_buildings(zone)
         local cls = self.world.stage.classes[e.class_idx + 1]
         if cls and cls.kind_name == "structure" then
             local dx, dy = self.world:delta(e.x, e.y, zone.x, zone.y)
-            if dx * dx + dy * dy <= COLOCATE_R * COLOCATE_R then buildings[#buildings + 1] = e end
+            if dx * dx + dy * dy <= COLOCATE_RADIUS * COLOCATE_RADIUS then buildings[#buildings + 1] = e end
         end
     end
     return buildings
@@ -113,19 +112,19 @@ end
 -- A point just outside the building's edge on the side facing the land pad, so
 -- POWs appear next to the building rather than on top of it.
 function RescueSystem:_exit_point(zone, building, lx, ly)
-    local brad = 12
+    local building_radius = 12
     if building then
         local r = self.world.images[building.class_idx + 1]
         if r and r.img then
             local iw, ih = r.img:getDimensions()
-            brad = math.max(iw, ih) / 2
+            building_radius = math.max(iw, ih) / 2
         end
     end
     local ddx, ddy = self.world:delta(lx, ly, zone.x, zone.y)   -- building toward pad
-    local dl = math.sqrt(ddx * ddx + ddy * ddy)
-    if dl <= 0 then return zone.x, zone.y end
-    local off = math.max(8, math.min(brad + EXIT_GAP, dl - 8))
-    return zone.x + ddx / dl * off, zone.y + ddy / dl * off
+    local pad_distance = math.sqrt(ddx * ddx + ddy * ddy)
+    if pad_distance <= 0 then return zone.x, zone.y end
+    local exit_offset = math.max(8, math.min(building_radius + EXIT_GAP, pad_distance - 8))
+    return zone.x + ddx / pad_distance * exit_offset, zone.y + ddy / pad_distance * exit_offset
 end
 
 function RescueSystem:clear()
@@ -147,7 +146,7 @@ end
 function RescueSystem:_landed_in_zone(p, site)
     if not p:is_stationary() then return false end
     local dx, dy = self.world:delta(p.x, p.y, site.lx, site.ly)
-    return dx * dx + dy * dy <= LAND_R * LAND_R
+    return dx * dx + dy * dy <= LAND_RADIUS * LAND_RADIUS
 end
 
 function RescueSystem:_emerge(site, target)
@@ -174,10 +173,10 @@ function RescueSystem:_update_pow(pow, site, dt, lander)
     local gx, gy, reach
     if pow.state == "out" then
         gx, gy = pow.target.x, pow.target.y
-        reach  = (pow.target.collision_radius or 8) + REACH_R
+        reach  = (pow.target.collision_radius or 8) + REACH_RADIUS
     else
         gx, gy = site.ex, site.ey   -- back to the door, not the building center
-        reach  = REACH_R
+        reach  = REACH_RADIUS
     end
 
     local dx, dy = self.world:delta(gx, gy, pow.x, pow.y)
@@ -195,7 +194,7 @@ function RescueSystem:_update_pow(pow, site, dt, lander)
     end
 
     -- Face the way it walks (heading: 0 = north, clockwise; dx,dy point at the goal).
-    pow.heading = (math.deg(atan2(dy, dx)) + 90) % 360
+    pow.heading = Mathx.heading_deg(dx, dy)
     local step = WALK_SPEED * dt * Config.speed_scale
     local s    = self.world.stage.world_size
     pow.x = (pow.x + dx / d * step) % s
@@ -288,7 +287,7 @@ function RescueSystem:projectile_hit(x, y, radius, from_player)
             for _, pow in ipairs(site.pows) do
                 if not pow.done then
                     local dx, dy = self.world:delta(pow.x, pow.y, x, y)
-                    local rr = radius + POW_HIT_R
+                    local rr = radius + POW_HIT_RADIUS
                     if dx * dx + dy * dy < rr * rr then
                         pow.done  = true
                         site.lost = site.lost + 1

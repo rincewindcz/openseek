@@ -1,5 +1,6 @@
 local Class    = require "engine.class"
 local Font     = require "engine.font"
+local Layout   = require "engine.ui.layout"
 local Pointer  = require "engine.pointer"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
@@ -21,7 +22,7 @@ local Menu = Class()
 -- these coordinates, scaled to fit the window like Screen / EndStats. Only
 -- the foreground (labels + arrow) uses this letterboxed space -- the
 -- backdrop is stretched to fully cover the real window instead (see draw()).
-local DW, DH = 320, 240
+local DESIGN_W, DESIGN_H = Layout.DESIGN_W, Layout.DESIGN_H
 
 local ROW_X   = 60      -- label left edge
 local ROW_Y0  = 38      -- first row top
@@ -181,7 +182,7 @@ end
 -- the keyboard). Ignored mid-confirm or while an info screen is held over us.
 function Menu:hover(x, y)
     if not self.active or self.confirming or self.held then return end
-    local i = self:_entry_at(Pointer.to_design(x, y, DW, DH))
+    local i = self:_entry_at(Pointer.to_design(x, y, DESIGN_W, DESIGN_H))
     if i and i ~= self.cursor then
         self.sel_blink_t = 0
         self.cursor = i
@@ -190,7 +191,7 @@ end
 
 function Menu:press(x, y)
     if not self.active or self.confirming or self.held then return end
-    local i = self:_entry_at(Pointer.to_design(x, y, DW, DH))
+    local i = self:_entry_at(Pointer.to_design(x, y, DESIGN_W, DESIGN_H))
     if i then
         if i ~= self.cursor then self.sel_blink_t = 0; self.cursor = i end
         self.pressed = i
@@ -199,7 +200,7 @@ end
 
 function Menu:release(x, y)
     if not self.active or self.confirming or self.held then return end
-    local i   = self:_entry_at(Pointer.to_design(x, y, DW, DH))
+    local i   = self:_entry_at(Pointer.to_design(x, y, DESIGN_W, DESIGN_H))
     local was = self.pressed
     self.pressed = nil
     if was and i == was then
@@ -292,30 +293,30 @@ function Menu:_highlight_alpha()
 end
 
 function Menu:draw()
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
-    local fade   = self:_fade()
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    local fade               = self:_fade()
 
     -- Backdrop: always stretched to fully cover the window (no letterbox bars),
     -- plus a slow breathing zoom that only ever zooms in so it can never expose
     -- an edge. Fades with the menu (open/confirm) through black.
     if self.bg then
         local breathe = 1 + 0.015 * (1 + math.sin(self.t * 0.5)) / 2
-        local bw, bh  = sw * breathe, sh * breathe
+        local bw, bh  = screen_w * breathe, screen_h * breathe
         g.setColor(fade, fade, fade, 1)
-        g.draw(self.bg, (sw - bw) / 2, (sh - bh) / 2, 0,
+        g.draw(self.bg, (screen_w - bw) / 2, (screen_h - bh) / 2, 0,
             bw / self.bg:getWidth(), bh / self.bg:getHeight())
     else
         g.setColor(0, 0, 0, 1)
-        g.rectangle("fill", 0, 0, sw, sh)
+        g.rectangle("fill", 0, 0, screen_w, screen_h)
     end
 
     -- Foreground (labels + cursor) stays in the fixed 320x240 design space so
     -- proportions don't skew with the window's aspect ratio.
-    local sc = math.min(sw / DW, sh / DH)
+    local scale, offset_x, offset_y = Layout.fit(screen_w, screen_h)
     g.push()
-    g.translate((sw - DW * sc) / 2, (sh - DH * sc) / 2)
-    g.scale(sc, sc)
+    g.translate(offset_x, offset_y)
+    g.scale(scale, scale)
 
     local hl = self:_highlight_alpha()
     for i, e in ipairs(self.entries) do
@@ -335,7 +336,7 @@ function Menu:draw()
     -- menu is fully up rather than leaving gold text over the fade-to-black.
     if fade >= 1 then
         local vw = self.version_font:width(self.version_text)
-        self.version_font:print(self.version_text, sw - vw - 4, sh - self.version_font.line_height - 3)
+        self.version_font:print(self.version_text, screen_w - vw - 4, screen_h - self.version_font.line_height - 3)
     end
 
     g.setColor(1, 1, 1, 1)

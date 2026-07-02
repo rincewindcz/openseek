@@ -50,16 +50,16 @@ function Screen:cancel()
 end
 
 function Screen:update(dt)
-    local a = self.active
-    if not a then return end
-    a.t = a.t + dt
-    if a.phase == "in" then
-        if a.t >= a.fade_in then a.t = 0; a.phase = a.wait_key and "wait" or "hold" end
-    elseif a.phase == "hold" then
-        if a.t >= a.hold then a.t = 0; a.phase = "out" end
-    elseif a.phase == "out" then
-        if a.t >= a.fade_out then
-            local cb = a.on_done
+    local overlay = self.active
+    if not overlay then return end
+    overlay.t = overlay.t + dt
+    if overlay.phase == "in" then
+        if overlay.t >= overlay.fade_in then overlay.t = 0; overlay.phase = overlay.wait_key and "wait" or "hold" end
+    elseif overlay.phase == "hold" then
+        if overlay.t >= overlay.hold then overlay.t = 0; overlay.phase = "out" end
+    elseif overlay.phase == "out" then
+        if overlay.t >= overlay.fade_out then
+            local cb = overlay.on_done
             self.active = nil
             if cb then cb() end
         end
@@ -68,37 +68,37 @@ end
 
 -- Dismiss a wait_key overlay; returns true if a key was consumed.
 function Screen:keypressed()
-    local a = self.active
-    if a and a.phase == "wait" then
-        a.t = 0
-        a.phase = "out"
+    local overlay = self.active
+    if overlay and overlay.phase == "wait" then
+        overlay.t = 0
+        overlay.phase = "out"
         return true
     end
-    return a ~= nil
+    return overlay ~= nil
 end
 
-function Screen:_alpha(a)
-    if a.phase == "in" then
-        return a.fade_in > 0 and math.min(1, a.t / a.fade_in) or 1
-    elseif a.phase == "out" then
-        return a.fade_out > 0 and math.max(0, 1 - a.t / a.fade_out) or 0
+function Screen:_alpha(overlay)
+    if overlay.phase == "in" then
+        return overlay.fade_in > 0 and math.min(1, overlay.t / overlay.fade_in) or 1
+    elseif overlay.phase == "out" then
+        return overlay.fade_out > 0 and math.max(0, 1 - overlay.t / overlay.fade_out) or 0
     end
     return 1
 end
 
 function Screen:draw()
-    local a = self.active
-    if not a then return end
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
-    local al     = self:_alpha(a)
-    g.setColor(0, 0, 0, al)
-    g.rectangle("fill", 0, 0, sw, sh)
-    if a.img then
-        local iw, ih = a.img:getDimensions()
-        local s = math.min(sw / iw, sh / ih)
-        g.setColor(1, 1, 1, al)
-        g.draw(a.img, (sw - iw * s) / 2, (sh - ih * s) / 2, 0, s, s)
+    local overlay = self.active
+    if not overlay then return end
+    local g = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    local alpha = self:_alpha(overlay)
+    g.setColor(0, 0, 0, alpha)
+    g.rectangle("fill", 0, 0, screen_w, screen_h)
+    if overlay.img then
+        local img_w, img_h = overlay.img:getDimensions()
+        local scale = math.min(screen_w / img_w, screen_h / img_h)
+        g.setColor(1, 1, 1, alpha)
+        g.draw(overlay.img, (screen_w - img_w * scale) / 2, (screen_h - img_h * scale) / 2, 0, scale, scale)
     end
     g.setColor(1, 1, 1)
 end

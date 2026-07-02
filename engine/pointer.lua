@@ -4,9 +4,9 @@
 -- menus can hit-test their widgets against exactly the transform they draw with.
 --
 -- This is a plain singleton module (one pointer for the whole app), not a Class.
-local Pointer = {}
+local Layout = require "engine.ui.layout"
 
-local DW, DH = 320, 240
+local Pointer = {}
 
 local cursor  -- nil = not loaded yet, false = missing
 
@@ -37,12 +37,11 @@ function Pointer.moved(x, y, touch)
 end
 
 -- window px -> letterboxed design space, matching the menus' draw transform
--- (sc = min(sw/DW, sh/DH), centered). Returns design x, y and the scale.
+-- (Layout.fit, centered). Returns design x, y and the scale.
 function Pointer.to_design(x, y, dw, dh)
-    dw, dh = dw or DW, dh or DH
-    local sw, sh = love.graphics.getDimensions()
-    local sc = math.min(sw / dw, sh / dh)
-    return (x - (sw - dw * sc) / 2) / sc, (y - (sh - dh * sc) / 2) / sc, sc
+    local screen_w, screen_h = love.graphics.getDimensions()
+    local scale, ox, oy = Layout.fit(screen_w, screen_h, dw, dh)
+    return (x - ox) / scale, (y - oy) / scale, scale
 end
 
 -- Design-space position of the current pointer (convenience for hover updates).
@@ -55,12 +54,11 @@ end
 function Pointer.draw(dw, dh)
     load()
     if not cursor or not Pointer.seen or Pointer.touch then return end
-    dw, dh = dw or DW, dh or DH
     local g = love.graphics
-    local sw, sh = g.getDimensions()
-    local sc = math.min(sw / dw, sh / dh)
+    local screen_w, screen_h = g.getDimensions()
+    local scale = Layout.fit(screen_w, screen_h, dw, dh)
     g.setColor(1, 1, 1, 1)
-    g.draw(cursor, Pointer.x, Pointer.y, 0, sc, sc)
+    g.draw(cursor, Pointer.x, Pointer.y, 0, scale, scale)
 end
 
 return Pointer

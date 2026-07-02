@@ -1,29 +1,30 @@
-local World        = require "engine.world"
-local Camera       = require "engine.camera"
-local Renderer     = require "engine.renderer"
-local Debug        = require "engine.debug"
-local Animation    = require "engine.animation"
-local Player       = require "engine.player"
-local Hud          = require "engine.hud"
-local CombatSystem = require "engine.combat"
-local HeliSystem   = require "engine.enemy_heli"
-local Powerups     = require "engine.powerups"
-local RescueSystem = require "engine.rescue"
-local Mission      = require "engine.mission"
-local Screen       = require "engine.screen"
-local Menu         = require "engine.menu"
-local MissionMenu  = require "engine.missionmenu"
+local World         = require "engine.world"
+local Camera        = require "engine.camera"
+local Renderer      = require "engine.renderer"
+local Debug         = require "engine.debug"
+local Animation     = require "engine.animation"
+local Player        = require "engine.player"
+local Hud           = require "engine.hud"
+local CombatSystem  = require "engine.combat"
+local HeliSystem    = require "engine.enemy_heli"
+local Powerups      = require "engine.powerups"
+local RescueSystem  = require "engine.rescue"
+local Mission       = require "engine.mission"
+local Screen        = require "engine.screen"
+local Menu          = require "engine.menu"
+local MissionMenu   = require "engine.missionmenu"
 local MissionSelect = require "engine.missionselect"
-local Config       = require "engine.config"
-local Font         = require "engine.font"
-local EndStats     = require "engine.endstats"
-local Pointer      = require "engine.pointer"
-local json         = require "lib.json"
+local Config        = require "engine.config"
+local Font          = require "engine.font"
+local EndStats      = require "engine.endstats"
+local Pointer       = require "engine.pointer"
+local Stats         = require "engine.game.stats"
+local json          = require "lib.json"
 
 local world
 local camera
 local renderer
-local dbg
+local debug_panel
 local hud
 local player
 local combat
@@ -33,26 +34,26 @@ local rescue
 local mission
 local screen
 local menu
-local missionmenu
-local missionselect
+local mission_menu
+local mission_select
 local hidden_cursor  -- transparent HW cursor used to hide the pointer reliably
-local endstats
-local won_timer    = nil   -- counts down MISSION COMPLETE before DESTRUCTION STATS
-local endstats_started = false
-local anim_gallery = false      -- test overlay: plays every animation clip at once
-local gallery      = nil        -- lazily built { items = {{name, state}, ...} }
-local font_gallery = false      -- test overlay: renders every original bitmap font
-local death_timer  = nil       -- counts ~3s after a fatal crash before the end picture
-local pending_takeoff = false   -- chopper lifts off once the level-start zoom-in ends
-local game_mode    = false
-local sandbox_mode = false
-local death_enabled = false   -- optional game-over (chopper falls, tank burns)
-local paused        = false
-local sel_vehicle  = "chopper"
-local sel_chopper_skin = 1    -- player chopper variant (1 green, 2 magenta, 3 white)
-local viewer_zi    = 4
-local vehicle_defs = {}
-local CHOPPER_SKINS = 3
+local end_stats
+local won_timer             = nil     -- counts down MISSION COMPLETE before DESTRUCTION STATS
+local end_stats_started     = false
+local anim_gallery          = false   -- test overlay: plays every animation clip at once
+local gallery               = nil     -- lazily built { items = {{name, state}, ...} }
+local font_gallery          = false   -- test overlay: renders every original bitmap font
+local death_timer           = nil     -- counts ~3s after a fatal crash before the end picture
+local pending_takeoff       = false   -- chopper lifts off once the level-start zoom-in ends
+local game_mode             = false
+local sandbox_mode          = false
+local death_enabled         = false   -- optional game-over (chopper falls, tank burns)
+local paused                = false
+local selected_vehicle      = "chopper"
+local selected_chopper_skin = 1       -- player chopper variant (1 green, 2 magenta, 3 white)
+local viewer_zoom_index     = 4
+local vehicle_defs          = {}
+local CHOPPER_SKINS         = 3
 
 -- The vehicle picker cycles chopper skin 1->2->3 then tank then back. Returns the
 -- next (vehicle, skin) pair; a label like "CHOPPER 2" / "TANK" for the UI.
@@ -68,12 +69,12 @@ local function vehicle_label(vehicle, skin)
 end
 
 -- split-screen two-player (extra mode, not in the original game)
-local split_mode  = false
-local menu_open   = false          -- the 2P setup menu overlay
-local sp_players  = {}             -- two Player instances
-local sp_cameras  = {}             -- two Camera instances, one per screen half
-local mp_setup    = { vehicle = { "chopper", "tank" }, skin = { 1, 1 }, god = false, ff = false }
-local MP_COLORS   = { { 0.30, 0.65, 1.0 }, { 1.0, 0.55, 0.15 } }  -- P1 blue, P2 orange
+local split_mode      = false
+local coop_setup_open = false   -- the 2P setup menu overlay
+local split_players   = {}      -- two Player instances
+local split_cameras   = {}      -- two Camera instances, one per screen half
+local coop_options    = { vehicle = { "chopper", "tank" }, skin = { 1, 1 }, god = false, ff = false }
+local COOP_COLORS     = { { 0.30, 0.65, 1.0 }, { 1.0, 0.55, 0.15 } }  -- P1 blue, P2 orange
 
 -- Distinct key sets so both players share one keyboard. fire / weapon / action
 -- are read here in main.lua; the movement keys feed Player.controls.
@@ -95,13 +96,13 @@ local VEHICLE_WEAPONS = {
 -- Sync the HUD weapon icon (WEAPONS.BIN frame) to the active weapon.
 local function sync_weapon_icon()
     if not (player and combat) then return end
-    local wdef = combat.weapons[player.weapon_name]
-    player.weapon_icon = wdef and wdef.icon or 0
+    local weapon_def = combat.weapons[player.weapon_name]
+    player.weapon_icon = weapon_def and weapon_def.icon or 0
 end
 
 -- sandbox UI
 
-local SB_PARAMS = {
+local SANDBOX_PARAMS = {
     { name="sprite_scale",   step=0.5  },
     { name="rotor_y_offset", step=1    },
     { name="rotor_fps",      step=2    },
@@ -117,33 +118,33 @@ local SB_PARAMS = {
     { name="takeoff_time",   step=0.05 },
     { name="land_time",      step=0.05 },
 }
-local sb_cursor   = 1
-local sb_status   = ""
-local sb_status_t = 0
+local sandbox_cursor       = 1
+local sandbox_status       = ""
+local sandbox_status_timer = 0
 
-local function sb_apply()
+local function sandbox_apply()
     if not player then return end
-    local def = vehicle_defs[sel_vehicle]
+    local def = vehicle_defs[selected_vehicle]
     if def then player:load_vehicle_def(def) end
 end
 
-local function sb_adjust(dir)
-    local def = vehicle_defs[sel_vehicle]
+local function sandbox_adjust(dir)
+    local def = vehicle_defs[selected_vehicle]
     if not def then return end
-    local p = SB_PARAMS[sb_cursor]
+    local p = SANDBOX_PARAMS[sandbox_cursor]
     def[p.name] = (def[p.name] or 0) + dir * p.step
-    sb_apply()
+    sandbox_apply()
 end
 
-local function sb_save()
-    local def = vehicle_defs[sel_vehicle]
+local function sandbox_save()
+    local def = vehicle_defs[selected_vehicle]
     if not def then return end
     local src  = love.filesystem.getSource()
-    local path = src .. "/data/vehicles/" .. sel_vehicle .. ".json"
+    local path = src .. "/data/vehicles/" .. selected_vehicle .. ".json"
     local f    = io.open(path, "w")
     if not f then
-        sb_status   = "ERROR: cannot write"
-        sb_status_t = 3
+        sandbox_status       = "ERROR: cannot write"
+        sandbox_status_timer = 3
         return
     end
     f:write("{\n")
@@ -152,32 +153,32 @@ local function sb_save()
     table.sort(keys)
     for i, k in ipairs(keys) do
         local v  = def[k]
-        local vs = type(v) == "number" and string.format("%.4g", v) or tostring(v)
-        f:write(string.format('  "%s": %s%s\n', k, vs, i < #keys and "," or ""))
+        local value_text = type(v) == "number" and string.format("%.4g", v) or tostring(v)
+        f:write(string.format('  "%s": %s%s\n', k, value_text, i < #keys and "," or ""))
     end
     f:write("}\n")
     f:close()
-    sb_status   = "Saved!"
-    sb_status_t = 2
+    sandbox_status       = "Saved!"
+    sandbox_status_timer = 2
 end
 
 local function draw_sandbox_panel()
-    local g      = love.graphics
-    local sw     = g.getDimensions()
-    local pw     = 220
-    local ph     = #SB_PARAMS * 18 + 58
-    local bx     = sw - pw - 4
-    local by     = 30
+    local g        = love.graphics
+    local screen_w = g.getDimensions()
+    local pw       = 220
+    local ph       = #SANDBOX_PARAMS * 18 + 58
+    local bx       = screen_w - pw - 4
+    local by       = 30
 
     g.setColor(0, 0, 0, 0.88)
     g.rectangle("fill", bx, by, pw, ph, 4)
     g.setColor(0.3, 0.9, 0.3, 1)
-    g.print("SANDBOX: " .. sel_vehicle, bx + 8, by + 6)
+    g.print("SANDBOX: " .. selected_vehicle, bx + 8, by + 6)
 
-    local def = vehicle_defs[sel_vehicle] or {}
-    for i, p in ipairs(SB_PARAMS) do
+    local def = vehicle_defs[selected_vehicle] or {}
+    for i, p in ipairs(SANDBOX_PARAMS) do
         local y = by + 24 + (i - 1) * 18
-        if i == sb_cursor then
+        if i == sandbox_cursor then
             g.setColor(0.2, 0.5, 1, 0.3)
             g.rectangle("fill", bx + 2, y - 1, pw - 4, 18)
             g.setColor(1, 1, 0, 1)
@@ -185,16 +186,16 @@ local function draw_sandbox_panel()
             g.setColor(0.75, 0.75, 0.75, 1)
         end
         local val = def[p.name]
-        local vs  = val ~= nil and string.format("%.4g", val) or "?"
-        g.print(string.format("%-16s %6s", p.name, vs), bx + 8, y)
+        local value_text  = val ~= nil and string.format("%.4g", val) or "?"
+        g.print(string.format("%-16s %6s", p.name, value_text), bx + 8, y)
     end
 
     g.setColor(0.45, 0.45, 0.45, 1)
     g.print("[/] nav  +/- adj  F4 save  F3 exit", bx + 4, by + ph - 18)
 
-    if sb_status ~= "" then
+    if sandbox_status ~= "" then
         g.setColor(0.1, 1, 0.4, 1)
-        g.print(sb_status, bx + 8, by + ph + 4)
+        g.print(sandbox_status, bx + 8, by + ph + 4)
     end
 end
 
@@ -202,13 +203,13 @@ end
 -- a dimmed screen. No subtitle / key hints: game mode shows game-font text only.
 local function draw_overlay_text(title, dim)
     local g      = love.graphics
-    local sw, sh = g.getDimensions()
+    local screen_w, screen_h = g.getDimensions()
     g.setColor(0, 0, 0, dim or 0.55)
-    g.rectangle("fill", 0, 0, sw, sh)
+    g.rectangle("fill", 0, 0, screen_w, screen_h)
     local font = Font.get("chars")
     local s    = 5
-    font:print(title, (sw - font:width(title, s)) / 2,
-        (sh - font.line_height * s) / 2, { scale = s })
+    font:print(title, (screen_w - font:width(title, s)) / 2,
+        (screen_h - font.line_height * s) / 2, { scale = s })
     g.setColor(1, 1, 1)
 end
 
@@ -222,58 +223,29 @@ local function draw_victory()   draw_overlay_text("MISSION COMPLETE") end
 local function draw_return_prompt()
     if math.floor(love.timer.getTime() * 1.5) % 2 ~= 0 then return end
     local g      = love.graphics
-    local sw, sh = g.getDimensions()
+    local screen_w, screen_h = g.getDimensions()
     local font   = Font.get("chars")
     local s      = 4
     local lines  = { "MISSION COMPLETE", "RETURN TO BASE" }
-    local y      = sh / 2 - 70
+    local y      = screen_h / 2 - 70
     for _, ln in ipairs(lines) do
-        font:print(ln, (sw - font:width(ln, s)) / 2, y, { scale = s })
+        font:print(ln, (screen_w - font:width(ln, s)) / 2, y, { scale = s })
         y = y + font.line_height * s + 10
     end
 end
 
 -- end-of-phase stats
 
-local STAT_GROUND   = { tank = true, flak_turret = true, soldier = true,
-                        soldier_aggressive = true, truck = true }
-local STAT_BUILDING = { structure = true, radar = true }
-
--- Count the stage's destructible ground forces / buildings (total and how many
--- are down), for the DESTRUCTION STATS percentages.
-local function destructible_totals()
-    local classes = world.stage.classes
-    local g_tot, g_down, b_tot, b_down = 0, 0, 0, 0
-    for _, e in ipairs(world.entities) do
-        local cls  = classes[e.class_idx + 1]
-        local kind = cls and cls.kind_name
-        local destructible = (e.type_data and (e.type_data.hit_radius or 0) > 0)
-            or (e.max_hp or 0) > 0
-        if destructible then
-            if STAT_GROUND[kind] then
-                g_tot = g_tot + 1
-                if not e:is_alive() then g_down = g_down + 1 end
-            elseif STAT_BUILDING[kind] then
-                b_tot = b_tot + 1
-                if not e:is_alive() then b_down = b_down + 1 end
-            end
-        end
-    end
-    return g_tot, g_down, b_tot, b_down
-end
-
-local function stage_phase() return (tonumber((world.stage_name or ""):match("^stage%d(%d)")) or 0) + 1 end
-
 -- Single player: the whole stage's destruction is credited to the lone player
--- (counted from alive vs total), choppers from the heli system counter.
+-- (counted from alive versus total), choppers from the heli system counter.
 local function collect_stats()
-    local g_tot, g_down, b_tot, b_down = destructible_totals()
+    local ground_total, ground_down, building_total, building_down = Stats.destructible_totals(world)
     return {
-        phase = stage_phase(),
+        phase = Stats.stage_phase(world.stage_name),
         participants = { {
             player    = player,
-            ground    = { killed = g_down, total = g_tot },
-            buildings = { killed = b_down, total = b_tot },
+            ground    = { killed = ground_down, total = ground_total },
+            buildings = { killed = building_down, total = building_total },
             choppers  = helis.kills or 0,
             rescues   = player.pows or 0,
         } },
@@ -283,20 +255,20 @@ end
 -- Co-op: one column per player from their own attributed kills (combat /
 -- enemy_heli credit the shooter's stat_kills), against the shared stage totals.
 local function collect_coop_stats()
-    local g_tot, _gd, b_tot = destructible_totals()
+    local ground_total, _gd, building_total = Stats.destructible_totals(world)
     local participants = {}
-    for i, p in ipairs(sp_players) do
+    for i, p in ipairs(split_players) do
         local k = p.stat_kills or {}
         participants[i] = {
             player    = p,
-            color     = MP_COLORS[i],
-            ground    = { killed = k.ground or 0,   total = g_tot },
-            buildings = { killed = k.building or 0,  total = b_tot },
+            color     = COOP_COLORS[i],
+            ground    = { killed = k.ground or 0,   total = ground_total },
+            buildings = { killed = k.building or 0,  total = building_total },
             choppers  = k.chopper or 0,
             rescues   = p.pows or 0,
         }
     end
-    return { phase = stage_phase(), participants = participants }
+    return { phase = Stats.stage_phase(world.stage_name), participants = participants }
 end
 
 -- mode transitions
@@ -305,7 +277,7 @@ local function after_stage_load()
     camera.world_size = world.stage.world_size
     camera:clamp()
     renderer:refresh_kinds()
-    dbg.world = world
+    debug_panel.world = world
     hud.world = world
     hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
     love.window.setTitle(world:title())
@@ -321,18 +293,18 @@ local function spawn_player()
     player = Player:new(sx, sy)
     player.world_size   = world.stage.world_size
     player.home_x, player.home_y = sx, sy
-    player.vehicle      = sel_vehicle
-    player.chopper_skin = sel_chopper_skin
+    player.vehicle      = selected_vehicle
+    player.chopper_skin = selected_chopper_skin
     player.world        = world
     player.camera       = camera
-    local def = vehicle_defs[sel_vehicle]
+    local def = vehicle_defs[selected_vehicle]
     if def then player:load_vehicle_def(def) end
-    local wlist = VEHICLE_WEAPONS[sel_vehicle]
-    if wlist then player.weapon_name = wlist[1] end
+    local weapon_list = VEHICLE_WEAPONS[selected_vehicle]
+    if weapon_list then player.weapon_name = weapon_list[1] end
     player:seed_ammo(combat.weapons)
     sync_weapon_icon()
-    local _, sh = love.graphics.getDimensions()
-    camera.view_oy = sh * 0.24
+    local _, screen_h = love.graphics.getDimensions()
+    camera.view_oy = screen_h * 0.24
     hud.player    = player
     combat.player = player
     combat.players = { player }
@@ -347,21 +319,21 @@ local function spawn_player()
     camera:start_zoom_intro(1.5, 1.0)   -- smooth zoom-in as the level opens
     pending_takeoff = true              -- chopper takes off when the zoom-in ends
     won_timer       = nil
-    endstats_started = false
-    if endstats then endstats.active = false end
+    end_stats_started = false
+    if end_stats then end_stats.active = false end
 end
 
 local function enter_game_mode()
     if menu then menu:close() end  -- drop the held-black menu once the world is live
-    if missionmenu then missionmenu:close() end
-    viewer_zi  = camera.zi
+    if mission_menu then mission_menu:close() end
+    viewer_zoom_index  = camera.zoom_index
     game_mode  = true
     paused     = false
     death_timer = nil
     renderer.in_game = true
     camera:set_zoom(6)
     spawn_player()
-    love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
+    love.window.setTitle(world:title() .. "  [" .. selected_vehicle .. "]")
 end
 
 -- The per-mission briefing picture (STAGE0X_MPIC) for the loaded stage. Stage
@@ -388,7 +360,7 @@ local function restart_level()
     world:load(name)
     after_stage_load()
     spawn_player()
-    love.window.setTitle(world:title() .. "  [" .. sel_vehicle .. "]")
+    love.window.setTitle(world:title() .. "  [" .. selected_vehicle .. "]")
 end
 
 local function leave_game_mode()
@@ -397,8 +369,8 @@ local function leave_game_mode()
     paused            = false
     death_timer       = nil
     won_timer         = nil
-    endstats_started  = false
-    if endstats then endstats.active = false end
+    end_stats_started  = false
+    if end_stats then end_stats.active = false end
     pending_takeoff   = false
     renderer.in_game  = false
     player            = nil
@@ -413,7 +385,7 @@ local function leave_game_mode()
     mission           = nil
     camera.angle      = nil
     camera.view_oy    = 0
-    camera:set_zoom(viewer_zi)
+    camera:set_zoom(viewer_zoom_index)
     love.window.setTitle(world:title())
 end
 
@@ -431,7 +403,7 @@ local function menu_select(id)
     if id == "new_game" then
         if game_mode then leave_game_mode() end
         menu:close()
-        missionmenu:open(world.stage_name or world.stages[1])  -- pre-mission menu
+        mission_menu:open(world.stage_name or world.stages[1])  -- pre-mission menu
     elseif id == "resume" then
         menu:close()
     elseif id == "options" or id == "credits" or id == "hiscores" then
@@ -440,7 +412,7 @@ local function menu_select(id)
         screen:show(pic, { fade_in = 0.3, wait_key = true, fade_out = 0.3, on_done = open_menu })
     elseif id == "mission" then
         menu:close()
-        missionselect:open()   -- debug mission/phase picker
+        mission_select:open()   -- debug mission/phase picker
     elseif id == "editor" then
         -- Drop into the overview (dev/editor) view. TODO: real level editor.
         if game_mode then leave_game_mode() end
@@ -453,15 +425,15 @@ end
 -- Runs a confirmed mission-select button: PLAY loads the chosen stage and opens
 -- its pre-mission menu (from there PLAY starts the level); EXIT backs out to the
 -- main menu. The mission-select fade-out plays before this runs.
-local function missionselect_select(id, stage_name)
+local function mission_picker_select(id, stage_name)
     if id == "play" then
-        missionselect:close()
+        mission_select:close()
         if game_mode then leave_game_mode() end
         world:load(stage_name)
         after_stage_load()
-        missionmenu:open(stage_name)
+        mission_menu:open(stage_name)
     elseif id == "exit" then
-        missionselect:close()
+        mission_select:close()
         open_menu()
     end
 end
@@ -469,12 +441,12 @@ end
 -- Runs a confirmed mission-menu button. PLAY drops straight into the mission
 -- (the menu itself is the briefing now); EXIT backs out to the main menu.
 -- SAVE / LOAD / SHOP are stubs for now.
-local function mission_select(id)
+local function mission_menu_select(id)
     if id == "play" then
-        missionmenu:close()
+        mission_menu:close()
         enter_game_mode()
     elseif id == "exit" then
-        missionmenu:close()
+        mission_menu:close()
         open_menu()
     end
 end
@@ -482,7 +454,7 @@ end
 local function enter_sandbox()
     if not game_mode then enter_game_mode() end
     sandbox_mode = true
-    love.window.setTitle(world:title() .. "  [sandbox:" .. sel_vehicle .. "]")
+    love.window.setTitle(world:title() .. "  [sandbox:" .. selected_vehicle .. "]")
 end
 
 local function leave_sandbox()
@@ -494,67 +466,67 @@ end
 local function make_split_player(idx, sx, sy)
     local p = Player:new(sx, sy)
     p.world_size = world.stage.world_size
-    p.vehicle    = mp_setup.vehicle[idx]
-    p.chopper_skin = mp_setup.skin[idx]
+    p.vehicle    = coop_options.vehicle[idx]
+    p.chopper_skin = coop_options.skin[idx]
     p.world      = world
     p.controls   = (idx == 1) and P1_CONTROLS or P2_CONTROLS
     local def = vehicle_defs[p.vehicle]
     if def then p:load_vehicle_def(def) end
-    local wlist = VEHICLE_WEAPONS[p.vehicle]
-    if wlist then p.weapon_name = wlist[1] end
+    local weapon_list = VEHICLE_WEAPONS[p.vehicle]
+    if weapon_list then p.weapon_name = weapon_list[1] end
     p:seed_ammo(combat.weapons)
-    p.unlimited = mp_setup.god
+    p.unlimited = coop_options.god
     return p
 end
 
 local function enter_split()
-    viewer_zi  = camera.zi
-    menu_open  = false
+    viewer_zoom_index  = camera.zoom_index
+    coop_setup_open  = false
     split_mode = true
     game_mode  = false
     paused     = false
     won_timer        = nil
-    endstats_started = false
-    if endstats then endstats.active = false end
+    end_stats_started = false
+    if end_stats then end_stats.active = false end
     renderer.in_game = true
 
     local sx, sy = world:player_start()
-    sp_players = {
+    split_players = {
         make_split_player(1, sx - 40, sy),
         make_split_player(2, sx + 40, sy),
     }
-    for _, p in ipairs(sp_players) do p.home_x, p.home_y = sx, sy end
-    sp_cameras = { Camera:new(world.stage.world_size), Camera:new(world.stage.world_size) }
-    local _, sh = love.graphics.getDimensions()
-    for i, p in ipairs(sp_players) do
-        local c = sp_cameras[i]
+    for _, p in ipairs(split_players) do p.home_x, p.home_y = sx, sy end
+    split_cameras = { Camera:new(world.stage.world_size), Camera:new(world.stage.world_size) }
+    local _, screen_h = love.graphics.getDimensions()
+    for i, p in ipairs(split_players) do
+        local c = split_cameras[i]
         c:set_zoom(6)
-        c.view_oy = sh * 0.24
+        c.view_oy = screen_h * 0.24
         c.x, c.y  = p.x, p.y
         c.angle   = p:camera_angle()
         p.camera  = c
         p:take_off()   -- choppers lift off; no-op for the tank
     end
 
-    combat.players      = sp_players
-    combat.player       = sp_players[1]
-    combat.friendly_fire = mp_setup.ff
+    combat.players      = split_players
+    combat.player       = split_players[1]
+    combat.friendly_fire = coop_options.ff
     combat.projectiles  = {}
     combat.effects      = {}
     helis:reset()
-    powerups:set_players(sp_players)
+    powerups:set_players(split_players)
     rescue.pow_counts = Mission.rescue_counts(world.stage_name)
     rescue:reset()
     -- Shared co-op objective from the stage's decoded objectives (nil = free play).
-    mission = Mission.coop(world, sp_players)
+    mission = Mission.coop(world, split_players)
     love.window.setTitle(world:title() .. "  [2P SPLIT]")
 end
 
 local function leave_split()
     split_mode       = false
     won_timer        = nil
-    endstats_started = false
-    if endstats then endstats.active = false end
+    end_stats_started = false
+    if end_stats then end_stats.active = false end
     renderer.in_game = false
     renderer.camera  = camera
     combat.camera    = camera
@@ -569,23 +541,23 @@ local function leave_split()
     hud.player = nil
     hud.coplayer, hud.coplayer_color = nil, nil
     hud.view_w, hud.view_h = nil, nil
-    sp_players = {}
-    sp_cameras = {}
+    split_players = {}
+    split_cameras = {}
     camera.angle   = nil
     camera.view_oy = 0
-    camera:set_zoom(viewer_zi)
+    camera:set_zoom(viewer_zoom_index)
     love.window.setTitle(world:title())
 end
 
 local function draw_split()
     local g    = love.graphics
     local W, H = g.getDimensions()
-    local hw   = math.floor(W / 2)
-    for i, p in ipairs(sp_players) do
-        local vx    = (i - 1) * hw
-        local vw    = (i == 2) and (W - hw) or hw
-        local cam   = sp_cameras[i]
-        local other = sp_players[3 - i]
+    local half_w   = math.floor(W / 2)
+    for i, p in ipairs(split_players) do
+        local vx    = (i - 1) * half_w
+        local vw    = (i == 2) and (W - half_w) or half_w
+        local cam   = split_cameras[i]
+        local other = split_players[3 - i]
         cam.vw, cam.vh  = vw, H
         renderer.camera = cam
         combat.camera   = cam
@@ -615,16 +587,16 @@ local function draw_split()
             else p_front = p.y >= other.y end
         end
         if other and not p_front then
-            other:draw_remote(g, cam, MP_COLORS[3 - i])
+            other:draw_remote(g, cam, COOP_COLORS[3 - i])
             p:draw()
         else
             p:draw()
-            if other then other:draw_remote(g, cam, MP_COLORS[3 - i]) end
+            if other then other:draw_remote(g, cam, COOP_COLORS[3 - i]) end
         end
         p:draw_world_front()
         hud.player          = p
         hud.coplayer        = other
-        hud.coplayer_color  = other and MP_COLORS[3 - i] or nil
+        hud.coplayer_color  = other and COOP_COLORS[3 - i] or nil
         hud.view_w, hud.view_h = vw, H
         hud:draw()
         g.setScissor()
@@ -632,11 +604,11 @@ local function draw_split()
     end
     -- Center divider
     g.setColor(0, 0, 0, 1)
-    g.rectangle("fill", hw - 1, 0, 2, H)
+    g.rectangle("fill", half_w - 1, 0, 2, H)
     g.setColor(1, 1, 1)
 
-    if endstats:is_active() then
-        endstats:draw()
+    if end_stats:is_active() then
+        end_stats:draw()
     elseif mission then
         if mission.state == "won" then
             draw_overlay_text("MISSION COMPLETE")
@@ -674,7 +646,7 @@ end
 -- current vehicle icon. Each player toggles their own box independently, so both
 -- boxes are always live (no cursor / focus).
 local function draw_player_box(g, idx, bx, by, bw, bh)
-    local col = MP_COLORS[idx]
+    local col = COOP_COLORS[idx]
     g.setColor(0, 0, 0, 0.5)
     g.rectangle("fill", bx, by, bw, bh)
     g.setColor(col[1], col[2], col[3], 1)
@@ -682,45 +654,45 @@ local function draw_player_box(g, idx, bx, by, bw, bh)
     g.rectangle("line", bx, by, bw, bh)
     g.setLineWidth(1)
     g.print("PLAYER " .. idx, bx + 8, by + 6)
-    draw_vehicle_icon(g, mp_setup.vehicle[idx], bx + bw / 2, by + bh / 2 + 6, 2, mp_setup.skin[idx])
+    draw_vehicle_icon(g, coop_options.vehicle[idx], bx + bw / 2, by + bh / 2 + 6, 2, coop_options.skin[idx])
     g.setColor(1, 1, 1, 1)
-    local name = vehicle_label(mp_setup.vehicle[idx], mp_setup.skin[idx])
+    local name = vehicle_label(coop_options.vehicle[idx], coop_options.skin[idx])
     g.print("< " .. name .. " >", bx + bw / 2 - 40, by + bh - 22)
 end
 
 local function draw_2p_menu()
     local g      = love.graphics
-    local sw, sh = g.getDimensions()
+    local screen_w, screen_h = g.getDimensions()
     g.setColor(0, 0, 0, 0.85)
-    g.rectangle("fill", 0, 0, sw, sh)
+    g.rectangle("fill", 0, 0, screen_w, screen_h)
 
     g.setColor(0.5, 0.9, 1, 1)
     local title = "SPLIT SCREEN CO-OP"
-    g.print(title, sw / 2 - g.getFont():getWidth(title) * 1.5 / 2, sh / 2 - 200, 0, 1.5, 1.5)
+    g.print(title, screen_w / 2 - g.getFont():getWidth(title) * 1.5 / 2, screen_h / 2 - 200, 0, 1.5, 1.5)
 
     local bw, bh = 200, 150
     local gap    = 40
-    local boxy   = sh / 2 - 150
-    draw_player_box(g, 1, sw / 2 - bw - gap / 2, boxy, bw, bh)
-    draw_player_box(g, 2, sw / 2 + gap / 2,      boxy, bw, bh)
+    local boxy   = screen_h / 2 - 150
+    draw_player_box(g, 1, screen_w / 2 - bw - gap / 2, boxy, bw, bh)
+    draw_player_box(g, 2, screen_w / 2 + gap / 2,      boxy, bw, bh)
 
     local ty = boxy + bh + 36
     g.setColor(1, 1, 1, 1)
-    g.print(string.format("[G] God mode:     < %s >", mp_setup.god and "ON" or "OFF"), sw / 2 - 120, ty)
-    g.print(string.format("[F] Friendly fire: < %s >", mp_setup.ff and "ON" or "OFF"), sw / 2 - 120, ty + 30)
+    g.print(string.format("[G] God mode:     < %s >", coop_options.god and "ON" or "OFF"), screen_w / 2 - 120, ty)
+    g.print(string.format("[F] Friendly fire: < %s >", coop_options.ff and "ON" or "OFF"), screen_w / 2 - 120, ty + 30)
 
     g.setColor(0.6, 0.6, 0.6, 1)
     local fy = ty + 78
-    g.print("P1 (blue): A/D pick vehicle      P2 (orange): Left/Right pick vehicle", sw / 2 - 240, fy)
-    g.print("G god mode      F friendly fire      SPACE start      Esc cancel", sw / 2 - 240, fy + 22)
+    g.print("P1 (blue): A/D pick vehicle      P2 (orange): Left/Right pick vehicle", screen_w / 2 - 240, fy)
+    g.print("G god mode      F friendly fire      SPACE start      Esc cancel", screen_w / 2 - 240, fy + 22)
     g.print("In game  P1: WASD + L-Shift/L-Ctrl/Q/E    P2: Arrows + R-Shift/R-Ctrl/Num0/NumEnter",
-        sw / 2 - 240, fy + 46)
+        screen_w / 2 - 240, fy + 46)
     g.setColor(1, 1, 1)
 end
 
 local function toggle_vehicle(idx)
-    mp_setup.vehicle[idx], mp_setup.skin[idx] =
-        cycle_vehicle(mp_setup.vehicle[idx], mp_setup.skin[idx])
+    coop_options.vehicle[idx], coop_options.skin[idx] =
+        cycle_vehicle(coop_options.vehicle[idx], coop_options.skin[idx])
 end
 
 -- animation gallery (test overlay)
@@ -745,9 +717,9 @@ end
 
 local function draw_anim_gallery()
     local g      = love.graphics
-    local sw, sh = g.getDimensions()
+    local screen_w, screen_h = g.getDimensions()
     g.setColor(0.06, 0.06, 0.09, 1)
-    g.rectangle("fill", 0, 0, sw, sh)
+    g.rectangle("fill", 0, 0, screen_w, screen_h)
     g.setColor(0.6, 0.9, 1, 1)
     g.print("ANIMATION GALLERY  -  every clip in data/animations.json, looping.   F8 / Esc: close", 10, 8)
 
@@ -755,7 +727,7 @@ local function draw_anim_gallery()
     local cols  = 8
     local rows  = math.max(1, math.ceil(#items / cols))
     local top   = 30
-    local cw, ch = sw / cols, (sh - top) / rows
+    local cw, ch = screen_w / cols, (screen_h - top) / rows
     for i, it in ipairs(items) do
         local r  = math.floor((i - 1) / cols)
         local c  = (i - 1) % cols
@@ -786,9 +758,9 @@ local FONT_GOLD   = { 1.0, 0.78, 0.20 }
 
 local function draw_font_gallery()
     local g      = love.graphics
-    local sw, sh = g.getDimensions()
+    local screen_w, screen_h = g.getDimensions()
     g.setColor(0.06, 0.06, 0.09, 1)
-    g.rectangle("fill", 0, 0, sw, sh)
+    g.rectangle("fill", 0, 0, screen_w, screen_h)
     g.setColor(0.6, 0.9, 1, 1)
     g.print("FONT GALLERY  -  original bitmap fonts, mask fonts tinted gold.   F9 / Esc: close", 10, 8)
 
@@ -813,7 +785,7 @@ end
 -- Pre-game (overview) UI: vehicle/option setup and the mode-launch keys, grouped
 -- into titled boxes. Toggles here also feed the live game (Config compat options).
 
-local OV = {
+local OVERVIEW_COLORS = {
     bg    = { 0,    0,    0,    0.82 },
     sect  = { 0.16, 0.18, 0.24, 1    },
     key   = { 0.45, 0.85, 1,    1    },
@@ -824,26 +796,26 @@ local OV = {
     title = { 0.50, 0.90, 1,    1    },
 }
 
-local OV_W   = 252
-local OV_ROW = 17
+local OVERVIEW_PANEL_W = 252
+local OVERVIEW_ROW_H   = 17
 
-local function ov_section(g, label, x, y)
-    g.setColor(OV.sect)
-    g.rectangle("fill", x, y, OV_W, 18, 2)
-    g.setColor(OV.title)
+local function overview_section(g, label, x, y)
+    g.setColor(OVERVIEW_COLORS.sect)
+    g.rectangle("fill", x, y, OVERVIEW_PANEL_W, 18, 2)
+    g.setColor(OVERVIEW_COLORS.title)
     g.print(label, x + 8, y + 2)
     return y + 22
 end
 
-local function ov_row(g, key, label, value, vcolor, x, y)
-    g.setColor(OV.key);   g.print(key, x + 8, y)
-    g.setColor(OV.label); g.print(label, x + 78, y)
+local function overview_row(g, key, label, value, vcolor, x, y)
+    g.setColor(OVERVIEW_COLORS.key);   g.print(key, x + 8, y)
+    g.setColor(OVERVIEW_COLORS.label); g.print(label, x + 78, y)
     if value then
-        g.setColor(vcolor or OV.value)
+        g.setColor(vcolor or OVERVIEW_COLORS.value)
         local tw = g.getFont():getWidth(value)
-        g.print(value, x + OV_W - tw - 10, y)
+        g.print(value, x + OVERVIEW_PANEL_W - tw - 10, y)
     end
-    return y + OV_ROW
+    return y + OVERVIEW_ROW_H
 end
 
 local function draw_overview_ui()
@@ -852,40 +824,40 @@ local function draw_overview_ui()
     local y = 30
 
     -- SETUP box
-    local setup_h = 22 + 6 * OV_ROW + 6
-    g.setColor(OV.bg); g.rectangle("fill", x, y, OV_W, setup_h, 4)
-    local yy = ov_section(g, "SETUP", x, y + 4)
-    yy = ov_row(g, "[V]", "Vehicle",   vehicle_label(sel_vehicle, sel_chopper_skin),
-          OV.value, x, yy)
-    yy = ov_row(g, "[O]", "Game over", death_enabled and "ON" or "OFF",
-          death_enabled and OV.on or OV.off, x, yy)
-    yy = ov_row(g, "[C]", "Pickups",   Config.axis_aligned_pickups and "AXIS-ALIGNED" or "ROTATED",
-          OV.value, x, yy)
-    yy = ov_row(g, "[P]", "POW friendly fire", Config.friendly_fire_pows and "ON" or "OFF",
-          Config.friendly_fire_pows and OV.on or OV.off, x, yy)
-    yy = ov_row(g, "[H]", "HUD scale", string.format("%.2f", Config.hud_scale),
-          OV.value, x, yy)
-    ov_row(g, "[ / ]", "Speed",   string.format("%.2f", Config.speed_scale),
-          OV.value, x, yy)
+    local setup_h = 22 + 6 * OVERVIEW_ROW_H + 6
+    g.setColor(OVERVIEW_COLORS.bg); g.rectangle("fill", x, y, OVERVIEW_PANEL_W, setup_h, 4)
+    local yy = overview_section(g, "SETUP", x, y + 4)
+    yy = overview_row(g, "[V]", "Vehicle",   vehicle_label(selected_vehicle, selected_chopper_skin),
+          OVERVIEW_COLORS.value, x, yy)
+    yy = overview_row(g, "[O]", "Game over", death_enabled and "ON" or "OFF",
+          death_enabled and OVERVIEW_COLORS.on or OVERVIEW_COLORS.off, x, yy)
+    yy = overview_row(g, "[C]", "Pickups",   Config.axis_aligned_pickups and "AXIS-ALIGNED" or "ROTATED",
+          OVERVIEW_COLORS.value, x, yy)
+    yy = overview_row(g, "[P]", "POW friendly fire", Config.friendly_fire_pows and "ON" or "OFF",
+          Config.friendly_fire_pows and OVERVIEW_COLORS.on or OVERVIEW_COLORS.off, x, yy)
+    yy = overview_row(g, "[H]", "HUD scale", string.format("%.2f", Config.hud_scale),
+          OVERVIEW_COLORS.value, x, yy)
+    overview_row(g, "[ / ]", "Speed",   string.format("%.2f", Config.speed_scale),
+          OVERVIEW_COLORS.value, x, yy)
 
     -- START box
     y = y + setup_h + 6
-    local start_h = 22 + 4 * OV_ROW + 6
-    g.setColor(OV.bg); g.rectangle("fill", x, y, OV_W, start_h, 4)
-    yy = ov_section(g, "START", x, y + 4)
-    yy = ov_row(g, "[F1]", "Play",              nil, nil, x, yy)
-    yy = ov_row(g, "[F3]", "Sandbox",           nil, nil, x, yy)
-    yy = ov_row(g, "[F7]", "2P split screen",   nil, nil, x, yy)
-    ov_row(g, "[F8]", "Animation gallery", nil, nil, x, yy)
+    local start_h = 22 + 4 * OVERVIEW_ROW_H + 6
+    g.setColor(OVERVIEW_COLORS.bg); g.rectangle("fill", x, y, OVERVIEW_PANEL_W, start_h, 4)
+    yy = overview_section(g, "START", x, y + 4)
+    yy = overview_row(g, "[F1]", "Play",              nil, nil, x, yy)
+    yy = overview_row(g, "[F3]", "Sandbox",           nil, nil, x, yy)
+    yy = overview_row(g, "[F7]", "2P split screen",   nil, nil, x, yy)
+    overview_row(g, "[F8]", "Animation gallery", nil, nil, x, yy)
 
     -- VIEW box
     y = y + start_h + 6
-    local view_h = 22 + 3 * OV_ROW + 6
-    g.setColor(OV.bg); g.rectangle("fill", x, y, OV_W, view_h, 4)
-    yy = ov_section(g, "VIEW", x, y + 4)
-    yy = ov_row(g, "[Tab]/[K]", "stage / kinds",    nil, nil, x, yy)
-    yy = ov_row(g, "[L]/[G]",   "segments / grid",  nil, nil, x, yy)
-    ov_row(g, "[+/-]",     "zoom",             nil, nil, x, yy)
+    local view_h = 22 + 3 * OVERVIEW_ROW_H + 6
+    g.setColor(OVERVIEW_COLORS.bg); g.rectangle("fill", x, y, OVERVIEW_PANEL_W, view_h, 4)
+    yy = overview_section(g, "VIEW", x, y + 4)
+    yy = overview_row(g, "[Tab]/[K]", "stage / kinds",    nil, nil, x, yy)
+    yy = overview_row(g, "[L]/[G]",   "segments / grid",  nil, nil, x, yy)
+    overview_row(g, "[+/-]",     "zoom",             nil, nil, x, yy)
 
     g.setColor(1, 1, 1)
 end
@@ -908,7 +880,7 @@ function love.load(args)
     world:load(args[1] or world.stages[1])
     camera   = Camera:new(world.stage.world_size)
     renderer = Renderer:new(world, camera)
-    dbg      = Debug:new(world, camera)
+    debug_panel      = Debug:new(world, camera)
     hud      = Hud:new()
     hud:load("data/hud.json")
     hud.world = world
@@ -924,13 +896,13 @@ function love.load(args)
     love.window.setTitle(world:title())
 
     screen = Screen:new()
-    endstats = EndStats:new()
+    end_stats = EndStats:new()
     menu = Menu:new()
     menu.on_select = menu_select
-    missionmenu = MissionMenu:new()
-    missionmenu.on_select = mission_select
-    missionselect = MissionSelect:new()
-    missionselect.on_select = missionselect_select
+    mission_menu = MissionMenu:new()
+    mission_menu.on_select = mission_menu_select
+    mission_select = MissionSelect:new()
+    mission_select.on_select = mission_picker_select
     -- A 1x1 transparent hardware cursor, used to hide the pointer reliably (LOVE's
     -- setVisible(false) is flaky under some Wayland compositors).
     local ok, c = pcall(function() return love.mouse.newCursor(love.image.newImageData(1, 1), 0, 0) end)
@@ -946,15 +918,15 @@ end
 -- literal "player" so projectiles hit enemies (not the other player) regardless
 -- of which of the two fired.
 local function fire_for(p)
-    local wdef = combat.weapons[p.weapon_name]
-    if not wdef then return end
+    local weapon_def = combat.weapons[p.weapon_name]
+    if not weapon_def then return end
     if p.fire_timer > 0 then return end
     if not p:has_ammo(p.weapon_name) then return end
-    local level = wdef.levels and wdef.levels[p.weapon_level] or wdef
+    local level = weapon_def.levels and weapon_def.levels[p.weapon_level] or weapon_def
     combat:tick_swing("player", p.weapon_name)
     combat:fire(p.x, p.y, p:fire_angle(), p.weapon_name, "player", p.weapon_level, nil, p)
-    p:consume_ammo(p.weapon_name, wdef.ammo_cost or 1)
-    p.fire_timer = 1.0 / (level.fire_rate or wdef.fire_rate or 10)
+    p:consume_ammo(p.weapon_name, weapon_def.ammo_cost or 1)
+    p.fire_timer = 1.0 / (level.fire_rate or weapon_def.fire_rate or 10)
 end
 
 local function _try_fire()
@@ -964,13 +936,13 @@ end
 
 -- Cycle p's weapon to the next one valid for its vehicle.
 local function cycle_weapon(p)
-    local wlist = VEHICLE_WEAPONS[p.vehicle] or {}
-    if #wlist == 0 then return end
+    local weapon_list = VEHICLE_WEAPONS[p.vehicle] or {}
+    if #weapon_list == 0 then return end
     local idx = 1
-    for i, w in ipairs(wlist) do
+    for i, w in ipairs(weapon_list) do
         if w == p.weapon_name then idx = i; break end
     end
-    p.weapon_name  = wlist[idx % #wlist + 1]
+    p.weapon_name  = weapon_list[idx % #weapon_list + 1]
     p.weapon_level = 1
     p.fire_timer   = 0
 end
@@ -987,24 +959,24 @@ end
 function love.update(dt)
     if screen then screen:update(dt) end
     if menu and menu:is_active() then menu:update(dt); return end
-    if missionmenu and missionmenu:is_active() then missionmenu:update(dt); return end
-    if missionselect and missionselect:is_active() then missionselect:update(dt); return end
+    if mission_menu and mission_menu:is_active() then mission_menu:update(dt); return end
+    if mission_select and mission_select:is_active() then mission_select:update(dt); return end
     if anim_gallery then gallery_update(dt); return end
     if font_gallery then return end
     if paused then return end
     if split_mode then
-        if endstats:is_active() then
-            endstats:update(dt)
+        if end_stats:is_active() then
+            end_stats:update(dt)
             world:update(dt)
             return
         end
-        for _, p in ipairs(sp_players) do
+        for _, p in ipairs(split_players) do
             p:update(dt)
             if not p.death and p:_held("fire") then fire_for(p) end
             if death_enabled and not p.death and p:is_dead() then p:start_death() end
         end
-        for i, p in ipairs(sp_players) do
-            local c = sp_cameras[i]
+        for i, p in ipairs(split_players) do
+            local c = split_cameras[i]
             c.x, c.y = p.x, p.y
             c.angle  = p:camera_angle()
         end
@@ -1017,17 +989,17 @@ function love.update(dt)
             if won_timer == nil then won_timer = 1.5 end
             if won_timer > 0 then
                 won_timer = won_timer - dt
-            elseif not endstats_started then
-                endstats:start(collect_coop_stats())
-                endstats_started = true
+            elseif not end_stats_started then
+                end_stats:start(collect_coop_stats())
+                end_stats_started = true
             end
         end
         world:update(dt)
         return
     end
     if game_mode and player then
-        if endstats:is_active() then
-            endstats:update(dt)
+        if end_stats:is_active() then
+            end_stats:update(dt)
             world:update(dt)
             return
         end
@@ -1060,9 +1032,9 @@ function love.update(dt)
             if won_timer == nil then won_timer = 1.5 end
             if won_timer > 0 then
                 won_timer = won_timer - dt
-            elseif not endstats_started then
-                endstats:start(collect_stats())
-                endstats_started = true
+            elseif not end_stats_started then
+                end_stats:start(collect_stats())
+                end_stats_started = true
             end
         end
         camera.x     = player.x
@@ -1074,19 +1046,19 @@ function love.update(dt)
             pending_takeoff = false
         end
     else
-        if not renderer.picker and not renderer.kind_picker and not menu_open
-        and not dbg:captures_arrows() then
+        if not renderer.picker and not renderer.kind_picker and not coop_setup_open
+        and not debug_panel:captures_arrows() then
             camera:update(dt)
         end
     end
     world:update(dt)
-    dbg:update()
+    debug_panel:update()
 
-    if sb_status_t > 0 then
-        sb_status_t = sb_status_t - dt
-        if sb_status_t <= 0 then
-            sb_status   = ""
-            sb_status_t = 0
+    if sandbox_status_timer > 0 then
+        sandbox_status_timer = sandbox_status_timer - dt
+        if sandbox_status_timer <= 0 then
+            sandbox_status   = ""
+            sandbox_status_timer = 0
         end
     end
 end
@@ -1094,9 +1066,9 @@ end
 function love.draw()
     -- Hide the OS cursor while a non-game screen owns the pointer (we draw the
     -- original SELPOINT cursor instead); restore it for gameplay.
-    local ui = (menu and menu:is_active()) or (missionmenu and missionmenu:is_active())
-        or (missionselect and missionselect:is_active())
-        or endstats:is_active() or (screen and screen:is_active())
+    local ui = (menu and menu:is_active()) or (mission_menu and mission_menu:is_active())
+        or (mission_select and mission_select:is_active())
+        or end_stats:is_active() or (screen and screen:is_active())
     if hidden_cursor then
         if ui then love.mouse.setCursor(hidden_cursor) else love.mouse.setCursor() end
     else
@@ -1113,14 +1085,14 @@ function love.draw()
         if not overlay then Pointer.draw() end
         return
     end
-    if missionmenu and missionmenu:is_active() then
-        missionmenu:draw()
+    if mission_menu and mission_menu:is_active() then
+        mission_menu:draw()
         if screen then screen:draw() end
         if not overlay then Pointer.draw() end
         return
     end
-    if missionselect and missionselect:is_active() then
-        missionselect:draw()
+    if mission_select and mission_select:is_active() then
+        mission_select:draw()
         if not overlay then Pointer.draw() end
         return
     end
@@ -1136,11 +1108,11 @@ function love.draw()
         draw_split()
         if paused then draw_pause() end
         if screen then screen:draw() end
-        if endstats:is_active() then Pointer.draw() end
+        if end_stats:is_active() then Pointer.draw() end
         return
     end
 
-    renderer.highlight = dbg:highlight_entity()
+    renderer.highlight = debug_panel:highlight_entity()
     renderer:draw()
 
     if game_mode and player then
@@ -1156,9 +1128,9 @@ function love.draw()
         player:draw_world_front()
         hud:draw()
         if mission and mission.state == "return_to_base" then draw_return_prompt() end
-        if mission and mission.state == "won" and not endstats:is_active() then draw_victory() end
+        if mission and mission.state == "won" and not end_stats:is_active() then draw_victory() end
         if mission and mission.state == "failed" then draw_game_over() end
-        if endstats:is_active() then endstats:draw() end
+        if end_stats:is_active() then end_stats:draw() end
         if paused then draw_pause() end
         if sandbox_mode then
             draw_sandbox_panel()
@@ -1168,10 +1140,10 @@ function love.draw()
         draw_overview_ui()
     end
 
-    if menu_open then draw_2p_menu() end
-    dbg:draw()
+    if coop_setup_open then draw_2p_menu() end
+    debug_panel:draw()
     if screen then screen:draw() end
-    if endstats:is_active() then Pointer.draw() end
+    if end_stats:is_active() then Pointer.draw() end
 end
 
 function love.wheelmoved(_, dy)
@@ -1219,16 +1191,16 @@ function love.keypressed(key)
     end
 
     -- Mission menu: arrows move between buttons, Enter confirms, Esc backs out
-    -- (dispatched via missionmenu.on_select).
-    if missionmenu and missionmenu:is_active() then
-        missionmenu:keypressed(key)
+    -- (dispatched via mission_menu.on_select).
+    if mission_menu and mission_menu:is_active() then
+        mission_menu:keypressed(key)
         return
     end
 
     -- Mission-select (debug): left/right pick the mission, 1-4/up-down the phase,
-    -- Enter plays, Esc backs out (dispatched via missionselect.on_select).
-    if missionselect and missionselect:is_active() then
-        missionselect:keypressed(key)
+    -- Enter plays, Esc backs out (dispatched via mission_select.on_select).
+    if mission_select and mission_select:is_active() then
+        mission_select:keypressed(key)
         return
     end
 
@@ -1254,11 +1226,11 @@ function love.keypressed(key)
 
     -- 2P setup menu. Each player toggles their own vehicle with their own keys at
     -- any time (no cursor); G/F toggle god/friendly-fire; SPACE starts.
-    if menu_open then
-        if     key == "escape" then menu_open = false
+    if coop_setup_open then
+        if     key == "escape" then coop_setup_open = false
         elseif key == "space"  then enter_split()
-        elseif key == "g"      then mp_setup.god = not mp_setup.god
-        elseif key == "f"      then mp_setup.ff  = not mp_setup.ff
+        elseif key == "g"      then coop_options.god = not coop_options.god
+        elseif key == "f"      then coop_options.ff  = not coop_options.ff
         elseif key == P1_CONTROLS.left or key == P1_CONTROLS.right then toggle_vehicle(1)
         elseif key == P2_CONTROLS.left or key == P2_CONTROLS.right then toggle_vehicle(2)
         end
@@ -1267,10 +1239,10 @@ function love.keypressed(key)
 
     -- Split-screen game keys.
     if split_mode then
-        if endstats:is_active() then
+        if end_stats:is_active() then
             if key == "escape" then
-                endstats:keypressed(); endstats.active = false; leave_split()
-            elseif endstats:keypressed() and not endstats:is_active() then
+                end_stats:keypressed(); end_stats.active = false; leave_split()
+            elseif end_stats:keypressed() and not end_stats:is_active() then
                 leave_split()
             end
             return
@@ -1279,12 +1251,12 @@ function love.keypressed(key)
         if key == "p" then paused = not paused; return end
         if key == "r" then paused = false; enter_split(); return end
         if key == "f5" then
-            mp_setup.god = not mp_setup.god
-            for _, p in ipairs(sp_players) do p.unlimited = mp_setup.god end
+            coop_options.god = not coop_options.god
+            for _, p in ipairs(split_players) do p.unlimited = coop_options.god end
             return
         end
         if key == "f6" then powerups.easy_mode = not powerups.easy_mode; return end
-        for _, p in ipairs(sp_players) do
+        for _, p in ipairs(split_players) do
             if key == p.controls.weapon then cycle_weapon(p) end
             if key == p.controls.action then toggle_land(p) end
         end
@@ -1292,33 +1264,33 @@ function love.keypressed(key)
     end
 
     if key == "f7" and not game_mode then
-        menu_open = true
+        coop_setup_open = true
         return
     end
 
     if key == "f2" then
-        dbg:toggle()
+        debug_panel:toggle()
         return
     end
 
-    if dbg.enabled then
-        if dbg:keypressed(key) then return end
+    if debug_panel.enabled then
+        if debug_panel:keypressed(key) then return end
     end
 
     -- sandbox key handling (before game mode keys so F3/F4 are caught first)
     if sandbox_mode then
         if key == "f3" then leave_sandbox(); return end
-        if key == "f4" then sb_save(); return end
+        if key == "f4" then sandbox_save(); return end
         if key == "[" then
-            sb_cursor = ((sb_cursor - 2) % #SB_PARAMS) + 1
+            sandbox_cursor = ((sandbox_cursor - 2) % #SANDBOX_PARAMS) + 1
             return
         end
         if key == "]" then
-            sb_cursor = sb_cursor % #SB_PARAMS + 1
+            sandbox_cursor = sandbox_cursor % #SANDBOX_PARAMS + 1
             return
         end
-        if key == "=" or key == "kp+" then sb_adjust( 1); return end
-        if key == "-" or key == "kp-" then sb_adjust(-1); return end
+        if key == "=" or key == "kp+" then sandbox_adjust( 1); return end
+        if key == "-" or key == "kp-" then sandbox_adjust(-1); return end
         -- fall through to game keys for movement (WASD, Space, etc.)
     end
 
@@ -1332,10 +1304,10 @@ function love.keypressed(key)
     end
 
     if game_mode and player then
-        if endstats:is_active() then
+        if end_stats:is_active() then
             if key == "escape" then
-                endstats:keypressed(); endstats.active = false; leave_game_mode()
-            elseif endstats:keypressed() and not endstats:is_active() then
+                end_stats:keypressed(); end_stats.active = false; leave_game_mode()
+            elseif end_stats:keypressed() and not end_stats:is_active() then
                 leave_game_mode()
             end
             return
@@ -1353,22 +1325,22 @@ function love.keypressed(key)
             return
         end
         if key == "q" then
-            local wlist = VEHICLE_WEAPONS[player.vehicle] or {}
+            local weapon_list = VEHICLE_WEAPONS[player.vehicle] or {}
             local idx = 1
-            for i, w in ipairs(wlist) do
+            for i, w in ipairs(weapon_list) do
                 if w == player.weapon_name then idx = i; break end
             end
-            idx = idx % #wlist + 1
-            player.weapon_name  = wlist[idx]
+            idx = idx % #weapon_list + 1
+            player.weapon_name  = weapon_list[idx]
             player.weapon_level = 1
             player.fire_timer   = 0
             sync_weapon_icon()
             return
         end
         if key == "e" then
-            local wdef = combat.weapons[player.weapon_name]
-            if wdef and wdef.levels then
-                player.weapon_level = player.weapon_level % #wdef.levels + 1
+            local weapon_def = combat.weapons[player.weapon_name]
+            if weapon_def and weapon_def.levels then
+                player.weapon_level = player.weapon_level % #weapon_def.levels + 1
             end
             return
         end
@@ -1416,7 +1388,7 @@ function love.keypressed(key)
 
     if not game_mode then
         if key == "v" then
-            sel_vehicle, sel_chopper_skin = cycle_vehicle(sel_vehicle, sel_chopper_skin)
+            selected_vehicle, selected_chopper_skin = cycle_vehicle(selected_vehicle, selected_chopper_skin)
         end
         if key == "o" then death_enabled = not death_enabled end
         if key == "c" then Config.axis_aligned_pickups = not Config.axis_aligned_pickups end
@@ -1431,8 +1403,8 @@ function love.keypressed(key)
         if key == "]" then Config.speed_scale = math.min(2.0, Config.speed_scale + 0.05) end
         if key == "l" then renderer.show_segments = not renderer.show_segments end
         if key == "g" then renderer.show_grid     = not renderer.show_grid     end
-        if key == "+" or key == "=" or key == "kp+" then camera:set_zoom(camera.zi + 1) end
-        if key == "-" or key == "kp-"               then camera:set_zoom(camera.zi - 1) end
+        if key == "+" or key == "=" or key == "kp+" then camera:set_zoom(camera.zoom_index + 1) end
+        if key == "-" or key == "kp-"               then camera:set_zoom(camera.zoom_index - 1) end
     end
 end
 
@@ -1440,10 +1412,10 @@ end
 local function ui_pointer_moved(x, y)
     if menu and menu:is_active() then
         menu:hover(x, y)
-    elseif missionmenu and missionmenu:is_active() then
-        missionmenu:hover(x, y)
-    elseif missionselect and missionselect:is_active() then
-        missionselect:hover(x, y)
+    elseif mission_menu and mission_menu:is_active() then
+        mission_menu:hover(x, y)
+    elseif mission_select and mission_select:is_active() then
+        mission_select:hover(x, y)
     end
 end
 
@@ -1452,9 +1424,9 @@ end
 local function ui_pointer_pressed(x, y)
     if screen and screen:is_active() then return true end
     if menu and menu:is_active() then menu:press(x, y); return true end
-    if missionmenu and missionmenu:is_active() then missionmenu:press(x, y); return true end
-    if missionselect and missionselect:is_active() then missionselect:press(x, y); return true end
-    if endstats:is_active() then return true end
+    if mission_menu and mission_menu:is_active() then mission_menu:press(x, y); return true end
+    if mission_select and mission_select:is_active() then mission_select:press(x, y); return true end
+    if end_stats:is_active() then return true end
     return false
 end
 
@@ -1464,10 +1436,10 @@ end
 local function ui_pointer_released(x, y)
     if screen and screen:is_active() then screen:keypressed(); return true end
     if menu and menu:is_active() then menu:release(x, y); return true end
-    if missionmenu and missionmenu:is_active() then missionmenu:release(x, y); return true end
-    if missionselect and missionselect:is_active() then missionselect:release(x, y); return true end
-    if endstats:is_active() then
-        if endstats:keypressed() and not endstats:is_active() then
+    if mission_menu and mission_menu:is_active() then mission_menu:release(x, y); return true end
+    if mission_select and mission_select:is_active() then mission_select:release(x, y); return true end
+    if end_stats:is_active() then
+        if end_stats:keypressed() and not end_stats:is_active() then
             if split_mode then leave_split() elseif game_mode then leave_game_mode() end
         end
         return true
@@ -1481,7 +1453,7 @@ function love.mousemoved(x, y)
 end
 
 function love.mousepressed(x, y, button)
-    dbg:mousepressed(x, y, button)
+    debug_panel:mousepressed(x, y, button)
     if button == 1 then
         Pointer.moved(x, y, false)
         ui_pointer_pressed(x, y)

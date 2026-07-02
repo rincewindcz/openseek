@@ -2,6 +2,7 @@ local Class   = require "engine.class"
 local Font    = require "engine.font"
 local json    = require "lib.json"
 local Pointer = require "engine.pointer"
+local Layout  = require "engine.ui.layout"
 
 -- Pre-mission menu, styled after the original's MISSION/PHASE screen: the
 -- STAGE0X_MS backdrop (its "MISSION 0X" title is baked in), the overlaid
@@ -19,7 +20,7 @@ local Pointer = require "engine.pointer"
 -- objective-icon columns are the already-exported fullscreen / phase art.
 local MissionMenu = Class()
 
-local DW, DH = 320, 240
+local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
 
 local TITLE_Y = 26
 local ICON_X, ICON_Y = 6, 52
@@ -213,17 +214,17 @@ function MissionMenu:_fade()
 end
 
 function MissionMenu:draw()
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
-    local sc     = math.min(sw / DW, sh / DH)
-    local fade   = self:_fade()  -- content alpha; dissolves into the black fill
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    local scale, ox, oy      = Layout.fit(screen_w, screen_h)
+    local fade               = self:_fade()  -- content alpha; dissolves into the black fill
 
     g.setColor(0, 0, 0, 1)
-    g.rectangle("fill", 0, 0, sw, sh)
+    g.rectangle("fill", 0, 0, screen_w, screen_h)
 
     g.push()
-    g.translate((sw - DW * sc) / 2, (sh - DH * sc) / 2)
-    g.scale(sc, sc)
+    g.translate(ox, oy)
+    g.scale(scale, scale)
 
     g.setColor(1, 1, 1, fade)
     if self.backdrop then

@@ -6,14 +6,14 @@ local Camera = Class()
 
 function Camera:init(world_size)
     self.world_size = world_size or 4096
-    self.x     = self.world_size / 2
-    self.y     = self.world_size / 2
-    self.zi    = 4     -- index into ZOOMS; default 1x
-    self.angle = nil   -- radians; nil = no rotation (viewer mode)
-    self.view_oy = 0   -- screen-space vertical offset of the focus point (px)
-    self.vw    = nil   -- viewport size; nil = full window (split screen sets these)
-    self.vh    = nil
-    self.zoom_anim = nil  -- continuous-scale tween for the level-start zoom-in
+    self.x          = self.world_size / 2
+    self.y          = self.world_size / 2
+    self.zoom_index = 4     -- index into ZOOMS; default 1x
+    self.angle      = nil   -- radians; nil = no rotation (viewer mode)
+    self.view_oy    = 0     -- screen-space vertical offset of the focus point (px)
+    self.vw         = nil   -- viewport size; nil = full window (split screen sets these)
+    self.vh         = nil
+    self.zoom_anim  = nil   -- continuous-scale tween for the level-start zoom-in
 end
 
 -- Viewport size this camera renders into: the full window, unless a split-screen
@@ -37,20 +37,20 @@ function Camera:zoom()
         k = 1 - (1 - k) * (1 - k) * (1 - k)   -- ease-out cubic
         return za.from + (za.to - za.from) * k
     end
-    return ZOOMS[self.zi]
+    return ZOOMS[self.zoom_index]
 end
 
 -- Ratio of the (possibly mid-intro) zoom to the discrete target zoom: 1.0 in
 -- normal play, <1 during the level-start zoom-in. Screen-space sprites such as
 -- the player scale by this so they grow with the animated world.
 function Camera:zoom_ratio()
-    return self:zoom() / ZOOMS[self.zi]
+    return self:zoom() / ZOOMS[self.zoom_index]
 end
 
 -- Smoothly zoom from `from_scale` to the current discrete zoom over `dur`
 -- seconds (the level-start intro). Cleared automatically when it completes.
 function Camera:start_zoom_intro(from_scale, dur)
-    self.zoom_anim = { from = from_scale, to = ZOOMS[self.zi], t = 0, dur = dur or 1.0 }
+    self.zoom_anim = { from = from_scale, to = ZOOMS[self.zoom_index], t = 0, dur = dur or 1.0 }
 end
 
 function Camera:tick_zoom(dt)
@@ -60,17 +60,17 @@ function Camera:tick_zoom(dt)
     if za.t >= za.dur then self.zoom_anim = nil end
 end
 
-function Camera:set_zoom(zi, mx, my)
+function Camera:set_zoom(zoom_index, mx, my)
     self.zoom_anim = nil
-    zi = math.max(1, math.min(#ZOOMS, zi))
-    if zi == self.zi then return end
+    zoom_index = math.max(1, math.min(#ZOOMS, zoom_index))
+    if zoom_index == self.zoom_index then return end
     local w, h = self:dims()
     mx = mx or w / 2
     my = my or h / 2
     local old_z = self:zoom()
     local wx = self.x + (mx - w / 2) / old_z
     local wy = self.y + (my - h / 2) / old_z
-    self.zi = zi
+    self.zoom_index = zoom_index
     local new_z = self:zoom()
     self.x = wx - (mx - w / 2) / new_z
     self.y = wy - (my - h / 2) / new_z
@@ -95,7 +95,7 @@ end
 
 function Camera:on_wheel(dy)
     local mx, my = love.mouse.getPosition()
-    self:set_zoom(self.zi + (dy > 0 and 1 or -1), mx, my)
+    self:set_zoom(self.zoom_index + (dy > 0 and 1 or -1), mx, my)
 end
 
 -- Apply the camera transform.  When self.angle is set, the world is rotated

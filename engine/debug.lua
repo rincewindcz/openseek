@@ -490,14 +490,14 @@ end
 -- multi-entity pick list
 
 function Debug:_draw_pick_list()
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
-    local list   = self.pick_list
-    local lh     = 22
-    local bw     = 340
-    local bh     = #list * lh + 52
-    local bx     = (sw - bw) / 2
-    local by     = (sh - bh) / 2
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    local list               = self.pick_list
+    local lh                 = 22
+    local bw                 = 340
+    local bh                 = #list * lh + 52
+    local bx                 = (screen_w - bw) / 2
+    local by                 = (screen_h - bh) / 2
 
     g.setColor(C.bg)
     g.rectangle("fill", bx, by, bw, bh, 6)
@@ -589,14 +589,14 @@ function Debug:_anim_picker_key(key)
 end
 
 function Debug:_draw_anim_picker()
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
-    local names  = self.anim_names
-    local lh     = 22
-    local bw     = 320
-    local bh     = #names * lh + 60
-    local bx     = (sw - bw) / 2
-    local by     = (sh - bh) / 2
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    local names              = self.anim_names
+    local lh                 = 22
+    local bw                 = 320
+    local bh                 = #names * lh + 60
+    local bx                 = (screen_w - bw) / 2
+    local by                 = (screen_h - bh) / 2
 
     g.setColor(C.bg)
     g.rectangle("fill", bx, by, bw, bh, 6)
@@ -674,19 +674,19 @@ function Debug:_draw_stats_bar()
     end
     local text = string.format("FPS %d   entities %d / %d   [F2] debug",
         love.timer.getFPS(), live, #self.world.entities)
-    local sw = g.getWidth()
+    local screen_w = g.getWidth()
     g.setColor(0, 0, 0, 0.6)
-    g.rectangle("fill", sw - 340, 0, 340, 22)
+    g.rectangle("fill", screen_w - 340, 0, 340, 22)
     g.setColor(C.hint)
-    g.print(text, sw - 336, 4)
+    g.print(text, screen_w - 336, 4)
 end
 
 function Debug:_draw_help()
-    local g  = love.graphics
-    local sw = g.getWidth()
-    local sh = g.getHeight()
+    local g        = love.graphics
+    local screen_w = g.getWidth()
+    local screen_h = g.getHeight()
     g.setColor(C.hint)
-    g.print("[F2] close debug", sw - 144, sh - 20)
+    g.print("[F2] close debug", screen_w - 144, screen_h - 20)
 end
 
 -- save
@@ -751,10 +751,10 @@ function Debug:_entity_under_mouse()
 end
 
 function Debug:_screen_to_world(sx, sy)
-    local sw, sh = love.graphics.getDimensions()
+    local screen_w, screen_h = love.graphics.getDimensions()
     local z  = self.camera:zoom()
-    local dx = (sx - sw / 2) / z
-    local dy = (sy - sh / 2) / z
+    local dx = (sx - screen_w / 2) / z
+    local dy = (sy - screen_h / 2) / z
     -- undo camera rotation when in game mode
     local a  = self.camera.angle
     if a then

@@ -123,20 +123,20 @@ end
 
 function Hud:draw()
     if not self.player then return end
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
-    if self.view_w then sw, sh = self.view_w, self.view_h end
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    if self.view_w then screen_w, screen_h = self.view_w, self.view_h end
     -- The global HUD scale grows each element and its inset from the anchored edge
     -- together, so a corner-anchored item stays in its corner as it gets bigger.
-    local hs = Config.hud_scale or 1
+    local hud_scale = Config.hud_scale or 1
     for _, item in ipairs(self.items) do
         local anchor, offx, offy = self:_anchor_offset(item)
         local fn     = ANCHOR[anchor]
-        local ax, ay = fn(sw, sh)
-        local ox     = offx * hs
-        local oy     = offy * hs
+        local ax, ay = fn(screen_w, screen_h)
+        local ox     = offx * hud_scale
+        local oy     = offy * hud_scale
         local x, y   = ax + ox, ay + oy
-        local s      = (item.scale or 1) * hs
+        local s      = (item.scale or 1) * hud_scale
         local t      = item.type
         if     t == "gauge"  then self:_draw_gauge(g, item, x, y, s)
         elseif t == "weapon" then self:_draw_weapon(g, item, x, y, s)
@@ -145,7 +145,7 @@ function Hud:draw()
         elseif t == "number" then self:_draw_number(g, item, x, y, s)
         end
     end
-    self:_draw_overkill(g, sw, sh, hs)
+    self:_draw_overkill(g, screen_w, screen_h, hud_scale)
     g.setColor(1, 1, 1)
 end
 
@@ -207,14 +207,14 @@ function Hud:_draw_number(g, item, x, y, s)
 end
 
 -- Blinking OVERKILL banner during a kill streak (Player:register_kill).
-function Hud:_draw_overkill(_g, sw, sh, hs)
+function Hud:_draw_overkill(_g, screen_w, screen_h, hud_scale)
     local p = self.player
     if not (p.overkill_active and p:overkill_active()) then return end
     if math.floor(love.timer.getTime() * 12) % 2 ~= 0 then return end
     local font = Font.get("overkill")
-    local s    = 4 * hs
+    local s    = 4 * hud_scale
     local w    = font:word_width(s)
-    font:print_word((sw - w) / 2, sh * 0.28, { scale = s })
+    font:print_word((screen_w - w) / 2, screen_h * 0.28, { scale = s })
 end
 
 -- gauge

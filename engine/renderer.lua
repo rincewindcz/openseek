@@ -406,8 +406,8 @@ end
 function Renderer:_draw_objective_banner()
     local obj = self.world.stage.objectives
     if not obj or not (obj.destroy or obj.rescue) then return end
-    local g  = love.graphics
-    local sw = g.getDimensions()
+    local g        = love.graphics
+    local screen_w = g.getDimensions()
     local text, col
     if obj.destroy then
         local rem = 0
@@ -424,7 +424,7 @@ function Renderer:_draw_objective_banner()
     end
     local font = g.getFont()
     local tw   = font:getWidth(text)
-    local bx   = (sw - tw) / 2
+    local bx   = (screen_w - tw) / 2
     g.setColor(0, 0, 0, 0.6)
     g.rectangle("fill", bx - 8, 44, tw + 16, 18)
     g.setColor(col[1], col[2], col[3], 1)
@@ -452,14 +452,14 @@ function Renderer:_draw_hud()
 end
 
 function Renderer:_draw_stage_picker()
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
-    local stages = self.world.stages
-    local lh     = 28
-    local bw     = 280
-    local bh     = #stages * lh + 50
-    local bx     = (sw - bw) / 2
-    local by     = (sh - bh) / 2
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    local stages             = self.world.stages
+    local lh                 = 28
+    local bw                 = 280
+    local bh                 = #stages * lh + 50
+    local bx                 = (screen_w - bw) / 2
+    local by                 = (screen_h - bh) / 2
     g.setColor(0, 0, 0, 0.85)
     g.rectangle("fill", bx, by, bw, bh, 6)
     g.setColor(1, 1, 1)
@@ -478,14 +478,14 @@ function Renderer:_draw_stage_picker()
 end
 
 function Renderer:_draw_kind_picker()
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
-    local kinds  = self._kinds
-    local lh     = 22
-    local bw     = 320
-    local bh     = #kinds * lh + 60
-    local bx     = (sw - bw) / 2
-    local by     = (sh - bh) / 2
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    local kinds              = self._kinds
+    local lh                 = 22
+    local bw                 = 320
+    local bh                 = #kinds * lh + 60
+    local bx                 = (screen_w - bw) / 2
+    local by                 = (screen_h - bh) / 2
 
     g.setColor(0, 0, 0, 0.88)
     g.rectangle("fill", bx, by, bw, bh, 6)

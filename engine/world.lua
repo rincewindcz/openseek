@@ -2,11 +2,10 @@ local Class     = require "engine.class"
 local json      = require "lib.json"
 local Entity    = require "engine.entity"
 local Animation = require "engine.animation"
-
-local atan2 = math.atan2 or math.atan
+local Mathx     = require "engine.core.mathx"
 
 -- Tumbling iron/metal shrapnel flung out by an explosion (buildings and bombs).
--- The clips loop, so each piece is bounded by its own ttl. When a piece lands a
+-- The clips loop, so each piece is bounded by its own lifetime. When a piece lands a
 -- dust puff is left on the ground.
 local DEBRIS_CLIPS = { "ironsz", "iron2sz", "metal8", "metalrt", "metalsz" }
 local DUST_CLIPS   = { "dust0", "dust1", "dust2" }
@@ -99,9 +98,9 @@ function World:load(name)
                 local entry = { img = img, ox = c.render.ox, oy = c.render.oy }
                 -- Unit kinds (soldiers) carry a sibling dead-pose frame, exported as
                 -- {stem}_f{frame_base + dead_frame_offset}.png; load it as the corpse.
-                local off = Entity.type_for(c.kind_name).dead_frame_offset
-                if off then
-                    local dframe = math.max(0, c.frame_base or 0) + off
+                local dead_frame_offset = Entity.type_for(c.kind_name).dead_frame_offset
+                if dead_frame_offset then
+                    local dframe = math.max(0, c.frame_base or 0) + dead_frame_offset
                     local dfile  = c.render.image:gsub("_f%d+%.png$", "_f" .. dframe .. ".png")
                     entry.dead = load_img(dfile)
                 end
@@ -165,7 +164,7 @@ function World:load(name)
     self.rescue_people = {}   -- pow.bin / people.bin civilians to rescue (kind 11)
     self.land_zones    = {}   -- lh.bin "land here" pads on rescue stages (owned by RescueSystem)
     self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
-    self.debris        = {}   -- flying explosion shrapnel {anim, x, y, vx, vy, age, ttl}
+    self.debris        = {}   -- flying explosion shrapnel {anim, x, y, vx, vy, age, lifetime}
     self.ground_fx     = {}   -- dust left on the ground when shrapnel lands {anim, x, y}
     self.heli_spawns   = {}   -- {x, y} spawn markers for enemy helicopters (not drawn)
     self.air_units     = {}   -- live enemy helicopters (owned by the heli system)
@@ -402,7 +401,7 @@ function World:spawn_debris(x, y, n, spread)
             self.debris[#self.debris + 1] = {
                 anim = anim, x = x, y = y,
                 vx = math.cos(a) * sp, vy = math.sin(a) * sp,
-                age = 0, ttl = 0.6 + math.random() * 0.6,
+                age = 0, lifetime = 0.6 + math.random() * 0.6,
             }
         end
     end
@@ -415,7 +414,7 @@ end
 function World:spawn_directional_debris(x, y, dx, dy, n, clip)
     local len = math.sqrt(dx * dx + dy * dy)
     if len == 0 then dx, dy = 0, -1 else dx, dy = dx / len, dy / len end
-    local base = atan2(dy, dx)
+    local base = Mathx.atan2(dy, dx)
     for _ = 1, n do
         local anim = Animation.new(clip or "metal8")
         if not anim:is_done() then
@@ -424,7 +423,7 @@ function World:spawn_directional_debris(x, y, dx, dy, n, clip)
             self.debris[#self.debris + 1] = {
                 anim = anim, x = x, y = y,
                 vx = math.cos(a) * sp, vy = math.sin(a) * sp,
-                age = 0, ttl = 0.5 + math.random() * 0.35,
+                age = 0, lifetime = 0.5 + math.random() * 0.35,
                 fade = true, fade_time = 0.22, alpha = 1,
             }
         end
@@ -454,9 +453,9 @@ function World:update(dt)
             d.vx, d.vy = d.vx * damp, d.vy * damp
             d.anim:update(dt)
             if d.fade then
-                d.alpha = math.min(1, (d.ttl - d.age) / d.fade_time)
+                d.alpha = math.min(1, (d.lifetime - d.age) / d.fade_time)
             end
-            if d.age < d.ttl then
+            if d.age < d.lifetime then
                 live[#live + 1] = d
             elseif not d.fade then
                 self:add_ground_dust(d.x, d.y)

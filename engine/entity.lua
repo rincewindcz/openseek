@@ -1,8 +1,7 @@
 local Class  = require "engine.class"
 local json   = require "lib.json"
 local Config = require "engine.config"
-
-local atan2 = math.atan2 or math.atan  -- Lua 5.3+ folds atan2 into atan(y, x)
+local Mathx  = require "engine.core.mathx"
 
 local entity_types = {}  -- keyed by kind_name, loaded once
 
@@ -271,7 +270,7 @@ function Entity:_patrol(dt)
     end
 
     -- Turn the hull toward the waypoint at a limited rate (no instant snap).
-    local desired = (math.deg(atan2(dy, dx)) + 90) % 360
+    local desired = Mathx.heading_deg(dx, dy)
     local turn    = (td.patrol_turn or 70) * dt * Config.speed_scale
     local diff    = ((desired - self.angle + 180) % 360) - 180
     if math.abs(diff) <= turn then

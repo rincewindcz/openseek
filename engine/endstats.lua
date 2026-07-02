@@ -1,5 +1,6 @@
 local Class  = require "engine.class"
 local Config = require "engine.config"
+local Layout = require "engine.ui.layout"
 
 -- End-of-phase DESTRUCTION STATS screen. Drawn over the dimmed game once the
 -- chopper lands home: a header (PHASE n / DESTRUCTION STATS), five tallied
@@ -13,7 +14,7 @@ local DIR = "phend/"   -- under assets/
 
 -- Design canvas (the original screen is 320x240); the whole thing is scaled to
 -- fit the window and centered, so every offset below is in these coordinates.
-local DW, DH = 320, 240
+local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
 
 local LX        = 16      -- label left edge ("N." line number)
 local TEXT_DX   = 15      -- label body text start (past the "N." line number)
@@ -260,15 +261,15 @@ end
 
 function EndStats:draw()
     if not self.active then return end
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
     g.setColor(0, 0, 0, 0.6)
-    g.rectangle("fill", 0, 0, sw, sh)
+    g.rectangle("fill", 0, 0, screen_w, screen_h)
 
-    local sc = math.min(sw / (DW + 8), sh / (DH + 8))
+    local scale = Layout.fit(screen_w, screen_h, DW + 8, DH + 8)
     g.push()
-    g.translate((sw - DW * sc) / 2, (sh - DH * sc) / 2)
-    g.scale(sc, sc)
+    g.translate((screen_w - DW * scale) / 2, (screen_h - DH * scale) / 2)
+    g.scale(scale, scale)
 
     -- Header + phase number.
     if self.header then

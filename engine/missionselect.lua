@@ -1,6 +1,7 @@
 local Class   = require "engine.class"
 local Font    = require "engine.font"
 local Pointer = require "engine.pointer"
+local Layout  = require "engine.ui.layout"
 
 -- Debug mission-select screen: pick any mission/phase and drop into it. Over the
 -- main-menu MAINP backdrop (breathing zoom, subtly tinted toward the selected
@@ -13,7 +14,7 @@ local Pointer = require "engine.pointer"
 -- MISSION entry (see main.lua).
 local MissionSelect = Class()
 
-local DW, DH = 320, 240
+local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
 
 local TITLE_Y = 8
 
@@ -362,26 +363,25 @@ function MissionSelect:_blit_mpic(g, image, x, fade)
 end
 
 function MissionSelect:draw()
-    local g      = love.graphics
-    local sw, sh = g.getDimensions()
-    local fade   = self:_fade()
-    local sc     = math.min(sw / DW, sh / DH)
-    local ox, oy = (sw - DW * sc) / 2, (sh - DH * sc) / 2
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    local fade               = self:_fade()
+    local scale, ox, oy      = Layout.fit(screen_w, screen_h)
 
     g.setColor(0, 0, 0, 1)
-    g.rectangle("fill", 0, 0, sw, sh)
+    g.rectangle("fill", 0, 0, screen_w, screen_h)
 
     -- Backdrop: full-window breathing zoom, tinted toward the mission colour.
     if self.bg then
         local breathe = 1 + 0.015 * (1 + math.sin(self.t * 0.5)) / 2
-        local bw, bh  = sw * breathe, sh * breathe
+        local bw, bh  = screen_w * breathe, screen_h * breathe
         g.setColor(self.tint[1] * fade, self.tint[2] * fade, self.tint[3] * fade, 1)
-        g.draw(self.bg, (sw - bw) / 2, (sh - bh) / 2, 0, bw / self.bg:getWidth(), bh / self.bg:getHeight())
+        g.draw(self.bg, (screen_w - bw) / 2, (screen_h - bh) / 2, 0, bw / self.bg:getWidth(), bh / self.bg:getHeight())
     end
 
     g.push()
     g.translate(ox, oy)
-    g.scale(sc, sc)
+    g.scale(scale, scale)
 
     local title = "MISSION SELECT"
     self.title_font:print(title, (DW - self.title_font:width(title)) / 2, TITLE_Y,
@@ -394,7 +394,7 @@ function MissionSelect:draw()
         p = p * p * (3 - 2 * p)                 -- smoothstep
         local off = p * MPIC_W
         local dir = self.slide_dir
-        g.setScissor(ox + MPIC_X * sc, oy + MPIC_Y * sc, MPIC_W * sc, MPIC_H * sc)
+        g.setScissor(ox + MPIC_X * scale, oy + MPIC_Y * scale, MPIC_W * scale, MPIC_H * scale)
         self:_blit_mpic(g, self.prev_mpic, MPIC_X - dir * off, fade)
         self:_blit_mpic(g, cur, MPIC_X + dir * MPIC_W - dir * off, fade)
         g.setScissor()

@@ -6,13 +6,13 @@ local Shadow    = require "engine.shadow"
 local Player = Class()
 
 -- sprite frame constants (0-indexed, matching exported assets)
-local PIT_NEUTRAL = 7    -- choppit1 neutral frame
-local PIT_FRAMES  = 15
-local BNK_NEUTRAL = 4    -- chopbnk1 neutral frame
-local BNK_MAX_R   = 7    -- chopbnk1 max-right frame used
-local DRP_FRAMES  = 6    -- chopdrp1 total frames
-local STRAFE_THR  = 5    -- |strafe| threshold to switch bank/pitch mode
-local ROTOR_MIN_S = 0.65  -- rotor scale factor when grounded (scales up to 1 airborne)
+local PITCH_NEUTRAL_FRAME = 7    -- choppit1 neutral frame
+local PITCH_FRAME_COUNT   = 15
+local BANK_NEUTRAL        = 4    -- chopbnk1 neutral frame
+local BANK_MAX_R          = 7    -- chopbnk1 max-right frame used
+local DROP_FRAME_COUNT    = 6    -- chopdrp1 total frames
+local STRAFE_THRESHOLD    = 5    -- |strafe| threshold to switch bank/pitch mode
+local ROTOR_MIN_SCALE     = 0.65  -- rotor scale factor when grounded (scales up to 1 airborne)
 
 function Player:init(x, y)
     self.x          = x or 2048
@@ -66,24 +66,24 @@ function Player:init(x, y)
     }
 
     -- vehicle params (defaults; overridden by load_vehicle_def)
-    self.sprite_scale = 3
-    self.rotor_y_off  = 0
-    self.rotor_fps    = 40
-    self.turn_rate    = 160
-    self.accel        = 280
-    self.decel        = 320
-    self.brake        = 480
-    self.max_fwd      = 260
-    self.max_rev      = 100
-    self.strafe_speed = 140
-    self.strafe_accel = 400
-    self.fuel_drain   = 1.3
-    self.takeoff_time = 0.65
-    self.land_time    = 0.50
+    self.sprite_scale   = 3
+    self.rotor_y_offset = 0
+    self.rotor_fps      = 40
+    self.turn_rate      = 160
+    self.accel          = 280
+    self.decel          = 320
+    self.brake          = 480
+    self.max_fwd        = 260
+    self.max_rev        = 100
+    self.strafe_speed   = 140
+    self.strafe_accel   = 400
+    self.fuel_drain     = 1.3
+    self.takeoff_time   = 0.65
+    self.land_time      = 0.50
 
     self._smoke_puffs = {}     -- {x, y, anim}: world-space smoke left behind as a trail
     self._smoke_timer = 0
-    self._hit_fx      = {}     -- {anim, age, ttl}: scorch bursts on top of the vehicle when hit
+    self._hit_fx      = {}     -- {anim, age, lifetime}: scorch bursts on top of the vehicle when hit
 
     self.home_x     = nil      -- friendly base / heliport spawn; parking here refuels
     self.home_y     = nil
@@ -102,20 +102,20 @@ function Player:init(x, y)
 end
 
 function Player:load_vehicle_def(def)
-    self.sprite_scale = def.sprite_scale   or self.sprite_scale
-    self.rotor_y_off  = def.rotor_y_offset or self.rotor_y_off
-    self.rotor_fps    = def.rotor_fps      ~= nil and def.rotor_fps or self.rotor_fps
-    self.turn_rate    = def.turn_rate      or self.turn_rate
-    self.accel        = def.accel          or self.accel
-    self.decel        = def.decel          or self.decel
-    self.brake        = def.brake          or self.brake
-    self.max_fwd      = def.max_fwd        or self.max_fwd
-    self.max_rev      = def.max_rev        or self.max_rev
-    self.strafe_speed = def.strafe_speed   or self.strafe_speed
-    self.strafe_accel = def.strafe_accel   or self.strafe_accel
-    self.fuel_drain   = def.fuel_drain     or self.fuel_drain
-    self.takeoff_time = def.takeoff_time   or self.takeoff_time
-    self.land_time    = def.land_time      or self.land_time
+    self.sprite_scale   = def.sprite_scale   or self.sprite_scale
+    self.rotor_y_offset = def.rotor_y_offset or self.rotor_y_offset
+    self.rotor_fps      = def.rotor_fps      ~= nil and def.rotor_fps or self.rotor_fps
+    self.turn_rate      = def.turn_rate      or self.turn_rate
+    self.accel          = def.accel          or self.accel
+    self.decel          = def.decel          or self.decel
+    self.brake          = def.brake          or self.brake
+    self.max_fwd        = def.max_fwd        or self.max_fwd
+    self.max_rev        = def.max_rev        or self.max_rev
+    self.strafe_speed   = def.strafe_speed   or self.strafe_speed
+    self.strafe_accel   = def.strafe_accel   or self.strafe_accel
+    self.fuel_drain     = def.fuel_drain     or self.fuel_drain
+    self.takeoff_time   = def.takeoff_time   or self.takeoff_time
+    self.land_time      = def.land_time      or self.land_time
     self.turret_rate      = def.turret_rate      or self.turret_rate
     self.collision_radius = def.collision_radius or self.collision_radius
 end
@@ -211,11 +211,11 @@ function Player:update(dt)
 end
 
 -- Scorch bursts (fire / smoke) that play on top of the vehicle when an enemy
--- round connects. Looping clips (fire) expire on their ttl; one-shot clips when
--- their animation ends.
-function Player:add_hit_fx(clip, ttl)
+-- round connects. Looping clips (fire) expire on their lifetime; one-shot clips
+-- when their animation ends.
+function Player:add_hit_fx(clip, lifetime)
     self._hit_fx[#self._hit_fx + 1] = {
-        anim = Animation.new(clip), age = 0, ttl = ttl,
+        anim = Animation.new(clip), age = 0, lifetime = lifetime,
         ox = (math.random() - 0.5) * 24, oy = (math.random() - 0.5) * 24,
     }
 end
@@ -226,7 +226,7 @@ function Player:_update_hit_fx(dt)
     for _, fx in ipairs(self._hit_fx) do
         fx.anim:update(dt)
         fx.age = fx.age + dt
-        local expired = (fx.ttl and fx.age >= fx.ttl) or fx.anim:is_done()
+        local expired = (fx.lifetime and fx.age >= fx.lifetime) or fx.anim:is_done()
         if not expired then live[#live + 1] = fx end
     end
     self._hit_fx = live
@@ -255,19 +255,19 @@ end
 -- animations are out of phase, and each picks (once) whether it sits in front of
 -- or behind the vehicle, so the trail reads as volume instead of a flat layer.
 function Player:_update_damage_smoke(dt)
-    local maxa = self.max_armor or 100
-    local pct  = maxa > 0 and (self.armor / maxa) or 1
+    local max_armor = self.max_armor or 100
+    local pct       = max_armor > 0 and (self.armor / max_armor) or 1
     local target = 0
     if pct < 0.6 then target = 3  end
     if pct < 0.4 then target = 7  end
     if pct < 0.2 then target = 12 end
 
     local live = {}
-    for _, pf in ipairs(self._smoke_puffs) do
-        pf.anim:update(dt)
-        pf.x = pf.x + pf.vx * dt
-        pf.y = pf.y + pf.vy * dt
-        if not pf.anim:is_done() then live[#live + 1] = pf end
+    for _, puff in ipairs(self._smoke_puffs) do
+        puff.anim:update(dt)
+        puff.x = puff.x + puff.vx * dt
+        puff.y = puff.y + puff.vy * dt
+        if not puff.anim:is_done() then live[#live + 1] = puff end
     end
     self._smoke_puffs = live
 
@@ -278,11 +278,11 @@ function Player:_update_damage_smoke(dt)
             -- Puffs drift along the vehicle's heading at a fraction of its current
             -- speed so the trail streams out behind a moving vehicle instead of
             -- hanging stationary in the air.
-            local rad   = (self.angle - 90) * math.pi / 180
-            local sr    = rad + math.pi / 2
-            local vx    = math.cos(rad) * self.speed + math.cos(sr) * self.strafe
-            local vy    = math.sin(rad) * self.speed + math.sin(sr) * self.strafe
-            local drift = 0.25 + math.random() * 0.5
+            local rad        = (self.angle - 90) * math.pi / 180
+            local strafe_rad = rad + math.pi / 2
+            local vx         = math.cos(rad) * self.speed + math.cos(strafe_rad) * self.strafe
+            local vy         = math.sin(rad) * self.speed + math.sin(strafe_rad) * self.strafe
+            local drift      = 0.25 + math.random() * 0.5
             self._smoke_puffs[#self._smoke_puffs + 1] = {
                 x     = self.x + (math.random() - 0.5) * 30,
                 y     = self.y + (math.random() - 0.5) * 30,
@@ -336,13 +336,13 @@ function Player:_draw_smoke_layer(front)
     for _, t in ipairs(self.camera:tiles()) do
         g.push()
         g.translate(t.ox, t.oy)
-        for _, pf in ipairs(self._smoke_puffs) do
-            if pf.front == front then
-                local img = pf.anim:current_image()
+        for _, puff in ipairs(self._smoke_puffs) do
+            if puff.front == front then
+                local img = puff.anim:current_image()
                 if img then
                     local w, h = img:getDimensions()
                     g.setColor(1, 1, 1, 0.8)
-                    g.draw(img, pf.x, pf.y, 0, 1.2, 1.2, w / 2, h / 2)
+                    g.draw(img, puff.x, puff.y, 0, 1.2, 1.2, w / 2, h / 2)
                 end
             end
         end
@@ -354,20 +354,20 @@ end
 
 -- death sequence
 
-local FALL_TIME  = 1.25  -- seconds for a downed chopper to drop from full altitude
-local TANK_BURN  = 1.6   -- seconds the tank burns before the turret blows
-local BLAST_R    = 90    -- radius of the player's death explosion damage
-local BLAST_DMG  = 140   -- damage dealt to nearby entities by that explosion
+local FALL_TIME    = 1.25  -- seconds for a downed chopper to drop from full altitude
+local TANK_BURN    = 1.6   -- seconds the tank burns before the turret blows
+local BLAST_RADIUS = 90    -- radius of the player's death explosion damage
+local BLAST_DAMAGE = 140   -- damage dealt to nearby entities by that explosion
 
 -- The player's death explosion damages everything around the wreck, like a bomb.
 function Player:_death_blast()
     if not self.world then return end
-    local r2 = BLAST_R * BLAST_R
+    local r2 = BLAST_RADIUS * BLAST_RADIUS
     for _, e in ipairs(self.world.entities) do
         if e:is_alive() and e.type_data and (e.type_data.hit_radius or 0) > 0 then
             local dx, dy = self.world:delta(e.x, e.y, self.x, self.y)
             if dx * dx + dy * dy < r2 then
-                e:take_damage(BLAST_DMG, dx, dy)
+                e:take_damage(BLAST_DAMAGE, dx, dy)
             end
         end
     end
@@ -490,7 +490,7 @@ end
 function Player:_apply_input(dt)
     -- Turn rates are gameplay speeds, so they take the global multiplier (movement
     -- is scaled in _move); acceleration ramps below stay on real dt.
-    local tdt = dt * Config.speed_scale
+    local turn_dt = dt * Config.speed_scale
     local rotate   = 0
     if self:_held("left")  then rotate = rotate - 1 end
     if self:_held("right") then rotate = rotate + 1 end
@@ -502,10 +502,10 @@ function Player:_apply_input(dt)
         -- shift + turn rotates the turret; otherwise the hull
         if modifier then
             if rotate ~= 0 then
-                self.turret_offset = (self.turret_offset + rotate * self.turret_rate * tdt) % 360
+                self.turret_offset = (self.turret_offset + rotate * self.turret_rate * turn_dt) % 360
             end
         elseif rotate ~= 0 then
-            self.angle = (self.angle + rotate * self.turn_rate * tdt) % 360
+            self.angle = (self.angle + rotate * self.turn_rate * turn_dt) % 360
             hull_turn = rotate
         end
         self.strafe = 0
@@ -524,7 +524,7 @@ function Player:_apply_input(dt)
         end
         -- rotation only when shift is not held
         if not modifier and rotate ~= 0 then
-            self.angle = (self.angle + rotate * self.turn_rate * tdt) % 360
+            self.angle = (self.angle + rotate * self.turn_rate * turn_dt) % 360
             hull_turn = rotate
         end
     end
@@ -553,11 +553,11 @@ function Player:_apply_input(dt)
 end
 
 function Player:_move(dt)
-    local sdt = dt * Config.speed_scale
-    local rad = (self.angle - 90) * math.pi / 180
-    local sr  = rad + math.pi / 2
-    local dx  = (math.cos(rad) * self.speed + math.cos(sr) * self.strafe) * sdt
-    local dy  = (math.sin(rad) * self.speed + math.sin(sr) * self.strafe) * sdt
+    local sdt        = dt * Config.speed_scale
+    local rad        = (self.angle - 90) * math.pi / 180
+    local strafe_rad = rad + math.pi / 2
+    local dx         = (math.cos(rad) * self.speed + math.cos(strafe_rad) * self.strafe) * sdt
+    local dy         = (math.sin(rad) * self.speed + math.sin(strafe_rad) * self.strafe) * sdt
 
     if self.world and not self:is_flyer() then
         -- Axis-separated so the tank slides along obstacles instead of sticking.
@@ -648,7 +648,7 @@ function Player:_frames(clip_name)
 end
 
 function Player:_using_bank()
-    return math.abs(self.strafe) > STRAFE_THR
+    return math.abs(self.strafe) > STRAFE_THRESHOLD
 end
 
 -- Normalized pitch/bank position in [0,1] (0.5 = neutral), shared by the body
@@ -681,29 +681,29 @@ function Player:_chopper_body_frame()
 
     if self.land_state == "landing" or self.land_state == "taking_off"
     or self.land_state == "grounded" then
-        local fi = math.floor((1.0 - self.altitude) * (DRP_FRAMES - 1) + 0.5) + 1
+        local frame_idx = math.floor((1.0 - self.altitude) * (DROP_FRAME_COUNT - 1) + 0.5) + 1
         local frames = self:_frames("chopdrp" .. skin)
-        return frames[math.max(1, math.min(#frames, fi))]
+        return frames[math.max(1, math.min(#frames, frame_idx))]
     end
 
     if self:_using_bank() then
-        local t  = self.strafe_speed > 0 and (self.strafe / self.strafe_speed) or 0
-        local fi = math.floor(BNK_NEUTRAL + t * BNK_NEUTRAL + 0.5) + 1
+        local t         = self.strafe_speed > 0 and (self.strafe / self.strafe_speed) or 0
+        local frame_idx = math.floor(BANK_NEUTRAL + t * BANK_NEUTRAL + 0.5) + 1
         local frames = self:_frames("chopbnk" .. skin)
-        return frames[math.max(1, math.min(BNK_MAX_R + 1, fi))]
+        return frames[math.max(1, math.min(BANK_MAX_R + 1, frame_idx))]
     end
 
-    local n = PIT_NEUTRAL
-    local fi
+    local n = PITCH_NEUTRAL_FRAME
+    local frame_idx
     if self.speed >= 0 then
         local t = self.speed / math.max(1, self.max_fwd * self.speed_factor)
-        fi = math.floor(n - n * t + 0.5) + 1
+        frame_idx = math.floor(n - n * t + 0.5) + 1
     else
         local t = (-self.speed) / math.max(1, self.max_rev * self.speed_factor)
-        fi = math.floor(n + (PIT_FRAMES - 1 - n) * t + 0.5) + 1
+        frame_idx = math.floor(n + (PITCH_FRAME_COUNT - 1 - n) * t + 0.5) + 1
     end
     local frames = self:_frames("choppit" .. skin)
-    return frames[math.max(1, math.min(#frames, fi))]
+    return frames[math.max(1, math.min(#frames, frame_idx))]
 end
 
 -- draw
@@ -726,8 +726,8 @@ function Player:draw_shadow()
     if self.camera then
         cx, cy = self.camera:screen_center()
     else
-        local sw, sh = g.getDimensions()
-        cx, cy = sw / 2, sh / 2
+        local screen_w, screen_h = g.getDimensions()
+        cx, cy = screen_w / 2, screen_h / 2
     end
     local s = self.sprite_scale
     if self.camera then s = s * self.camera:zoom_ratio() end
@@ -735,9 +735,9 @@ function Player:draw_shadow()
     local a  = (self.camera and self.camera.angle) or 0
     local dx = Shadow.DIR_X * math.cos(a) - Shadow.DIR_Y * math.sin(a)
     local dy = Shadow.DIR_X * math.sin(a) + Shadow.DIR_Y * math.cos(a)
-    local off = Shadow.OFFSET * s * alt
+    local shadow_offset = Shadow.OFFSET * s * alt
     local w, h = body:getDimensions()
-    Shadow.draw(body, cx + dx * off, cy + dy * off, 0, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
+    Shadow.draw(body, cx + dx * shadow_offset, cy + dy * shadow_offset, 0, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
     g.setColor(1, 1, 1)
 end
 
@@ -747,8 +747,8 @@ function Player:draw()
     if self.camera then
         cx, cy = self.camera:screen_center()
     else
-        local sw, sh = g.getDimensions()
-        cx, cy = sw / 2, sh / 2
+        local screen_w, screen_h = g.getDimensions()
+        cx, cy = screen_w / 2, screen_h / 2
     end
     local s = self.sprite_scale
     if self.camera then s = s * self.camera:zoom_ratio() end
@@ -802,8 +802,8 @@ end
 function Player:_draw_chopper(g, cx, cy, s)
     self:_draw_centered(g, self:_chopper_body_frame(), cx, cy, s)
     local rotor_img = self:_rotor_image()
-    local rs = s * (ROTOR_MIN_S + (1 - ROTOR_MIN_S) * self.altitude)
-    self:_draw_centered(g, rotor_img, cx, cy + self.rotor_y_off, rs)
+    local rs = s * (ROTOR_MIN_SCALE + (1 - ROTOR_MIN_SCALE) * self.altitude)
+    self:_draw_centered(g, rotor_img, cx, cy + self.rotor_y_offset, rs)
 end
 
 -- Draw this player as the co-op teammate, seen from another player's camera.
@@ -839,7 +839,7 @@ function Player:draw_remote(g, cam, color)
         local rotor = self:_rotor_image()
         if rotor then
             local w, h = rotor:getDimensions()
-            local rs   = s * (ROTOR_MIN_S + (1 - ROTOR_MIN_S) * self.altitude)
+            local rs   = s * (ROTOR_MIN_SCALE + (1 - ROTOR_MIN_SCALE) * self.altitude)
             g.draw(rotor, sx, sy, base, rs, rs, w / 2, h / 2)
         end
     end
@@ -873,9 +873,9 @@ function Player:draw_remote_shadow(g, cam)
     local a  = cam.angle or 0
     local dx = Shadow.DIR_X * math.cos(a) - Shadow.DIR_Y * math.sin(a)
     local dy = Shadow.DIR_X * math.sin(a) + Shadow.DIR_Y * math.cos(a)
-    local off  = Shadow.OFFSET * s * alt
-    local w, h = body:getDimensions()
-    Shadow.draw(body, sx + dx * off, sy + dy * off, base, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
+    local shadow_offset = Shadow.OFFSET * s * alt
+    local w, h          = body:getDimensions()
+    Shadow.draw(body, sx + dx * shadow_offset, sy + dy * shadow_offset, base, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
     g.setColor(1, 1, 1)
 end
 
