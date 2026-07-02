@@ -1,6 +1,6 @@
-local Class     = require "engine.class"
+local Class     = require "engine.core.class"
 local json      = require "lib.json"
-local Animation = require "engine.animation"
+local Animation = require "engine.core.animation"
 
 local Debug = Class()
 

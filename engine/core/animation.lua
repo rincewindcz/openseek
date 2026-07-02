@@ -1,4 +1,4 @@
-local Class = require "engine.class"
+local Class = require "engine.core.class"
 local json  = require "lib.json"
 
 -- AnimClip

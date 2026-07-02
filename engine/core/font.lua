@@ -1,4 +1,4 @@
-local Class = require "engine.class"
+local Class = require "engine.core.class"
 local json  = require "lib.json"
 
 -- Bitmap fonts decoded from the original game's glyph containers
@@ -7,7 +7,7 @@ local json  = require "lib.json"
 -- so they can be tinted to any color at draw time; truecolor fonts (OVERKILL)
 -- carry their real palette and are drawn untinted.
 --
---   local Font = require "engine.font"
+--   local Font = require "engine.core.font"
 --   Font.get("hichars"):print("HIGH SCORE", x, y, { color = {1, 0.8, 0.2} })
 --
 -- Char -> frame: a font with an explicit "charmap" maps charmap[i] -> frame i;

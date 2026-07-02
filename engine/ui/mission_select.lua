@@ -1,6 +1,6 @@
-local Class   = require "engine.class"
-local Font    = require "engine.font"
-local Pointer = require "engine.pointer"
+local Class   = require "engine.core.class"
+local Font    = require "engine.core.font"
+local Pointer = require "engine.ui.pointer"
 local Layout  = require "engine.ui.layout"
 
 -- Debug mission-select screen: pick any mission/phase and drop into it. Over the

@@ -1,7 +1,7 @@
-local Class  = require "engine.class"
+local Class  = require "engine.core.class"
 local json   = require "lib.json"
-local Config = require "engine.config"
-local Font   = require "engine.font"
+local Config = require "engine.core.config"
+local Font   = require "engine.core.font"
 
 local Hud = Class()
 

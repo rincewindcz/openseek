@@ -1,5 +1,5 @@
-local Class     = require "engine.class"
-local Animation = require "engine.animation"
+local Class     = require "engine.core.class"
+local Animation = require "engine.core.animation"
 
 local Renderer = Class()
 

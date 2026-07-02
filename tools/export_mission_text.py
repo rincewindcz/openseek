@@ -9,7 +9,7 @@ or more paragraphs separated by blank lines (typically an objective paragraph
 followed by an enemy/threat paragraph, though some blocks merge them).
 
 Output keys are stage<M><P> (M = mission 0-4, P = phase 0-3), matching the
-stage_name parse in engine/missionmenu.lua. Each value is a list of paragraphs
+stage_name parse in engine/ui/mission_menu.lua. Each value is a list of paragraphs
 with the original wording preserved (whitespace normalized, hand-wrapped line
 breaks collapsed so the menu can re-wrap to its own column width).
 

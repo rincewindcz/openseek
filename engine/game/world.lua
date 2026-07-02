@@ -1,7 +1,7 @@
-local Class     = require "engine.class"
+local Class     = require "engine.core.class"
 local json      = require "lib.json"
-local Entity    = require "engine.entity"
-local Animation = require "engine.animation"
+local Entity    = require "engine.game.entity"
+local Animation = require "engine.core.animation"
 local Mathx     = require "engine.core.mathx"
 
 -- Tumbling iron/metal shrapnel flung out by an explosion (buildings and bombs).

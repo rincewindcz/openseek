@@ -1,7 +1,7 @@
-local Class     = require "engine.class"
-local Animation = require "engine.animation"
-local Config    = require "engine.config"
-local Shadow    = require "engine.shadow"
+local Class     = require "engine.core.class"
+local Animation = require "engine.core.animation"
+local Config    = require "engine.core.config"
+local Shadow    = require "engine.game.shadow"
 local Mathx     = require "engine.core.mathx"
 
 -- Each spawned heli gets exactly one of these, picked at random. air_to_air uses

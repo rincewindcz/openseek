@@ -1,4 +1,4 @@
-local Class = require "engine.class"
+local Class = require "engine.core.class"
 
 -- Fullscreen image overlay with fade-in / hold / fade-out phases, used for the
 -- title card, the per-mission briefing picture, and the crash end screen.

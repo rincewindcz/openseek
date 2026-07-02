@@ -1,7 +1,7 @@
-local Class   = require "engine.class"
-local Font    = require "engine.font"
+local Class   = require "engine.core.class"
+local Font    = require "engine.core.font"
 local json    = require "lib.json"
-local Pointer = require "engine.pointer"
+local Pointer = require "engine.ui.pointer"
 local Layout  = require "engine.ui.layout"
 
 -- Pre-mission menu, styled after the original's MISSION/PHASE screen: the

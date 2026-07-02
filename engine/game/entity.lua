@@ -1,6 +1,6 @@
-local Class  = require "engine.class"
+local Class  = require "engine.core.class"
 local json   = require "lib.json"
-local Config = require "engine.config"
+local Config = require "engine.core.config"
 local Mathx  = require "engine.core.mathx"
 
 local entity_types = {}  -- keyed by kind_name, loaded once
@@ -102,7 +102,7 @@ function Entity:attach_turret(render, spin)
 end
 
 function Entity:_destroy_turret()
-    local Animation = require "engine.animation"
+    local Animation = require "engine.core.animation"
     self.turret_alive = false
     local ex = (self.type_data and self.type_data.turret_explosion) or "medium"
     local fx = Animation.new("explosion_" .. ex)
@@ -114,7 +114,7 @@ end
 -- alternate randomly between smoke and smoke2).
 function Entity:on_hit(clip)
     if not self:is_alive() then return end
-    local Animation = require "engine.animation"
+    local Animation = require "engine.core.animation"
     local anim = Animation.new(clip or "smoke2")
     if anim:is_done() then return end  -- clip not found / empty
     self._hit_smokes[#self._hit_smokes + 1] = {
@@ -125,7 +125,7 @@ function Entity:on_hit(clip)
 end
 
 function Entity:play_anim(clip_name)
-    local Animation = require "engine.animation"
+    local Animation = require "engine.core.animation"
     local anim = Animation.new(clip_name)
     if anim.clip:is_empty() then return end
     anim:reset()
@@ -135,7 +135,7 @@ function Entity:play_anim(clip_name)
 end
 
 function Entity:_start_death(dx, dy)
-    local Animation = require "engine.animation"
+    local Animation = require "engine.core.animation"
     local explosion = (self.type_data and self.type_data.explosion) or "none"
     self.anim  = Animation.new("explosion_" .. explosion)
     self.state = self.anim:is_done() and "dead" or "exploding"
@@ -211,7 +211,7 @@ function Entity:update(dt)
         if pct < 0.2 then target = 3 end
 
         while #self._damage_smokes < target do
-            local Animation = require "engine.animation"
+            local Animation = require "engine.core.animation"
             local anim = Animation.new("smoke")
             self._damage_smokes[#self._damage_smokes + 1] = {
                 anim = anim,

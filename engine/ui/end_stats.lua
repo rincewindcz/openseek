@@ -1,5 +1,5 @@
-local Class  = require "engine.class"
-local Config = require "engine.config"
+local Class  = require "engine.core.class"
+local Config = require "engine.core.config"
 local Layout = require "engine.ui.layout"
 
 -- End-of-phase DESTRUCTION STATS screen. Drawn over the dimmed game once the

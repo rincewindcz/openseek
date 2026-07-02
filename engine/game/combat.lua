@@ -1,7 +1,7 @@
-local Class     = require "engine.class"
+local Class     = require "engine.core.class"
 local json      = require "lib.json"
-local Animation = require "engine.animation"
-local Config    = require "engine.config"
+local Animation = require "engine.core.animation"
+local Config    = require "engine.core.config"
 local Mathx     = require "engine.core.mathx"
 local Stats     = require "engine.game.stats"
 

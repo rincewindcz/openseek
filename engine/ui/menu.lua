@@ -1,7 +1,7 @@
-local Class    = require "engine.class"
-local Font     = require "engine.font"
+local Class    = require "engine.core.class"
+local Font     = require "engine.core.font"
 local Layout   = require "engine.ui.layout"
-local Pointer  = require "engine.pointer"
+local Pointer  = require "engine.ui.pointer"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
 -- OPTIONS / CREDITS / HIGH SCORES / LOAD / SAVE / ORDER INFO / EXIT over the

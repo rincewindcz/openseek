@@ -1,6 +1,6 @@
-local Class     = require "engine.class"
-local Animation = require "engine.animation"
-local Config    = require "engine.config"
+local Class     = require "engine.core.class"
+local Animation = require "engine.core.animation"
+local Config    = require "engine.core.config"
 local Mathx     = require "engine.core.mathx"
 
 -- POW rescue from POWHERE buildings. Each powhere.bin marker (World.rescue_zones)
