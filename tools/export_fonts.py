@@ -67,6 +67,8 @@ FONTS = {
                  "pal": "data/GOVPAL.BIN"},
     "charspow": {"src": "data/CHARSPOW.BIN",  "mode": "truecolor",
                  "pal": "data/GOVPAL.BIN"},
+    "charstit": {"src": "data/CHARSTIT.BIN",  "mode": "truecolor",
+                 "pal": "data/GOVPAL.BIN"},
     "phasenum": {"src": "data/PHASENUM.BIN", "mode": "mask", "charmap": "1234"},
     "gov":      {"src": "data/GOV.BIN",       "mode": "mask", "word": True},
     "gov2":     {"src": "data/GOV2.BIN",      "mode": "mask", "word": True},

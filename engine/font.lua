@@ -21,7 +21,8 @@ local cache = {}
 -- Fonts shipped by the exporter, in a stable order for the gallery.
 Font.NAMES = {
   "phasenum", "gov", "gov2", "overkill",
-  "chars", "charspow", "hichars", "hichars2", "savechar", "endchars", "keysfont",
+  "chars", "charspow", "charstit", "hichars", "hichars2", "savechar", "endchars", "keysfont",
+  "mainmen",
 }
 
 function Font.get(name)
@@ -81,8 +82,13 @@ function Font:_glyph_for(ch)
   return nil
 end
 
-local function set_tint(color)
-  if color then
+-- Truecolor fonts keep their baked RGB (no tint) but still honor an alpha so
+-- callers can fade them (the main menu fades/blinks/dims its entries); mask
+-- fonts take the full tint color. No-color callers draw fully opaque as before.
+local function set_tint(color, truecolor)
+  if truecolor then
+    love.graphics.setColor(1, 1, 1, (color and color[4]) or 1)
+  elseif color then
     love.graphics.setColor(color[1], color[2], color[3], color[4] or 1)
   else
     love.graphics.setColor(1, 1, 1, 1)
@@ -95,7 +101,7 @@ function Font:print(text, x, y, opts)
   opts = opts or {}
   local scale    = opts.scale or 1
   local tracking = opts.tracking or 0
-  set_tint(self.truecolor and nil or opts.color)
+  set_tint(opts.color, self.truecolor)
   local pen = x
   for i = 1, #text do
     local ch = text:sub(i, i)
@@ -141,7 +147,7 @@ function Font:print_word(x, y, opts)
   opts = opts or {}
   local scale    = opts.scale or 1
   local tracking = opts.tracking or 1
-  set_tint(self.truecolor and nil or opts.color)
+  set_tint(opts.color, self.truecolor)
   local pen = x
   for _, idx in ipairs(self.sequence) do
     local gl = self.glyphs[idx]

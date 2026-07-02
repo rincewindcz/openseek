@@ -12,9 +12,12 @@ local RescueSystem = require "engine.rescue"
 local Mission      = require "engine.mission"
 local Screen       = require "engine.screen"
 local Menu         = require "engine.menu"
+local MissionMenu  = require "engine.missionmenu"
+local MissionSelect = require "engine.missionselect"
 local Config       = require "engine.config"
 local Font         = require "engine.font"
 local EndStats     = require "engine.endstats"
+local Pointer      = require "engine.pointer"
 local json         = require "lib.json"
 
 local world
@@ -30,6 +33,9 @@ local rescue
 local mission
 local screen
 local menu
+local missionmenu
+local missionselect
+local hidden_cursor  -- transparent HW cursor used to hide the pointer reliably
 local endstats
 local won_timer    = nil   -- counts down MISSION COMPLETE before DESTRUCTION STATS
 local endstats_started = false
@@ -347,6 +353,7 @@ end
 
 local function enter_game_mode()
   if menu then menu:close() end  -- drop the held-black menu once the world is live
+  if missionmenu then missionmenu:close() end
   viewer_zi  = camera.zi
   game_mode  = true
   paused     = false
@@ -422,21 +429,53 @@ end
 -- reopen it when dismissed, so the menu fades back in behind them.
 local function menu_select(id)
   if id == "new_game" then
-    menu:hold()  -- stay black behind the briefing; enter_game_mode() closes it
     if game_mode then leave_game_mode() end
-    begin_game_mode()
+    menu:close()
+    missionmenu:open(world.stage_name or world.stages[1])  -- pre-mission menu
   elseif id == "resume" then
     menu:close()
   elseif id == "options" or id == "credits" or id == "hiscores" then
     local pic = (id == "options" and "OPTPIC") or (id == "credits" and "CREDITS") or "HISCORE"
     menu:hold()  -- stay active but black behind the screen so the game can't show through
     screen:show(pic, { fade_in = 0.3, wait_key = true, fade_out = 0.3, on_done = open_menu })
+  elseif id == "mission" then
+    menu:close()
+    missionselect:open()   -- debug mission/phase picker
   elseif id == "editor" then
     -- Drop into the overview (dev/editor) view. TODO: real level editor.
     if game_mode then leave_game_mode() end
     menu:close()
   elseif id == "exit" then
     love.event.quit()
+  end
+end
+
+-- Runs a confirmed mission-select button: PLAY loads the chosen stage and opens
+-- its pre-mission menu (from there PLAY starts the level); EXIT backs out to the
+-- main menu. The mission-select fade-out plays before this runs.
+local function missionselect_select(id, stage_name)
+  if id == "play" then
+    missionselect:close()
+    if game_mode then leave_game_mode() end
+    world:load(stage_name)
+    after_stage_load()
+    missionmenu:open(stage_name)
+  elseif id == "exit" then
+    missionselect:close()
+    open_menu()
+  end
+end
+
+-- Runs a confirmed mission-menu button. PLAY drops straight into the mission
+-- (the menu itself is the briefing now); EXIT backs out to the main menu.
+-- SAVE / LOAD / SHOP are stubs for now.
+local function mission_select(id)
+  if id == "play" then
+    missionmenu:close()
+    enter_game_mode()
+  elseif id == "exit" then
+    missionmenu:close()
+    open_menu()
   end
 end
 
@@ -888,6 +927,14 @@ function love.load(args)
   endstats = EndStats:new()
   menu = Menu:new()
   menu.on_select = menu_select
+  missionmenu = MissionMenu:new()
+  missionmenu.on_select = mission_select
+  missionselect = MissionSelect:new()
+  missionselect.on_select = missionselect_select
+  -- A 1x1 transparent hardware cursor, used to hide the pointer reliably (LOVE's
+  -- setVisible(false) is flaky under some Wayland compositors).
+  local ok, c = pcall(function() return love.mouse.newCursor(love.image.newImageData(1, 1), 0, 0) end)
+  hidden_cursor = ok and c or nil
   -- Hold the menu black behind the title card so the overview never shows
   -- during the intro; open_menu() fades it in once the title is done.
   open_menu()
@@ -940,6 +987,8 @@ end
 function love.update(dt)
   if screen then screen:update(dt) end
   if menu and menu:is_active() then menu:update(dt); return end
+  if missionmenu and missionmenu:is_active() then missionmenu:update(dt); return end
+  if missionselect and missionselect:is_active() then missionselect:update(dt); return end
   if anim_gallery then gallery_update(dt); return end
   if font_gallery then return end
   if paused then return end
@@ -1043,9 +1092,36 @@ function love.update(dt)
 end
 
 function love.draw()
+  -- Hide the OS cursor while a non-game screen owns the pointer (we draw the
+  -- original SELPOINT cursor instead); restore it for gameplay.
+  local ui = (menu and menu:is_active()) or (missionmenu and missionmenu:is_active())
+    or (missionselect and missionselect:is_active())
+    or endstats:is_active() or (screen and screen:is_active())
+  if hidden_cursor then
+    if ui then love.mouse.setCursor(hidden_cursor) else love.mouse.setCursor() end
+  else
+    love.mouse.setVisible(not ui)
+  end
+
+  -- A passive image overlay (title / briefing / crash) is up front: no cursor,
+  -- even over a held menu (the intro card holds the menu black behind it).
+  local overlay = screen and screen:is_active()
+
   if menu and menu:is_active() then
     menu:draw()
     if screen then screen:draw() end
+    if not overlay then Pointer.draw() end
+    return
+  end
+  if missionmenu and missionmenu:is_active() then
+    missionmenu:draw()
+    if screen then screen:draw() end
+    if not overlay then Pointer.draw() end
+    return
+  end
+  if missionselect and missionselect:is_active() then
+    missionselect:draw()
+    if not overlay then Pointer.draw() end
     return
   end
   if anim_gallery then
@@ -1060,6 +1136,7 @@ function love.draw()
     draw_split()
     if paused then draw_pause() end
     if screen then screen:draw() end
+    if endstats:is_active() then Pointer.draw() end
     return
   end
 
@@ -1094,6 +1171,7 @@ function love.draw()
   if menu_open then draw_2p_menu() end
   dbg:draw()
   if screen then screen:draw() end
+  if endstats:is_active() then Pointer.draw() end
 end
 
 function love.wheelmoved(_, dy)
@@ -1138,6 +1216,20 @@ function love.keypressed(key)
       menu:keypressed(key)  -- confirmed entries dispatch via menu.on_select
       return
     end
+  end
+
+  -- Mission menu: arrows move between buttons, Enter confirms, Esc backs out
+  -- (dispatched via missionmenu.on_select).
+  if missionmenu and missionmenu:is_active() then
+    missionmenu:keypressed(key)
+    return
+  end
+
+  -- Mission-select (debug): left/right pick the mission, 1-4/up-down the phase,
+  -- Enter plays, Esc backs out (dispatched via missionselect.on_select).
+  if missionselect and missionselect:is_active() then
+    missionselect:keypressed(key)
+    return
   end
 
   -- Animation gallery test overlay: F8 toggles it from the overview, Esc/F8
@@ -1344,6 +1436,78 @@ function love.keypressed(key)
   end
 end
 
+-- Route a pointer move to whichever menu is up (hover-to-focus).
+local function ui_pointer_moved(x, y)
+  if menu and menu:is_active() then
+    menu:hover(x, y)
+  elseif missionmenu and missionmenu:is_active() then
+    missionmenu:hover(x, y)
+  elseif missionselect and missionselect:is_active() then
+    missionselect:hover(x, y)
+  end
+end
+
+-- Pointer down: arm the widget under the pointer. A passive overlay / end-stats
+-- screen advances on release, so here we only consume the press.
+local function ui_pointer_pressed(x, y)
+  if screen and screen:is_active() then return true end
+  if menu and menu:is_active() then menu:press(x, y); return true end
+  if missionmenu and missionmenu:is_active() then missionmenu:press(x, y); return true end
+  if missionselect and missionselect:is_active() then missionselect:press(x, y); return true end
+  if endstats:is_active() then return true end
+  return false
+end
+
+-- Pointer up: fire the armed widget, or advance a passive overlay / end-stats
+-- screen (mirrors the keyboard paths in love.keypressed). Screen is checked
+-- first so a click still advances an overlay shown over a held menu.
+local function ui_pointer_released(x, y)
+  if screen and screen:is_active() then screen:keypressed(); return true end
+  if menu and menu:is_active() then menu:release(x, y); return true end
+  if missionmenu and missionmenu:is_active() then missionmenu:release(x, y); return true end
+  if missionselect and missionselect:is_active() then missionselect:release(x, y); return true end
+  if endstats:is_active() then
+    if endstats:keypressed() and not endstats:is_active() then
+      if split_mode then leave_split() elseif game_mode then leave_game_mode() end
+    end
+    return true
+  end
+  return false
+end
+
+function love.mousemoved(x, y)
+  Pointer.moved(x, y, false)
+  ui_pointer_moved(x, y)
+end
+
 function love.mousepressed(x, y, button)
   dbg:mousepressed(x, y, button)
+  if button == 1 then
+    Pointer.moved(x, y, false)
+    ui_pointer_pressed(x, y)
+  end
+end
+
+function love.mousereleased(x, y, button)
+  if button == 1 then
+    Pointer.moved(x, y, false)
+    ui_pointer_released(x, y)
+  end
+end
+
+-- Touch mirrors the mouse (primary/each touch acts as the pointer); Pointer is
+-- told it's touch so it suppresses the cursor sprite (the finger is the pointer).
+function love.touchmoved(_, x, y)
+  Pointer.moved(x, y, true)
+  ui_pointer_moved(x, y)
+end
+
+function love.touchpressed(_, x, y)
+  Pointer.moved(x, y, true)
+  ui_pointer_pressed(x, y)
+end
+
+function love.touchreleased(_, x, y)
+  Pointer.moved(x, y, true)
+  ui_pointer_released(x, y)
 end

@@ -39,6 +39,7 @@ far the largest) contiguous run.
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -64,6 +65,14 @@ ENTRIES = [
 
 FONT_H = 15  # canonical glyph height; every word is 15px tall (one 16px stray
              # bottom row belongs only to HIGH SCORES' wrapped final S)
+
+# Layout constants for the packed engine font (engine/font.lua), mirroring the
+# retired menufont.lua so composed labels keep the original 1px letter / 21px
+# word spacing.
+LETTER_SPACING = 1
+SPACE_WIDTH    = 20
+ATLAS_WIDTH    = 512
+GLYPH_PAD      = 1
 
 CLUSTER_GAP = 40   # px; real inter-word gaps in a phrase measure ~22px
 MODEX_WIDTH = 384  # Mode X virtual buffer width (96 bytes x 4 planes)
@@ -145,8 +154,38 @@ def emit_glyphs(word_img, text, glyphs, font_dir):
     letters = [c for c in text if c != " "]
     for (x0, x1), ch in zip(runs, letters):
         if ch not in glyphs:
-            word_img.crop((x0, 0, x1 + 1, FONT_H)).save(font_dir / f"{ch}.png")
-            glyphs[ch] = True
+            crop = word_img.crop((x0, 0, x1 + 1, FONT_H))
+            crop.save(font_dir / f"{ch}.png")
+            glyphs[ch] = crop
+
+
+def pack_font_atlas(glyphs, out_png, out_json):
+    # Pack the sliced letters into one truecolor atlas + metrics JSON in the
+    # engine/font.lua format. Glyphs are ASCII-indexed (frame == codepoint, no
+    # charmap), with a frame-32 space carrying only its advance.
+    from PIL import Image
+    meta, placements = {}, []
+    x = y = row_h = 0
+    for ch, img in sorted(glyphs.items()):
+        w, h = img.size
+        if x + w + GLYPH_PAD > ATLAS_WIDTH:
+            x, y, row_h = 0, y + row_h + GLYPH_PAD, 0
+        placements.append((img, x, y))
+        meta[str(ord(ch))] = {"x": x, "y": y, "w": w, "h": h, "oy": 0,
+                              "advance": w + LETTER_SPACING}
+        x += w + GLYPH_PAD
+        row_h = max(row_h, h)
+    # A 1x1 transparent cell for the space glyph (advance only; never drawn).
+    if x + 1 + GLYPH_PAD > ATLAS_WIDTH:
+        x, y, row_h = 0, y + row_h + GLYPH_PAD, 0
+    meta["32"] = {"x": x, "y": y, "w": 1, "h": 1, "oy": 0, "advance": SPACE_WIDTH}
+    atlas = Image.new("RGBA", (ATLAS_WIDTH, y + max(row_h, 1)), (0, 0, 0, 0))
+    for img, px, py in placements:
+        atlas.paste(img, (px, py))
+    atlas.save(out_png)
+    out_json.write_text(json.dumps(
+        {"line_height": FONT_H, "mode": "truecolor", "glyphs": meta}, indent=1) + "\n")
+    print(f"  font atlas: {len(glyphs)} glyphs -> {out_png.relative_to(REPO_ROOT)}")
 
 
 def export_arrow(bmp_path, palette, out_dir):
@@ -210,6 +249,9 @@ def main():
         emit_glyphs(img, text, glyphs, font_dir)
 
     print(f"\n  font: {len(glyphs)} glyphs [{''.join(sorted(glyphs))}] -> assets/mainmen/font/")
+    fonts_dir = REPO_ROOT / "assets" / "fonts"
+    fonts_dir.mkdir(parents=True, exist_ok=True)
+    pack_font_atlas(glyphs, fonts_dir / "mainmen.png", fonts_dir / "mainmen.json")
     export_arrow(bmp_path, palette, out_dir)
 
 

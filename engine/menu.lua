@@ -1,6 +1,6 @@
 local Class    = require "engine.class"
-local MenuFont = require "engine.menufont"
 local Font     = require "engine.font"
+local Pointer  = require "engine.pointer"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
 -- OPTIONS / CREDITS / HIGH SCORES / LOAD / SAVE / ORDER INFO / EXIT over the
@@ -9,12 +9,12 @@ local Font     = require "engine.font"
 -- then calls self.on_select(id); the caller (main.lua) sets that callback and
 -- decides what each id means.
 --
--- Entry labels and the selection arrow are the original's own pre-rendered
--- art (MAINMEN.BIN word sprites plus the arrow cropped from MAINMENU.BMP,
--- see tools/export_mainmen.py), not live-drawn: exported truecolor straight
--- through the captured runtime menu palette, so they match the original screen
--- pixel for pixel. Entries with no baked word PNG (custom labels like EDITOR)
--- are composed from a font sliced out of that same art (engine/menufont.lua).
+-- Entry labels are drawn from the `mainmen` bitmap font: the original MAINMEN
+-- word art sliced per letter and packed into a standard font atlas
+-- (assets/fonts/mainmen.{png,json}, see tools/export_mainmen.py), truecolor
+-- through the captured runtime menu palette so glyphs match the original screen
+-- pixel for pixel. The selection arrow is the gold triangle cropped from
+-- MAINMENU.BMP (assets/mainmen/arrow.png).
 local Menu = Class()
 
 -- Design canvas (the original screen is 320x240); every offset below is in
@@ -54,7 +54,7 @@ local Menu_DEFAULT_ENTRIES = {
   { id = "credits",    label = "CREDITS" },
   { id = "hiscores",   label = "HIGH SCORES" },
   { id = "load",       label = "LOAD",       enabled = false },
-  { id = "save",       label = "SAVE",       enabled = false },
+  { id = "mission",    label = "MISSION" },
   { id = "editor",     label = "EDITOR",     gap_after = 8 },
   { id = "exit",       label = "EXIT" },
 }
@@ -70,22 +70,16 @@ function Menu:init(entries)
   self.t       = 0
   self.active  = false
 
-  -- Font sliced from the same word art, used to render any entry that has no
-  -- baked word PNG (e.g. custom labels like EDITOR).
-  self.font = MenuFont:new()
+  -- The original main-menu word art, packed per letter into a standard font
+  -- atlas; every entry is composed from it (uppercase only).
+  self.font = Font.get("mainmen")
 
   local y = ROW_Y0
   for _, e in ipairs(self.entries) do
     e.y = y
-    -- Prefer the original's pre-baked word art; fall back to composing the
-    -- label from the sliced font when there's no PNG for this id.
-    local ok, img = pcall(love.graphics.newImage, "assets/mainmen/" .. e.id .. ".png")
-    if ok then
-      img:setFilter("nearest", "nearest")
-      e.img = img
-    end
-    local h = (e.img and e.img:getHeight()) or self.font.height
-    e.mid_y = y + h / 2
+    e.w = self.font:width(e.label)   -- hit rect
+    e.h = self.font.line_height
+    e.mid_y = y + e.h / 2
     y = y + ROW_DY + (e.gap_after or 0)
   end
   self.arrow_y = self.entries[1] and self.entries[1].mid_y or ROW_Y0
@@ -129,6 +123,7 @@ function Menu:open()
   self.held = false       -- true while an info screen is up over the menu
   self.confirming = nil   -- pending confirmed id during the fade-out
   self.confirm_t = 0
+  self.pressed = nil      -- entry armed by mouse/touch down, fires on release
   self.sel_blink_t = SEL_BLINK_TIME  -- start with no blink in progress
   if self.entries[self.cursor] and self.entries[self.cursor].enabled == false then
     self:_move(1)
@@ -167,6 +162,52 @@ function Menu:_move(dir)
       if i ~= self.cursor then self.sel_blink_t = 0 end  -- one-shot blink
       self.cursor = i
       return
+    end
+  end
+end
+
+-- Index of the enabled entry under a design-space point, or nil.
+function Menu:_entry_at(dx, dy)
+  for i, e in ipairs(self.entries) do
+    if e.enabled ~= false and dx >= ROW_X and dx <= ROW_X + e.w
+       and dy >= e.y and dy <= e.y + e.h then
+      return i
+    end
+  end
+  return nil
+end
+
+-- Mouse/touch, window coords. Hover moves focus (with the one-shot blink); press
+-- arms an entry; release over the same entry confirms it (same fade-out path as
+-- the keyboard). Ignored mid-confirm or while an info screen is held over us.
+function Menu:hover(x, y)
+  if not self.active or self.confirming or self.held then return end
+  local i = self:_entry_at(Pointer.to_design(x, y, DW, DH))
+  if i and i ~= self.cursor then
+    self.sel_blink_t = 0
+    self.cursor = i
+  end
+end
+
+function Menu:press(x, y)
+  if not self.active or self.confirming or self.held then return end
+  local i = self:_entry_at(Pointer.to_design(x, y, DW, DH))
+  if i then
+    if i ~= self.cursor then self.sel_blink_t = 0; self.cursor = i end
+    self.pressed = i
+  end
+end
+
+function Menu:release(x, y)
+  if not self.active or self.confirming or self.held then return end
+  local i   = self:_entry_at(Pointer.to_design(x, y, DW, DH))
+  local was = self.pressed
+  self.pressed = nil
+  if was and i == was then
+    local e = self.entries[was]
+    if e and e.enabled ~= false then
+      self.confirming = e.id
+      self.confirm_t = 0
     end
   end
 end
@@ -281,12 +322,7 @@ function Menu:draw()
   for i, e in ipairs(self.entries) do
     local selected = (i == self.cursor)
     local a = (e.enabled == false) and DIM_ALPHA or (selected and hl or 1)
-    if e.img then
-      g.setColor(1, 1, 1, a * fade)
-      g.draw(e.img, ROW_X, e.y)
-    else
-      self.font:draw(e.label, ROW_X, e.y, a * fade)
-    end
+    self.font:print(e.label, ROW_X, e.y, { color = { 1, 1, 1, a * fade } })
     if selected then
       self:_draw_arrow(g, hl * fade)
     end
