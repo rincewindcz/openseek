@@ -193,6 +193,66 @@ STATS screen (`endstats.lua`); dismissing it returns to the overview. `Esc` skip
 current picture and returns to the overview, and from game mode it returns to the
 overview too; it never quits the game.
 
+## Split-screen co-op
+
+`F7` (viewer only) opens the split-screen co-op setup menu (graphical per-player
+vehicle pick in colored boxes, global god mode, friendly fire), an extra mode not
+in the original. The menu has no cursor: each player toggles their own vehicle
+with their own keys at any time (P1 `A`/`D`, P2 `Left`/`Right`), `G` toggles god
+mode, `F` toggles friendly fire, `SPACE` starts. In split screen the window
+divides vertically, each half follows its own player camera, and the shared
+systems (`combat`, `powerups`, `hud`, `renderer`) are pointed at each viewport's
+camera/player in turn during draw. Each half draws the teammate via
+`Player:draw_remote` (positioned with `Camera:project`) ringed in the other
+player's color (P1 blue, P2 orange) and shows it on the radar (`hud.coplayer`);
+the two vehicles are y-sorted so the southern one draws on top, identically in
+both halves.
+
+It is co-op: a single shared objective is built from the stage's decoded
+`objectives` block via `Mission.coop` (destroy all `world.targets` / rescue
+`world.rescue_people`, then any player returns to base; fail only when both are
+down). Each player keeps an own `score` (kills attributed to `proj.shooter` in
+`CombatSystem`). Friendly fire (`combat.friendly_fire`, default off) lets a
+player's rounds hit the other. P1 uses WASD + L-Shift/L-Ctrl/Q/E, P2 uses arrows
++ R-Shift/R-Ctrl/Num0/NumEnter; `Player.controls` holds the per-player bindings
+(`combat.players` / `powerups.players` carry both). `F5` toggles god for both,
+`R` restarts, `Esc`/`F1` exits.
+
+## Combat system map
+
+- `combat.lua` owns weapons, projectiles, and transient `effects` (missile trails,
+  napalm fire). `fire()` builds projectiles from a weapon def and a level index,
+  applying spread, multiple streams, swing, perpendicular side offsets, and
+  `alternate_side`; `proj_type "flame"` routes to `_fire_flame` (a damaging fire
+  cone) instead. `update()` advances/culls projectiles + effects (effects apply a
+  one-time AoE) and runs hit detection; `_check_hit` is split player-vs-entity and
+  enemy-vs-player and honors `player.unlimited`.
+- `powerups.lua` spawns pickups when `entity.drop_powerup` is set (large building
+  death), and applies ammo/fuel/armor/medal effects on collection.
+- Enemy turrets sharing the `flak_turret` kind fire different weapons per sprite
+  via `data/enemy_overrides.json` (asset filename -> weapon), applied to
+  `entity.weapon` at load; the AI reads `e.weapon or td.weapon`. Enemy rounds play
+  their `explosion` clip on death (`_end_projectile`), except tracers which fade.
+- Two-part objects (tank hull+turret, radar base+dish) are folded at load via
+  `TURRET_DEFS` in `world.lua`; a turret with `spin` rotates on its own (radar),
+  otherwise the AI aims it. `data/building_drops.json` forces a pickup kind on a
+  building's death (asset filename -> kind, e.g. bunker -> medal).
+- Player ammo lives on `player.lua` (`seed_ammo`/`has_ammo`/`consume_ammo`/
+  `add_ammo`); `main.lua:_try_fire` gates on it. Weapons map to a `short` name and
+  WEAPONS.BIN `icon` frame in `data/weapons.json`.
+- `main.lua:_try_fire` drives player firing from input and the weapon's fire rate.
+- `entity.lua` is the damage target: `take_damage`, `on_hit` (spawns smoke),
+  the HP-tier damage smoke, and the death/explosion state machine.
+- `data/weapons.json` defines every weapon, including `enemy` weapons (`flak`,
+  `machine_gun`, `tank_cannon`, `rifle`) that have no firing code yet.
+- `data/entity_types.json` already carries `weapon`, `attack_range`,
+  `detection_radius`, and `turn_speed` for enemy kinds. Enemy AI is the natural
+  next consumer of these fields.
+
+When extending combat, keep the player and enemy paths symmetric where it makes
+sense, and route all projectile spawning through `combat:fire` so geometry stays
+in one place.
+
 ## Coordinate and angle conventions
 
 - World units are original game pixels. World is `world_size` square (usually
