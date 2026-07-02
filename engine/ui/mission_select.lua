@@ -21,7 +21,7 @@ local TITLE_Y = 8
 -- Carousel picture box (STAGE0X_MPIC is fullscreen; shown shrunk, same aspect).
 local MPIC_W, MPIC_H = 152, 114
 local MPIC_X = (DW - MPIC_W) / 2
-local MPIC_Y = 26
+local MPIC_Y = 40
 
 local ARROW_SCALE = 1.5
 local ARROW_GAP   = 8      -- px between the picture box and each arrow
@@ -30,13 +30,15 @@ local BUMP_TIME   = 0.18
 
 local SLIDE_TIME  = 0.28   -- carousel image slide on a mission change
 
--- Phase button row (assets/mission/phase01..04, used exactly like PLAY / EXIT).
+-- Phase button row (assets/mission/phase01..04). These are toggle buttons: only
+-- one phase is selected at a time and it wears its pressed (down) frame to mark
+-- the chosen level; PLAY then loads whatever phase is selected.
 local PHASE_W, PHASE_H = 63, 12
 local PHASE_PITCH = 69
 local PHASE_X0 = (DW - (PHASE_PITCH * 3 + PHASE_W)) / 2
-local PHASE_Y  = 156
+local PHASE_Y  = 170
 
-local BTN_Y = 200
+local BTN_Y = 214
 local BUTTONS = {
     { id = "play", x = 106 },
     { id = "exit", x = 168 },
@@ -49,7 +51,7 @@ local CONFIRM_TIME = 0.3
 -- Backdrop tint toward the selected mission's colour. TINT_AMOUNT is the whole
 -- effect's strength (0 = off, ~0.5 = strong); TINT_SPEED is how fast it eases
 -- between missions. Tune these two to taste.
-local TINT_AMOUNT  = 0.30
+local TINT_AMOUNT  = 0.42
 local TINT_SPEED   = 3
 
 -- Focus rows.
@@ -85,7 +87,7 @@ function MissionSelect:init()
     self.prev_mpic = nil
     self.bump_l, self.bump_r = 0, 0
 
-    self.title_font = Font.get("chars")
+    self.title_font = Font.get("mainmen")
     self.focus = img("assets/hud/selfocus_f01.png")
     self.arrow = img("assets/mainmen/arrow.png")
 
@@ -231,7 +233,7 @@ function MissionSelect:hover(x, y)
     if not self.active or self.confirming then return end
     local kind, v = self:_target_at(Pointer.to_design(x, y, DW, DH))
     if kind == "button" then self.row = ROW_BUTTON; self.btn = v
-    elseif kind == "phase" then self.row = ROW_PHASE; self.phase = v
+    elseif kind == "phase" then self.row = ROW_PHASE
     elseif kind == "arrow" or kind == "mpic" then self.row = ROW_CAROUSEL end
 end
 

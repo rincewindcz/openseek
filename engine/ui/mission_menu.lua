@@ -76,7 +76,8 @@ function MissionMenu:init()
     local raw = love.filesystem.read("data/mission_text.json")
     self.text = raw and json.decode(raw) or {}
 
-    self._cache = {}  -- path -> image | false
+    self._cache = {}       -- path -> image | false
+    self._block_cache = {} -- icon path -> { top offset of each objective square }
 end
 
 function MissionMenu:is_active() return self.active end
@@ -87,6 +88,35 @@ function MissionMenu:_img(path)
         self._cache[path] = img(path) or false
     end
     return self._cache[path] or nil
+end
+
+-- Top y offset (within the icon image) of each objective square. The phase icon
+-- is a vertical stack of 47px squares separated by transparent gaps, one square
+-- per briefing paragraph; a square may be blank (e.g. stage13 skips the middle),
+-- so the tops are read from the art rather than assumed evenly spaced.
+function MissionMenu:_icon_block_tops(path)
+    local cached = self._block_cache[path]
+    if cached ~= nil then return cached end
+    local tops = {}
+    local ok, data = pcall(love.image.newImageData, path)
+    if ok then
+        local w, h = data:getWidth(), data:getHeight()
+        local in_block = false
+        for y = 0, h - 1 do
+            local opaque = false
+            for x = 0, w - 1 do
+                if select(4, data:getPixel(x, y)) > 0.06 then opaque = true; break end
+            end
+            if opaque and not in_block then
+                tops[#tops + 1] = y
+                in_block = true
+            elseif not opaque then
+                in_block = false
+            end
+        end
+    end
+    self._block_cache[path] = tops
+    return tops
 end
 
 -- Wraps text to width w (design px) using the CHARS advances.
@@ -112,22 +142,34 @@ function MissionMenu:open(stage_name)
     local m = tonumber(stage_name:sub(6, 6)) or 0
     local p = tonumber(stage_name:sub(7, 7)) or 0
 
+    local icon_path = string.format("assets/phase/stage%d_phase%d_f00.png", m, p + 1)
     self.backdrop = self:_img(string.format("assets/fullscreen/STAGE0%d_MS.png", m))
     self.title    = self:_img(string.format("assets/mission/title_phase0%d.png", p + 1))
-    self.icon     = self:_img(string.format("assets/phase/stage%d_phase%d_f00.png", m, p + 1))
+    self.icon     = self:_img(icon_path)
 
     -- Original briefing text: one or more paragraphs (objective first, then any
-    -- enemy/threat notes), each wrapped to the text column and separated by a gap.
-    -- Already upper case in the source to match the yellow CHARSTIT body text.
-    self.text_lines = {}
+    -- enemy/threat notes), each wrapped to the text column. Already upper case in
+    -- the source to match the yellow CHARSTIT body text. Each paragraph is snapped
+    -- to the top of its matching objective square (see _icon_block_tops); a
+    -- paragraph taller than the square spacing pushes the next one down so nothing
+    -- overlaps, and any paragraph past the last square just flows on with PARA_GAP.
+    self.paragraphs = {}
     local info = self.text[stage_name]
     if info and info.paragraphs then
-        for pi, para in ipairs(info.paragraphs) do
-            if pi > 1 then self.text_lines[#self.text_lines + 1] = { gap = true } end
-            for _, l in ipairs(self:_wrap(para, TEXT_W)) do
-                self.text_lines[#self.text_lines + 1] = { l }
-            end
+        for _, para in ipairs(info.paragraphs) do
+            self.paragraphs[#self.paragraphs + 1] = self:_wrap(para, TEXT_W)
         end
+    end
+
+    local block_tops = self:_icon_block_tops(icon_path)
+    local pitch = self.font.line_height + LINE_GAP
+    self.para_y = {}
+    local flow = TEXT_Y
+    for i, lines in ipairs(self.paragraphs) do
+        local snap = block_tops[i] and (TEXT_Y + block_tops[i]) or flow
+        local top = math.max(snap, flow)
+        self.para_y[i] = top
+        flow = top + #lines * pitch + PARA_GAP
     end
 
     self.cursor     = DEFAULT_CURSOR
@@ -237,13 +279,12 @@ function MissionMenu:draw()
         g.draw(self.icon, ICON_X, ICON_Y)
     end
 
-    local y = TEXT_Y
-    for _, row in ipairs(self.text_lines) do
-        if row.gap then
-            y = y + PARA_GAP
-        else
-            self.font:print(row[1], TEXT_X, y, { color = { 1, 1, 1, fade } })
-            y = y + self.font.line_height + LINE_GAP
+    local pitch = self.font.line_height + LINE_GAP
+    for i, lines in ipairs(self.paragraphs) do
+        local y = self.para_y[i]
+        for _, l in ipairs(lines) do
+            self.font:print(l, TEXT_X, y, { color = { 1, 1, 1, fade } })
+            y = y + pitch
         end
     end
 
