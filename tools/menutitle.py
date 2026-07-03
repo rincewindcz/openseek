@@ -13,8 +13,12 @@ title styling).
 The blitter lays these frames into a 384 px Mode X row anchored at x0 = 192, so
 a full-width title runs off the row and wraps back to the left edge (the "split"
 visible from frame 8 on, where "HIGH SCORES" reads "RES ... HIGH SCO").
-unsplit() rotates each frame's columns to close the largest empty gap, rejoining
-the title before it is cropped to its bounding box.
+unsplit() rejoins the wrapped columns before the frame is cropped.
+
+MENUTITLE_PAL.BIN is stored as 6-bit VGA values (0-63) like every other game
+palette, so decode_blitter.render (which expands entries by *4) resolves it
+correctly; the colors recovered from the screenshot are 8-bit and shifted down
+two bits on write.
 
 Run this module to regenerate MENUTITLE_PAL.BIN from the reference screenshot:
 
@@ -198,7 +202,8 @@ def main():
         sys.exit("Could not find CREDANIM.BIN. Pass --game-dir (the seek dir).")
 
     pal = extract_palette(data_dir)
-    PAL_PATH.write_bytes(pal)
+    # Store as 6-bit VGA (decode_blitter.render expands entries by *4).
+    PAL_PATH.write_bytes(bytes(b >> 2 for b in pal))
     print(f"wrote {PAL_PATH.relative_to(THIS_DIR.parent)} ({len(pal)} bytes)")
 
 
