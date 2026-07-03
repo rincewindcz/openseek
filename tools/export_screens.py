@@ -10,8 +10,8 @@ decoder its container uses (world blitter or the raw planar HUD class, routed
 automatically by decode_planar.is_planar) and rendered in that screen's own
 palette:
 
-  credanim   menu CREDITS option    MAINP.BIN embedded palette    -> assets/credits/
-  hianim     menu HIGH SCORES opt.   MAINP.BIN embedded palette    -> assets/hiscore/
+  credanim   menu CREDITS option    recovered DAC palette         -> assets/credits/
+  hianim     menu HIGH SCORES opt.   recovered DAC palette         -> assets/hiscore/
   pownums    POW count digit font    GOVPAL.BIN (menu gold ramp)   -> assets/pow/
   pownames   rescued weapon names    GOVPAL.BIN                    -> assets/pow/
   powgads    POW screen buttons      GOVPAL.BIN                    -> assets/pow/
@@ -23,9 +23,11 @@ palette:
   phase1..4  objective briefing      each STAGE0{m} palette        -> assets/phase/
 
 CREDANIM ("CREDITS") and HIANIM ("HIGH SCORES") are the animated main-menu
-options, so they take the MAINP.BIN menu palette (gold 3D text), not their
-backdrop screens' palettes. The POW rescue widgets draw in the gold GOVPAL menu
-ramp like the other in-game fonts. A palette source is either a raw 768-byte VGA
+options. Their gold-face / grey-bevel title colors match no shipped BIN (the
+game assembles the palette in the DAC at load time), so they use the palette
+recovered from an original-game screenshot and are column de-wrapped; see
+menutitle.py. The POW rescue widgets draw in the gold GOVPAL menu ramp like the
+other in-game fonts. A palette source is either a raw 768-byte VGA
 palette BIN (first 768 bytes) or a fullscreen image whose palette is embedded
 after a 14-byte header (MAINP). PEOPLE.BIN and HATCH.BIN are excluded: PEOPLE
 dispatches to a different (still unsolved) per-width routine, and HATCH is the
@@ -44,6 +46,7 @@ REPO_ROOT = THIS_DIR.parent
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 import decode_planar as dp
+import menutitle
 
 FS_HEADER = 14  # fullscreen images store their palette after a 14-byte header
 
@@ -66,7 +69,7 @@ def load_palette(path, embedded):
     return data[off:off + 768]
 
 
-def export_sprite(src_path, prefix, out_dir, palette):
+def export_sprite(src_path, prefix, out_dir, palette, transform=None):
     data   = src_path.read_bytes()
     dec    = dp if dp.is_planar(data) else db
     frames = dec.read_frames(data)
@@ -75,6 +78,8 @@ def export_sprite(src_path, prefix, out_dir, palette):
         canvas, status = dec.decode_frame(data, off, end)
         if status != "ok" or not canvas:
             continue
+        if transform:
+            canvas = transform(canvas)
         img   = dec.render(canvas, palette, scale=1)
         fname = f"{prefix}_f{i:02d}.png"
         img.save(out_dir / fname)
@@ -85,9 +90,9 @@ def export_sprite(src_path, prefix, out_dir, palette):
 
 
 # (source BIN under data/, output prefix, out subdir, palette BIN, embedded?)
+# CREDANIM/HIANIM are handled separately (see export_titles): they need the
+# recovered DAC palette and column de-wrap, not a shipped palette BIN.
 JOBS = [
-    ("data/CREDANIM", "credanim", "credits", "data/MAINP.BIN",    True),
-    ("data/HIANIM",   "hianim",   "hiscore", "data/MAINP.BIN",    True),
     ("data/POWNUMS",  "pownums",  "pow",     "data/GOVPAL.BIN",   False),
     ("data/POWNAMES", "pownames", "pow",     "data/GOVPAL.BIN",   False),
     ("data/POWGADS",  "powgads",  "pow",     "data/GOVPAL.BIN",   False),
@@ -108,6 +113,25 @@ def stage_palette(sdir):
     return None
 
 
+def export_titles(game_dir):
+    """CREDANIM / HIANIM: the animated CREDITS and HIGH SCORES menu titles.
+
+    Rendered in the recovered runtime palette (gold face + grey 3D bevel; see
+    menutitle.py) and column de-wrapped, since the blitter wraps these
+    full-width frames around the 384 px Mode X row."""
+    palette = menutitle.load_palette()
+    print("Menu titles -> assets/credits, assets/hiscore/")
+    for stem, prefix, sub in (("CREDANIM", "credanim", "credits"),
+                              ("HIANIM", "hianim", "hiscore")):
+        src = game_dir / "data" / (stem + ".BIN")
+        if not src.exists():
+            print(f"  skip {stem}: not found")
+            continue
+        out_dir = REPO_ROOT / "assets" / sub
+        out_dir.mkdir(parents=True, exist_ok=True)
+        export_sprite(src, prefix, out_dir, palette, transform=menutitle.unsplit)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Export screen sprites to assets/")
     ap.add_argument("--game-dir", default=None)
@@ -115,6 +139,9 @@ def main():
 
     game_dir = find_game_dir(args.game_dir)
     print(f"Game dir: {game_dir}\n")
+
+    export_titles(game_dir)
+    print()
 
     for stem, prefix, sub, pal_rel, embedded in JOBS:
         src = game_dir / (stem + ".BIN")
