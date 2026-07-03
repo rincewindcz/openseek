@@ -87,7 +87,9 @@ function MissionSelect:init()
     self.prev_mpic = nil
     self.bump_l, self.bump_r = 0, 0
 
-    self.title_font = Font.get("mainmen")
+    self.title_font   = Font.get("mainmen")
+    self.version_font = Font.get("chars")   -- bottom-right build tag, as on the main menu
+    self.version_text = "OPENSEEK 0.9"
     self.focus = img("assets/hud/selfocus_f01.png")
     self.arrow = img("assets/mainmen/arrow.png")
 
@@ -430,6 +432,15 @@ function MissionSelect:draw()
     self:_draw_focus(g, fade)
 
     g.pop()
+
+    -- Build tag, bottom-right, in raw window pixels like the main menu (CHARS is
+    -- truecolor gold, so only show it once the screen is fully up).
+    if fade >= 1 then
+        local vw = self.version_font:width(self.version_text)
+        self.version_font:print(self.version_text, screen_w - vw - 4,
+            screen_h - self.version_font.line_height - 3)
+    end
+
     g.setColor(1, 1, 1, 1)
 end
 

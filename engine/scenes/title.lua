@@ -13,6 +13,7 @@ function Title:enter()
         fade_in   = 0.6,
         hold      = 2.0,
         fade_out  = 0.6,
+        tag       = "OPENSEEK 0.9",
         on_done   = to_menu,
         on_cancel = to_menu,
     })

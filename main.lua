@@ -26,6 +26,8 @@ local CoopSetup       = require "engine.scenes.coop_setup"
 local CoopGameplay    = require "engine.scenes.coop_gameplay"
 local AnimGallery     = require "engine.scenes.anim_gallery"
 local FontGallery     = require "engine.scenes.font_gallery"
+local Credits         = require "engine.scenes.credits"
+local HiScores        = require "engine.scenes.hiscores"
 
 -- The shared app context handed to every scene: the world and the systems
 -- around it, the fullscreen fade overlay, the stats screen, and the pre-game
@@ -116,6 +118,8 @@ function love.load(args)
     scenes:register("coop_gameplay",    CoopGameplay:new(app))
     scenes:register("anim_gallery",     AnimGallery:new(app))
     scenes:register("font_gallery",     FontGallery:new(app))
+    scenes:register("credits",          Credits:new(app))
+    scenes:register("hiscores",         HiScores:new(app))
     scenes:switch("title")
 end
 

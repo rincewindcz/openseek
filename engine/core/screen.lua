@@ -1,4 +1,5 @@
 local Class = require "engine.core.class"
+local Font  = require "engine.core.font"
 
 -- Fullscreen image overlay with fade-in / hold / fade-out phases, used for the
 -- title card, the per-mission briefing picture, and the crash end screen.
@@ -25,8 +26,9 @@ function Screen:_img(name)
 end
 
 -- opts: fade_in, hold, fade_out (seconds); wait_key (hold until a key dismisses
--- it instead of timing out); on_done (called once fully faded out); on_cancel
--- (called when the overlay is cancelled, so the shower decides where Esc goes).
+-- it instead of timing out); tag (small bottom-right build-tag text drawn at the
+-- overlay's alpha); on_done (called once fully faded out); on_cancel (called when
+-- the overlay is cancelled, so the shower decides where Esc goes).
 function Screen:show(name, opts)
     opts = opts or {}
     self.active = {
@@ -35,6 +37,7 @@ function Screen:show(name, opts)
         hold      = opts.hold     or 1.5,
         fade_out  = opts.fade_out or 0.5,
         wait_key  = opts.wait_key or false,
+        tag       = opts.tag,
         on_done   = opts.on_done,
         on_cancel = opts.on_cancel,
         phase     = "in",
@@ -104,6 +107,12 @@ function Screen:draw()
         local scale = math.min(screen_w / img_w, screen_h / img_h)
         g.setColor(1, 1, 1, alpha)
         g.draw(overlay.img, (screen_w - img_w * scale) / 2, (screen_h - img_h * scale) / 2, 0, scale, scale)
+    end
+    if overlay.tag then
+        self.tag_font = self.tag_font or Font.get("chars")
+        local vw = self.tag_font:width(overlay.tag)
+        self.tag_font:print(overlay.tag, screen_w - vw - 4,
+            screen_h - self.tag_font.line_height - 3, { color = { 1, 1, 1, alpha } })
     end
     g.setColor(1, 1, 1)
 end

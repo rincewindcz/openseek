@@ -38,11 +38,14 @@ function MainMenu:_select(id)
         app.scenes:switch("mission_briefing", app.world.stage_name or app.world.stages[1])
     elseif id == "resume" then
         if self.over_game then app.scenes:pop() end
-    elseif id == "options" or id == "credits" or id == "hiscores" then
-        local pic = (id == "options" and "OPTPIC") or (id == "credits" and "CREDITS") or "HISCORE"
+    elseif id == "credits" then
+        app.scenes:replace("credits")
+    elseif id == "hiscores" then
+        app.scenes:replace("hiscores")
+    elseif id == "options" then
         self.menu:hold()  -- stay active but black behind the screen so nothing shows through
         local reopen = function() self:_open() end
-        app.screen:show(pic, { fade_in = 0.3, wait_key = true, fade_out = 0.3,
+        app.screen:show("OPTPIC", { fade_in = 0.3, wait_key = true, fade_out = 0.3,
             on_done = reopen, on_cancel = reopen })
     elseif id == "mission" then
         app.scenes:replace("mission_select")   -- debug mission/phase picker
