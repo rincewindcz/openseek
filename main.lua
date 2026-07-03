@@ -8,6 +8,7 @@ local CombatSystem    = require "engine.game.combat"
 local HeliSystem      = require "engine.game.enemy_heli"
 local Powerups        = require "engine.game.powerups"
 local RescueSystem    = require "engine.game.rescue"
+local Weather         = require "engine.game.weather"
 local Mission         = require "engine.game.mission"
 local Screen          = require "engine.core.screen"
 local EndStats        = require "engine.ui.end_stats"
@@ -98,6 +99,7 @@ function love.load(args)
     Mission.load("data/missions.json")
     app.powerups = Powerups:new(world, camera, app.combat.weapons)
     app.rescue   = RescueSystem:new(world, app.combat)
+    app.weather  = Weather:new()
     app.renderer:refresh_kinds()
     love.window.setTitle(world:title())
 

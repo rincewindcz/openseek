@@ -51,6 +51,7 @@ function CoopGameplay:enter()
     self.paused = false
     self:reset_end_stats()
     app.renderer.in_game = true
+    self:enter_weather()
 
     local sx, sy = world:player_start()
     self.players = {
@@ -89,6 +90,7 @@ function CoopGameplay:leave()
     local app = self.app
     self.paused = false
     self:reset_end_stats()
+    app.weather:set(nil)
     app.renderer.in_game = false
     -- Restore the shared overview camera on every system that was pointed at
     -- a split camera, or the overview renders through a stale half-view.
@@ -159,6 +161,7 @@ function CoopGameplay:update(dt)
     if self.mission then self.mission:update(dt) end
     self:update_won(dt)
     app.world:update(dt)
+    app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
 end
 
 function CoopGameplay:draw()
@@ -215,6 +218,7 @@ function CoopGameplay:draw()
         g.setScissor()
         g.pop()
     end
+    app.weather:draw()   -- full-window overlay across both halves
     -- Center divider
     g.setColor(0, 0, 0, 1)
     g.rectangle("fill", half_w - 1, 0, 2, H)

@@ -19,6 +19,7 @@ function Gameplay:enter()
     self.pending_takeoff = false
     app.renderer.in_game = true
     app.camera:set_zoom(6)
+    self:enter_weather()
     self:spawn_player()
     love.window.setTitle(app.world:title() .. "  [" .. app.settings.vehicle .. "]")
 end
@@ -29,6 +30,7 @@ function Gameplay:leave()
     self.death_timer     = nil
     self.pending_takeoff = false
     self:reset_end_stats()
+    app.weather:set(nil)
     app.renderer.in_game   = false
     self.player            = nil
     app.hud.player         = nil
@@ -169,6 +171,7 @@ function Gameplay:update(dt)
         self.pending_takeoff = false
     end
     app.world:update(dt)
+    app.weather:update(dt, app.camera)
     app.debug_panel:update()
 end
 
@@ -187,6 +190,7 @@ function Gameplay:draw()
     app.helis:draw()             -- airborne enemy helicopters
     self.player:draw()
     self.player:draw_world_front()
+    app.weather:draw()
     app.hud:draw()
     if mission and mission.state == "return_to_base" then self:draw_return_prompt() end
     if mission and mission.state == "won" and not app.end_stats:is_active() then

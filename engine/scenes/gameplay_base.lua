@@ -9,6 +9,17 @@ local Vehicles = require "engine.game.vehicles"
 -- collect_stats() for the stats screen.
 local GameplayBase = Class(Scene)
 
+-- Weather overlay per mission digit (snow on the winter world, rain on the
+-- jungle world); other missions run clear.
+local WEATHER_FOR_MISSION = { [1] = "snow", [2] = "rain" }
+
+-- Activate the stage's weather; call from a scene's enter(). leave() should
+-- clear it with self.app.weather:set(nil).
+function GameplayBase:enter_weather()
+    local m = tonumber((self.app.world.stage_name or ""):match("^stage(%d)"))
+    self.app.weather:set(WEATHER_FOR_MISSION[m])
+end
+
 -- Centered title in the game's bitmap body font (same as the score readout)
 -- over a dimmed screen. No subtitle / key hints: game mode shows game-font
 -- text only.
