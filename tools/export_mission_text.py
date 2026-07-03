@@ -4,14 +4,18 @@ Export the original per-phase mission descriptions to data/mission_text.json.
 
 The originals live as plain ASCII in the game's MT0.BIN .. MT4.BIN (one file per
 mission, opened as data\\mt%d.bin by mission_select_menu @ 0x203250). Each file
-holds four phase blocks at a fixed 18-line stride; within a block the text is one
-or more paragraphs separated by blank lines (typically an objective paragraph
-followed by an enemy/threat paragraph, though some blocks merge them).
+holds four phase blocks at a fixed 18-line stride, and within a block the text is
+a fixed grid of three 6-line box slots (line offsets 0, 6, 12). Each slot is one
+briefing paragraph aligned to its objective box; a slot may be blank, and slots
+are NOT separated by blank lines (adjacent slots often run together), so grouping
+by blank lines wrongly merges them. Paragraphs are parsed by slot offset instead.
 
 Output keys are stage<M><P> (M = mission 0-4, P = phase 0-3), matching the
-stage_name parse in engine/ui/mission_menu.lua. Each value is a list of paragraphs
-with the original wording preserved (whitespace normalized, hand-wrapped line
-breaks collapsed so the menu can re-wrap to its own column width).
+stage_name parse in engine/ui/mission_menu.lua. Each value is a list of paragraph
+objects { "slot": 0-2, "text": ... }; the slot fixes the paragraph's vertical box
+so mission_menu.lua can align it even when the matching box art is blank. Original
+wording is preserved (whitespace normalized, hand-wrapped line breaks collapsed so
+the menu can re-wrap to its own column width).
 
 Usage:
   python3 tools/export_mission_text.py
@@ -30,6 +34,8 @@ REPO_ROOT = THIS_DIR.parent
 MISSIONS = 5
 PHASES = 4
 BLOCK_LINES = 18  # fixed per-phase stride within each MT file
+SLOTS = 3         # box slots per phase block
+SLOT_LINES = BLOCK_LINES // SLOTS  # 6 lines per box slot
 
 
 def find_game_dir(hint):
@@ -45,18 +51,14 @@ def find_game_dir(hint):
 
 
 def parse_block(lines):
-    # Group consecutive non-empty lines into paragraphs; join each with single
-    # spaces and collapse runs of whitespace.
-    paras, cur = [], []
-    for line in lines:
-        s = line.strip()
-        if s:
-            cur.append(s)
-        elif cur:
-            paras.append(re.sub(r"\s+", " ", " ".join(cur)))
-            cur = []
-    if cur:
-        paras.append(re.sub(r"\s+", " ", " ".join(cur)))
+    # Split the block into its fixed 6-line box slots; each non-blank slot is one
+    # paragraph carrying its slot index, joined with single spaces.
+    paras = []
+    for slot in range(SLOTS):
+        window = lines[slot * SLOT_LINES:(slot + 1) * SLOT_LINES]
+        text = re.sub(r"\s+", " ", " ".join(l.strip() for l in window if l.strip())).strip()
+        if text:
+            paras.append({"slot": slot, "text": text})
     return paras
 
 
@@ -83,8 +85,9 @@ def main():
         for p, paras in enumerate(parse_mission(data)):
             key = f"stage{m}{p}"
             result[key] = {"paragraphs": paras}
-            head = (paras[0] if paras else "").lower()[:44]
-            print(f"  {key}: {len(paras)} para(s)  \"{head}...\"")
+            head = (paras[0]["text"] if paras else "").lower()[:44]
+            slots = ",".join(str(p["slot"]) for p in paras)
+            print(f"  {key}: {len(paras)} para(s) slots[{slots}]  \"{head}...\"")
 
     out_path.write_text(json.dumps(result, indent=2) + "\n")
     print(f"\nGame dir: {game_dir}\nWrote:    {out_path} ({len(result)} stages)")
