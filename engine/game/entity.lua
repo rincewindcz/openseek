@@ -50,6 +50,7 @@ function Entity:init(id, stage_ent, stage_cls)
     -- self.weapon may override type_data.weapon for specific sprites (set at load).
     self.aim_angle    = 0
     self.reload       = 0
+    self.alert_t      = 0     -- time the player has been in detection (reaction delay)
     self.weapon       = nil
 
     -- Damage visual effects

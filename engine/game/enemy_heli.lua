@@ -21,6 +21,9 @@ local TURN_RATE  = 120    -- deg/s heading slew
 local ORBIT_R    = 270    -- radius it tries to circle the player at
 local ATTACK_R   = 360    -- range within which it will fire
 local FIRE_CONE  = 32     -- deg; the nose must be this close to the player to shoot
+local REACTION_DELAY = 0.9 -- s in attack range before the first volley (evasion window)
+local FRONT_LIMIT = 90    -- deg; the orbit is kept within this bearing of the player's front
+local FIRE_FRONT  = 115   -- deg; a heli only fires within this bearing, never from the rear blind spot
 local HIT_RADIUS   = 13
 local MAX_HP       = 60
 local SPAWN_DELAY  = 2.5 -- gap between spawns while below the cap
@@ -104,7 +107,7 @@ function HeliSystem:_spawn_one(player)
         burst_left = pick.burst,
         dir = (math.random() < 0.5) and 1 or -1,
         phase = math.random() * math.pi * 2,
-        reload = 0.8,
+        reload = 0.8, alert_t = 0,
         smoke = {}, smoke_t = 0, hitfx = {},
         rotor_spin = math.random() * math.pi * 2,
         hit_radius = HIT_RADIUS,
@@ -183,12 +186,25 @@ function HeliSystem:_update_heli(heli, dt)
     local dist     = math.sqrt(dx * dx + dy * dy)
     local toplayer = Mathx.heading_deg(dx, dy)
 
+    -- Bearing of the heli around the player, relative to the player's facing:
+    -- 0 = dead ahead of the player, +/-180 = directly behind. The view keeps the
+    -- player low on screen so the rear is off-screen, so this drives both the orbit
+    -- bias and the fire gate: the heli fights where the player can see it.
+    local front_pos = ((toplayer - (p.angle or 0)) % 360) - 180
+
     -- Far: head straight at the player. Near: circle, sweeping the nose between
-    -- nearly tangential and pointing at the player so it lines up to shoot.
+    -- nearly tangential and pointing at the player so it lines up to shoot, but
+    -- biased to the player's front. Outside the front arc the orbit direction is
+    -- forced back toward the front (dir=+1 lowers the bearing, dir=-1 raises it),
+    -- so a heli closing in from behind comes around into view instead of loitering
+    -- in the blind spot and shooting the player from off-screen.
     local target
     if dist > ORBIT_R * 1.25 then
         target = toplayer
     else
+        if math.abs(front_pos) > FRONT_LIMIT then
+            heli.dir = (front_pos > 0) and 1 or -1
+        end
         heli.phase = heli.phase + dt * 1.7 * Config.speed_scale
         local offset = 55 + 50 * math.sin(heli.phase)   -- 5..105 deg off the player
         target = (toplayer + heli.dir * offset) % 360
@@ -202,9 +218,16 @@ function HeliSystem:_update_heli(heli, dt)
     self:_advance(heli, dt)
 
     heli.reload = heli.reload - dt
+    -- Reaction delay: chase and line up immediately, but hold the first volley until
+    -- the heli has been in attack range for REACTION_DELAY seconds, so a heli that
+    -- just closed in (often from off-screen behind the player) gives an evasion
+    -- window instead of firing on arrival. Resets when it falls out of range.
+    if dist <= ATTACK_R then heli.alert_t = heli.alert_t + dt else heli.alert_t = 0 end
+    local ready  = heli.alert_t >= REACTION_DELAY
     local face   = math.abs(((toplayer - heli.heading + 180) % 360) - 180)
     local mid    = heli.burst_left < heli.burst                  -- already firing this volley
-    local can_start = dist <= ATTACK_R and face <= FIRE_CONE
+    local in_view   = math.abs(front_pos) <= FIRE_FRONT
+    local can_start = ready and in_view and dist <= ATTACK_R and face <= FIRE_CONE
     -- A volley only starts when the nose is on the player and in range; once it has,
     -- it commits to all `burst` rounds (the burst is brief, so the nose barely
     -- drifts) and then waits out the long cooldown. That makes a clear shoot/pause

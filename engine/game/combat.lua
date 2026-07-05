@@ -386,6 +386,7 @@ end
 function CombatSystem:_update_ai(dt)
     for _, e in ipairs(self.world.combatants) do
         local p = e:is_alive() and self:_nearest_player(e.x, e.y) or nil
+        local acquired = false
         if p then
             local td  = e.type_data
             local dx, dy = self.world:delta(p.x, p.y, e.x, e.y)
@@ -393,6 +394,13 @@ function CombatSystem:_update_ai(dt)
             local detection = td.detection_radius or 0
             e.engaging = false
             if detection > 0 and d2 <= detection * detection then
+                acquired = true
+                -- Reaction delay: the unit tracks the player immediately (aim below)
+                -- but holds fire until it has had the player in its detection radius
+                -- for reaction_delay seconds, giving the player a window to break off.
+                -- The timer resets whenever the player leaves detection.
+                e.alert_t = (e.alert_t or 0) + dt
+                local ready = e.alert_t >= (td.reaction_delay or 0)
                 local target = Mathx.heading_deg(dx, dy)
                 local diff   = ((target - e.aim_angle + 180) % 360) - 180
                 local step   = (td.turn_speed or 90) * dt * Config.speed_scale
@@ -411,8 +419,8 @@ function CombatSystem:_update_ai(dt)
                 -- Patrol only pauses for the brief window around each shot (slow to a
                 -- stop as the reload comes up, fire, then resume), not the whole time
                 -- the player is in range.
-                e.engaging         = d2 <= attack_range * attack_range and e.reload <= STOP_LEAD
-                local can_fire = (not e.has_turret) or e.turret_alive
+                e.engaging         = ready and d2 <= attack_range * attack_range and e.reload <= STOP_LEAD
+                local can_fire = ready and ((not e.has_turret) or e.turret_alive)
                 if can_fire and math.abs(diff) < LOCK_DEG and d2 <= attack_range * attack_range then
                     e.reload = e.reload - dt
                     if e.reload <= 0 then
@@ -434,6 +442,7 @@ function CombatSystem:_update_ai(dt)
                 end
             end
         end
+        if not acquired then e.alert_t = 0 end
     end
 end
 
