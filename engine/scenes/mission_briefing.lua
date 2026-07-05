@@ -26,6 +26,10 @@ end
 
 function MissionBriefing:_select(id)
     if id == "play" then
+        -- Launching a real mission (new game / mission select both funnel here)
+        -- turns on the lives + game-over flow; the overview toggle can still
+        -- disable it. The sandbox is left deathless.
+        self.app.settings.death_enabled = true
         self.app.scenes:switch("gameplay")
     elseif id == "exit" then
         self.app.scenes:switch("main_menu")

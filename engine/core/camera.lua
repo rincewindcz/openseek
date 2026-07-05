@@ -40,6 +40,13 @@ function Camera:zoom()
     return ZOOMS[self.zoom_index]
 end
 
+-- The discrete target zoom, ignoring any in-progress intro tween. Used where a
+-- value must stay fixed across the smooth zoom (e.g. the weather field's tile
+-- size, so the lattice does not reflow while the intro animates).
+function Camera:base_zoom()
+    return ZOOMS[self.zoom_index]
+end
+
 -- Ratio of the (possibly mid-intro) zoom to the discrete target zoom: 1.0 in
 -- normal play, <1 during the level-start zoom-in. Screen-space sprites such as
 -- the player scale by this so they grow with the animated world.

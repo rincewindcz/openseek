@@ -55,13 +55,21 @@ function Gameplay:sync_weapon_icon()
 end
 
 -- Build a fresh player on the stage spawn and wire it into the systems.
-function Gameplay:spawn_player()
+-- carry: keep the previous player's remaining lives and running score (a
+-- respawn after losing a vehicle). Omitted for a fresh game / manual R restart,
+-- which start over with full lives and a zero score.
+function Gameplay:spawn_player(carry)
     local app = self.app
     local world, camera, combat = app.world, app.camera, app.combat
     local settings = app.settings
     local sx, sy = world:player_start()
+    local prev   = self.player
     local player = Player:new(sx, sy)
     self.player = player
+    if carry and prev then
+        player.lives = prev.lives
+        player.score = prev.score
+    end
     player.world_size   = world.stage.world_size
     player.home_x, player.home_y = sx, sy
     player.vehicle      = settings.vehicle
@@ -94,13 +102,40 @@ end
 
 -- Reload the current stage and respawn the player (R in game mode, or a key
 -- on the crash end screen).
-function Gameplay:restart()
+function Gameplay:restart(carry)
     local app = self.app
     self.death_timer = nil
     app.world:load(app.world.stage_name)
     app.after_stage_load()
-    self:spawn_player()
+    self:spawn_player(carry)
     love.window.setTitle(app.world:title() .. "  [" .. app.settings.vehicle .. "]")
+end
+
+-- A vehicle was destroyed: spend one life (the count shown in the HUD). With
+-- spares left, the crash picture holds until a key, then the stage restarts
+-- with the same score and remaining lives. On the last life it is game over:
+-- the final score is handed to the high-score screen for a possible entry.
+function Gameplay:on_vehicle_lost()
+    local app    = self.app
+    local player = self.player
+    player.lives = math.max(0, (player.lives or 0) - 1)
+    local pic    = (player.vehicle == "tank") and "TANKEND" or "DEATHPIC"
+    if player.lives > 0 then
+        app.screen:show(pic, {
+            fade_in   = 0.6,
+            wait_key  = true,
+            on_done   = function() self:restart(true) end,
+            on_cancel = function() app.scenes:switch("overview") end,
+        })
+    else
+        local score = player.score or 0
+        app.screen:show(pic, {
+            fade_in   = 0.6,
+            wait_key  = true,
+            on_done   = function() app.scenes:switch("hiscores", score) end,
+            on_cancel = function() app.scenes:switch("hiscores", score) end,
+        })
+    end
 end
 
 -- Single player: the whole stage's destruction is credited to the lone player
@@ -133,9 +168,8 @@ function Gameplay:update(dt)
     if app.settings.death_enabled and not player.death and player:is_dead() then
         player:start_death()
     end
-    -- After the crash animation finishes, wait ~3s then bring up the end
-    -- picture (DEATHPIC for the chopper, TANKEND for the tank); a key restarts,
-    -- Esc bails out to the overview.
+    -- After the crash animation finishes, wait ~3s then spend a life and bring
+    -- up the crash picture / high-score screen (see on_vehicle_lost).
     if player:death_done() and not app.screen:is_active() then
         if self.death_timer == nil then
             self.death_timer = 3.0
@@ -143,13 +177,7 @@ function Gameplay:update(dt)
             self.death_timer = self.death_timer - dt
             if self.death_timer <= 0 then
                 self.death_timer = 0
-                local pic = (player.vehicle == "tank") and "TANKEND" or "DEATHPIC"
-                app.screen:show(pic, {
-                    fade_in   = 0.6,
-                    wait_key  = true,
-                    on_done   = function() self:restart() end,
-                    on_cancel = function() app.scenes:switch("overview") end,
-                })
+                self:on_vehicle_lost()
             end
         end
     end

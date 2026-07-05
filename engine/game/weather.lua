@@ -106,8 +106,14 @@ function Weather:update(dt, camera)
     end
     self.t = self.t + dt
 
+    -- Project with the live (possibly mid-intro) zoom, but size the tile from the
+    -- discrete target zoom so the world lattice does not reflow while the level's
+    -- zoom-in tween animates. Reflowing it would slide the whole field across the
+    -- screen (cxT = wx / T shifts when T changes), which reads as the flakes
+    -- briefly racing off in the wrong direction. min() keeps full screen coverage
+    -- if an intro ever zooms in from below the target instead of out toward it.
     local z = camera:zoom()
-    local T = self:_tile(z)
+    local T = self:_tile(math.min(z, camera:base_zoom()))
 
     -- Fall: advance each particle by the wind in normalized tile units, wrapped.
     local dnx = preset.wind[1] * dt / T
