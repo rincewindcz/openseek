@@ -168,7 +168,9 @@ function Overview:keypressed(key)
     if key == "f2" then app.debug_panel:toggle();          return end
     if app.debug_panel.enabled and app.debug_panel:keypressed(key) then return end
     if key == "f1" then
-        -- Show the mission briefing picture, then drop into the live game.
+        -- Show the mission briefing picture, then drop into the live game. Dev
+        -- launch of a single stage, not a campaign run.
+        app.campaign = false
         local pic = mission_pic(app.world)
         if pic then
             app.screen:show(pic, { fade_in = 0.3, hold = 0.75, fade_out = 0.3,

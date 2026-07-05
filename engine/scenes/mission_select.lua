@@ -26,6 +26,7 @@ end
 function MissionSelectScene:_select(id, stage_name)
     local app = self.app
     if id == "play" then
+        app.campaign = false   -- picked a single stage: play it, then back to menu
         app.world:load(stage_name)
         app.after_stage_load()
         app.scenes:switch("mission_briefing", stage_name)

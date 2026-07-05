@@ -82,6 +82,9 @@ function love.load(args)
         vehicle_defs      = vehicle_defs,
         after_stage_load  = after_stage_load,
         viewer_zoom_index = 4,     -- overview zoom, restored when a game mode ends
+        campaign          = false, -- NEW GAME run: advance phase->phase, accumulate score
+        run_score         = 0,     -- score carried across phases of a campaign run
+        run_lives         = 3,     -- spare vehicles carried across phases of a campaign run
         settings = {
             vehicle       = "chopper",
             chopper_skin  = 1,     -- player chopper variant (1 green, 2 magenta, 3 white)

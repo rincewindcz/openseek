@@ -35,7 +35,15 @@ end
 function MainMenu:_select(id)
     local app = self.app
     if id == "new_game" then
-        app.scenes:switch("mission_briefing", app.world.stage_name or app.world.stages[1])
+        -- Start a fresh campaign run at the first stage: play through every phase
+        -- and mission in order, accumulating one running score across the run.
+        local first   = app.world.stages[1]
+        app.campaign  = true
+        app.run_score = 0
+        app.run_lives = 3
+        app.world:load(first)
+        app.after_stage_load()
+        app.scenes:switch("mission_briefing", first)
     elseif id == "resume" then
         if self.over_game then app.scenes:pop() end
     elseif id == "credits" then

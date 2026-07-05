@@ -110,8 +110,14 @@ function GameplayBase:reset_end_stats()
     self.app.end_stats.active = false
 end
 
--- End-stats key handling: Esc dismisses immediately; otherwise the first key
--- snaps the tally, the next dismisses. Dismissing returns to the overview.
+-- Where to go once the stats screen is dismissed. Base returns to the overview;
+-- single-player overrides this to continue a campaign run to the next phase.
+function GameplayBase:on_stats_done()
+    self.app.scenes:switch("overview")
+end
+
+-- End-stats key handling: Esc aborts to the overview; otherwise the first key
+-- snaps the tally, the next dismisses and hands off via on_stats_done().
 function GameplayBase:end_stats_keypressed(key)
     local end_stats = self.app.end_stats
     if key == "escape" then
@@ -119,7 +125,7 @@ function GameplayBase:end_stats_keypressed(key)
         end_stats.active = false
         self.app.scenes:switch("overview")
     elseif end_stats:keypressed() and not end_stats:is_active() then
-        self.app.scenes:switch("overview")
+        self:on_stats_done()
     end
 end
 
@@ -128,7 +134,7 @@ function GameplayBase:mousereleased(_x, _y)
     local end_stats = self.app.end_stats
     if end_stats:is_active() then
         if end_stats:keypressed() and not end_stats:is_active() then
-            self.app.scenes:switch("overview")
+            self:on_stats_done()
         end
     end
 end

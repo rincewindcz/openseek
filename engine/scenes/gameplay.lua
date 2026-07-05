@@ -69,6 +69,11 @@ function Gameplay:spawn_player(carry)
     if carry and prev then
         player.lives = prev.lives
         player.score = prev.score
+    elseif app.campaign then
+        -- Entering a campaign phase: seed the running score and remaining lives
+        -- carried from the previous phase (zero / full on the first phase).
+        player.score = app.run_score
+        player.lives = app.run_lives
     end
     player.world_size   = world.stage.world_size
     player.home_x, player.home_y = sx, sy
@@ -129,6 +134,7 @@ function Gameplay:on_vehicle_lost()
         })
     else
         local score = player.score or 0
+        app.campaign = false   -- out of lives: the run is over
         app.screen:show(pic, {
             fade_in   = 0.6,
             wait_key  = true,
@@ -136,6 +142,29 @@ function Gameplay:on_vehicle_lost()
             on_cancel = function() app.scenes:switch("hiscores", score) end,
         })
     end
+end
+
+-- Stats dismissed: in a campaign run, carry the accumulated score and remaining
+-- lives forward and open the next phase's briefing (or the next mission once a
+-- mission's phases are done). When the last stage is cleared, the run is complete
+-- and the total goes to the high-score screen. Outside a run, back to the overview.
+function Gameplay:on_stats_done()
+    local app = self.app
+    if not app.campaign then
+        app.scenes:switch("overview")
+        return
+    end
+    app.run_score = self.player.score or app.run_score
+    app.run_lives = self.player.lives or app.run_lives
+    local next_stage = app.world.stages[app.world.stage_index + 1]
+    if not next_stage then
+        app.campaign = false
+        app.scenes:switch("hiscores", app.run_score)
+        return
+    end
+    app.world:load(next_stage)
+    app.after_stage_load()
+    app.scenes:switch("mission_briefing", next_stage)
 end
 
 -- Single player: the whole stage's destruction is credited to the lone player
