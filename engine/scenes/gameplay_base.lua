@@ -110,25 +110,18 @@ function GameplayBase:reset_end_stats()
     self.app.end_stats.active = false
 end
 
--- Where to go once the stats screen is dismissed. Base returns to the overview;
+-- Where to go once the stats screen is dismissed. Base returns to the menu;
 -- single-player overrides this to continue a campaign run to the next phase.
 function GameplayBase:on_stats_done()
-    self.app.scenes:switch("overview")
+    self.app.scenes:switch("main_menu")
 end
 
--- End-stats key handling: Esc aborts straight to the overview; otherwise a press
--- steps the screen (snap the tally, then start the reverse count-down close). The
--- handoff via on_stats_done() fires from update() once the close finishes, so the
--- animation plays out before the scene changes.
-function GameplayBase:end_stats_keypressed(key)
-    local end_stats = self.app.end_stats
-    if key == "escape" then
-        end_stats:keypressed()
-        end_stats.active = false
-        self.app.scenes:switch("overview")
-    else
-        end_stats:keypressed()
-    end
+-- End-stats key handling: any key (Esc included) steps the screen, snapping the
+-- tally and then starting the reverse count-down close. The handoff via
+-- on_stats_done() fires from update() once the close finishes, so the animation
+-- always plays out before the scene changes.
+function GameplayBase:end_stats_keypressed(_key)
+    self.app.end_stats:keypressed()
 end
 
 -- Pointer release mirrors the keyboard: step the stats screen.

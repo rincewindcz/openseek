@@ -37,6 +37,7 @@ function Screen:show(name, opts)
         hold      = opts.hold     or 1.5,
         fade_out  = opts.fade_out or 0.5,
         wait_key  = opts.wait_key or false,
+        timeout   = opts.timeout,   -- wait_key overlays: auto-advance after this many seconds
         tag       = opts.tag,
         on_done   = opts.on_done,
         on_cancel = opts.on_cancel,
@@ -50,12 +51,14 @@ function Screen:is_active()
 end
 
 -- Overlay a mission's intro picture (assets/fullscreen/STAGE0M_MPIC) above
--- whatever scene is active, dismissed by any key. Shown when a campaign run
--- crosses into a new mission (including the first mission of a NEW GAME).
+-- whatever scene is active. Appears instantly (no fade-in, so the briefing behind
+-- it never bleeds through), holds for one second, then fades out; a key, click or
+-- touch dismisses it early. Shown when a campaign run crosses into a new mission
+-- (including the first mission of a NEW GAME).
 function Screen:show_mission(m)
     if not m then return end
     self:show(string.format("STAGE0%d_MPIC", m),
-        { fade_in = 0.35, fade_out = 0.4, wait_key = true })
+        { fade_in = 0, fade_out = 0.3, wait_key = true, timeout = 1.0 })
 end
 
 -- Drop the current overlay immediately without running its on_done callback;
@@ -72,6 +75,8 @@ function Screen:update(dt)
     overlay.t = overlay.t + dt
     if overlay.phase == "in" then
         if overlay.t >= overlay.fade_in then overlay.t = 0; overlay.phase = overlay.wait_key and "wait" or "hold" end
+    elseif overlay.phase == "wait" then
+        if overlay.timeout and overlay.t >= overlay.timeout then overlay.t = 0; overlay.phase = "out" end
     elseif overlay.phase == "hold" then
         if overlay.t >= overlay.hold then overlay.t = 0; overlay.phase = "out" end
     elseif overlay.phase == "out" then

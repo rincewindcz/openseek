@@ -139,7 +139,10 @@ function EndStats:start(stats)
     self.active      = true
     self.closing     = false
     self.applied     = false
-    self._total_time = #self.rows * LINE_STAGGER + LINE_TIME + 0.6
+    -- Time for the last line to finish counting up (all lines full). The reverse
+    -- close starts from here so it begins winding down at once, with no dead zone.
+    self._tally_time = math.max(0, #self.rows - 1) * LINE_STAGGER + LINE_TIME
+    self._total_time = self._tally_time + LINE_STAGGER + 0.6
 end
 
 function EndStats:is_active() return self.active end
@@ -209,15 +212,15 @@ end
 -- skip); the scene watches is_active() to know when to hand off.
 function EndStats:keypressed()
     if not self.active then return false end
-    if self.closing then
-        self.t = 0   -- impatient press during the close: update() finishes it next frame
+    if self.closing then return true end   -- close is animating; let it play out
+    if self.t < self._tally_time then
+        self.t = self._tally_time   -- first press snaps the count-up to completion
         return true
     end
-    if self.t < self._total_time then
-        self.t = self._total_time   -- first press snaps the tally to completion
-        return true
-    end
-    self:_apply_final()   -- bank the score, then run the reverse close
+    -- Tally settled: bank the score, then run the reverse count-down close from a
+    -- full board (clamp away the settle pause so it starts winding down at once).
+    self:_apply_final()
+    self.t       = self._tally_time
     self.closing = true
     return true
 end

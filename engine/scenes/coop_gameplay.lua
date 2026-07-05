@@ -144,7 +144,7 @@ function CoopGameplay:update(dt)
         if app.end_stats:is_active() then
             app.world:update(dt)
         else
-            self:on_stats_done()   -- reverse close finished: hand off (base -> overview)
+            self:on_stats_done()   -- reverse close finished: hand off (base -> menu)
         end
         return
     end
@@ -243,7 +243,7 @@ end
 function CoopGameplay:keypressed(key)
     local app = self.app
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
-    if key == "escape" or key == "f1" then app.scenes:switch("overview"); return end
+    if key == "escape" then app.scenes:push("main_menu"); return end
     if key == "p" then self.paused = not self.paused; return end
     if key == "r" then app.scenes:switch("coop_gameplay"); return end   -- full re-enter
     if key == "f5" then

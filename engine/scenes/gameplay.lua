@@ -130,11 +130,16 @@ function Gameplay:on_vehicle_lost()
     player.lives = math.max(0, (player.lives or 0) - 1)
     local pic    = (player.vehicle == "tank") and "TANKEND" or "DEATHPIC"
     if player.lives > 0 then
+        -- Recoverable: flash the crash picture briefly, then drop straight back
+        -- into the game at the base. A key/click only continues (never bails to a
+        -- different mode), so RESUME keeps working.
+        local continue = function() self:respawn_at_base() end
         app.screen:show(pic, {
-            fade_in   = 0.6,
-            wait_key  = true,
-            on_done   = function() self:respawn_at_base() end,
-            on_cancel = function() app.scenes:switch("overview") end,
+            fade_in   = 0.1,
+            hold      = 0.5,
+            fade_out  = 0.1,
+            on_done   = continue,
+            on_cancel = continue,
         })
     else
         local score = player.score or 0
@@ -168,11 +173,11 @@ end
 -- Stats dismissed: in a campaign run, carry the accumulated score and remaining
 -- lives forward and open the next phase's briefing (or the next mission once a
 -- mission's phases are done). When the last stage is cleared, the run is complete
--- and the total goes to the high-score screen. Outside a run, back to the overview.
+-- and the total goes to the high-score screen. Outside a run, back to the menu.
 function Gameplay:on_stats_done()
     local app = self.app
     if not app.campaign then
-        app.scenes:switch("overview")
+        app.scenes:switch("main_menu")   -- single stage done: back to the menu
         return
     end
     app.run_score = self.player.score or app.run_score
@@ -232,13 +237,18 @@ function Gameplay:update(dt)
         if self.mission and self.mission.state == "return_to_base" then
             self.mission.state = "won"
         end
+        -- A crash is terminal only when it spends the last life; otherwise it is a
+        -- recoverable "MAYDAY" that respawns. Captured now (before the life is
+        -- spent) so the overlay and timing stay stable through the death.
+        self.terminal_death = (player.lives or 0) <= 1
         player:start_death()
     end
-    -- After the crash animation finishes, wait ~3s then spend a life and bring
-    -- up the crash picture / high-score screen (see on_vehicle_lost).
+    -- After the crash animation finishes, hold briefly then spend a life and bring
+    -- up the crash picture (a quick beat for a recoverable crash, a longer one on
+    -- game over); see on_vehicle_lost.
     if player:death_done() and not app.screen:is_active() then
         if self.death_timer == nil then
-            self.death_timer = 3.0
+            self.death_timer = self.terminal_death and 3.0 or 0.8
         elseif self.death_timer > 0 then
             self.death_timer = self.death_timer - dt
             if self.death_timer <= 0 then
@@ -290,7 +300,13 @@ function Gameplay:draw()
     if mission and mission.state == "won" and not app.end_stats:is_active() then
         self:overlay_text("MISSION COMPLETE")
     end
-    if mission and mission.state == "failed" then self:overlay_text("GAME OVER") end
+    if mission and mission.state == "failed" then
+        if self.terminal_death then
+            self:overlay_text("GAME OVER")
+        else
+            self:overlay_text("MAYDAY MAYDAY", 0)   -- recoverable crash: no screen tint
+        end
+    end
     if app.end_stats:is_active() then app.end_stats:draw() end
     if self.paused then self:overlay_text("PAUSE") end
     app.debug_panel:draw()
@@ -309,7 +325,6 @@ end
 function Gameplay:game_keys(key)
     local app    = self.app
     local player = self.player
-    if key == "f1" then app.scenes:switch("overview"); return end
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
     if key == "p"  then self.paused = not self.paused; return end
     if key == "r"  then self.paused = false; self:restart(); return end
