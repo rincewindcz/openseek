@@ -117,19 +117,23 @@ function Gameplay:restart(carry)
 end
 
 -- A vehicle was destroyed: spend one life (the count shown in the HUD). With
--- spares left, the crash picture holds until a key, then the stage restarts
--- with the same score and remaining lives. On the last life it is game over:
--- the final score is handed to the high-score screen for a possible entry.
+-- spares left, the crash picture holds until a key, then the player respawns at
+-- the home base with the stage's progress intact (destroyed enemies stay down,
+-- objectives keep their progress). On the last life it is game over: the final
+-- score is handed to the high-score screen for a possible entry.
 function Gameplay:on_vehicle_lost()
     local app    = self.app
     local player = self.player
+    -- Objectives were finished as the vehicle went down: the stats screen is
+    -- already taking over (see the death handler), so no life is spent here.
+    if self.mission and self.mission.state == "won" then return end
     player.lives = math.max(0, (player.lives or 0) - 1)
     local pic    = (player.vehicle == "tank") and "TANKEND" or "DEATHPIC"
     if player.lives > 0 then
         app.screen:show(pic, {
             fade_in   = 0.6,
             wait_key  = true,
-            on_done   = function() self:restart(true) end,
+            on_done   = function() self:respawn_at_base() end,
             on_cancel = function() app.scenes:switch("overview") end,
         })
     else
@@ -142,6 +146,23 @@ function Gameplay:on_vehicle_lost()
             on_cancel = function() app.scenes:switch("hiscores", score) end,
         })
     end
+end
+
+-- Respawn at the home base after a crash without reloading the stage, so the
+-- world keeps its progress. The mission flipped to "failed" while the vehicle was
+-- down (every player dead); with a spare vehicle it is cleared back to "active" so
+-- the remaining objectives can still be finished.
+function Gameplay:respawn_at_base()
+    local app    = self.app
+    local player = self.player
+    player:respawn(player.home_x or player.x, player.home_y or player.y)
+    if self.mission and self.mission.state == "failed" then
+        self.mission.state = "active"
+    end
+    app.camera.x, app.camera.y = player.x, player.y
+    app.camera:start_zoom_intro(1.5, 1.0)
+    self.pending_takeoff = true
+    self.death_timer     = nil
 end
 
 -- Stats dismissed: in a campaign run, carry the accumulated score and remaining
@@ -195,6 +216,12 @@ function Gameplay:update(dt)
     end
     player:update(dt)
     if app.settings.death_enabled and not player.death and player:is_dead() then
+        -- Crashing on the way home with every objective already done still counts
+        -- as a mission complete: flip to won now (before the death sets the mission
+        -- to failed) so the stats screen takes over instead of costing a life.
+        if self.mission and self.mission.state == "return_to_base" then
+            self.mission.state = "won"
+        end
         player:start_death()
     end
     -- After the crash animation finishes, wait ~3s then spend a life and bring

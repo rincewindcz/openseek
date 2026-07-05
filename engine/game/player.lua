@@ -387,6 +387,28 @@ function Player:start_death()
     end
 end
 
+-- Respawn the same vehicle at (x, y) after a crash: a fresh, fully fuelled and
+-- undamaged vehicle, parked and ready. Keeps score, lives, weapon and ammo; the
+-- world (destroyed enemies, objective progress) is left untouched by the caller.
+-- Carried POWs are lost with the wreck.
+function Player:respawn(x, y)
+    self.x, self.y   = x, y
+    self.speed       = 0
+    self.strafe      = 0
+    self.altitude    = 0
+    self.land_state  = "grounded"
+    self.death       = nil
+    self.armor       = self.max_armor
+    self.fuel        = self.max_fuel
+    self.pows        = 0
+    self.fire_timer  = 0
+    self.overkill_until = 0
+    self._kill_times    = {}
+    self._smoke_puffs   = {}
+    self._smoke_timer   = 0
+    self._hit_fx        = {}
+end
+
 function Player:death_done()
     return self.death ~= nil and self.death.phase == "done"
 end
