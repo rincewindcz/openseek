@@ -28,6 +28,7 @@ local MAX_ICONS = 10      -- 10 icons == 100% / full tally
 
 local LINE_TIME    = 0.7  -- seconds to tally one line
 local LINE_STAGGER = 0.45 -- gap between successive lines starting
+local CLOSE_SPEED  = 1.6  -- reverse-tally rate on close, relative to the count-up
 local BADGE_FPS    = 18
 
 -- Bonus points folded into TOTAL SCORE per line unit.
@@ -136,6 +137,7 @@ function EndStats:start(stats)
     self.t           = 0
     self.badge_t     = 0
     self.active      = true
+    self.closing     = false
     self.applied     = false
     self._total_time = #self.rows * LINE_STAGGER + LINE_TIME + 0.6
 end
@@ -153,8 +155,20 @@ end
 
 function EndStats:update(dt)
     if not self.active then return end
-    self.t = self.t + dt
     self.badge_t = self.badge_t + dt
+    if self.closing then
+        -- Reverse tally on close: wind every line (and the total) back down toward
+        -- zero, the mirror of the count-up, then drop the screen. The score was
+        -- already banked by _apply_final when the tally settled, so this is purely
+        -- cosmetic. A bit quicker than the count-up so the close does not drag.
+        self.t = self.t - dt * CLOSE_SPEED
+        if self.t <= 0 then
+            self.t      = 0
+            self.active = false
+        end
+        return
+    end
+    self.t = self.t + dt
     if not self.applied and self.t >= self._total_time then
         self:_apply_final()
     end
@@ -189,15 +203,22 @@ function EndStats:_apply_final()
     end
 end
 
--- Dismiss the screen (any key after the tally settles, or Esc at any time).
+-- Advance the screen a step: snap the tally to complete, then start the reverse
+-- count-down close, then (an impatient press mid-close) finish it at once. The
+-- screen only goes inactive once the close animation reaches zero (or here on the
+-- skip); the scene watches is_active() to know when to hand off.
 function EndStats:keypressed()
     if not self.active then return false end
+    if self.closing then
+        self.t = 0   -- impatient press during the close: update() finishes it next frame
+        return true
+    end
     if self.t < self._total_time then
         self.t = self._total_time   -- first press snaps the tally to completion
         return true
     end
-    self.active = false
-    self:_apply_final()
+    self:_apply_final()   -- bank the score, then run the reverse close
+    self.closing = true
     return true
 end
 

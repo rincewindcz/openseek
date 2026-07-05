@@ -183,9 +183,15 @@ function Gameplay:on_stats_done()
         app.scenes:switch("hiscores", app.run_score)
         return
     end
+    local cur_m  = tonumber((app.world.stage_name or ""):match("^stage(%d)"))
+    local next_m = tonumber(next_stage:match("^stage(%d)"))
     app.world:load(next_stage)
     app.after_stage_load()
     app.scenes:switch("mission_briefing", next_stage)
+    -- Crossing into a new mission: show that mission's picture over the briefing.
+    if next_m and next_m ~= cur_m then
+        app.screen:show_mission(next_m)
+    end
 end
 
 -- Single player: the whole stage's destruction is credited to the lone player
@@ -211,7 +217,11 @@ function Gameplay:update(dt)
     if self.paused then return end
     if app.end_stats:is_active() then
         app.end_stats:update(dt)
-        app.world:update(dt)
+        if app.end_stats:is_active() then
+            app.world:update(dt)
+        else
+            self:on_stats_done()   -- reverse close finished: hand off to the next scene
+        end
         return
     end
     player:update(dt)

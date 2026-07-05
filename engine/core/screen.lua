@@ -49,6 +49,15 @@ function Screen:is_active()
     return self.active ~= nil
 end
 
+-- Overlay a mission's intro picture (assets/fullscreen/STAGE0M_MPIC) above
+-- whatever scene is active, dismissed by any key. Shown when a campaign run
+-- crosses into a new mission (including the first mission of a NEW GAME).
+function Screen:show_mission(m)
+    if not m then return end
+    self:show(string.format("STAGE0%d_MPIC", m),
+        { fade_in = 0.35, fade_out = 0.4, wait_key = true })
+end
+
 -- Drop the current overlay immediately without running its on_done callback;
 -- runs on_cancel instead when one was given.
 function Screen:cancel()

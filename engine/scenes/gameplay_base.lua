@@ -116,26 +116,25 @@ function GameplayBase:on_stats_done()
     self.app.scenes:switch("overview")
 end
 
--- End-stats key handling: Esc aborts to the overview; otherwise the first key
--- snaps the tally, the next dismisses and hands off via on_stats_done().
+-- End-stats key handling: Esc aborts straight to the overview; otherwise a press
+-- steps the screen (snap the tally, then start the reverse count-down close). The
+-- handoff via on_stats_done() fires from update() once the close finishes, so the
+-- animation plays out before the scene changes.
 function GameplayBase:end_stats_keypressed(key)
     local end_stats = self.app.end_stats
     if key == "escape" then
         end_stats:keypressed()
         end_stats.active = false
         self.app.scenes:switch("overview")
-    elseif end_stats:keypressed() and not end_stats:is_active() then
-        self:on_stats_done()
+    else
+        end_stats:keypressed()
     end
 end
 
--- Pointer release mirrors the keyboard: advance / dismiss the stats screen.
+-- Pointer release mirrors the keyboard: step the stats screen.
 function GameplayBase:mousereleased(_x, _y)
-    local end_stats = self.app.end_stats
-    if end_stats:is_active() then
-        if end_stats:keypressed() and not end_stats:is_active() then
-            self:on_stats_done()
-        end
+    if self.app.end_stats:is_active() then
+        self.app.end_stats:keypressed()
     end
 end
 

@@ -2,11 +2,11 @@
   { "name": "MAVERICK", "score": 98500 },
   { "name": "ICEMAN",   "score": 87200 },
   { "name": "VIPER",    "score": 76400 },
-  { "name": "GHOST",    "score": 65100 },
-  { "name": "REAPER",   "score": 54800 },
-  { "name": "HAVOC",    "score": 43600 },
-  { "name": "COBRA",    "score": 32900 },
-  { "name": "RAPTOR",   "score": 24300 },
-  { "name": "FALCON",   "score": 15700 },
-  { "name": "ROOKIE",   "score": 8200 }
+  { "name": "", "score": 0 },
+  { "name": "", "score": 0 },
+  { "name": "", "score": 0 },
+  { "name": "", "score": 0 },
+  { "name": "", "score": 0 },
+  { "name": "", "score": 0 },
+  { "name": "", "score": 0 }
 ]

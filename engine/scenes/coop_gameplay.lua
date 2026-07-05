@@ -141,7 +141,11 @@ function CoopGameplay:update(dt)
     if self.paused then return end
     if app.end_stats:is_active() then
         app.end_stats:update(dt)
-        app.world:update(dt)
+        if app.end_stats:is_active() then
+            app.world:update(dt)
+        else
+            self:on_stats_done()   -- reverse close finished: hand off (base -> overview)
+        end
         return
     end
     for _, p in ipairs(self.players) do

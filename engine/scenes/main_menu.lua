@@ -44,6 +44,7 @@ function MainMenu:_select(id)
         app.world:load(first)
         app.after_stage_load()
         app.scenes:switch("mission_briefing", first)
+        app.screen:show_mission(tonumber(first:match("^stage(%d)")))
     elseif id == "resume" then
         if self.over_game then app.scenes:pop() end
     elseif id == "credits" then
