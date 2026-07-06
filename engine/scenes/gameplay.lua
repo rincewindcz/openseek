@@ -81,9 +81,20 @@ function Gameplay:spawn_player(carry)
     player.camera       = camera
     local def = app.vehicle_defs[settings.vehicle]
     if def then player:load_vehicle_def(def) end
-    local weapon_list = Vehicles.WEAPONS[settings.vehicle]
-    if weapon_list then player.weapon_name = weapon_list[1] end
-    player:seed_ammo(combat.weapons)
+    -- Weapon list: the equip-screen loadout snapshot when one was applied
+    -- (campaign / mission play), else the free-play full list. The loadout
+    -- carries per-weapon owned levels and bay-count ammo multipliers.
+    local loadout = settings.loadout
+    if loadout then
+        player.weapon_list   = loadout.list
+        player.weapon_levels = loadout.levels
+        player.weapon_name   = loadout.list[1]
+        player.weapon_level  = loadout.levels[player.weapon_name] or 1
+    else
+        local weapon_list = Vehicles.WEAPONS[settings.vehicle]
+        if weapon_list then player.weapon_name = weapon_list[1] end
+    end
+    player:seed_ammo(combat.weapons, loadout and loadout.counts)
     self:sync_weapon_icon()
     local _, screen_h = love.graphics.getDimensions()
     camera.view_oy = screen_h * 0.24
@@ -334,6 +345,9 @@ function Gameplay:game_keys(key)
         return
     end
     if key == "e" then
+        -- Free-play level cycling; with an equip loadout the level is the
+        -- owned upgrade level and stays fixed.
+        if player.weapon_levels then return end
         local weapon_def = app.combat.weapons[player.weapon_name]
         if weapon_def and weapon_def.levels then
             player.weapon_level = player.weapon_level % #weapon_def.levels + 1
@@ -341,6 +355,12 @@ function Gameplay:game_keys(key)
         return
     end
     if Overview.picker_keys(app, key) then return end
+    local slot = key:match("^(%d)$")
+    if slot then
+        self:select_weapon(player, tonumber(slot))
+        self:sync_weapon_icon()
+        return
+    end
     if key == "escape" then app.scenes:push("main_menu") end
 end
 

@@ -68,17 +68,34 @@ function GameplayBase:fire_for(p)
     p.fire_timer = 1.0 / (level.fire_rate or weapon_def.fire_rate or 10)
 end
 
--- Cycle p's weapon to the next one valid for its vehicle.
+-- p's selectable weapons: the equip-screen loadout list when one was applied
+-- (unique bay weapons in bay order, then the special), else the free-play
+-- full list for the vehicle.
+function GameplayBase:weapon_list_for(p)
+    return p.weapon_list or Vehicles.WEAPONS[p.vehicle] or {}
+end
+
+-- Select the i-th weapon of p's list (the number keys, assigned in bay
+-- order). A loadout carries the owned level per weapon; free play starts
+-- every weapon at level 1 (E cycles it).
+function GameplayBase:select_weapon(p, i)
+    local weapon_list = self:weapon_list_for(p)
+    local name = weapon_list[i]
+    if not name or name == p.weapon_name then return end
+    p.weapon_name  = name
+    p.weapon_level = p.weapon_levels and p.weapon_levels[name] or 1
+    p.fire_timer   = 0
+end
+
+-- Cycle p's weapon to the next one in its list.
 function GameplayBase:cycle_weapon(p)
-    local weapon_list = Vehicles.WEAPONS[p.vehicle] or {}
+    local weapon_list = self:weapon_list_for(p)
     if #weapon_list == 0 then return end
     local idx = 1
     for i, w in ipairs(weapon_list) do
         if w == p.weapon_name then idx = i; break end
     end
-    p.weapon_name  = weapon_list[idx % #weapon_list + 1]
-    p.weapon_level = 1
-    p.fire_timer   = 0
+    self:select_weapon(p, idx % #weapon_list + 1)
 end
 
 -- Toggle a flyer between airborne and grounded; no-op for a tank.

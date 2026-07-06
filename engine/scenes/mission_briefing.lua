@@ -1,10 +1,12 @@
 local Class       = require "engine.core.class"
 local Scene       = require "engine.core.scene"
 local MissionMenu = require "engine.ui.mission_menu"
+local EquipScreen = require "engine.ui.equip_screen"
 
 -- Pre-mission briefing scene wrapping the MISSION/PHASE menu (the menu itself
--- is the briefing). PLAY drops into the game; EXIT backs out to the main
--- menu. SAVE / LOAD / SHOP are stubs for now.
+-- is the briefing). PLAY opens the vehicle equip screen (or drops straight
+-- into the game when the equip art is not exported); EXIT backs out to the
+-- main menu. SAVE / LOAD / SHOP are stubs for now.
 local MissionBriefing = Class(Scene)
 
 MissionBriefing.ui_pointer = true
@@ -30,7 +32,11 @@ function MissionBriefing:_select(id)
         -- turns on the lives + game-over flow; the overview toggle can still
         -- disable it. The sandbox is left deathless.
         self.app.settings.death_enabled = true
-        self.app.scenes:switch("gameplay")
+        if EquipScreen.available() then
+            self.app.scenes:switch("equip", self.app.world.stage_name)
+        else
+            self.app.scenes:switch("gameplay")
+        end
     elseif id == "exit" then
         self.app.scenes:switch("main_menu")
     end

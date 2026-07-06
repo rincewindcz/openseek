@@ -41,6 +41,13 @@ function Mission.coop(world, players)
     return Mission:new(world, players, def)
 end
 
+-- Vehicle a stage forces ("tank" locks the equip screen to the tank, like the
+-- original's tank-only phases), or nil when the player may choose.
+function Mission.required_vehicle(stage_name)
+    local def = defs[stage_name]
+    return def and def.vehicle or nil
+end
+
 -- Optional per-building POW counts for a rescue stage (missions.json
 -- rescue_pow_counts, in powhere load order); nil falls back to a random 1-3.
 function Mission.rescue_counts(stage_name)

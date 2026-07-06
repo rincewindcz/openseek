@@ -1,6 +1,7 @@
-local Class = require "engine.core.class"
-local Scene = require "engine.core.scene"
-local Menu  = require "engine.ui.menu"
+local Class   = require "engine.core.class"
+local Scene   = require "engine.core.scene"
+local Menu    = require "engine.ui.menu"
+local Loadout = require "engine.game.loadout"
 
 -- Main menu scene. Switched to after the title card, or pushed over a running
 -- gameplay scene (Esc in game), in which case RESUME pops back to the game.
@@ -41,6 +42,7 @@ function MainMenu:_select(id)
         app.campaign  = true
         app.run_score = 0
         app.run_lives = 3
+        app.loadout   = Loadout:new()   -- fresh weapon inventory for the run
         app.world:load(first)
         app.after_stage_load()
         app.scenes:switch("mission_briefing", first)

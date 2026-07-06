@@ -4,11 +4,28 @@ local Vehicles = {}
 
 Vehicles.CHOPPER_SKINS = 3
 
--- Weapon lists per vehicle (order determines cycle order).
+-- Weapon lists per vehicle (order determines cycle order). Free-play modes
+-- (overview F1, sandbox, co-op) use these full lists; a campaign run builds
+-- its list from the equip-screen loadout instead (engine/game/loadout.lua).
 Vehicles.WEAPONS = {
     chopper = { "chaingun", "napalm", "rockets", "mega_missile", "air_to_ground", "air_to_air", "bomb" },
     tank    = { "chaingun", "shells" },
 }
+
+-- Equip-screen catalogue, matching the original screens: the numbered bays
+-- take the bay weapons (bay 1 is always the chain gun), and one built-in
+-- special may be loaded at a time. Weapons without a data/weapons.json entry
+-- are not implemented yet and show darkened / unselectable.
+Vehicles.BAY_COUNT = { chopper = 6, tank = 4 }
+Vehicles.BAY_WEAPONS = {
+    chopper = { "chaingun", "rockets", "air_to_ground", "air_to_air", "napalm", "air_strike" },
+    tank    = { "chaingun", "shells", "flame_thrower", "air_strike" },
+}
+Vehicles.SPECIAL_WEAPONS = {
+    chopper = { "mega_missile", "super_napalm", "bomb" },
+    tank    = { "power_shell", "ground_to_air", "mine" },
+}
+Vehicles.STARTING_WEAPON = { chopper = "rockets", tank = "shells" }
 
 -- The next (vehicle, skin) pair in the picker cycle.
 function Vehicles.cycle(vehicle, skin)

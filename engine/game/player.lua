@@ -133,14 +133,17 @@ end
 -- ammo
 
 -- Seed per-weapon ammo to full from the weapon table. Weapons without an
--- ammo_max (chaingun) stay absent and read as infinite.
-function Player:seed_ammo(weapons)
+-- ammo_max (chaingun) stay absent and read as infinite. counts (optional,
+-- weapon -> loaded bay count from the equip loadout) multiplies a weapon's
+-- capacity: N bays of one weapon carry N x ammo, the original's rule.
+function Player:seed_ammo(weapons, counts)
     self.ammo      = {}
     self._ammo_max = {}
     for name, w in pairs(weapons) do
         if w.ammo_max then
-            self.ammo[name]      = w.ammo_max
-            self._ammo_max[name] = w.ammo_max
+            local max = w.ammo_max * (counts and counts[name] or 1)
+            self.ammo[name]      = max
+            self._ammo_max[name] = max
         end
     end
 end

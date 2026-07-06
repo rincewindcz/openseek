@@ -56,8 +56,18 @@ HUD) have been re-exported with the fixed decoder.
   its waypoint loop (the hull faces its travel heading while the turret tracks). The fixed hull carries a
   separate turret that spins to aim; the turret has its own HP and must be
   destroyed (it absorbs all hits and explodes first) before the hull can be
-  damaged. Solid entities block tank movement and veto helicopter landings;
-  player armor takes damage from enemy fire. Enemy turrets vary their weapon by
+  damaged. On stage12 a `shut.bin` hut co-located with a tank links as a hangar
+  (`World:_link_hangar_tanks`): the tank rides out along its `tanktrak` axis to
+  fire when the player is near but not facing it, lingers `ride_linger` seconds,
+  then ducks back; while hidden it is shielded (skipped by player hit/AoE/lock
+  tests) and drawn under the hut, which takes the damage first. Solid entities
+  block tank movement and veto helicopter landings;
+  player armor takes damage from enemy fire. Flak turrets fire paired
+  accelerating animated tracers (`heavy_flak`); enemy tanks fire the plain
+  single-tracer `flak`; soldiers fire rifles. Enemy shots spawn a
+  `muzzle_offset` ahead of the hull center (a per-kind `type_data` field,
+  editable in the panel, or a per-sprite `data/enemy_muzzle.json` override).
+  Enemy turrets vary their weapon by
   sprite (`data/enemy_overrides.json`): gun1 fires slow homing missiles, sguntop
   spits fireballs; sgun fireballs flak-burst on impact while tracers fade out.
   GUN1's fire rate is set per stage in `data/enemy_fire_rates.json` (later phases
@@ -117,8 +127,33 @@ HUD) have been re-exported with the fixed decoder.
   is tracked live; once all objectives are met the player must fly the surviving
   people home and land on the friendly base pad to complete the phase. Stages with no
   explicit `missions.json` entry fall back to their decoded `objectives` block, so
-  rescue and destroy phases still run in single player and co-op. A weapon shop is not
-  yet implemented.
+  rescue and destroy phases still run in single player and co-op.
+- **Vehicle equip screen (`scenes/equip.lua` + `ui/equip_screen.lua`):** the
+  original EQUIP CHOPPER / EQUIP TANK screens, between the briefing's PLAY and
+  the live game. The weapon-bay rows are drawn over the re-rendered backdrop in
+  their live state (darkened = not owned or not implemented, gold = loaded in
+  that bay, normal = owned) with level pips beside each row; bay 1 always
+  carries the chain gun. One special weapon loads at a time. Clicking a row
+  loads that bay; TANK / CHOP flips the vehicle; OK applies the loadout
+  (`app.settings.loadout`) and starts the phase, EXIT returns to the briefing.
+  The campaign inventory lives in `game/loadout.lua` (`app.loadout`, reset by
+  NEW GAME): per vehicle the owned level per weapon and the bay assignment.
+  A NEW GAME run starts owning only the chain gun and rockets/shells (more
+  arrive with the future shop); single-mission play (the MISSION menu) equips
+  a separate `app.loadout_free` with every implemented weapon unlocked at its
+  top level (`Loadout:unlock_all`), since there is no run to earn them in.
+  `luajit tools/sim_equip.lua` drives the whole screen headlessly (clicks,
+  states, buttons, vehicle switch) against a stubbed love API.
+  In game the loadout becomes the weapon list (unique bay weapons in bay
+  order, then the special): number keys 1-9 select by slot, Q cycles, ammo is
+  multiplied by the bay count (N bays of one weapon = N x ammo, the
+  original's rule), and each weapon fires at its owned upgrade level (E is
+  disabled). Stages with `"vehicle": "tank"` in `missions.json` lock the
+  screen to the tank with no switch button, like the original's tank-only
+  phases. Weapons not yet in `data/weapons.json` (air strike, flame thrower,
+  the tank specials, super napalm) show permanently darkened. A weapon shop
+  (buying upgrades with medals into the same inventory) is not yet
+  implemented.
 - **POW rescue (`rescue.lua`):** on POWHERE stages, each `powhere.bin` building holds
   POWs and cannot be destroyed (its `powhut.bin` huts are shielded) until emptied.
   Landing the vehicle on the building's `lh.bin` pad for 1.0s walks the POWs out to the
@@ -139,12 +174,18 @@ fullscreen fade overlay plus the top scene. Each top-level mode is a scene in
 
 - **title** -> **main_menu**: the boot flow; the menu is also pushed over a
   running game (Esc), where RESUME pops back.
+- **credits** / **hiscores**: the CREDITS and HIGH SCORES info screens (shared
+  `ui/info_screen.lua` shell: backdrop, one-shot title zoom-in, EXIT button).
+  The high-score table persists to `data/highscores.json`; a game-over score
+  that makes the top 10 opens a name-entry row.
 - **overview** (EDITOR entry): free-roam camera over the stage, stage/kind
   pickers, the SETUP/START/EDITOR/VIEW panel, and the mode-launch keys. The
   entity editor (the shared `dev/debug_panel.lua`) is always on here (not F2
   gated): click an entity to edit its kind.
 - **mission_briefing** / **mission_select**: the pre-mission menu and the
   debug mission/phase picker.
+- **equip**: the vehicle select and equip screen between the briefing's PLAY
+  and the game (skipped when `assets/equip/` is not exported).
 - **gameplay** (`F1`): camera locks to the player, world rotates so the player
   faces up, combat runs. **sandbox** (`F3`) extends it with a live
   vehicle-parameter editor.
@@ -165,7 +206,7 @@ Engine modules (`engine/`), all built on the tiny `core/class.lua` helper:
 | `game/enemy_heli.lua` | Airborne enemy helicopters: spawns them off-screen at the stage's `badheli` markers (`World.heli_spawns`, count = simultaneous cap), flies them toward the player and circles, fires one random weapon when the nose lines up, smokes when damaged, and falls/explodes when downed. They cast ground shadows (`draw_shadows`) like the player. Its live list is exposed as `world.air_units` for `combat.lua` hit detection. |
 | `game/combat.lua` | Weapons, projectiles, firing geometry (spread/streams/swing/side offset), hit detection, AoE. Loads `data/weapons.json`. Tracer weapons resolve their streak sprite to the loaded stage's mission variant (`trace`/`strace`/`jtrace`/`rtrace`). The `bomb_drop` weapon glides forward then falls and detonates with shrapnel + full-damage AoE. Homing missiles (player `locking` levels, enemy `homing` weapons) steer toward a target at a capped `turn_rate` so they can be dodged (`_steer_homing`). |
 | `core/camera.lua` | Zoom, pan, world-rotation transform, viewport culling, game-mode vertical focus offset (`view_oy`, `screen_center`). |
-| `game/renderer.lua` | Draws world layers bottom-to-top: ground dust (lowest), decals, segments, objects (y-sorted, culled), objective markers (destroy reticles, loose-civilian rings) and banner, grid, pickers, viewer HUD bar. Flying shrapnel is a separate overlay (`draw_debris`) drawn after the explosion effects so the chunks stay on top of the blast. |
+| `game/renderer.lua` | Draws world layers bottom-to-top: ground dust (lowest), decals, segments, destruction craters (their own pass, so entities always sit above the holes), objects (y-sorted, culled), objective markers (destroy reticles, loose-civilian rings) and banner, grid, pickers, viewer HUD bar. Flying shrapnel is a separate overlay (`draw_debris`) drawn after the explosion effects so the chunks stay on top of the blast. |
 | `ui/hud.lua` | Sprite-based gauges, weapon icon, acceleration box, and radar from `data/hud.json`. The radar draws dots by priority (buildings, then enemies, then airborne helicopters in pink from `world.air_units`, then objectives on top in white) so the goal is never hidden. The acceleration box uses the original `BOX.BIN` art with a green dot driven by speed/strafe plus a small turn nudge. Per mission it prefers override art in `assets/hud/stage{m}/` when present (mission 3 ships a full custom armour/fuel/weapons/scanner/box set, 1-2 only armour), falling back per item to the shared `assets/hud/` set (`Hud:set_mission`). A global `Config.hud_scale` grows every element and its edge inset together so corner-anchored items stay in their corners. The `number` item type draws bitmap-font counters (CHARS gold digits via `engine/core/font.lua`) with an optional marker sprite, either trailing the icon or (with `text_on_icon` + `text_dx`/`text_dy`) placed in a slot inside it: score (top-left, `SCORE` marker + 8 digits), lives (top-right before fuel, `LIVES` marker + 1 digit), carried POWs (bottom-left, the `POWCOUNT` "[soldier] POW =" plate with the count in its bottom-right slot, shown only while POWs are aboard the vehicle), and current-weapon ammo (the count in the weapon sprite's own `x` slot, hidden when infinite; `relative_to: "weapon"` pins it to the weapon item's offset so it rides along when the weapon sprite is repositioned). A kill streak (`Player:register_kill`, several kills inside a short window) shows the blinking stage `OVERKILL` word. |
 | `game/powerups.lua` | Power-up drops from destroyed large buildings: spawn, ttl/blink, fly-over vs land-on collection, and effect application. Frames from the `pickup` clip. Honors `Config.axis_aligned_pickups` (draws them screen-upright, like the original engine, instead of rotating with the world). |
 | `game/mission.lua` | Per-stage win conditions: destroy / rescue / sabotage objectives, progress tracking, and the return-to-base landing requirement. Data-driven from `data/missions.json`, falling back to the stage's own decoded `objectives` block when a stage has no explicit entry (so single player and co-op share the same goals). POWHERE rescue objectives delegate their progress to `rescue.lua`; loose-civilian rescue stages keep the simple fly-over collection. `rescue_pow_counts` (per stage) sets exact POWs per building. |
@@ -177,18 +218,25 @@ Engine modules (`engine/`), all built on the tiny `core/class.lua` helper:
 | `core/screen.lua` | Fullscreen image overlay with fade-in / hold / fade-out (one at a time): the `TITLE` card at launch, the per-mission briefing picture (`STAGE0X_MPIC`) before a level starts, and the crash end screen (`DEATHPIC` chopper / `TANKEND` tank). Images live in `assets/fullscreen/`. |
 | `ui/end_stats.lua` | End-of-phase DESTRUCTION STATS screen over the dimmed game once the chopper lands home (mission `won`). Header `PHASE n` (`PHEND` art + the `PHASENUM` metallic digit) and `DESTRUCTION STATS` title, then five tallied lines: ground forces / buildings as a percentage destroyed, choppers shot down, POWs rescued, and a provisional OK rating (one point per fully cleared category), with a running `TOTAL SCORE`. Each line animates over its value while a proportional row of `KILLICON` icons (max 10 = 100% / full tally) tracks it and the bonus folds into the score; the OK line shows the spinning `OKBADGE` (each frame centered, since the rotation frames vary in width). `Config.endstats_count_up` builds the values up from zero (default) or counts them down to zero like the original. Co-op shows two value columns per line, one per player in their HUD color (the `STATNUMS` white digit set tinted; the gold set is used single player), from each player's own attributed kills (`combat.lua` / `enemy_heli.lua` credit the shooter's `stat_kills`) against the shared stage totals; the kill-icon rows are single-player only. Assets are built by `tools/export_phend.py` into `assets/phend/` (label strips, `STATNUMS` digit font, header, phase digits) in the `PHASEPAL` palette. A key snaps the tally to its end, the next dismisses back to the overview. |
 | `ui/pointer.lua` | Shared mouse/touch pointer for the non-game screens: draws the original `SELPOINT` cursor (`assets/hud/selpoint_f00.png`) at the OS pointer and converts window pixels into the 320x240 design space (`Pointer.to_design`) using the same letterbox transform the menus draw with, so they can hit-test widgets against exactly what they render. Wired from `main.lua`'s mouse/touch callbacks; the OS cursor is hidden while a non-game screen is up. The main menu (`menu.lua`) is hover-to-focus with press/release confirming an entry; the mission menu (`ui/mission_menu.lua`) and mission-select (`ui/mission_select.lua`) give each button a `SELFOCUS` focus ring, swap to a pressed (down) frame while held, and fire the action only on release over the same button (a confirm fade-through-black plays first). Touch mirrors the mouse (the finger is the pointer, so the cursor sprite is suppressed). The cursor is not drawn over passive image overlays (title / briefing / crash screens). |
+| `ui/menu.lua` | Main-menu widget over the `MAINP` backdrop: entries (NEW GAME / RESUME / OPTIONS / CREDITS / HIGH SCORES / LOAD / MISSION / EDITOR / EXIT) rendered from the `mainmen` bitmap font with the original arrow cursor, hover-to-focus with press/release confirm, disabled entries dimmed. |
+| `ui/mission_menu.lua` | Pre-mission briefing menu over the `STAGE0X_MS` backdrop: the phase selectors, the SAVE / LOAD / SHOP / PLAY / EXIT button row (`assets/mission/`, pressed frames + `SELFOCUS` focus ring), the objective icon column, and the original briefing paragraphs from `data/mission_text.json`. |
+| `ui/info_screen.lua` | Shared shell for the CREDITS / HIGH SCORES scenes: fullscreen backdrop, one-shot title zoom-in animation, caller-supplied body content in the 320x240 design space, and an EXIT button; fades in on open and through black on confirm. |
+| `ui/equip_screen.lua` | The EQUIP CHOPPER / EQUIP TANK widget layer: draws the re-rendered backdrop, every weapon row in its live state, level pips, specials, and the OK / EXIT / TANK|CHOP buttons from `assets/equip/layout.json` (`tools/export_equip.py`); hit-tests clicks against the same rects, edits the passed `Loadout` in place, and confirms OK / EXIT through the shared fade (`on_select`). A weapon without a `data/weapons.json` def draws darkened and is unselectable. |
 | `ui/mission_select.lua` | Debug mission/phase picker reached from the main menu's MISSION entry (which replaced the disabled SAVE). Over the `MAINP` backdrop with its breathing zoom, subtly tinted toward the selected mission's colour (auto-sampled from the average of its `STAGE0X_MPIC` and normalized to shift hue not brightness, eased between missions): a `STAGE0X_MPIC` carousel that slides on a mission change with the clicked arrow bumping (scale), a row of the four `PHASE 0X` buttons (`assets/mission/phase0X`, the selected shows its pressed frame) used like PLAY / EXIT, and PLAY / EXIT. Keyboard-first: up/down move focus between the carousel / phase / button rows, left/right act within a row (cycle mission / pick phase / pick button), 1-4 jump to a phase, Enter plays, Esc exits; the focused element is outlined (a 1px primitive rect around the big carousel box, the `SELFOCUS` ring around the small phase/button widgets). Mouse and touch also work. PLAY loads the chosen `stageMP` (`World:load` -> `after_stage_load`) and opens its pre-mission menu (`ui/mission_menu.lua`); EXIT returns to the main menu. Title in `chars`; tint strength is `TINT_AMOUNT`. |
 | `core/font.lua` | Original bitmap fonts (`assets/fonts/<name>.{png,json}`, exported by `tools/export_fonts.py`). Each font is one atlas plus per-glyph quad metrics; `Font.get(name)` caches an instance and `print` / `print_word` draw a string at a scale and tint color. Most glyph containers are ordinary blitter sprite frames (one frame per glyph) and decode through `decode_blitter`; the in-game body fonts `chars`/`charspow` are the raw planar HUD class and decode through `decode_planar` (the exporter routes each font automatically by `decode_planar.is_planar`). Their pixels are a brightness ramp in a high palette region the stage palette leaves undefined, so the exporter renders them as white-on-alpha intensity **masks** (gradient preserved by rank-normalizing the ramp) that the engine tints at runtime. `OVERKILL` keeps its real per-stage palette (truecolor, drawn untinted); `charstit` is the yellow-with-outline title font (truecolor under GOVPAL, idx 16 outline + idx 24 `(252,220,0)`) used for the mission-menu descriptions; `mainmen` is the main-menu word art sliced per letter and packed by `tools/export_mainmen.py` (truecolor, the whole menu renders from it). Truecolor fonts keep their baked RGB but still honor a passed alpha so the menu can fade/blink/dim them. Full sets (`chars`/`charspow`/`charstit`/`hichars`/`hichars2`/`savechar`/`endchars`/`keysfont`) are ASCII-indexed (frame == codepoint); `phasenum` is the digits `1234`; `gov`/`gov2`/`overkill` are word sequences. The `F9` gallery renders every font for testing. |
 | `dev/debug_panel.lua` | Entity editor / debug overlay: click to select an entity (overlap pick-list), inspect it, and edit every `type_data` field (numbers step, bools toggle, string fields cycle known values). Mouse-driven: each field row has clickable `-`/`+` steppers and the actions (play animation / fire weapon / kill / revive / save) are clickable buttons; keyboard edits still work. Entities with a weapon get a `FIRE` action (`F`) that shoots one round of their weapon via `combat:fire_entity`; the overview ticks and draws `combat` so the shot flies and bursts. Clickable rects are rebuilt each frame as hit zones (`_zone`/`_zone_at`) and consumed before the world-pick fallthrough. `[S]` / the Save button write all fields per kind to `data/entity_types.json`. Always on in the overview (the editor); still F2-toggled in gameplay. While the pick-list / picker / field editor is open the overview camera is held still (`captures_arrows`) and the focused overlapping entity glows in the world (`highlight_entity`). |
 | `core/mathx.lua` | Small math helpers shared across systems: the `atan2` LuaJIT/Lua 5.3 shim and `heading_deg` (screen heading in the deg 0 = north, clockwise-positive convention). |
 | `core/scene.lua` | Base class for scenes: no-op lifecycle hooks (`enter`/`leave`/`suspend`/`resume`), update/draw, and input handlers; `ui_pointer = true` marks menu-family scenes that own the SELPOINT cursor. |
 | `core/scene_manager.lua` | Stack-based scene manager: name registry (`register`), `switch`/`push`/`pop`/`replace`, and `dispatch` to the top scene only. Scenes address each other by name so they never require each other in cycles. |
-| `game/vehicles.lua` | Vehicle catalogue shared by the scenes: per-vehicle weapon cycle lists, the chopper-skin/tank picker cycle, and UI labels. |
+| `game/vehicles.lua` | Vehicle catalogue shared by the scenes: per-vehicle weapon cycle lists, the equip-screen bay/special weapon lists (`BAY_WEAPONS`/`SPECIAL_WEAPONS`/`BAY_COUNT`), the chopper-skin/tank picker cycle, and UI labels. |
+| `game/loadout.lua` | Campaign weapon inventory (`app.loadout`, reset by NEW GAME): per vehicle the owned level per weapon, the bay assignments (bay 1 fixed chain gun), and the loaded special; `weapon_list` builds the gameplay list with bay-count ammo multipliers and owned levels. The future shop buys into `owned` with medals. |
+| `game/weather.lua` | Weather overlay: a world-space tiled field of pixel particles (snow on the winter mission, rain on the jungle mission) drawn through the camera so flying streams it and turning rotates it; density stays uniform under any pan/turn. Activated per stage by `GameplayBase:enter_weather`. |
 | `game/stats.lua` | Destruction-stats bookkeeping shared by gameplay and the end-of-phase screen: the ground/building kind tables, `kind_category`, `destructible_totals`, and `stage_phase`. |
 | `ui/layout.lua` | Shared 320x240 design space (`DESIGN_W`/`DESIGN_H`) and the `fit` letterbox transform (scale + centering offsets) used by every non-game screen and `ui/pointer.lua`. |
 
 Scene modules (`engine/scenes/`), one per top-level mode, all subclassing
-`core/scene.lua`: `title`, `main_menu`, `mission_briefing`, `mission_select`,
+`core/scene.lua`: `title`, `main_menu`, `credits`, `hiscores`,
+`mission_briefing`, `mission_select`, `equip`,
 `overview`, `gameplay_base` (shared firing / weapon cycling / landing /
 mission-won sequencing), `gameplay`, `sandbox` (extends gameplay; a live
 mouse/keyboard player-vehicle editor), `coop_setup`, `coop_gameplay`,
@@ -199,7 +247,9 @@ mouse/keyboard player-vehicle editor), `coop_setup`, `coop_gameplay`,
 `F1` enters game mode and spawns the vehicle on the friendly base pad; the chopper
 lifts off automatically. WASD or arrows drive; the chopper lands / takes off again
 with `Space` (it bounces back up if it tries to land on a solid obstacle). Holding `Shift` while turning strafes the chopper or
-rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `E` cycles weapon level.
+rotates the tank turret. `Ctrl` fires, `Q` cycles weapon, `1`-`9` select a weapon
+slot directly, `E` cycles weapon level (free play only; an equip loadout fixes
+each weapon at its owned level).
 `F5` toggles unlimited ammo/fuel/armor (god mode); `F6` toggles power-up pickup
 between easy (fly-over) and hard (land-on); `R` restarts the current level; `P`
 pauses. The overview screen presents a SETUP panel (top-left, in titled boxes):
@@ -217,10 +267,18 @@ stage name) and then drops into the live game with a short eased zoom-in
 (`Camera:start_zoom_intro`); the chopper lifts off the pad once the zoom-in ends.
 With game-over enabled, a fatal crash plays the
 wreck animation, waits ~3 seconds, then fades up the end picture (`DEATHPIC` for
-the chopper, `TANKEND` for the tank); any key restarts the level. When every
+the chopper, `TANKEND` for the tank). With lives to spare the picture flashes
+briefly and the player respawns at the home base with the stage's progress
+intact (destroyed enemies stay down, objectives keep their progress); on the
+last life the run is over and the final score goes to the high-score screen.
+When every
 objective is met and the chopper lands at the home base (mission `won`), the
 `MISSION COMPLETE` overlay holds ~1.5s and then hands off to the DESTRUCTION
-STATS screen (`ui/end_stats.lua`); dismissing it returns to the overview. `Esc` skips the
+STATS screen (`ui/end_stats.lua`); dismissing it returns to the overview, or in
+a campaign run (NEW GAME) carries the accumulated score and remaining lives to
+the next phase's briefing, showing the mission picture when a run crosses into
+a new mission; clearing the last stage sends the total to the high-score
+screen. `Esc` skips the
 current picture and returns to the overview, and from game mode it returns to the
 overview too; it never quits the game.
 
@@ -329,6 +387,8 @@ Two layers cooperate, both keyed off the JSON contract:
 {
   "stage01": {
     "briefing": "Rescue the POWs, level the radar, return to base.",
+    "vehicle": "tank",                 // optional: force the vehicle; locks the
+                                       // equip screen to it (no switch button)
     "home_radius": 48,                 // landing tolerance at the base pad (px)
     "home_base_asset": "lh.bin",       // optional: base pad sprite, when it is
                                        // not the auto-detected basecirc.bin / h.bin
@@ -367,7 +427,7 @@ the player must land on it to win.
 |------|----------|
 | `assets/stageMP.json` + `assets/stageMP/*.png` | Decoded stages and sprites. Each stage JSON includes an `objectives` block and a per-class `is_target` flag; each render PNG is the axis-aligned `frame_base` (frame 0). Unit classes also export a sibling dead-pose frame (`{stem}_f{frame_base + dead_frame_offset}.png`) the engine derives by name. |
 | `data/weapons.json` | Weapon and projectile definitions: per-level upgrades, `short`/`icon` (WEAPONS.BIN), `ammo_max`/`ammo_pickup`, plus `alternate_side`/`trail` (mega missile) and `flame` cone params (napalm). |
-| `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`, unit `sprite`/`dead_sprite` fallback clips, `dead_frame_offset` for the per-stage corpse frame, two-part tank `turret_hp`/`turret_explosion`). |
+| `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`, `muzzle_offset`, unit `sprite`/`dead_sprite` fallback clips, `dead_frame_offset` for the per-stage corpse frame, two-part tank `turret_hp`/`turret_explosion`, hangar-tank `ride_linger`). |
 | `data/enemy_overrides.json` | Per-sprite enemy weapon overrides (asset filename -> weapon), for turrets that share the `flak_turret` kind but fire different weapons. |
 | `data/enemy_fire_rates.json` | Per-stage enemy fire-rate overrides (stage name -> asset filename -> shots/sec), e.g. GUN1 firing faster in later mission-0 phases. |
 | `data/enemy_muzzle.json` | Per-sprite forward muzzle offset (asset filename -> px) so enemy shots leave the barrel instead of the hull center. |
@@ -375,11 +435,13 @@ the player must land on it to win.
 | `data/missions.json` | Optional per-stage win/lose missions (objective list + return-to-base). See "Mission objectives". Empty by default; the auto-decoded `objectives` block in each stage JSON drives the on-map markers and banner without it. Each entry's short `briefing` line is the in-game status-banner text (`mission.lua`), separate from the full mission-menu text below. |
 | `data/mission_text.json` | Original per-phase pre-mission briefings shown on the mission menu (`ui/mission_menu.lua`), keyed `stage<M><P>` with a `paragraphs` list (objective, then any enemy/threat notes). Extracted from the game's `MT0.BIN`..`MT4.BIN` by `tools/export_mission_text.py`. Presentation only. |
 | `data/vehicles/*.json` | Player vehicle tuning. |
+| `data/highscores.json` | Persisted top-10 high-score table (rank / nickname / score), read and written by `scenes/hiscores.lua` (saved to the Love2D save directory at runtime). |
 | `data/animations.json` | Named animation clips (explosions, smoke, rotors, projectile sprites). |
 | `data/sounds.json` + `assets/sounds/*.wav` | Imported sound effects. The catalog is an ordered list of categories (`weapons`, `vehicle`, `voice`, `ui`, `explosions`, `misc`) of `{name, file, label, rate}`; the WAVs are mono 8-bit PCM decoded from the game's `SFX/` IFF 8SVX files. Built by `tools/export_sounds.py`. Loaded by `engine/core/audio.lua`. |
 | `data/hud.json` | HUD layout and gauge sprites. |
 | `assets/fonts/<name>.{png,json}` | Original bitmap fonts: one glyph atlas plus per-glyph metrics (`x,y,w,h,oy,advance`), `charmap`/`word` mapping, and `mode` (`mask` or `truecolor`). Built by `tools/export_fonts.py` from the game's glyph containers. |
-| `assets/{credits,hiscore,pow,phase}/*.png` + screen sprites in `assets/hud,effects` | Per-screen sprite batteries built by `tools/export_screens.py`, each in its own palette: the gold main-menu CREDITS/HIGH SCORES options (MAINP palette), the gold POW rescue widgets (GOVPAL), the OVERKILL badge and kill icon (PHASEPAL), the stage fire (BURN/BURN2, registered as `burn`/`burn2` clips), and the objective briefing cards (PHASE1..4). The credits/hiscore/POW art is decoded but not yet wired into live UI. |
+| `assets/{credits,hiscore,pow,phase}/*.png` + screen sprites in `assets/hud,effects` | Per-screen sprite batteries built by `tools/export_screens.py`, each in its own palette: the gold main-menu CREDITS/HIGH SCORES titles (MAINP palette, animated in `scenes/credits.lua` / `scenes/hiscores.lua`), the gold weapon-shop widgets (GOVPAL; `powgads` PURCHASE/DONE/CHOP/TANK buttons, `pownames` weapon-category labels, `pownums` digits, `powmedal` medal icons for the POWUP/POWUPT shop screens, plus the in-game `powcount` HUD plate), the OVERKILL badge and kill icon (PHASEPAL), the stage fire (BURN/BURN2, registered as `burn`/`burn2` clips), and the objective briefing cards (PHASE1..4). The shop widgets are decoded but not yet wired into live UI. |
+| `assets/equip/*.png` + `layout.json` | Vehicle equip screen art built by `tools/export_equip.py`: the re-rendered EQPCHP/EQPTNK backdrops, every weapon row in 3 states (normal / selected / darkened), the OK / EXIT / TANK|CHOP buttons (up / down / blank plate), the lit / empty level pips, and the EQPNUMS gold digits (unused yet). `layout.json` carries every widget's design-space position (template-matched against the backdrop index maps) grouped into bays / specials / buttons. Palette: GOVPAL for indices 0-79, the high region sampled from the exported fullscreen PNGs (interior-pixel mode, median for thin features). Consumed by `ui/equip_screen.lua`. |
 | `assets/phend/*.png` + `layout.json` | DESTRUCTION STATS screen art built by `tools/export_phend.py` (PHASEPAL palette): the `header` (`PHEND`), the four `phase_fN` digits (`PHASENUM`), the five line label strips (`PHGTXT`/`PHBTXT`/`PHCTXT`/`PHPTXT`/`PHOTXT`, label cropped off their baked number placeholders), the lifted `pct` "%" glyph, and the `STATNUMS` readout digit font (`digit_f00..09` white, `f10..19` gold). Wired into `ui/end_stats.lua`. The blitter line strips author every line onto one origin and wrap the 384-pixel mode-X back buffer; the exporter unwraps them (rolling x past the widest empty column run) before cropping. |
 
 ## Building assets
@@ -391,6 +453,7 @@ Requires the original game files. Point the Python tools at the extracted
 pip install pillow numpy
 python3 tools/export_love2d.py all   # writes assets/stageMP{.json,/*.png}
 python3 tools/export_sounds.py       # writes assets/sounds/*.wav + data/sounds.json (from SFX/)
+python3 tools/export_equip.py        # writes assets/equip/ (equip screens; needs assets/fullscreen/)
 love .                               # run
 love . stage12                       # open a specific stage
 ```

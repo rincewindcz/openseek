@@ -283,8 +283,10 @@ function Overview:keypressed(key)
     if app.debug_panel.enabled and app.debug_panel:keypressed(key) then return end
     if key == "f1" then
         -- Show the mission briefing picture, then drop into the live game. Dev
-        -- launch of a single stage, not a campaign run.
-        app.campaign = false
+        -- launch of a single stage, not a campaign run; no equip loadout, the
+        -- full free-play weapon list.
+        app.campaign         = false
+        app.settings.loadout = nil
         local pic = mission_pic(app.world)
         if pic then
             app.screen:show(pic, { fade_in = 0.3, hold = 0.75, fade_out = 0.3,
@@ -294,7 +296,11 @@ function Overview:keypressed(key)
         end
         return
     end
-    if key == "f3" then app.scenes:switch("sandbox"); return end
+    if key == "f3" then
+        app.settings.loadout = nil
+        app.scenes:switch("sandbox")
+        return
+    end
     if Overview.picker_keys(app, key) then return end
     if key == "escape" then app.scenes:switch("main_menu"); return end
 
