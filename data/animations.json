@@ -78,6 +78,26 @@
     "fps": 12,
     "loop": false
   },
+  "explosion_fire": {
+    "frames": [
+      "effects/fire_f00.png",
+      "effects/fire_f01.png",
+      "effects/fire_f02.png",
+      "effects/fire_f03.png",
+      "effects/fire_f04.png",
+      "effects/fire_f05.png",
+      "effects/fire_f06.png",
+      "effects/fire_f07.png",
+      "effects/fire_f08.png",
+      "effects/fire_f09.png",
+      "effects/fire_f10.png",
+      "effects/fire_f11.png",
+      "effects/fire_f12.png",
+      "effects/fire_f13.png"
+    ],
+    "fps": 8,
+    "loop": false
+  },
   "bullet": {
     "frames": [
       "stage01/bullet_f00.png"

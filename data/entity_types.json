@@ -1,15 +1,15 @@
 {
   "flak_turret": {
     "attack_range": 240,
+    "collision_radius": 12,
     "detection_radius": 320,
     "explosion": "medium",
     "hit_radius": 14,
+    "reaction_delay": 0.6,
+    "solid": true,
     "speed": 0,
     "turn_speed": 120,
-    "weapon": "flak",
-    "solid": true,
-    "collision_radius": 12,
-    "reaction_delay": 0.6
+    "weapon": "flak"
   },
   "ground_decal": {
     "attack_range": 0,
@@ -19,34 +19,7 @@
     "speed": 0,
     "turn_speed": 0
   },
-  "powerup_marker": {},
-  "soldier": {
-    "attack_range": 220,
-    "detection_radius": 280,
-    "explosion": "none",
-    "hit_radius": 6,
-    "speed": 0,
-    "turn_speed": 100,
-    "weapon": "rifle",
-    "sprite": "soldier",
-    "dead_sprite": "soldier_dead",
-    "dead_frame_offset": 32,
-    "sprite_rot": 0,
-    "reaction_delay": 0.7
-  },
-  "soldier_aggressive": {
-    "attack_range": 240,
-    "detection_radius": 320,
-    "explosion": "none",
-    "hit_radius": 6,
-    "speed": 0,
-    "turn_speed": 150,
-    "weapon": "rifle",
-    "sprite": "soldier",
-    "dead_sprite": "soldier_dead",
-    "dead_frame_offset": 32,
-    "sprite_rot": 0,
-    "reaction_delay": 0.4
+  "powerup_marker": {
   },
   "scenery": {
     "attack_range": 0,
@@ -58,38 +31,22 @@
   },
   "structure": {
     "attack_range": 0,
-    "detection_radius": 0,
-    "explosion": "medium",
-    "hit_radius": 16,
-    "speed": 0,
-    "turn_speed": 0,
-    "solid": true,
-    "collision_radius": 14
-  },
-  "tank": {
-    "attack_range": 260,
-    "detection_radius": 360,
-    "explosion": "large",
-    "hit_radius": 18,
-    "speed": 0,
-    "turn_speed": 70,
-    "patrol_speed": 28,
-    "patrol_turn": 70,
-    "weapon": "tank_cannon",
-    "turret_explosion": "medium",
-    "solid": true,
     "collision_radius": 14,
-    "reaction_delay": 0.9
+    "detection_radius": 0,
+    "explosion": "small",
+    "hit_radius": 16,
+    "solid": true,
+    "speed": 0,
+    "turn_speed": 0
   },
   "tree": {
     "attack_range": 0,
+    "collision_radius": 5,
     "detection_radius": 0,
     "explosion": "none",
     "hit_radius": 0,
-    "speed": 0,
-    "turn_speed": 0,
     "solid": true,
-    "collision_radius": 5
-  },
-  "unknown_14": {}
+    "speed": 0,
+    "turn_speed": 0
+  }
 }

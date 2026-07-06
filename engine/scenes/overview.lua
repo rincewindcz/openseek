@@ -49,6 +49,21 @@ local function mission_pic(world)
     return m and ("STAGE0" .. m .. "_MPIC") or nil
 end
 
+-- The overview is the editor: its entity editor (the shared debug panel) is
+-- always on here, not gated behind F2. Gameplay keeps its own F2 toggle, so we
+-- scope the always-on state to this scene with enter/leave.
+function Overview:enter()
+    self.app.debug_panel.enabled = true
+end
+
+function Overview:leave()
+    local dp = self.app.debug_panel
+    dp.enabled  = false
+    dp.selected = nil
+    dp.pick_list   = nil
+    dp.anim_picker = false
+end
+
 function Overview:update(dt)
     local app = self.app
     if not app.renderer.picker and not app.renderer.kind_picker
@@ -56,6 +71,7 @@ function Overview:update(dt)
         app.camera:update(dt)
     end
     app.world:update(dt)
+    app.combat:update(dt)   -- advance any shots fired via the editor FIRE action
     app.debug_panel:update()
 end
 
@@ -70,6 +86,7 @@ function Overview:draw()
     local app = self.app
     app.renderer.highlight = app.debug_panel:highlight_entity()
     app.renderer:draw()
+    app.combat:draw()            -- projectiles/effects from the editor FIRE action
     app.renderer:draw_debris()   -- shrapnel above any explosion (e.g. F2 kills)
     self:_draw_panel()
     app.debug_panel:draw()
@@ -80,7 +97,17 @@ function Overview:_draw_panel()
     local settings = app.settings
     local g = love.graphics
     local x = 8
-    local y = 30
+    local y = 8
+
+    -- Title strip: mode + current stage.
+    g.setColor(0.10, 0.24, 0.34, 1)
+    g.rectangle("fill", x, y, PANEL_W, 20, 3)
+    g.setColor(COLORS.title)
+    g.print("OVERVIEW / EDITOR", x + 8, y + 3)
+    local sn = app.world.stage_name or "?"
+    g.setColor(COLORS.label)
+    g.print(sn, x + PANEL_W - g.getFont():getWidth(sn) - 8, y + 3)
+    y = y + 26
 
     -- SETUP box
     local setup_h = 22 + 6 * ROW_H + 6
@@ -101,16 +128,27 @@ function Overview:_draw_panel()
 
     -- START box
     y = y + setup_h + 6
-    local start_h = 22 + 4 * ROW_H + 6
+    local start_h = 22 + 6 * ROW_H + 6
     g.setColor(COLORS.bg); g.rectangle("fill", x, y, PANEL_W, start_h, 4)
     yy = section(g, "START", x, y + 4)
-    yy = row(g, "[F1]", "Play",              nil, nil, x, yy)
-    yy = row(g, "[F3]", "Sandbox",           nil, nil, x, yy)
-    yy = row(g, "[F7]", "2P split screen",   nil, nil, x, yy)
-    row(g, "[F8]", "Animation gallery", nil, nil, x, yy)
+    yy = row(g, "[F1]",  "Play",              nil, nil, x, yy)
+    yy = row(g, "[F3]",  "Sandbox (vehicle)", nil, nil, x, yy)
+    yy = row(g, "[F7]",  "2P split screen",   nil, nil, x, yy)
+    yy = row(g, "[F8]",  "Animation gallery", nil, nil, x, yy)
+    yy = row(g, "[F9]",  "Font gallery",      nil, nil, x, yy)
+    row(g, "[F10]", "Sound gallery",     nil, nil, x, yy)
+
+    -- EDITOR box: the entity editor panel is always on in the overview.
+    y = y + start_h + 6
+    local edit_h = 22 + 3 * ROW_H + 6
+    g.setColor(COLORS.bg); g.rectangle("fill", x, y, PANEL_W, edit_h, 4)
+    yy = section(g, "ENTITY EDITOR", x, y + 4)
+    yy = row(g, "[Click]",  "select entity",    nil, nil, x, yy)
+    yy = row(g, "[-/+]",    "adjust field",     nil, nil, x, yy)
+    row(g, "[S]",      "save entity_types", nil, nil, x, yy)
 
     -- VIEW box
-    y = y + start_h + 6
+    y = y + edit_h + 6
     local view_h = 22 + 3 * ROW_H + 6
     g.setColor(COLORS.bg); g.rectangle("fill", x, y, PANEL_W, view_h, 4)
     yy = section(g, "VIEW", x, y + 4)
@@ -162,10 +200,11 @@ end
 
 function Overview:keypressed(key)
     local app = self.app
-    if key == "f8" then app.scenes:switch("anim_gallery"); return end
-    if key == "f9" then app.scenes:switch("font_gallery"); return end
-    if key == "f7" then app.scenes:switch("coop_setup");   return end
-    if key == "f2" then app.debug_panel:toggle();          return end
+    if key == "f8"  then app.scenes:switch("anim_gallery");  return end
+    if key == "f9"  then app.scenes:switch("font_gallery");  return end
+    if key == "f10" then app.scenes:switch("sound_gallery"); return end
+    if key == "f7"  then app.scenes:switch("coop_setup");    return end
+    if key == "f2"  then return end   -- editor is always on here; F2 is a no-op
     if app.debug_panel.enabled and app.debug_panel:keypressed(key) then return end
     if key == "f1" then
         -- Show the mission briefing picture, then drop into the live game. Dev

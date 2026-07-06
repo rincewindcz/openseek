@@ -320,6 +320,29 @@ function CombatSystem:tick_swing(owner, weapon_name)
     if not self._swing[key] then self._swing[key] = 0 end
 end
 
+-- Fire a single shot from an entity along its current aim, mirroring the AI's
+-- muzzle placement. Used by the overview entity editor's FIRE action (and any
+-- other one-shot trigger). Returns true if a shot was actually fired.
+function CombatSystem:fire_entity(e)
+    if not e or not e:is_alive() then return false end
+    if e.has_turret and not e.turret_alive then return false end
+    local td     = e.type_data or {}
+    local weapon = e.weapon or td.weapon
+    if not weapon or not self.weapons[weapon] then return false end
+
+    local aim = e.aim_angle or e.angle or 0
+    local sx, sy = e.x, e.y
+    local muzzle_offset = e.muzzle_offset or 0
+    if muzzle_offset ~= 0 then
+        local muzzle_rad = (aim - 90) * math.pi / 180
+        sx = e.x + math.cos(muzzle_rad) * muzzle_offset
+        sy = e.y + math.sin(muzzle_rad) * muzzle_offset
+    end
+    local range = td.attack_range or td.detection_radius or 300
+    self:fire(sx, sy, aim, weapon, e, 1, range * 1.3)
+    return true
+end
+
 -- Angular threshold (deg) within which a turret/soldier is considered locked on.
 local LOCK_DEG = 8
 -- How long before its next shot a patrolling tank slows to a stop (then resumes).

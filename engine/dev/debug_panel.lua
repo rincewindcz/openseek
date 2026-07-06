@@ -83,24 +83,6 @@ local function draw_section(g, label, bx, y, w)
     return y + SECT_H
 end
 
-local function draw_row(g, label, value, bx, y, highlighted)
-    if highlighted then
-        g.setColor(C.cursor)
-        g.rectangle("fill", bx + 4, y - 1, PANEL_W - 8, LINE_H)
-        g.setColor(C.edit)
-    else
-        g.setColor(C.label)
-    end
-    g.print(label, bx + PAD, y)
-    g.setColor(highlighted and C.edit or C.key_col)
-    if highlighted then
-        g.print("< " .. tostring(value) .. " >", bx + 150, y)
-    else
-        g.print(tostring(value), bx + 150, y)
-    end
-    return y + LINE_H
-end
-
 local function draw_info_row(g, label, value, bx, y)
     g.setColor(C.label)
     g.print(label, bx + PAD, y)
@@ -138,7 +120,27 @@ function Debug:init(world, camera)
     self._status     = nil
     self._status_ttl = 0
 
+    -- clickable UI zones, rebuilt every draw() (field steppers, action buttons,
+    -- modal rows). See _zone / _zone_at / mousepressed.
+    self._zones = {}
+
     self.entity_types_path = "data/entity_types.json"
+end
+
+-- Register a clickable rectangle for this frame; fn runs on a left click inside.
+function Debug:_zone(x, y, w, h, fn)
+    self._zones[#self._zones + 1] = { x = x, y = y, w = w, h = h, fn = fn }
+end
+
+-- The handler for the topmost zone under the point (later-drawn zones win, so
+-- modal rows take precedence over the inspector beneath them).
+function Debug:_zone_at(mx, my)
+    for i = #self._zones, 1, -1 do
+        local z = self._zones[i]
+        if mx >= z.x and mx <= z.x + z.w and my >= z.y and my <= z.y + z.h then
+            return z.fn
+        end
+    end
 end
 
 -- Every type_data key of the entity as an editable row, sorted for a stable
@@ -229,6 +231,23 @@ function Debug:_set_status(msg)
     self._status_ttl = 2.5
 end
 
+-- The selected entity has a weapon and can be test-fired (needs the combat system
+-- wired in from main.lua).
+function Debug:_can_fire()
+    local e = self.selected
+    if not self.combat or not e then return false end
+    local td = e.type_data or {}
+    return (e.weapon or td.weapon) ~= nil
+end
+
+function Debug:_fire_selected()
+    if not self:_can_fire() then return end
+    if self.combat:fire_entity(self.selected) then
+        local td = self.selected.type_data or {}
+        self:_set_status("fired: " .. tostring(self.selected.weapon or td.weapon))
+    end
+end
+
 -- The entity to glow in the world: the overlapping candidate currently under the
 -- pick-list cursor (so the user sees which one Enter will pick), else the
 -- selection / hover.
@@ -284,6 +303,7 @@ function Debug:keypressed(key)
     end
 
     if key == "p" then self:_open_anim_picker(); return true end
+    if key == "f" then self:_fire_selected(); return true end
     if key == "x" then
         self.selected:take_damage(self.selected.hp + 1)
         self:_set_status("killed")
@@ -310,33 +330,36 @@ end
 
 function Debug:mousepressed(mx, my, button)
     if not self.enabled then return false end
+    if button ~= 1 then return false end
 
+    -- A clickable UI zone (field stepper, action button, or modal row) wins over
+    -- everything else on the panel.
+    local fn = self:_zone_at(mx, my)
+    if fn then fn(); return true end
+
+    -- A click off the modal rows dismisses the modal.
     if self.anim_picker then
         self.anim_picker = false
         return true
     end
-
     if self.pick_list then
         self.pick_list = nil
         return true
     end
 
-    if button == 1 then
-        local wx, wy = self:_screen_to_world(mx, my)
-        local candidates = self:_entities_near(wx, wy, PICK_RADIUS)
-        if #candidates == 0 then
-            self.selected = nil
-        elseif #candidates == 1 then
-            self:_select(candidates[1])
-        else
-            -- multiple overlapping entities: open pick list
-            self.pick_list  = candidates
-            self.pick_index = 1
-        end
-        self.field_i = 1
-        return true
+    -- Otherwise this is a world click: pick the entity (or overlap list) under it.
+    local wx, wy = self:_screen_to_world(mx, my)
+    local candidates = self:_entities_near(wx, wy, PICK_RADIUS)
+    if #candidates == 0 then
+        self.selected = nil
+    elseif #candidates == 1 then
+        self:_select(candidates[1])
+    else
+        self.pick_list  = candidates
+        self.pick_index = 1
     end
-    return false
+    self.field_i = 1
+    return true
 end
 
 function Debug:_pick_list_key(key)
@@ -384,6 +407,7 @@ end
 function Debug:draw()
     if not self.enabled then return end
     local g = love.graphics
+    self._zones = {}   -- rebuilt fresh each frame
 
     g.push()
     self.camera:apply()
@@ -409,13 +433,15 @@ function Debug:_draw_inspector(ent)
     local cls = self.world.stage.classes[ent.class_idx + 1]
     local td  = ent.type_data or {}
     local sel = (self.selected == ent)
+    local mx, my = love.mouse.getPosition()
 
     local fields = sel and self.fields or self:_build_fields(ent)
 
+    local can_fire = sel and self:_can_fire()
     local n_info  = 10
     local n_type  = math.max(1, #fields)
-    local n_act   = 4
-    local total_h = PAD
+    local n_act   = 4 + (can_fire and 1 or 0)
+    local total_h = PAD + SECT_H       -- title band
         + SECT_H + n_info * LINE_H
         + SECT_H + n_type * LINE_H
         + SECT_H + n_act  * LINE_H
@@ -427,8 +453,21 @@ function Debug:_draw_inspector(ent)
 
     g.setColor(C.bg)
     g.rectangle("fill", bx, by, PANEL_W, total_h, 4)
+    -- Swallow clicks anywhere on the panel so panel chrome never world-picks or
+    -- deselects; specific buttons register their own zones on top of this.
+    self:_zone(bx, by, PANEL_W, total_h, function() end)
 
     local y = by + PAD
+
+    -- title band
+    g.setColor(0.12, 0.28, 0.4, 1)
+    g.rectangle("fill", bx, y, PANEL_W, SECT_H - 2, 2)
+    g.setColor(0.5, 0.9, 1, 1)
+    g.print("ENTITY EDITOR", bx + PAD, y + 2)
+    g.setColor(C.hint)
+    local kn = cls.kind_name or "?"
+    g.print(kn, bx + PANEL_W - g.getFont():getWidth(kn) - PAD, y + 2)
+    y = y + SECT_H
 
     y = draw_section(g, "Info", bx, y, PANEL_W)
     y = draw_info_row(g, "id",    ent.id,                                    bx, y)
@@ -446,31 +485,86 @@ function Debug:_draw_inspector(ent)
     y = draw_info_row(g, "state", ent.state,            bx, y)
     y = draw_info_row(g, "route", ent.route or "none",  bx, y)
 
+    -- A small clickable box drawn at (x,y,w,h); highlights when hovered.
+    local fh = g.getFont():getHeight()
+    local function draw_btn(x, y0, w, h, txt)
+        local over = mx >= x and mx <= x + w and my >= y0 and my <= y0 + h
+        g.setColor(over and {0.30, 0.55, 0.90, 1} or {0.22, 0.25, 0.31, 1})
+        g.rectangle("fill", x, y0, w, h, 2)
+        g.setColor(over and {1, 1, 1, 1} or {0.82, 0.86, 0.92, 1})
+        g.print(txt, x + (w - g.getFont():getWidth(txt)) / 2, y0 + (h - fh) / 2)
+    end
+
     y = draw_section(g, "Type data  (shared by kind)", bx, y, PANEL_W)
     if #fields == 0 then
         y = draw_info_row(g, "(no fields)", "", bx, y)
     else
+        local sw  = 16
+        local mnx = bx + 150
+        local plx = bx + PANEL_W - PAD - sw
         for i, f in ipairs(fields) do
             local v = td[f.name]
             if v == nil then v = "-" end
-            y = draw_row(g, f.name, tostring(v), bx, y, sel and i == self.field_i)
+            local hot = sel and i == self.field_i
+            if hot then
+                g.setColor(C.cursor)
+                g.rectangle("fill", bx + 4, y - 1, PANEL_W - 8, LINE_H)
+            end
+            g.setColor(hot and C.edit or C.label)
+            g.print(f.name, bx + PAD, y)
+            if sel then
+                draw_btn(mnx, y - 1, sw, LINE_H - 1, "-")
+                self:_zone(mnx, y - 1, sw, LINE_H - 1,
+                    function() self.field_i = i; self:_edit_field(td, f, -1) end)
+                draw_btn(plx, y - 1, sw, LINE_H - 1, "+")
+                self:_zone(plx, y - 1, sw, LINE_H - 1,
+                    function() self.field_i = i; self:_edit_field(td, f, 1) end)
+                self:_zone(bx + PAD, y - 1, 150 - PAD, LINE_H,
+                    function() self.field_i = i end)
+                g.setColor(hot and C.edit or C.key_col)
+                local vt = tostring(v)
+                g.print(vt, mnx + sw + (plx - mnx - sw - g.getFont():getWidth(vt)) / 2, y)
+            else
+                g.setColor(C.key_col)
+                g.print(tostring(v), bx + 150, y)
+            end
+            y = y + LINE_H
         end
     end
 
     y = draw_section(g, "Actions", bx, y, PANEL_W)
-    local function action_row(key, label)
-        g.setColor(C.action); g.print("[" .. key .. "]", bx + PAD, y)
-        g.setColor(C.value);  g.print(label, bx + 50, y)
-        y = y + LINE_H
-    end
     if sel then
-        action_row("P", "play animation...")
-        action_row("X", "kill entity")
-        action_row("R", "revive entity")
-        action_row("S", "save entity_types.json")
+        local function action_btn(key, label, fn)
+            local ah = LINE_H - 2
+            local over = mx >= bx + PAD and mx <= bx + PANEL_W - PAD and my >= y and my <= y + ah
+            if over then
+                g.setColor(0.30, 0.55, 0.90, 0.35)
+                g.rectangle("fill", bx + PAD, y, PANEL_W - 2 * PAD, ah, 2)
+            end
+            g.setColor(C.action); g.print("[" .. key .. "]", bx + PAD + 2, y)
+            g.setColor(C.value);  g.print(label, bx + 50, y)
+            self:_zone(bx + PAD, y, PANEL_W - 2 * PAD, ah, fn)
+            y = y + LINE_H
+        end
+        action_btn("P", "play animation...", function() self:_open_anim_picker() end)
+        if can_fire then
+            action_btn("F", "fire weapon", function() self:_fire_selected() end)
+        end
+        action_btn("X", "kill entity", function()
+            self.selected:take_damage(self.selected.hp + 1); self:_set_status("killed")
+        end)
+        action_btn("R", "revive entity", function()
+            self.selected.hp    = self.selected.max_hp
+            self.selected.state = "idle"
+            self.selected.anim  = nil
+            self:_set_status("revived")
+        end)
+        action_btn("S", "save entity_types.json", function()
+            self:_save_entity_types(); self:_set_status("saved entity_types.json")
+        end)
     else
         g.setColor(C.hint)
-        g.print("click to enable actions", bx + PAD, y)
+        g.print("click an entity to edit its kind", bx + PAD, y)
         y = y + LINE_H * 4
     end
 
@@ -481,7 +575,7 @@ function Debug:_draw_inspector(ent)
 
     g.setColor(C.hint)
     if sel then
-        g.print("Up/Down field   Left/Right value   Esc deselect", bx + PAD, by + total_h + 2)
+        g.print("-/+ or click steppers   Esc deselect", bx + PAD, by + total_h + 2)
     else
         g.print("click to edit", bx + PAD, by + total_h + 2)
     end
@@ -501,6 +595,7 @@ function Debug:_draw_pick_list()
 
     g.setColor(C.bg)
     g.rectangle("fill", bx, by, bw, bh, 6)
+    self:_zone(bx, by, bw, bh, function() end)   -- box swallows off-row clicks
     g.setColor(C.value)
     g.print(string.format("Select entity  (%d overlapping)", #list), bx + PAD, by + PAD)
 
@@ -520,6 +615,9 @@ function Debug:_draw_pick_list()
             g.setColor(C.value)
         end
         g.print(label, bx + PAD, y)
+        self:_zone(bx + 4, y - 1, bw - 8, lh - 1, function()
+            self:_select(ent); self.pick_list = nil
+        end)
     end
 
     g.setColor(C.hint)
@@ -600,6 +698,7 @@ function Debug:_draw_anim_picker()
 
     g.setColor(C.bg)
     g.rectangle("fill", bx, by, bw, bh, 6)
+    self:_zone(bx, by, bw, bh, function() end)   -- box swallows off-row clicks
     g.setColor(C.value)
     local title = self.selected
         and string.format("Play animation on #%d", self.selected.id)
@@ -616,6 +715,13 @@ function Debug:_draw_anim_picker()
             g.setColor(C.value)
         end
         g.print(name, bx + PAD, y)
+        self:_zone(bx + 4, y - 1, bw - 8, lh - 1, function()
+            if self.selected then
+                self.selected:play_anim(name)
+                self:_set_status("playing: " .. name)
+            end
+            self.anim_picker = false
+        end)
     end
 
     g.setColor(C.hint)

@@ -28,6 +28,7 @@ function Sandbox:init(app)
     self.cursor       = 1
     self.status       = ""
     self.status_timer = 0
+    self._zones       = {}   -- clickable panel rects, rebuilt each draw
 end
 
 function Sandbox:enter()
@@ -98,19 +99,34 @@ end
 function Sandbox:_draw_panel()
     local g        = love.graphics
     local screen_w = g.getDimensions()
-    local pw       = 220
-    local ph       = #PARAMS * 18 + 58
+    local pw       = 250
+    local ph       = #PARAMS * 18 + 76
     local bx       = screen_w - pw - 4
     local by       = 30
+    local mx, my   = love.mouse.getPosition()
+    self._zones    = {}
+
+    local function draw_btn(x, y0, w, h, txt)
+        local over = mx >= x and mx <= x + w and my >= y0 and my <= y0 + h
+        g.setColor(over and {0.30, 0.55, 0.90, 1} or {0.22, 0.25, 0.31, 1})
+        g.rectangle("fill", x, y0, w, h, 2)
+        g.setColor(over and {1, 1, 1, 1} or {0.82, 0.86, 0.92, 1})
+        local fh = g.getFont():getHeight()
+        g.print(txt, x + (w - g.getFont():getWidth(txt)) / 2, y0 + (h - fh) / 2)
+    end
 
     g.setColor(0, 0, 0, 0.88)
     g.rectangle("fill", bx, by, pw, ph, 4)
-    g.setColor(0.3, 0.9, 0.3, 1)
-    g.print("SANDBOX: " .. self.app.settings.vehicle, bx + 8, by + 6)
+    g.setColor(0.12, 0.34, 0.18, 1)
+    g.rectangle("fill", bx, by, pw, 20, 2)
+    g.setColor(0.4, 1, 0.5, 1)
+    g.print("VEHICLE EDITOR: " .. self.app.settings.vehicle, bx + 8, by + 3)
 
     local def = self:_def() or {}
+    local sw, plx = 16, bx + pw - 8 - 16
+    local mnx     = plx - 4 - 16
     for i, p in ipairs(PARAMS) do
-        local y = by + 24 + (i - 1) * 18
+        local y = by + 26 + (i - 1) * 18
         if i == self.cursor then
             g.setColor(0.2, 0.5, 1, 0.3)
             g.rectangle("fill", bx + 2, y - 1, pw - 4, 18)
@@ -118,17 +134,41 @@ function Sandbox:_draw_panel()
         else
             g.setColor(0.75, 0.75, 0.75, 1)
         end
+        g.print(p.name, bx + 8, y)
         local val = def[p.name]
         local value_text = val ~= nil and string.format("%.4g", val) or "?"
-        g.print(string.format("%-16s %6s", p.name, value_text), bx + 8, y)
+        g.print(value_text, mnx - 8 - g.getFont():getWidth(value_text), y)
+
+        draw_btn(mnx, y - 1, sw, 17, "-")
+        self._zones[#self._zones + 1] = { x = mnx, y = y - 1, w = sw, h = 17,
+            fn = function() self.cursor = i; self:adjust(-1) end }
+        draw_btn(plx, y - 1, sw, 17, "+")
+        self._zones[#self._zones + 1] = { x = plx, y = y - 1, w = sw, h = 17,
+            fn = function() self.cursor = i; self:adjust(1) end }
+        self._zones[#self._zones + 1] = { x = bx + 2, y = y - 1, w = mnx - bx - 4, h = 17,
+            fn = function() self.cursor = i end }
     end
 
+    local sy = by + 26 + #PARAMS * 18 + 4
+    draw_btn(bx + 8, sy, 60, 18, "SAVE")
+    self._zones[#self._zones + 1] = { x = bx + 8, y = sy, w = 60, h = 18,
+        fn = function() self:save() end }
     g.setColor(0.45, 0.45, 0.45, 1)
-    g.print("[/] nav  +/- adj  F4 save  F3 exit", bx + 4, by + ph - 18)
+    g.print("[/] nav  +/- or click  F3 exit", bx + 78, sy + 2)
 
     if self.status ~= "" then
         g.setColor(0.1, 1, 0.4, 1)
         g.print(self.status, bx + 8, by + ph + 4)
+    end
+end
+
+function Sandbox:mousepressed(mx, my)
+    if self.paused or self.app.end_stats:is_active() then return end
+    for _, z in ipairs(self._zones) do
+        if mx >= z.x and mx <= z.x + z.w and my >= z.y and my <= z.y + z.h then
+            z.fn()
+            return
+        end
     end
 end
 

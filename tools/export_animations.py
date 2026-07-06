@@ -161,6 +161,12 @@ def main():
         names = export_anim(game_dir, out_dir, bin_stem, prefix, palette)
         results[prefix] = (names, fps, loop)
 
+    # One-shot alias of FIRE used as a small-entity death explosion. The engine
+    # plays death effects as "explosion_<type>", so exposing the FIRE frames under
+    # explosion_fire (non-looping) makes "fire" a valid explosion in the editor.
+    if results.get("fire"):
+        results["explosion_fire"] = (results["fire"][0], results["fire"][1], False)
+
     print()
     print("Per-mission animations:")
     results.update(export_all_mission_anims(game_dir, out_dir))

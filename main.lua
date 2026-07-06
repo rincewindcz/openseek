@@ -14,6 +14,7 @@ local Screen          = require "engine.core.screen"
 local EndStats        = require "engine.ui.end_stats"
 local Pointer         = require "engine.ui.pointer"
 local SceneManager    = require "engine.core.scene_manager"
+local Audio           = require "engine.core.audio"
 local json            = require "lib.json"
 
 local Title           = require "engine.scenes.title"
@@ -27,6 +28,7 @@ local CoopSetup       = require "engine.scenes.coop_setup"
 local CoopGameplay    = require "engine.scenes.coop_gameplay"
 local AnimGallery     = require "engine.scenes.anim_gallery"
 local FontGallery     = require "engine.scenes.font_gallery"
+local SoundGallery    = require "engine.scenes.sound_gallery"
 local Credits         = require "engine.scenes.credits"
 local HiScores        = require "engine.scenes.hiscores"
 
@@ -56,6 +58,7 @@ end
 function love.load(args)
     love.graphics.setDefaultFilter("nearest", "nearest")
     Animation.load("data/animations.json")
+    Audio.load("data/sounds.json")
 
     local vehicle_defs = {}
     for _, fname in ipairs(love.filesystem.getDirectoryItems("data/vehicles")) do
@@ -97,6 +100,7 @@ function love.load(args)
     app.hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
     app.combat = CombatSystem:new(world, camera)
     app.combat:load("data/weapons.json")
+    app.debug_panel.combat = app.combat   -- lets the editor's FIRE action shoot
     app.helis  = HeliSystem:new(world, app.combat)
     app.combat.heli_sys = app.helis
     Mission.load("data/missions.json")
@@ -123,6 +127,7 @@ function love.load(args)
     scenes:register("coop_gameplay",    CoopGameplay:new(app))
     scenes:register("anim_gallery",     AnimGallery:new(app))
     scenes:register("font_gallery",     FontGallery:new(app))
+    scenes:register("sound_gallery",    SoundGallery:new(app))
     scenes:register("credits",          Credits:new(app))
     scenes:register("hiscores",         HiScores:new(app))
     scenes:switch("title")
