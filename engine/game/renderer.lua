@@ -130,6 +130,7 @@ function Renderer:_draw_world_layers(vp)
         g.setColor(1, 1, 1)
     end
 
+    self:_draw_craters(vp)
     self:_draw_entities(w.objects, vp)
     self:_draw_objectives(vp)
 
@@ -169,10 +170,16 @@ function Renderer:_draw_entities(list, vp)
             local r = images[e.class_idx + 1]
             if r then
                 -- Two-part tanks keep a fixed hull (turret does the aiming) unless they
-                -- patrol, in which case the hull faces its travel heading; everything
-                -- else rotates its single sprite to face.
-                local rot = (e.turret_render and not e.route_points) and 0
-                    or e:draw_angle_rad(cls.angle_steps)
+                -- patrol, in which case the hull faces its travel heading; a hangar tank
+                -- faces its fixed ride axis; everything else rotates its sprite to face.
+                local rot
+                if e.hide_angle then
+                    rot = e.hide_angle * math.pi / 180
+                elseif e.turret_render and not e.route_points then
+                    rot = 0
+                else
+                    rot = e:draw_angle_rad(cls.angle_steps)
+                end
                 g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
                 if e == self.highlight then
                     self:_glow(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
@@ -228,12 +235,8 @@ function Renderer:_draw_entities(list, vp)
                 end
             end
         else
-            -- Not alive: persistent crater under any in-progress explosion.
-            if e.crater_img then
-                local iw, ih = e.crater_img:getDimensions()
-                g.setColor(1, 1, 1)
-                g.draw(e.crater_img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
-            end
+            -- Not alive: the persistent crater is drawn earlier (see _draw_craters)
+            -- so it stays at the bottom of the stack, under every entity.
             if e.state == "exploding" and e.anim then
                 local img = e.anim:current_image()
                 if img then
@@ -244,6 +247,21 @@ function Renderer:_draw_entities(list, vp)
         end
 
         ::continue::
+    end
+end
+
+-- Destruction craters: a dead building's hole is a ground feature, so it is drawn
+-- under every object (before the object pass) instead of at the building's own
+-- y-position, keeping tanks and other entities on top of it.
+function Renderer:_draw_craters(vp)
+    local g = love.graphics
+    g.setColor(1, 1, 1)
+    for _, e in ipairs(self.world.objects) do
+        if e.crater_img and not e:is_alive()
+        and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
+            local iw, ih = e.crater_img:getDimensions()
+            g.draw(e.crater_img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+        end
     end
 end
 

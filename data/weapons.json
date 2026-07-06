@@ -296,6 +296,22 @@
     "damage": 5,
     "fire_rate": 3,
     "spread_deg": 0,
+    "count": 1
+  },
+  "heavy_flak": {
+    "vehicle": "enemy",
+    "proj_type": "tracer",
+    "proj_sprite": "trace",
+    "proj_sprite_rot": 0,
+    "speed": 22,
+    "proj_accel": 140,
+    "proj_radius": 3,
+    "lifetime": 3.5,
+    "aoe": 0,
+    "explosion": "explosion_flak",
+    "damage": 5,
+    "fire_rate": 3,
+    "spread_deg": 0,
     "count": 2,
     "side_offset": 7
   },

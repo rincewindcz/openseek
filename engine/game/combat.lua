@@ -332,7 +332,7 @@ function CombatSystem:fire_entity(e)
 
     local aim = e.aim_angle or e.angle or 0
     local sx, sy = e.x, e.y
-    local muzzle_offset = e.muzzle_offset or 0
+    local muzzle_offset = e.muzzle_offset or td.muzzle_offset or 0
     if muzzle_offset ~= 0 then
         local muzzle_rad = (aim - 90) * math.pi / 180
         sx = e.x + math.cos(muzzle_rad) * muzzle_offset
@@ -347,6 +347,52 @@ end
 local LOCK_DEG = 8
 -- How long before its next shot a patrolling tank slows to a stop (then resumes).
 local STOP_LEAD = 0.8
+-- A hangar tank stays hidden while the player's facing is within this cone of the
+-- hut (the player is "looking at it"); it rides out only when the player looks away.
+local FACE_DEG = 55
+
+-- Drive a hangar tank's ride-out: it emerges along its track axis to fire when a
+-- player is near but not facing the hut, and retreats inside (shielded, drawn
+-- under the hut) when the player looks its way or leaves. Called before aiming so
+-- the fire step below can gate on e.hidden.
+function CombatSystem:_update_hangar(e, p, dt)
+    if not e.hide_home then return end
+    local td = e.type_data or {}
+
+    local emerge = false
+    if p then
+        local dx, dy = self.world:delta(e.x, e.y, p.x, p.y)   -- from player toward tank
+        local d2  = dx * dx + dy * dy
+        local det = td.detection_radius or 0
+        if det > 0 and d2 <= det * det then
+            local to_tank = Mathx.heading_deg(dx, dy)
+            local diff    = ((to_tank - (p.angle or 0) + 180) % 360) - 180
+            emerge = math.abs(diff) > FACE_DEG   -- player not looking this way
+        end
+    end
+
+    -- Linger outside: while it wants to be out the timer stays topped up; once the
+    -- player looks its way (or leaves) it counts down, so the tank holds position a
+    -- moment before ducking back rather than snapping in the instant it is spotted.
+    if emerge then
+        e.hide_stay = td.ride_linger or 1.2
+    elseif (e.hide_stay or 0) > 0 then
+        e.hide_stay = e.hide_stay - dt
+    end
+    local stay_out = emerge or (e.hide_stay or 0) > 0
+
+    local want  = stay_out and e.hide_extend or 0
+    local speed = (td.patrol_speed or 24) * dt * Config.speed_scale
+    if e.hide_pos < want then
+        e.hide_pos = math.min(want, e.hide_pos + speed)
+    else
+        e.hide_pos = math.max(want, e.hide_pos - speed)
+    end
+    e.x = e.hide_home.x + e.hide_axis.x * e.hide_pos
+    e.y = e.hide_home.y + e.hide_axis.y * e.hide_pos
+    e.hidden        = e.hide_pos < 4
+    e.hide_shielded = e.hidden and e.hideout and e.hideout:is_alive() or false
+end
 
 -- Nearest live player to a point, or nil if every player is down. Split screen
 -- has two; enemies engage whichever is closer.
@@ -368,7 +414,7 @@ function CombatSystem:_nearest_enemy(x, y, range)
     local best, best_d2
     local r2 = range and range * range or nil
     for _, e in ipairs(self.world.entities) do
-        if e:is_alive() and e.type_data and (e.type_data.hit_radius or 0) > 0 then
+        if e:is_alive() and not e.hide_shielded and e.type_data and (e.type_data.hit_radius or 0) > 0 then
             local dx, dy = self.world:delta(e.x, e.y, x, y)
             local d2 = dx * dx + dy * dy
             if (not r2 or d2 <= r2) and (not best_d2 or d2 < best_d2) then
@@ -409,6 +455,7 @@ end
 function CombatSystem:_update_ai(dt)
     for _, e in ipairs(self.world.combatants) do
         local p = e:is_alive() and self:_nearest_player(e.x, e.y) or nil
+        if e.hideable then self:_update_hangar(e, p, dt) end
         local acquired = false
         if p then
             local td  = e.type_data
@@ -443,7 +490,9 @@ function CombatSystem:_update_ai(dt)
                 -- stop as the reload comes up, fire, then resume), not the whole time
                 -- the player is in range.
                 e.engaging         = ready and d2 <= attack_range * attack_range and e.reload <= STOP_LEAD
+                -- A hangar tank only fires once it has ridden clear of the hut.
                 local can_fire = ready and ((not e.has_turret) or e.turret_alive)
+                    and not (e.hideable and e.hidden)
                 if can_fire and math.abs(diff) < LOCK_DEG and d2 <= attack_range * attack_range then
                     e.reload = e.reload - dt
                     if e.reload <= 0 then
@@ -451,7 +500,7 @@ function CombatSystem:_update_ai(dt)
                         -- tracked per turret (e.g. each sgun alternates its own L/R barrel).
                         -- Spawn forward of the hull center by the turret's muzzle offset.
                         local sx, sy = e.x, e.y
-                        local muzzle_offset = e.muzzle_offset or 0
+                        local muzzle_offset = e.muzzle_offset or td.muzzle_offset or 0
                         if muzzle_offset ~= 0 then
                             local muzzle_rad = (e.aim_angle - 90) * math.pi / 180
                             sx = e.x + math.cos(muzzle_rad) * muzzle_offset
@@ -536,7 +585,7 @@ function CombatSystem:_update_effects(dt)
                 effect.hit = true
                 local r2 = (effect.radius or 0) ^ 2
                 for _, e in ipairs(self.world.entities) do
-                    if e:is_alive() and (e.type_data and (e.type_data.hit_radius or 0) > 0) then
+                    if e:is_alive() and not e.hide_shielded and (e.type_data and (e.type_data.hit_radius or 0) > 0) then
                         local dx, dy = self.world:delta(e.x, e.y, effect.x, effect.y)
                         if dx * dx + dy * dy < r2 then
                             e:on_hit()
@@ -580,7 +629,7 @@ end
 function CombatSystem:_check_hit(projectile)
     if projectile.owner == "player" then
         for _, e in ipairs(self.world.entities) do
-            if e:is_alive() then
+            if e:is_alive() and not e.hide_shielded then
                 local hit_radius = e.type_data and e.type_data.hit_radius or 0
                 if hit_radius > 0 then
                     local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
@@ -669,7 +718,7 @@ function CombatSystem:_bomb_detonate(projectile)
     local r  = projectile.aoe > 0 and projectile.aoe or 80
     local r2 = r * r
     for _, e in ipairs(self.world.entities) do
-        if e:is_alive() and e.type_data and (e.type_data.hit_radius or 0) > 0 then
+        if e:is_alive() and not e.hide_shielded and e.type_data and (e.type_data.hit_radius or 0) > 0 then
             local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
             if dx * dx + dy * dy < r2 then
                 e:on_hit()
@@ -687,7 +736,7 @@ end
 function CombatSystem:_apply_aoe(projectile)
     local r2 = projectile.aoe ^ 2
     for _, e in ipairs(self.world.entities) do
-        if e:is_alive() then
+        if e:is_alive() and not e.hide_shielded then
             local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
             if dx * dx + dy * dy < r2 then
                 e:take_damage(projectile.damage * 0.5)

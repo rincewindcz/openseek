@@ -34,6 +34,10 @@ local TURRET_DEFS = {
     { top_match = "^radarsp%.bin$", hull_asset = "radar.bin", spin = 110 },
 }
 
+-- Hangar assets that hide a co-located tank: the hut renders above the tank and
+-- shields it until the tank rides out to fire (see World:_link_hangar_tanks).
+local HIDE_TANK_HANGARS = { ["shut.bin"] = true }
+
 function World:init()
     self.stage       = nil   -- decoded JSON table
     self.stage_name  = nil
@@ -175,7 +179,8 @@ function World:load(name)
     for id, raw in ipairs(self.stage.entities) do
         local cls    = self.stage.classes[raw.class + 1]
         local entity = Entity:new(id, raw, cls)
-        entity.world = self   -- backref so a dying building can spawn world shrapnel
+        entity.world     = self   -- backref so a dying building can spawn world shrapnel
+        entity.kind_name = cls.kind_name
         -- Craters are for large static buildings only. Keying on kind "structure"
         -- excludes vehicles/turrets (tank, truck, flak), and the size gate excludes
         -- small machinery filed under "structure" (jeeps, ammo packs).
@@ -191,6 +196,7 @@ function World:load(name)
         local af = cls.asset and self.stage.assets[cls.asset + 1]
         if af and af.file then
             local fn = af.file:lower()
+            entity.asset_file = fn
             entity.weapon    = self.weapon_overrides[fn]
             entity.drop_kind = self.building_drops[fn]
             -- Per-stage fire-rate override (e.g. GUN1 fires faster in later phases).
@@ -267,15 +273,75 @@ function World:load(name)
         end
         ::continue::
     end
+    -- Pair each hangar hut with the tank it hides before the draw order is fixed,
+    -- so the hut's sort_bias can lift it above its tank.
+    self:_link_hangar_tanks()
+
     local by_y = function(a, b)
         if a.y ~= b.y then return a.y < b.y end
         if a.x ~= b.x then return a.x < b.x end
-        return a.id < b.id  -- stable tiebreaker for entities at identical positions
+        -- Stable tiebreak for entities at one spot; sort_bias lifts a hangar hut
+        -- past its tank so it always draws on top.
+        return a.id + (a.sort_bias or 0) < b.id + (b.sort_bias or 0)
     end
     table.sort(self.decals,  by_y)
     table.sort(self.objects, by_y)
 
     self:_fit_wrap_period()
+end
+
+-- Link each hangar hut to the tank sharing its position: the tank rides out along
+-- its track decal to fire and ducks back inside when the player looks its way,
+-- shielded and drawn under the hut while hidden. The tank aim/fire and the hut's
+-- own destructibility are unchanged; combat drives the ride-out (_update_hangar).
+function World:_link_hangar_tanks()
+    local huts, tracks = {}, {}
+    for _, e in ipairs(self.entities) do
+        if e.asset_file and HIDE_TANK_HANGARS[e.asset_file] then huts[#huts + 1] = e end
+    end
+    for _, d in ipairs(self.decals) do
+        if d.asset_file == "tanktrak.bin" then tracks[#tracks + 1] = d end
+    end
+    for _, hut in ipairs(huts) do
+        local tank
+        for _, t in ipairs(self.entities) do
+            if t ~= hut and t.kind_name == "tank"
+            and math.abs(t.x - hut.x) < 24 and math.abs(t.y - hut.y) < 24 then
+                tank = t
+                break
+            end
+        end
+        if tank then self:_setup_hangar(tank, hut, tracks) end
+    end
+end
+
+function World:_setup_hangar(tank, hut, tracks)
+    tank.hideout   = hut
+    hut.hides      = tank
+    hut.is_hideout = true
+    -- Draw the hut just after (above) its tank at the same spot.
+    hut.sort_bias  = (tank.id - hut.id) + 0.5
+
+    -- Ride-out axis: toward the nearest track decal, else default west.
+    local ax, ay, best = -1, 0, nil
+    for _, tr in ipairs(tracks) do
+        local dx, dy = tr.x - tank.x, tr.y - tank.y
+        local d2 = dx * dx + dy * dy
+        if d2 > 1 and (not best or d2 < best) then best = d2; ax, ay = dx, dy end
+    end
+    local len = math.sqrt(ax * ax + ay * ay)
+    if len > 0 then ax, ay = ax / len, ay / len end
+
+    -- Face the hull along its ride axis (toward the track) and keep it there: the
+    -- tank only slides out and back, it never turns. The turret still aims freely.
+    tank.hide_angle    = Mathx.heading_deg(ax, ay)
+    tank.hide_axis     = { x = ax, y = ay }
+    tank.hide_home     = { x = tank.x, y = tank.y }
+    tank.hide_extend   = tank.type_data.ride_distance or 44
+    tank.hide_pos      = 0
+    tank.hidden        = true
+    tank.hide_shielded = true
+    tank.hideable      = true
 end
 
 -- Some stages (mission 0 phases 0-2) inset their content ~48px from the world

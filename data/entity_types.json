@@ -5,11 +5,12 @@
     "detection_radius": 320,
     "explosion": "medium",
     "hit_radius": 14,
+    "muzzle_offset": 0,
     "reaction_delay": 0.6,
     "solid": true,
     "speed": 0,
     "turn_speed": 120,
-    "weapon": "flak"
+    "weapon": "heavy_flak"
   },
   "ground_decal": {
     "attack_range": 0,
@@ -36,6 +37,7 @@
     "detection_radius": 280,
     "explosion": "none",
     "hit_radius": 6,
+    "muzzle_offset": 0,
     "reaction_delay": 0.7,
     "speed": 0,
     "sprite": "soldier",
@@ -50,6 +52,7 @@
     "detection_radius": 320,
     "explosion": "none",
     "hit_radius": 6,
+    "muzzle_offset": 0,
     "reaction_delay": 0.4,
     "speed": 0,
     "sprite": "soldier",
@@ -73,14 +76,16 @@
     "detection_radius": 360,
     "explosion": "large",
     "hit_radius": 18,
+    "muzzle_offset": 0,
     "patrol_speed": 28,
     "patrol_turn": 70,
     "reaction_delay": 0.9,
+    "ride_linger": 1.2,
     "solid": true,
     "speed": 0,
     "turn_speed": 70,
     "turret_explosion": "medium",
-    "weapon": "tank_cannon"
+    "weapon": "flak"
   },
   "tree": {
     "attack_range": 0,
@@ -91,5 +96,7 @@
     "solid": true,
     "speed": 0,
     "turn_speed": 0
+  },
+  "unknown_14": {
   }
 }
