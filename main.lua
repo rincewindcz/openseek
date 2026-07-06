@@ -46,7 +46,6 @@ local function after_stage_load()
     app.debug_panel.world = world
     app.hud.world = world
     app.hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
-    love.window.setTitle(world:title())
     local top = app.scenes:top()
     local player = top and top.player
     if player then
@@ -108,7 +107,6 @@ function love.load(args)
     app.rescue   = RescueSystem:new(world, app.combat)
     app.weather  = Weather:new()
     app.renderer:refresh_kinds()
-    love.window.setTitle(world:title())
 
     -- A 1x1 transparent hardware cursor, used to hide the pointer reliably (LOVE's
     -- setVisible(false) is flaky under some Wayland compositors).
@@ -197,9 +195,9 @@ local function pointer_released(x, y)
     app.scenes:dispatch("mousereleased", x, y)
 end
 
-function love.mousemoved(x, y)
+function love.mousemoved(x, y, dx, dy)
     Pointer.moved(x, y, false)
-    app.scenes:dispatch("mousemoved", x, y)
+    app.scenes:dispatch("mousemoved", x, y, dx, dy)
 end
 
 function love.mousepressed(x, y, button)
@@ -207,6 +205,8 @@ function love.mousepressed(x, y, button)
     if button == 1 then
         Pointer.moved(x, y, false)
         pointer_pressed(x, y)
+    elseif not app.screen:is_active() then
+        app.scenes:dispatch("mousepressed", x, y, button)
     end
 end
 
@@ -214,6 +214,8 @@ function love.mousereleased(x, y, button)
     if button == 1 then
         Pointer.moved(x, y, false)
         pointer_released(x, y)
+    elseif not app.screen:is_active() then
+        app.scenes:dispatch("mousereleased", x, y, button)
     end
 end
 

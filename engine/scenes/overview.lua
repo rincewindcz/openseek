@@ -54,11 +54,14 @@ end
 -- scope the always-on state to this scene with enter/leave.
 function Overview:enter()
     self.app.debug_panel.enabled = true
+    self.app.debug_panel.editor  = true
+    self.panning = false
 end
 
 function Overview:leave()
     local dp = self.app.debug_panel
     dp.enabled  = false
+    dp.editor   = false
     dp.selected = nil
     dp.pick_list   = nil
     dp.anim_picker = false
@@ -82,6 +85,26 @@ function Overview:wheelmoved(_dx, dy)
     end
 end
 
+-- Right-drag pans the camera: the world point under the cursor stays put, so the
+-- map follows the mouse. Delta is in screen pixels, converted to world units by
+-- the current zoom.
+function Overview:mousepressed(_x, _y, button)
+    if button == 2 then self.panning = true end
+end
+
+function Overview:mousereleased(_x, _y, button)
+    if button == 2 then self.panning = false end
+end
+
+function Overview:mousemoved(_x, _y, dx, dy)
+    if not self.panning then return end
+    local camera = self.app.camera
+    local z = camera:zoom()
+    camera.x = camera.x - dx / z
+    camera.y = camera.y - dy / z
+    camera:clamp()
+end
+
 function Overview:draw()
     local app = self.app
     app.renderer.highlight = app.debug_panel:highlight_entity()
@@ -90,6 +113,57 @@ function Overview:draw()
     app.renderer:draw_debris()   -- shrapnel above any explosion (e.g. F2 kills)
     self:_draw_panel()
     app.debug_panel:draw()
+    self:_draw_status_bar()
+end
+
+-- Bottom status bar: the live view/world state, consolidated from the old
+-- top-left/top-right HUD overlays into one readable strip.
+function Overview:_draw_status_bar()
+    local app  = self.app
+    local g    = love.graphics
+    local font = g.getFont()
+    local sw, sh = g.getDimensions()
+    local barh = 24
+    local by   = sh - barh
+
+    g.setColor(0.06, 0.09, 0.13, 0.92)
+    g.rectangle("fill", 0, by, sw, barh)
+    g.setColor(0.16, 0.42, 0.54, 1)
+    g.rectangle("fill", 0, by, sw, 2)
+
+    local cam  = app.camera
+    local live = 0
+    for _, e in ipairs(app.world.entities) do if e:is_alive() then live = live + 1 end end
+
+    local x  = 10
+    local ty = by + (barh - font:getHeight()) / 2
+    local function seg(label, value)
+        g.setColor(COLORS.label); g.print(label, x, ty)
+        x = x + font:getWidth(label) + 5
+        g.setColor(COLORS.value); g.print(value, x, ty)
+        x = x + font:getWidth(value) + 20
+    end
+
+    g.setColor(COLORS.title); g.print("EDITOR", x, ty)
+    x = x + font:getWidth("EDITOR") + 20
+    seg("stage",    app.world.stage_name or "?")
+    seg("cam",      string.format("%d, %d", cam.x, cam.y))
+    seg("zoom",     string.format("%gx", cam:zoom()))
+    seg("fps",      tostring(love.timer.getFPS()))
+    seg("entities", string.format("%d / %d", live, #app.world.entities))
+
+    -- Mission objective, right-aligned in its own color (moved off the world view).
+    local obj_text, obj_col = app.renderer:objective_status()
+    if obj_text then
+        local label = "OBJECTIVE"
+        local tw = font:getWidth(label) + 6 + font:getWidth(obj_text)
+        local ox = sw - tw - 10
+        if ox > x then
+            g.setColor(COLORS.label); g.print(label, ox, ty)
+            g.setColor(obj_col); g.print(obj_text, ox + font:getWidth(label) + 6, ty)
+        end
+    end
+    g.setColor(1, 1, 1)
 end
 
 function Overview:_draw_panel()
@@ -149,11 +223,12 @@ function Overview:_draw_panel()
 
     -- VIEW box
     y = y + edit_h + 6
-    local view_h = 22 + 3 * ROW_H + 6
+    local view_h = 22 + 4 * ROW_H + 6
     g.setColor(COLORS.bg); g.rectangle("fill", x, y, PANEL_W, view_h, 4)
     yy = section(g, "VIEW", x, y + 4)
     yy = row(g, "[Tab]/[K]", "stage / kinds",    nil, nil, x, yy)
     yy = row(g, "[L]/[G]",   "segments / grid",  nil, nil, x, yy)
+    yy = row(g, "[WASD]",    "pan / R-drag",     nil, nil, x, yy)
     row(g, "[+/-]",     "zoom",             nil, nil, x, yy)
 
     g.setColor(1, 1, 1)

@@ -486,9 +486,4 @@ function World:shadows_enabled()
     return not NIGHT_MISSIONS[m]
 end
 
-function World:title()
-    return string.format("Seek & Destroy - %s (%d entities)",
-        self.stage_name, #self.stage.entities)
-end
-
 return World

@@ -83,7 +83,6 @@ function CoopGameplay:enter()
     app.rescue:reset()
     -- Shared co-op objective from the stage's decoded objectives (nil = free play).
     self.mission = Mission.coop(world, self.players)
-    love.window.setTitle(world:title() .. "  [2P SPLIT]")
 end
 
 function CoopGameplay:leave()
@@ -113,7 +112,6 @@ function CoopGameplay:leave()
     app.camera.angle   = nil
     app.camera.view_oy = 0
     app.camera:set_zoom(app.viewer_zoom_index)
-    love.window.setTitle(app.world:title())
 end
 
 -- Co-op: one column per player from their own attributed kills (combat /

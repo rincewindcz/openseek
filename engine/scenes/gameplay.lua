@@ -21,7 +21,6 @@ function Gameplay:enter()
     app.camera:set_zoom(6)
     self:enter_weather()
     self:spawn_player()
-    love.window.setTitle(app.world:title() .. "  [" .. app.settings.vehicle .. "]")
 end
 
 function Gameplay:leave()
@@ -45,7 +44,6 @@ function Gameplay:leave()
     app.camera.angle   = nil
     app.camera.view_oy = 0
     app.camera:set_zoom(app.viewer_zoom_index)
-    love.window.setTitle(app.world:title())
 end
 
 -- Sync the HUD weapon icon (WEAPONS.BIN frame) to the active weapon.
@@ -113,7 +111,6 @@ function Gameplay:restart(carry)
     app.world:load(app.world.stage_name)
     app.after_stage_load()
     self:spawn_player(carry)
-    love.window.setTitle(app.world:title() .. "  [" .. app.settings.vehicle .. "]")
 end
 
 -- A vehicle was destroyed: spend one life (the count shown in the HUD). With

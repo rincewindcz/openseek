@@ -83,8 +83,6 @@ end
 
 function Renderer:draw()
     self:_draw_world()
-    if not self.in_game then self:_draw_hud() end
-    if not self.in_game then self:_draw_objective_banner() end
     if self.picker      then self:_draw_stage_picker() end
     if self.kind_picker then self:_draw_kind_picker()  end
 end
@@ -403,52 +401,23 @@ end
 
 -- One-line objective summary (screen space, top-center) with live counts. Shown
 -- in the viewer and in game mode; phases with no destroy/rescue goal show nothing.
-function Renderer:_draw_objective_banner()
+-- The current stage objective as a status line: text plus an RGB color, or nil
+-- when the phase has no destroy/rescue goal. Used by the overview status bar.
+function Renderer:objective_status()
     local obj = self.world.stage.objectives
-    if not obj or not (obj.destroy or obj.rescue) then return end
-    local g        = love.graphics
-    local screen_w = g.getDimensions()
-    local text, col
+    if not obj or not (obj.destroy or obj.rescue) then return nil end
     if obj.destroy then
         local rem = 0
         for _, e in ipairs(self.world.targets) do if e:is_alive() then rem = rem + 1 end end
-        text = string.format("OBJECTIVE: DESTROY  -  %d target%s remaining", rem, rem == 1 and "" or "s")
+        local text = string.format("DESTROY  %d target%s remaining", rem, rem == 1 and "" or "s")
         if obj.special_end then text = text .. "  [COMMANDERS BUILDING]" end
-        col = { 1, 0.55, 0.3 }
-    else
-        local n = #self.world.rescue_people
-        text = n > 0
-            and string.format("OBJECTIVE: RESCUE  -  %d POW%s to recover", n, n == 1 and "" or "s")
-            or  "OBJECTIVE: RESCUE  -  reach the marked POW landing zones"
-        col = { 0.4, 1, 0.6 }
+        return text, { 1, 0.55, 0.3 }
     end
-    local font = g.getFont()
-    local tw   = font:getWidth(text)
-    local bx   = (screen_w - tw) / 2
-    g.setColor(0, 0, 0, 0.6)
-    g.rectangle("fill", bx - 8, 44, tw + 16, 18)
-    g.setColor(col[1], col[2], col[3], 1)
-    g.print(text, bx, 46)
-    g.setColor(1, 1, 1)
-end
-
-function Renderer:_draw_hud()
-    local g = love.graphics
-    g.setColor(0, 0, 0, 0.6)
-    g.rectangle("fill", 0, 0, 500, 22)
-    g.setColor(1, 1, 1)
-
-    -- count hidden kinds for the hint
-    local nhidden = 0
-    for _ in pairs(self.hidden_kinds) do nhidden = nhidden + 1 end
-    local kind_hint = nhidden > 0
-        and string.format("[K]inds (%d hidden)", nhidden)
-        or  "[K]inds"
-
-    g.print(string.format(
-        "%s  cam %d,%d  zoom %gx  [Tab] [L] [G] %s",
-        self.world.stage_name, self.camera.x, self.camera.y,
-        self.camera:zoom(), kind_hint), 4, 4)
+    local n = #self.world.rescue_people
+    local text = n > 0
+        and string.format("RESCUE  %d POW%s to recover", n, n == 1 and "" or "s")
+        or  "RESCUE  reach the marked POW landing zones"
+    return text, { 0.4, 1, 0.6 }
 end
 
 function Renderer:_draw_stage_picker()

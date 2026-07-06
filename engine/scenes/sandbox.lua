@@ -33,7 +33,6 @@ end
 
 function Sandbox:enter()
     Gameplay.enter(self)
-    love.window.setTitle(self.app.world:title() .. "  [sandbox:" .. self.app.settings.vehicle .. "]")
 end
 
 function Sandbox:_def()

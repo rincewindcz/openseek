@@ -26,8 +26,8 @@ function Scene:draw() end
 
 function Scene:keypressed(_key) end
 function Scene:wheelmoved(_dx, _dy) end
-function Scene:mousemoved(_x, _y) end
-function Scene:mousepressed(_x, _y) end
-function Scene:mousereleased(_x, _y) end
+function Scene:mousemoved(_x, _y, _dx, _dy) end
+function Scene:mousepressed(_x, _y, _button) end
+function Scene:mousereleased(_x, _y, _button) end
 
 return Scene

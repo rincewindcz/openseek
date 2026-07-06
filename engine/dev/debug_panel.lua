@@ -773,6 +773,9 @@ end
 -- stats bar & help
 
 function Debug:_draw_stats_bar()
+    -- The overview (editor) shows this live state in its own bottom status bar and
+    -- has no F2 toggle, so the top-right bar is redundant there.
+    if self.editor then return end
     local g    = love.graphics
     local live = 0
     for _, e in ipairs(self.world.entities) do
@@ -788,6 +791,7 @@ function Debug:_draw_stats_bar()
 end
 
 function Debug:_draw_help()
+    if self.editor then return end   -- editor is always on here; no [F2] toggle hint
     local g        = love.graphics
     local screen_w = g.getWidth()
     local screen_h = g.getHeight()
@@ -798,7 +802,16 @@ end
 -- save
 
 function Debug:_save_entity_types()
-    local seen, types = {}, {}
+    -- Start from the full on-disk set so kinds absent from the current stage are
+    -- preserved (a stage without tanks/soldiers must not drop their types); overlay
+    -- the live, possibly edited type_data for the kinds present on this stage.
+    local types = {}
+    local existing = love.filesystem.read(self.entity_types_path)
+    if existing then
+        local ok, decoded = pcall(json.decode, existing)
+        if ok and type(decoded) == "table" then types = decoded end
+    end
+    local seen = {}
     for _, e in ipairs(self.world.entities) do
         local cls = self.world.stage.classes[e.class_idx + 1]
         local kn  = cls.kind_name
