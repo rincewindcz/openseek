@@ -31,6 +31,78 @@ function Audio.categories()
     return Audio._cats
 end
 
+-- 1-based index of the category currently holding the named clip, or nil.
+function Audio.category_of(name)
+    for ci, cat in ipairs(Audio._cats) do
+        for _, item in ipairs(cat.items or {}) do
+            if item.name == name then return ci end
+        end
+    end
+end
+
+-- Move the named clip into the category at target_index (1-based). Returns true
+-- when the clip moved; false if it is missing, already there, or the index is
+-- out of range. The gallery re-layouts and can persist with Audio.save.
+function Audio.move(name, target_index)
+    local target = Audio._cats[target_index]
+    if not target then return false end
+    for _, cat in ipairs(Audio._cats) do
+        for i, item in ipairs(cat.items or {}) do
+            if item.name == name then
+                if cat == target then return false end
+                table.remove(cat.items, i)
+                target.items = target.items or {}
+                target.items[#target.items + 1] = item
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function json_string(s)
+    return '"' .. tostring(s):gsub('[%z\1-\31\\"]', function(c)
+        local map = { ['"'] = '\\"', ['\\'] = '\\\\', ['\n'] = '\\n',
+                      ['\r'] = '\\r', ['\t'] = '\\t' }
+        return map[c] or string.format("\\u%04x", string.byte(c))
+    end) .. '"'
+end
+
+-- Persist the current categorization back to data/sounds.json, preserving the
+-- exported shape (ordered categories of {name, title, items:[{name,file,label,
+-- rate}]}). Returns true on success.
+function Audio.save(path)
+    local out = { "[" }
+    local cats = Audio._cats
+    for ci, cat in ipairs(cats) do
+        out[#out + 1] = "  {"
+        out[#out + 1] = '    "name": '  .. json_string(cat.name)  .. ","
+        out[#out + 1] = '    "title": ' .. json_string(cat.title) .. ","
+        out[#out + 1] = '    "items": ['
+        local items = cat.items or {}
+        for ii, it in ipairs(items) do
+            local parts = {
+                '"name": '  .. json_string(it.name),
+                '"file": '  .. json_string(it.file),
+                '"label": ' .. json_string(it.label),
+            }
+            if it.rate ~= nil then parts[#parts + 1] = '"rate": ' .. tostring(it.rate) end
+            out[#out + 1] = "      { " .. table.concat(parts, ", ") .. " }"
+                .. (ii < #items and "," or "")
+        end
+        out[#out + 1] = "    ]"
+        out[#out + 1] = "  }" .. (ci < #cats and "," or "")
+    end
+    out[#out + 1] = "]"
+
+    local full = love.filesystem.getSource() .. "/" .. path
+    local f = io.open(full, "w")
+    if not f then return false end
+    f:write(table.concat(out, "\n") .. "\n")
+    f:close()
+    return true
+end
+
 function Audio.play(name)
     local file = Audio._files[name]
     if not file then return end
