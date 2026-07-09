@@ -143,6 +143,7 @@ function Hud:draw()
         elseif t == "cursor" then self:_draw_cursor(g, item, x, y, s)
         elseif t == "radar"  then self:_draw_radar(g, item, x, y, s)
         elseif t == "number" then self:_draw_number(g, item, x, y, s)
+        elseif t == "sight"  then self:_draw_sight(g, item, s)
         end
     end
     self:_draw_overkill(g, screen_w, screen_h, hud_scale)
@@ -265,6 +266,99 @@ function Hud:_draw_weapon(g, item, x, y, s)
     if img then
         g.setColor(1, 1, 1)
         g.draw(img, x, y, 0, s, s)
+    end
+end
+
+-- targeting sight
+-- The reticle of a locking weapon (weapon_def.sight = the sights frame index). It
+-- rests ahead of the vehicle; on a locking level it eases toward the enemy the
+-- missiles would acquire (combat:player_lock_target), so the player sees where
+-- they will go. The eased position is clamped to a padded box inside the viewport
+-- so the reticle never leaves the screen, and is kept per player for co-op. It
+-- flashes a few times the moment a lock is acquired.
+local SIGHT_BLINK_INTERVAL = 0.08   -- s per on/off half-cycle
+local SIGHT_BLINK_COUNT    = 3      -- number of flashes on a new lock
+
+-- World point the reticle should sit on for a lock target: the sprite's visual
+-- center. Ground entities are drawn at (x,y) offset by their anchor, so the
+-- center is x + ox + iw/2; helicopters are already drawn centered on (x,y).
+function Hud:_target_center(tgt)
+    if tgt.class_idx and self.world then
+        local r = self.world.images[tgt.class_idx + 1]
+        if r and r.img then
+            local iw, ih = r.img:getDimensions()
+            return tgt.x + r.ox + iw / 2, tgt.y + r.oy + ih / 2
+        end
+    end
+    return tgt.x, tgt.y
+end
+
+function Hud:_draw_sight(g, item, s)
+    local p = self.player
+    if not (p and self.combat and p.camera) then return end
+    local weapon_def = self.combat.weapons[p.weapon_name]
+    if not (weapon_def and weapon_def.sight ~= nil) then
+        p._sight_x, p._sight_y, p._sight_lock, p._sight_blink = nil, nil, nil, nil
+        return
+    end
+    local img = item._frames and item._frames[weapon_def.sight + 1]
+    if not img then return end
+
+    local cam = p.camera
+    local screen_w, screen_h = love.graphics.getDimensions()
+    if self.view_w then screen_w, screen_h = self.view_w, self.view_h end
+
+    -- Resting position: straight ahead of the vehicle (which always faces up on
+    -- screen), a short way down from the top edge.
+    local cx    = cam:screen_center()
+    local rx    = cx
+    local ry    = screen_h * (item.rest or 0.2)
+    local tx, ty = rx, ry
+
+    local level   = (weapon_def.levels and weapon_def.levels[p.weapon_level]) or weapon_def
+    local locking = level.locking or weapon_def.homing
+    local tgt
+    if locking then
+        tgt = self.combat:player_lock_target(p.x, p.y, p:fire_angle(), self.combat:player_range(), weapon_def.target_kind)
+        if tgt then tx, ty = cam:project(self:_target_center(tgt)) end
+    end
+
+    -- Keep the reticle inside a padded box so it never touches the screen edge.
+    local w, h = img:getDimensions()
+    local pad  = item.pad or 0.1
+    local mx   = math.max(w / 2 * s + 2, screen_w * pad)
+    local my   = math.max(h / 2 * s + 2, screen_h * pad)
+    tx = math.max(mx, math.min(screen_w - mx, tx))
+    ty = math.max(my, math.min(screen_h - my, ty))
+
+    local dt = love.timer.getDelta()
+
+    -- Flash on lock: restart the blink whenever the locked target changes.
+    if tgt then
+        if tgt ~= p._sight_lock then p._sight_lock, p._sight_blink = tgt, 0 end
+        if p._sight_blink then p._sight_blink = p._sight_blink + dt end
+    else
+        p._sight_lock, p._sight_blink = nil, nil
+    end
+    local visible = true
+    if p._sight_blink then
+        if p._sight_blink < SIGHT_BLINK_INTERVAL * SIGHT_BLINK_COUNT * 2 then
+            visible = math.floor(p._sight_blink / SIGHT_BLINK_INTERVAL) % 2 == 0
+        else
+            p._sight_blink = nil
+        end
+    end
+
+    -- Ease the reticle toward the target so a lock reads as a smooth glide from
+    -- the resting point (seeded there when the sight first appears).
+    if not p._sight_x then p._sight_x, p._sight_y = rx, ry end
+    local k = 1 - math.exp(-(item.lerp or 8) * dt)
+    p._sight_x = p._sight_x + (tx - p._sight_x) * k
+    p._sight_y = p._sight_y + (ty - p._sight_y) * k
+
+    if visible then
+        g.setColor(1, 1, 1)
+        g.draw(img, p._sight_x, p._sight_y, 0, s, s, w / 2, h / 2)
     end
 end
 

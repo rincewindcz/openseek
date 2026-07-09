@@ -24,6 +24,7 @@ function Projectile:init(p)
     self.angle_rad  = p.angle_rad  -- Love2D draw rotation (radians)
     self.max_range  = p.max_range
     self.accel      = p.accel or 0  -- forward acceleration (px/s^2), e.g. tracers
+    self.max_speed  = p.max_speed   -- speed cap for accelerating rounds (nil = uncapped)
     self.traveled   = 0
     self.trail          = p.trail            -- effect clip dropped along the path
     self.trail_interval = p.trail_interval or 14
@@ -71,6 +72,7 @@ function Projectile:update(dt)
         local speed_now = math.sqrt(self.vx * self.vx + self.vy * self.vy)
         if speed_now > 0 then
             local new_speed = speed_now + self.accel * dt
+            if self.max_speed and new_speed > self.max_speed then new_speed = self.max_speed end
             self.vx = self.vx / speed_now * new_speed
             self.vy = self.vy / speed_now * new_speed
         end
@@ -191,9 +193,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
 
     -- Range cap: player shots are limited to ~1.5x the visible screen so they
     -- cannot cross the map; enemies pass their attack range so their shots reach.
-    local screen_w, screen_h = love.graphics.getDimensions()
-    local view               = math.max(screen_w, screen_h) / self.camera:zoom()
-    local max_range          = range_override or (1.5 * view)
+    local max_range = range_override or self:player_range()
 
     -- Multi-frame projectile sprites animate (the tracer streak that grows).
     local sprite    = self:_resolve_sprite(weapon_def)
@@ -231,7 +231,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     local target
     if homing then
         if owner == "player" then
-            target = self:_nearest_enemy(x, y, max_range)
+            target = self:player_lock_target(x, y, angle_deg, max_range, weapon_def.target_kind)
         else
             target = self:_nearest_player(x, y)
         end
@@ -277,6 +277,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             sprite     = sprite,
             max_range  = max_range,
             accel      = weapon_def.proj_accel or 0,
+            max_speed  = weapon_def.max_speed,
             animate    = animate,
             trail          = weapon_def.trail,
             trail_interval = weapon_def.trail_interval,
@@ -425,6 +426,79 @@ function CombatSystem:_nearest_enemy(x, y, range)
     return best
 end
 
+-- Half-angle (deg) of the forward cone a player's locking weapon acquires
+-- within: the original only locks onto a target held in front of the vehicle.
+local LOCK_ARC_DEG = 45
+
+-- Lock-on priority of a ground target: armed vehicles/turrets that shoot back are
+-- taken first, then buildings, then small fry (soldiers, decorative bits) last.
+local function ground_lock_priority(e)
+    local k = e.kind_name
+    if k == "soldier" or k == "soldier_aggressive" then return 1 end
+    local td = e.type_data
+    if td and td.weapon and (td.detection_radius or 0) > 0 then return 3 end
+    if k == "structure" or k == "radar" then return 2 end
+    return 1
+end
+
+-- Nearest live enemy helicopter (air_to_air targets) within range and inside the
+-- forward cone. Helicopters live in the heli system, not world.entities.
+function CombatSystem:_lock_air(x, y, facing_deg, range)
+    if not self.heli_sys then return nil end
+    local best, best_d2
+    local r2 = range and range * range or nil
+    for _, h in ipairs(self.heli_sys.helis) do
+        if h.state == "alive" then
+            local dx, dy = self.world:delta(h.x, h.y, x, y)
+            local d2 = dx * dx + dy * dy
+            if not r2 or d2 <= r2 then
+                local to_h = Mathx.heading_deg(dx, dy)
+                local diff = ((to_h - facing_deg + 180) % 360) - 180
+                if math.abs(diff) <= LOCK_ARC_DEG and (not best_d2 or d2 < best_d2) then
+                    best, best_d2 = h, d2
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- The target a player's locking weapon acquires from (x, y) while facing
+-- facing_deg, within range and the forward LOCK_ARC_DEG cone. kind "air" locks
+-- enemy helicopters (air_to_air); otherwise ground entities, ranked by
+-- ground_lock_priority then distance. Shared by fire() (missile steering) and
+-- the HUD sight reticle, so the reticle shows exactly where the missiles go.
+function CombatSystem:player_lock_target(x, y, facing_deg, range, kind)
+    if kind == "air" then return self:_lock_air(x, y, facing_deg, range) end
+    local best, best_pri, best_d2
+    local r2 = range and range * range or nil
+    for _, e in ipairs(self.world.entities) do
+        if e:is_alive() and not e.hide_shielded and e.type_data and (e.type_data.hit_radius or 0) > 0 then
+            local dx, dy = self.world:delta(e.x, e.y, x, y)
+            local d2 = dx * dx + dy * dy
+            if not r2 or d2 <= r2 then
+                local to_ent = Mathx.heading_deg(dx, dy)
+                local diff   = ((to_ent - facing_deg + 180) % 360) - 180
+                if math.abs(diff) <= LOCK_ARC_DEG then
+                    local pri = ground_lock_priority(e)
+                    if not best or pri > best_pri or (pri == best_pri and d2 < best_d2) then
+                        best, best_pri, best_d2 = e, pri, d2
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- Range a player's shots reach: ~1.5x the visible screen, so they can't cross
+-- the map. Shared by fire() and the HUD sight so the reticle's lock range and
+-- the missile's lock range agree.
+function CombatSystem:player_range()
+    local screen_w, screen_h = love.graphics.getDimensions()
+    return 1.5 * math.max(screen_w, screen_h) / self.camera:zoom()
+end
+
 -- Rotate a homing projectile's velocity toward its (moving) target, capped at
 -- its turn rate so a nimble player can shake it. A dead/landed target drops the
 -- lock and the missile flies straight on.
@@ -432,8 +506,9 @@ function CombatSystem:_steer_homing(projectile, dt)
     local tgt = projectile.target
     if not tgt then return end
     local lost
-    if tgt.is_alive then lost = not tgt:is_alive()
-    else lost = (tgt.armor or 0) <= 0 or tgt.death ~= nil end
+    if tgt.is_alive then lost = not tgt:is_alive()              -- world entity
+    elseif tgt.state ~= nil then lost = tgt.state ~= "alive"    -- enemy helicopter
+    else lost = (tgt.armor or 0) <= 0 or tgt.death ~= nil end   -- player
     if lost then projectile.target = nil; return end
 
     local dx, dy   = self.world:delta(tgt.x, tgt.y, projectile.x, projectile.y)
@@ -628,6 +703,11 @@ end
 
 function CombatSystem:_check_hit(projectile)
     if projectile.owner == "player" then
+        -- Guided weapons only strike their own domain: air_to_air (target_kind
+        -- "air") ignores ground targets, air_to_ground ("ground") ignores
+        -- helicopters. Unguided weapons (no target_kind) hit anything.
+        local tk = projectile.weapon_def.target_kind
+        if tk ~= "air" then
         for _, e in ipairs(self.world.entities) do
             if e:is_alive() and not e.hide_shielded then
                 local hit_radius = e.type_data and e.type_data.hit_radius or 0
@@ -647,8 +727,9 @@ function CombatSystem:_check_hit(projectile)
                 end
             end
         end
+        end
         -- Airborne enemy helicopters (owned by the heli system, not world.entities).
-        if self.heli_sys then
+        if tk ~= "ground" and self.heli_sys then
             for _, h in ipairs(self.heli_sys.helis) do
                 if h.state == "alive" then
                     local dx, dy = self.world:delta(h.x, h.y, projectile.x, projectile.y)

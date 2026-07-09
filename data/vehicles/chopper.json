@@ -5,7 +5,7 @@
   "decel": 320,
   "fuel_drain": 0.87,
   "land_time": 0.5,
-  "max_fwd": 220,
+  "max_fwd": 140,
   "max_rev": 100,
   "rotor_fps": 50,
   "rotor_y_offset": -26,

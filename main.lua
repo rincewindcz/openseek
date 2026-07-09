@@ -100,6 +100,7 @@ function love.load(args)
     app.hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
     app.combat = CombatSystem:new(world, camera)
     app.combat:load("data/weapons.json")
+    app.hud.combat = app.combat   -- lets the HUD sight query the current weapon / lock target
     app.debug_panel.combat = app.combat   -- lets the editor's FIRE action shoot
     app.helis  = HeliSystem:new(world, app.combat)
     app.combat.heli_sys = app.helis

@@ -109,6 +109,16 @@
       "relative_to": "weapon",
       "offset": [27, 33],
       "scale": 2.5
+    },
+    {
+      "id": "sight",
+      "type": "sight",
+      "sprite_pattern": "hud/sights_f%02d.png",
+      "sprite_count": 3,
+      "rest": 0.2,
+      "pad": 0.1,
+      "lerp": 8,
+      "scale": 3
     }
   ]
 }

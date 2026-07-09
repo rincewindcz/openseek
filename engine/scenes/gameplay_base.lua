@@ -64,7 +64,13 @@ function GameplayBase:fire_for(p)
     local level = weapon_def.levels and weapon_def.levels[p.weapon_level] or weapon_def
     combat:tick_swing("player", p.weapon_name)
     combat:fire(p.x, p.y, p:fire_angle(), p.weapon_name, "player", p.weapon_level, nil, p)
-    p:consume_ammo(p.weapon_name, weapon_def.ammo_cost or 1)
+    -- Ammo drains per projectile the shot spawns (rockets fire 2/3/4 by level), not
+    -- per trigger pull. Flame weapons spawn ground patches, not rounds, so bill one.
+    local shots = 1
+    if weapon_def.proj_type ~= "flame" then
+        shots = (level.side_offsets and #level.side_offsets) or level.count or 1
+    end
+    p:consume_ammo(p.weapon_name, (weapon_def.ammo_cost or 1) * shots)
     p.fire_timer = 1.0 / (level.fire_rate or weapon_def.fire_rate or 10)
 end
 
