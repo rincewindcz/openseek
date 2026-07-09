@@ -190,6 +190,10 @@ function Gameplay:on_stats_done()
     end
     app.run_score = self.player.score or app.run_score
     app.run_lives = self.player.lives or app.run_lives
+    -- Carry the medals picked up this phase into the shop purse for the next one.
+    if app.loadout then
+        app.loadout.medals = app.loadout.medals + (self.player.medals or 0)
+    end
     local next_stage = app.world.stages[app.world.stage_index + 1]
     if not next_stage then
         app.campaign = false

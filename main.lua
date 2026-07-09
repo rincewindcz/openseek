@@ -22,6 +22,7 @@ local MainMenu        = require "engine.scenes.main_menu"
 local MissionBriefing = require "engine.scenes.mission_briefing"
 local MissionSelect   = require "engine.scenes.mission_select"
 local Equip           = require "engine.scenes.equip"
+local Shop            = require "engine.scenes.shop"
 local Overview        = require "engine.scenes.overview"
 local Gameplay        = require "engine.scenes.gameplay"
 local Sandbox         = require "engine.scenes.sandbox"
@@ -121,6 +122,7 @@ function love.load(args)
     scenes:register("mission_briefing", MissionBriefing:new(app))
     scenes:register("mission_select",   MissionSelect:new(app))
     scenes:register("equip",            Equip:new(app))
+    scenes:register("shop",             Shop:new(app))
     scenes:register("overview",         Overview:new(app))
     scenes:register("gameplay",         Gameplay:new(app))
     scenes:register("sandbox",          Sandbox:new(app))

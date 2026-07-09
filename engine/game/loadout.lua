@@ -6,9 +6,31 @@ local Vehicles = require "engine.game.vehicles"
 -- always carries the chain gun. Loading several bays with one weapon gives
 -- that weapon slot multiplied ammo (the original's rule); number keys are
 -- assigned to unique weapons in bay order. One built-in special may be
--- loaded at a time; specials are free and have no levels. The future shop
--- screen purchases into `owned` with medals.
+-- loaded at a time; specials are free and have no levels. The shop screen
+-- (engine/ui/shop_screen.lua) purchases levels into `owned` with medals.
 local Loadout = Class()
+
+-- Medal cost to reach weapon level 1 / 2 / 3 (medals are the pickup currency).
+Loadout.PRICES = { 2, 4, 6 }
+
+-- Medals a single-mission (MISSION mode) run starts with; a NEW GAME campaign
+-- starts at 0 and earns medals from pickups across its phases.
+Loadout.START_MEDALS = 16
+
+-- The loadout for the current run: the persistent campaign inventory (NEW GAME,
+-- earned from pickups) or the single-mission inventory (MISSION mode, seeded
+-- with START_MEDALS). Created on first use; the shop and equip screens share it.
+function Loadout.active(app)
+    if app.campaign then
+        if not app.loadout then app.loadout = Loadout:new() end
+        return app.loadout
+    end
+    if not app.loadout_free then
+        app.loadout_free = Loadout:new()
+        app.loadout_free.medals = Loadout.START_MEDALS
+    end
+    return app.loadout_free
+end
 
 function Loadout:init()
     self.medals   = 0
@@ -20,6 +42,10 @@ function Loadout:init()
             owned   = { chaingun = 1, [start] = 1 },
             bays    = { "chaingun" },
             special = nil,
+            -- Vehicle characteristics, each 0..1 (0.5 = evenly balanced, the
+            -- original's default). Fuel and armor are set on the equip screen;
+            -- speed is derived from them (more fuel+armor => slower).
+            chars   = { fuel = 0.5, armor = 0.5 },
         }
         for i = 2, n do v.bays[i] = start end
         self.vehicles[vehicle] = v
@@ -45,10 +71,36 @@ function Loadout:set_special(vehicle, weapon)
     v.special = (v.special ~= weapon) and weapon or nil
 end
 
+-- A vehicle characteristic (0..1); "speed" is derived from fuel + armor.
+function Loadout:char(vehicle, which)
+    local c = self.vehicles[vehicle].chars
+    if which == "speed" then return 1 - (c.fuel + c.armor) / 2 end
+    return c[which]
+end
+
+function Loadout:set_char(vehicle, which, value)
+    if which == "speed" then return end   -- read-only (derived)
+    self.vehicles[vehicle].chars[which] = math.max(0, math.min(1, value))
+end
+
 -- Grant / upgrade a weapon (the shop's entry point).
 function Loadout:grant(vehicle, weapon, level)
     local v = self.vehicles[vehicle]
     v.owned[weapon] = math.max(v.owned[weapon] or 0, level or 1)
+end
+
+-- Buy a weapon at `level` (higher than currently owned) for PRICES[level] if
+-- the purse can afford it. Any level can be bought directly without owning the
+-- lower ones first; owning a level implies the lower ones. Spends the medals
+-- and returns true on a purchase, false otherwise.
+function Loadout:buy(vehicle, weapon, level)
+    local price = self.PRICES[level]
+    if not price or level <= self:level(vehicle, weapon) or self.medals < price then
+        return false
+    end
+    self.medals = self.medals - price
+    self:grant(vehicle, weapon, level)
+    return true
 end
 
 -- Own every implemented catalogue weapon at its top level (weapons is the

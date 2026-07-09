@@ -5,8 +5,8 @@ local EquipScreen = require "engine.ui.equip_screen"
 
 -- Pre-mission briefing scene wrapping the MISSION/PHASE menu (the menu itself
 -- is the briefing). PLAY opens the vehicle equip screen (or drops straight
--- into the game when the equip art is not exported); EXIT backs out to the
--- main menu. SAVE / LOAD / SHOP are stubs for now.
+-- into the game when the equip art is not exported); SHOP opens the weapon
+-- shop; EXIT backs out to the main menu. SAVE / LOAD are stubs for now.
 local MissionBriefing = Class(Scene)
 
 MissionBriefing.ui_pointer = true
@@ -37,6 +37,8 @@ function MissionBriefing:_select(id)
         else
             self.app.scenes:switch("gameplay")
         end
+    elseif id == "shop" then
+        self.app.scenes:switch("shop", self.app.world.stage_name)
     elseif id == "exit" then
         self.app.scenes:switch("main_menu")
     end

@@ -138,10 +138,12 @@ HUD) have been re-exported with the fixed decoder.
   (`app.settings.loadout`) and starts the phase, EXIT returns to the briefing.
   The campaign inventory lives in `game/loadout.lua` (`app.loadout`, reset by
   NEW GAME): per vehicle the owned level per weapon and the bay assignment.
-  A NEW GAME run starts owning only the chain gun and rockets/shells (more
-  arrive with the future shop); single-mission play (the MISSION menu) equips
-  a separate `app.loadout_free` with every implemented weapon unlocked at its
-  top level (`Loadout:unlock_all`), since there is no run to earn them in.
+  A NEW GAME run starts owning only the chain gun and rockets/shells with a 0
+  medal purse; the shop (below) buys the rest from medals earned in play.
+  Single-mission play (the MISSION menu) equips a separate `app.loadout_free`
+  seeded with `Loadout.START_MEDALS` (16) to spend in the shop, since there is
+  no run to earn them in. `Loadout.active(app)` picks the right one for the
+  current mode and both the shop and equip screens share it.
   `luajit tools/sim_equip.lua` drives the whole screen headlessly (clicks,
   states, buttons, vehicle switch) against a stubbed love API.
   In game the loadout becomes the weapon list (unique bay weapons in bay
@@ -150,10 +152,21 @@ HUD) have been re-exported with the fixed decoder.
   original's rule), and each weapon fires at its owned upgrade level (E is
   disabled). Stages with `"vehicle": "tank"` in `missions.json` lock the
   screen to the tank with no switch button, like the original's tank-only
-  phases. Weapons not yet in `data/weapons.json` (air strike, flame thrower,
-  the tank specials, super napalm) show permanently darkened. A weapon shop
-  (buying upgrades with medals into the same inventory) is not yet
-  implemented.
+  phases. Weapons not yet in `data/weapons.json` (air strike, the tank
+  specials, super napalm) show permanently darkened on the equip screen.
+- **Weapon shop (`ui/shop_screen.lua`, `scenes/shop.lua`):** the briefing's
+  SHOP button opens the `POWUP` (chopper) / `POWUPT` (tank) shop. Each weapon
+  category's three baked icon boxes are its level buttons: an owned level wears
+  a gold ring, an affordable level is bright, and a level costing more medals
+  than the purse holds is dimmed. Any level can be bought directly (no need to
+  own the lower ones first) for `Loadout.PRICES` (2 / 4 / 6 medals for level 1 /
+  2 / 3) from the shared purse drawn top-left; the CHOP / TANK toggle flips the
+  shopped vehicle (hidden on a forced-vehicle phase) and the DONE button
+  (POWGADS) returns to the briefing. Purchases land in the same `owned` table
+  the equip screen equips from. Campaign medals accumulate into the purse from
+  each phase's pickups (`gameplay.on_stats_done`). The medal / label / icon
+  widgets are decoded in the shop runtime palette by `tools/export_shop.py`
+  (see below). `luajit tools/sim_shop.lua` drives the screen headlessly.
 - **POW rescue (`rescue.lua`):** on POWHERE stages, each `powhere.bin` building holds
   POWs and cannot be destroyed (its `powhut.bin` huts are shielded) until emptied.
   Landing the vehicle on the building's `lh.bin` pad for 1.0s walks the POWs out to the
@@ -229,7 +242,7 @@ Engine modules (`engine/`), all built on the tiny `core/class.lua` helper:
 | `core/scene.lua` | Base class for scenes: no-op lifecycle hooks (`enter`/`leave`/`suspend`/`resume`), update/draw, and input handlers; `ui_pointer = true` marks menu-family scenes that own the SELPOINT cursor. |
 | `core/scene_manager.lua` | Stack-based scene manager: name registry (`register`), `switch`/`push`/`pop`/`replace`, and `dispatch` to the top scene only. Scenes address each other by name so they never require each other in cycles. |
 | `game/vehicles.lua` | Vehicle catalogue shared by the scenes: per-vehicle weapon cycle lists, the equip-screen bay/special weapon lists (`BAY_WEAPONS`/`SPECIAL_WEAPONS`/`BAY_COUNT`), the chopper-skin/tank picker cycle, and UI labels. |
-| `game/loadout.lua` | Campaign weapon inventory (`app.loadout`, reset by NEW GAME): per vehicle the owned level per weapon, the bay assignments (bay 1 fixed chain gun), and the loaded special; `weapon_list` builds the gameplay list with bay-count ammo multipliers and owned levels. The future shop buys into `owned` with medals. |
+| `game/loadout.lua` | Campaign weapon inventory (`app.loadout`, reset by NEW GAME): per vehicle the owned level per weapon, the bay assignments (bay 1 fixed chain gun), and the loaded special; `weapon_list` builds the gameplay list with bay-count ammo multipliers and owned levels. The shop (`ui/shop_screen.lua`) buys levels into `owned` with medals via `Loadout:buy`; `Loadout.active(app)` returns the campaign or MISSION-mode inventory. |
 | `game/weather.lua` | Weather overlay: a world-space tiled field of pixel particles (snow on the winter mission, rain on the jungle mission) drawn through the camera so flying streams it and turning rotates it; density stays uniform under any pan/turn. Activated per stage by `GameplayBase:enter_weather`. |
 | `game/stats.lua` | Destruction-stats bookkeeping shared by gameplay and the end-of-phase screen: the ground/building kind tables, `kind_category`, `destructible_totals`, and `stage_phase`. |
 | `ui/layout.lua` | Shared 320x240 design space (`DESIGN_W`/`DESIGN_H`) and the `fit` letterbox transform (scale + centering offsets) used by every non-game screen and `ui/pointer.lua`. |
@@ -440,7 +453,7 @@ the player must land on it to win.
 | `data/sounds.json` + `assets/sounds/*.wav` | Imported sound effects. The catalog is an ordered list of categories (`weapons`, `vehicle`, `voice`, `ui`, `explosions`, `misc`) of `{name, file, label, rate}`; the WAVs are mono 8-bit PCM decoded from the game's `SFX/` IFF 8SVX files. Built by `tools/export_sounds.py`. Loaded by `engine/core/audio.lua`. |
 | `data/hud.json` | HUD layout and gauge sprites. |
 | `assets/fonts/<name>.{png,json}` | Original bitmap fonts: one glyph atlas plus per-glyph metrics (`x,y,w,h,oy,advance`), `charmap`/`word` mapping, and `mode` (`mask` or `truecolor`). Built by `tools/export_fonts.py` from the game's glyph containers. |
-| `assets/{credits,hiscore,pow,phase}/*.png` + screen sprites in `assets/hud,effects` | Per-screen sprite batteries built by `tools/export_screens.py`, each in its own palette: the gold main-menu CREDITS/HIGH SCORES titles (MAINP palette, animated in `scenes/credits.lua` / `scenes/hiscores.lua`), the gold weapon-shop widgets (GOVPAL; `powgads` PURCHASE/DONE/CHOP/TANK buttons, `pownames` weapon-category labels, `pownums` digits, `powmedal` medal icons for the POWUP/POWUPT shop screens, plus the in-game `powcount` HUD plate), the OVERKILL badge and kill icon (PHASEPAL), the stage fire (BURN/BURN2, registered as `burn`/`burn2` clips), and the objective briefing cards (PHASE1..4). The shop widgets are decoded but not yet wired into live UI. |
+| `assets/{credits,hiscore,pow,phase}/*.png` + screen sprites in `assets/hud,effects` | Per-screen sprite batteries built by `tools/export_screens.py`, each in its own palette: the gold main-menu CREDITS/HIGH SCORES titles (MAINP palette, animated in `scenes/credits.lua` / `scenes/hiscores.lua`), the gold weapon-shop widgets (GOVPAL; `powgads` PURCHASE/DONE/CHOP/TANK buttons, `pownames` weapon-category labels, `pownums` digits, `powmedal` medal icons for the POWUP/POWUPT shop screens, plus the in-game `powcount` HUD plate), the OVERKILL badge and kill icon (PHASEPAL), the stage fire (BURN/BURN2, registered as `burn`/`burn2` clips), and the objective briefing cards (PHASE1..4). The `powgads` DONE/CHOP/TANK buttons drive the live `ui/shop_screen.lua`; the shop sprites that need the POWUP/POWUPT runtime palette (`powmedal`, `pownames`, `powarmed`, `powfocus`, `powwgads`) are exported by `tools/export_shop.py`, which reconstructs that palette from the screenshot-derived `assets/fullscreen/POWUP.png` + `POWUPT.png` (backdrop-index sampling, POWWGADS icon-tile alignment for the icon bodies, GOVPAL for indices 0-79). |
 | `assets/equip/*.png` + `layout.json` | Vehicle equip screen art built by `tools/export_equip.py`: the re-rendered EQPCHP/EQPTNK backdrops, every weapon row in 3 states (normal / selected / darkened), the OK / EXIT / TANK|CHOP buttons (up / down / blank plate), the lit / empty level pips, and the EQPNUMS gold digits (unused yet). `layout.json` carries every widget's design-space position (template-matched against the backdrop index maps) grouped into bays / specials / buttons. Palette: GOVPAL for indices 0-79, the high region sampled from the exported fullscreen PNGs (interior-pixel mode, median for thin features). Consumed by `ui/equip_screen.lua`. |
 | `assets/phend/*.png` + `layout.json` | DESTRUCTION STATS screen art built by `tools/export_phend.py` (PHASEPAL palette): the `header` (`PHEND`), the four `phase_fN` digits (`PHASENUM`), the five line label strips (`PHGTXT`/`PHBTXT`/`PHCTXT`/`PHPTXT`/`PHOTXT`, label cropped off their baked number placeholders), the lifted `pct` "%" glyph, and the `STATNUMS` readout digit font (`digit_f00..09` white, `f10..19` gold). Wired into `ui/end_stats.lua`. The blitter line strips author every line onto one origin and wrap the 384-pixel mode-X back buffer; the exporter unwraps them (rolling x past the widest empty column run) before cropping. |
 

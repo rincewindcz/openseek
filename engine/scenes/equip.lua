@@ -8,8 +8,9 @@ local EquipScreen = require "engine.ui.equip_screen"
 -- live game: pick the vehicle (TANK / CHOP button) and load its weapon bays
 -- (engine/ui/equip_screen.lua drives the widgets against app.loadout). OK
 -- starts the phase with the picked vehicle and loadout; EXIT returns to the
--- briefing. Stages with a forced vehicle (missions.json "vehicle") lock the
--- screen to it. Without exported equip art the briefing skips this scene.
+-- briefing. Weapons are bought on the shop screen and equipped here. Stages
+-- with a forced vehicle (missions.json "vehicle") lock the screen to it.
+-- Without exported equip art the briefing skips this scene.
 local Equip = Class(Scene)
 
 Equip.ui_pointer = true
@@ -23,19 +24,10 @@ end
 function Equip:enter(stage_name)
     local app = self.app
     self.stage_name = stage_name or app.world.stage_name
-    -- A campaign run equips its own inventory, grown by the (future) shop; a
-    -- single mission (mission select) gets every implemented weapon unlocked
-    -- at its top level, since there is no run to earn them in.
-    if app.campaign then
-        if not app.loadout then app.loadout = Loadout:new() end
-        self.loadout = app.loadout
-    else
-        if not app.loadout_free then
-            app.loadout_free = Loadout:new()
-            app.loadout_free:unlock_all(app.combat.weapons)
-        end
-        self.loadout = app.loadout_free
-    end
+    -- A campaign run equips its own inventory, grown by the shop from medal
+    -- pickups; a single mission (MISSION mode) equips the START_MEDALS-seeded
+    -- inventory bought in the shop. Both share the run's Loadout.
+    self.loadout = Loadout.active(app)
     local required = Mission.required_vehicle(self.stage_name)
     if required then self.loadout.vehicle = required end
     if not self.screen:open(self.loadout, app.combat.weapons,
