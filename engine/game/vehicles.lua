@@ -19,7 +19,7 @@ Vehicles.WEAPONS = {
 Vehicles.BAY_COUNT = { chopper = 6, tank = 4 }
 Vehicles.BAY_WEAPONS = {
     chopper = { "chaingun", "rockets", "air_to_ground", "air_to_air", "napalm", "air_strike" },
-    tank    = { "chaingun", "shells", "flame_thrower", "air_strike" },
+    tank    = { "chaingun", "shells", "napalm", "air_strike" },
 }
 Vehicles.SPECIAL_WEAPONS = {
     chopper = { "mega_missile", "super_napalm", "bomb" },

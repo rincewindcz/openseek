@@ -90,6 +90,13 @@ function Gameplay:spawn_player(carry)
         player.weapon_levels = loadout.levels
         player.weapon_name   = loadout.list[1]
         player.weapon_level  = loadout.levels[player.weapon_name] or 1
+        -- Equip-screen characteristics (0..1) scale the fuel/armor loadout; speed
+        -- follows from their sum via Player:_apply_config.
+        if loadout.chars then
+            player.load_fuel  = loadout.chars.fuel  * 100
+            player.load_armor = loadout.chars.armor * 100
+            player:_apply_config()
+        end
     else
         local weapon_list = Vehicles.WEAPONS[settings.vehicle]
         if weapon_list then player.weapon_name = weapon_list[1] end

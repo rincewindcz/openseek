@@ -65,6 +65,9 @@ except ImportError:
 MATCH_TOLERANCE = 4     # max mismatching pixels for a template hit
 PIP_PITCH       = 5     # pip box pitch (4 px box + 1 px shadow)
 PIP_W, PIP_H    = 4, 8
+# The fullscreen EQP*.png backdrops the engine draws sit 24 px left of the BIN
+# index maps the widget positions are template-matched against.
+FULLSCREEN_X_SHIFT = -24
 
 # widget container weapon order (frame triples: normal / selected / dark)
 WEAPONS = {
@@ -81,6 +84,20 @@ SPECIALS = {
 SCREENS = {
     "chopper": ("EQPCHP", "EQPCHPG", "EQPCHPG2"),
     "tank":    ("EQPTNK", "EQPTNKG", "EQPTNKG2"),
+}
+# Hand-measured CHARACTERISTICS slider tracks (design px): the backdrop bakes a
+# dark track per row at a 10px pitch. Fuel and armor drag; speed is derived.
+CHARACTERISTICS = {
+    "chopper": [
+        {"char": "fuel",  "x": 160, "y": 198, "w": 35, "h": 6},
+        {"char": "armor", "x": 160, "y": 208, "w": 35, "h": 6},
+        {"char": "speed", "x": 160, "y": 218, "w": 35, "h": 6, "readonly": True},
+    ],
+    "tank": [
+        {"char": "fuel",  "x": 160, "y": 188, "w": 35, "h": 6},
+        {"char": "armor", "x": 160, "y": 198, "w": 35, "h": 6},
+        {"char": "speed", "x": 160, "y": 208, "w": 35, "h": 6, "readonly": True},
+    ],
 }
 BUTTONS = ["ok", "exit", "switch"]   # G2 frame pairs 0/1, 2/3, 4/5; f06 = plate
 
@@ -231,9 +248,12 @@ def export_screen(vehicle, game, pal, maps, out):
     rows    = blitter_frames(game / "data" / f"{g_stem}.BIN")
     buttons = blitter_frames(game / "data" / f"{g2_stem}.BIN")
     weapons = WEAPONS[vehicle]
-    layout  = {"backdrop": f"{vehicle}_backdrop.png",
-               "bays": [], "specials": [], "buttons": {}}
-    save_backdrop(arr, pal, out / f"{vehicle}_backdrop.png")
+    # The engine draws the correctly-decoded full-screen backdrop
+    # (assets/fullscreen/EQP*.png); the widget overlays below sit on top of it, so
+    # no separate re-rendered backdrop is emitted here.
+    layout  = {"backdrop": f"{back_stem}.png",
+               "bays": [], "specials": [], "buttons": {},
+               "characteristics": CHARACTERISTICS[vehicle]}
 
     # Row art: 3 states per weapon.
     for wi, weapon in enumerate(weapons):
@@ -308,6 +328,24 @@ def export_screen(vehicle, game, pal, maps, out):
     if len(buttons) > 6 and buttons[6]:
         save_canvas(buttons[6], pal, out / f"{vehicle}_btn_plate.png")
 
+    # Widget positions above are matched against the BIN index map; the engine
+    # draws the assets/fullscreen/ backdrop, which sits FULLSCREEN_X_SHIFT px left
+    # of that map, so shift the matched x into fullscreen space. (CHARACTERISTICS
+    # are measured directly in fullscreen space, so they are left alone.)
+    for bay in layout["bays"]:
+        if "x" in bay:
+            bay["x"] += FULLSCREEN_X_SHIFT
+        if bay.get("pips_x") is not None:
+            bay["pips_x"] += FULLSCREEN_X_SHIFT
+        for row in bay.get("rows", []):
+            row["x"] += FULLSCREEN_X_SHIFT
+            if row.get("pips_x") is not None:
+                row["pips_x"] += FULLSCREEN_X_SHIFT
+    for sp in layout["specials"]:
+        sp["x"] += FULLSCREEN_X_SHIFT
+    for b in layout["buttons"].values():
+        b["x"] += FULLSCREEN_X_SHIFT
+
     n_rows = sum(len(b.get("rows", [])) for b in layout["bays"])
     print(f"  {vehicle}: {len(layout['bays'])} bays ({n_rows} rows), "
           f"{len(layout['specials'])} specials, {len(layout['buttons'])} buttons")
@@ -343,6 +381,16 @@ def main():
     for i, canvas in enumerate(planar_frames(game / "data" / "EQPNUMS.BIN")):
         save_canvas(canvas, pal, out / f"digit_f{i:02d}.png")
     print("  digit_f00..09.png")
+
+    # CHARACTERISTICS slider art: EQPTNKF f3 knob + EQPTNKG f21 colored track.
+    knob = planar_frames(game / "data" / "EQPTNKF.BIN")
+    if len(knob) > 3 and knob[3]:
+        save_canvas(knob[3], pal, out / "slider_knob.png")
+        print("  slider_knob.png")
+    track = blitter_frames(game / "data" / "EQPTNKG.BIN")
+    if len(track) > 21 and track[21]:
+        save_canvas(track[21], pal, out / "slider_track.png")
+        print("  slider_track.png")
 
     (out / "layout.json").write_text(json.dumps(layout, indent=2) + "\n")
     print("  layout.json")

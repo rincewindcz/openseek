@@ -50,7 +50,9 @@ function Equip:_select(id)
         local loadout = self.loadout
         local list, counts, levels = loadout:weapon_list(loadout.vehicle)
         app.settings.vehicle = loadout.vehicle
-        app.settings.loadout = { list = list, counts = counts, levels = levels }
+        app.settings.loadout = { list = list, counts = counts, levels = levels,
+            chars = { fuel = loadout:char(loadout.vehicle, "fuel"),
+                      armor = loadout:char(loadout.vehicle, "armor") } }
         app.scenes:switch("gameplay")
     else
         app.scenes:switch("mission_briefing", self.stage_name)

@@ -25,6 +25,7 @@ local PIP_PITCH    = 5     -- pip box pitch (4 px box + 1 px shadow)
 local PIP_SLOTS    = 3
 local FOCUS_COLOR  = { 1, 0.85, 0.2 }
 local CONFIRM_TIME = 0.3   -- fade-through-black before OK / EXIT fires
+local KNOB_W       = 3     -- slider knob (EQPTNKF f3) width
 
 local LAYOUT_PATH = "assets/equip/layout.json"
 
@@ -71,6 +72,7 @@ function EquipScreen:open(loadout, weapons, opts)
     self.vehicle    = loadout.vehicle
     self.focus      = nil
     self.pressed    = nil
+    self.dragging   = nil
     self.confirming = nil
     self.confirm_t  = 0
     self:_build()
@@ -80,11 +82,16 @@ end
 
 -- Clickable zones for the current vehicle, from the exported layout.
 function EquipScreen:_build()
+    self.dragging = nil
     local L = self.layout[self.vehicle]
     self.screen_layout = L
-    self.backdrop = self:_img("assets/equip/" .. L.backdrop)
+    -- Backdrop is the correctly-decoded full-screen art (assets/fullscreen/); the
+    -- widget overlays in assets/equip/ draw on top of its baked GUI.
+    self.backdrop = self:_img("assets/fullscreen/" .. L.backdrop)
     self.pip_lit   = self:_img("assets/equip/pip_lit.png")
     self.pip_empty = self:_img("assets/equip/pip_empty.png")
+    self.knob      = self:_img("assets/equip/slider_knob.png")
+    self.track     = self:_img("assets/equip/slider_track.png")
 
     self.zones = {}
     for bi, bay in ipairs(L.bays) do
@@ -122,6 +129,12 @@ function EquipScreen:_build()
             end
         end
     end
+    for _, s in ipairs(L.characteristics or {}) do
+        self.zones[#self.zones + 1] = {
+            kind = "slider", char = s.char, readonly = s.readonly or false,
+            x = s.x, y = s.y, w = s.w, h = s.h,
+        }
+    end
 end
 
 function EquipScreen:_row_img(weapon, state)
@@ -144,10 +157,23 @@ function EquipScreen:row_state(bay_index, weapon)
     return "normal"
 end
 
+-- All three specials are always selectable (only one loads at a time); one that
+-- has no combat def yet (super napalm) still selects and simply does nothing in
+-- game until implemented.
 function EquipScreen:special_state(weapon)
-    if not self.weapons[weapon] then return "dark" end
     if self.loadout.vehicles[self.vehicle].special == weapon then return "sel" end
     return "normal"
+end
+
+-- Knob-travel x bounds (design px) for a slider track.
+function EquipScreen:_slider_bounds(s)
+    return s.x + 1, s.x + s.w - 1 - KNOB_W
+end
+
+-- Set a slider's characteristic from a design-space mouse x.
+function EquipScreen:_set_slider(z, dx)
+    local x_min, x_max = self:_slider_bounds(z)
+    self.loadout:set_char(self.vehicle, z.char, (dx - x_min) / (x_max - x_min))
 end
 
 function EquipScreen:_zone_at(dx, dy)
@@ -170,14 +196,16 @@ function EquipScreen:_activate(z)
             self.loadout:set_bay(self.vehicle, z.bay, z.weapon)
         end
     elseif z.kind == "special" then
-        if self.weapons[z.weapon] then
-            self.loadout:set_special(self.vehicle, z.weapon)
-        end
+        self.loadout:set_special(self.vehicle, z.weapon)
     elseif z.kind == "button" then
         if z.id == "switch" then
             self.vehicle = (self.vehicle == "chopper") and "tank" or "chopper"
             self.loadout.vehicle = self.vehicle
             self:_build()
+            self.focus = nil
+            for _, nz in ipairs(self.zones) do
+                if nz.kind == "button" and nz.id == "switch" then self.focus = nz break end
+            end
         else
             self:_confirm(z.id)
         end
@@ -188,16 +216,27 @@ end
 -- show their down frame while held and fire on release over the same button.
 function EquipScreen:hover(x, y)
     if not self.active or self.confirming then return end
-    self.focus = self:_zone_at(Pointer.to_design(x, y, DW, DH))
+    local dx, dy = Pointer.to_design(x, y, DW, DH)
+    if self.dragging then
+        self:_set_slider(self.dragging, dx)
+        return
+    end
+    self.focus = self:_zone_at(dx, dy)
 end
 
 function EquipScreen:press(x, y)
     if not self.active or self.confirming then return end
-    local z = self:_zone_at(Pointer.to_design(x, y, DW, DH))
+    local dx, dy = Pointer.to_design(x, y, DW, DH)
+    local z = self:_zone_at(dx, dy)
     self.focus = z
     if not z then return end
     if z.kind == "button" then
         self.pressed = z
+    elseif z.kind == "slider" then
+        if not z.readonly then
+            self.dragging = z
+            self:_set_slider(z, dx)
+        end
     else
         self:_activate(z)
     end
@@ -205,6 +244,7 @@ end
 
 function EquipScreen:release(x, y)
     if not self.active or self.confirming then return end
+    self.dragging = nil
     local z   = self:_zone_at(Pointer.to_design(x, y, DW, DH))
     local was = self.pressed
     self.pressed = nil
@@ -213,16 +253,41 @@ function EquipScreen:release(x, y)
     end
 end
 
+-- Move keyboard focus through the button menu (PLAY / TANK|CHOP / EXIT), top to
+-- bottom, wrapping. The first press lands on the top or bottom button.
+function EquipScreen:_focus_step(dir)
+    local btns = {}
+    for _, z in ipairs(self.zones) do
+        if z.kind == "button" then btns[#btns + 1] = z end
+    end
+    if #btns == 0 then return end
+    table.sort(btns, function(a, b) return a.y < b.y end)
+    local idx
+    for i, z in ipairs(btns) do
+        if z == self.focus then idx = i break end
+    end
+    if not idx then
+        self.focus = btns[dir > 0 and 1 or #btns]
+        return
+    end
+    self.focus = btns[((idx - 1 + dir) % #btns) + 1]
+end
+
 function EquipScreen:keypressed(key)
     if not self.active or self.confirming then return end
     if key == "return" or key == "kpenter" then
-        self:_confirm("ok")
+        local z = self.focus
+        if z and z.kind == "button" then
+            self:_activate(z)
+        else
+            self:_confirm("ok")
+        end
     elseif key == "escape" then
         self:_confirm("exit")
-    elseif (key == "left" or key == "right" or key == "tab") and not self.lock then
-        self.vehicle = (self.vehicle == "chopper") and "tank" or "chopper"
-        self.loadout.vehicle = self.vehicle
-        self:_build()
+    elseif key == "up" or key == "left" then
+        self:_focus_step(-1)
+    elseif key == "down" or key == "right" or key == "tab" then
+        self:_focus_step(1)
     end
 end
 
@@ -270,33 +335,58 @@ function EquipScreen:draw()
 
     if self.backdrop then g.draw(self.backdrop, 0, 0) end
 
+    -- The backdrop bakes every row/special in its normal state, so only the
+    -- darkened (not owned) and gold-selected overlays are drawn on top.
     for bi, bay in ipairs(L.bays) do
         if bay.fixed then
             self:_draw_pips(bay, self:_level(bay.fixed))
         end
         for _, row in ipairs(bay.rows or {}) do
-            local sprite = self:_row_img(row.weapon, self:row_state(bi, row.weapon))
-            if sprite then g.draw(sprite, row.x, row.y) end
+            local state = self:row_state(bi, row.weapon)
+            if state ~= "normal" then
+                local sprite = self:_row_img(row.weapon, state)
+                if sprite then g.draw(sprite, row.x, row.y) end
+            end
             self:_draw_pips(row, self:_level(row.weapon))
         end
     end
 
     for _, sp in ipairs(L.specials) do
-        local sprite = self:_row_img(sp.weapon, self:special_state(sp.weapon))
-        if sprite then g.draw(sprite, sp.x, sp.y) end
+        local state = self:special_state(sp.weapon)
+        if state ~= "normal" then
+            local sprite = self:_row_img(sp.weapon, state)
+            if sprite then g.draw(sprite, sp.x, sp.y) end
+        end
     end
 
+    -- Characteristics sliders: the colored track (EQPTNKG f21) over the baked
+    -- track and its captured knob, then the live knob at fuel/armor/speed.
+    for _, s in ipairs(L.characteristics or {}) do
+        local frac = self.loadout:char(self.vehicle, s.char)
+        local cy   = s.y + s.h / 2
+        if self.track then
+            g.setColor(1, 1, 1, fade)
+            g.draw(self.track, s.x, math.floor(cy - self.track:getHeight() / 2 + 0.5))
+        end
+        if self.knob then
+            local x_min, x_max = self:_slider_bounds(s)
+            g.setColor(1, 1, 1, fade)
+            g.draw(self.knob, math.floor(x_min + frac * (x_max - x_min) + 0.5),
+                              math.floor(cy - self.knob:getHeight() / 2 + 0.5))
+        end
+    end
+
+    -- Buttons are baked into the backdrop in their idle state; only the pressed
+    -- (down) frame is overdrawn, and the switch is plated over on a locked phase.
     for _, id in ipairs({ "ok", "exit", "switch" }) do
         local b = L.buttons[id]
         if b then
-            local suffix = "_up.png"
+            local suffix = nil
             if id == "switch" and self.lock then
-                suffix = nil   -- tank-only phase: blank the vehicle switch
                 local plate = self:_img("assets/equip/" .. self.vehicle .. "_btn_plate.png")
                 if plate then g.draw(plate, b.x, b.y) end
-            elseif self.pressed and self.pressed.kind == "button" and self.pressed.id == id then
-                suffix = "_down.png"
-            elseif self.confirming == id then
+            elseif (self.pressed and self.pressed.kind == "button" and self.pressed.id == id)
+                or self.confirming == id then
                 suffix = "_down.png"
             end
             if suffix then
