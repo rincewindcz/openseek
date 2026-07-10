@@ -62,9 +62,16 @@ end
 
 function EndStats:_asset(path, quiet)
     if self._img[path] == nil then
-        local ok, img = pcall(love.graphics.newImage, "assets/" .. path)
-        if ok then
+        -- Check the file exists before newImage: love.js (Lua 5.1 web build) raises
+        -- an uncatchable error when newImage is handed a missing path, unlike native
+        -- LOVE where pcall would swallow it. getInfo is the portable existence probe.
+        local full = "assets/" .. path
+        local img
+        if love.filesystem.getInfo(full) then
+            img = love.graphics.newImage(full)
             img:setFilter("nearest", "nearest")
+        end
+        if img then
             self._img[path] = img
         else
             if not quiet then print("endstats: missing " .. path) end

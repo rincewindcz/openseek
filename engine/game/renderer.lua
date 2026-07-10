@@ -155,98 +155,93 @@ function Renderer:_draw_entities(list, vp)
     for _, e in ipairs(list) do
         local cls = classes[e.class_idx + 1]
         local in_vp = e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1
-        if not in_vp then goto continue end
-        if hidden[cls.kind_name] then goto continue end
-        if e.rescue_hidden then goto continue end   -- emptied POW building marker
-
-        -- Units with explicit alive/dead sprites (soldiers) draw axis-aligned and
-        -- persist as a corpse once dead.
-        if e.type_data and e.type_data.sprite then
-            self:_draw_unit(e)
-            goto continue
-        end
-
-        if e:is_alive() then
-            local r = images[e.class_idx + 1]
-            if r then
-                -- Two-part tanks keep a fixed hull (turret does the aiming) unless they
-                -- patrol, in which case the hull faces its travel heading; a hangar tank
-                -- faces its fixed ride axis; everything else rotates its sprite to face.
-                local rot
-                if e.hide_angle then
-                    rot = e.hide_angle * math.pi / 180
-                elseif e.turret_render and not e.route_points then
-                    rot = 0
+        -- Cull off-screen entities, kinds the editor hid, and emptied POW building
+        -- markers (rescue_hidden) before drawing.
+        if in_vp and not hidden[cls.kind_name] and not e.rescue_hidden then
+            if e.type_data and e.type_data.sprite then
+                -- Units with explicit alive/dead sprites (soldiers) draw
+                -- axis-aligned and persist as a corpse once dead.
+                self:_draw_unit(e)
+            elseif e:is_alive() then
+                local r = images[e.class_idx + 1]
+                if r then
+                    -- Two-part tanks keep a fixed hull (turret does the aiming) unless they
+                    -- patrol, in which case the hull faces its travel heading; a hangar tank
+                    -- faces its fixed ride axis; everything else rotates its sprite to face.
+                    local rot
+                    if e.hide_angle then
+                        rot = e.hide_angle * math.pi / 180
+                    elseif e.turret_render and not e.route_points then
+                        rot = 0
+                    else
+                        rot = e:draw_angle_rad(cls.angle_steps)
+                    end
+                    g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+                    if e == self.highlight then
+                        self:_glow(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+                    end
                 else
-                    rot = e:draw_angle_rad(cls.angle_steps)
+                    g.setColor(1, 0, 1)
+                    g.circle("fill", e.x, e.y, 3)
+                    g.setColor(1, 1, 1)
                 end
-                g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
-                if e == self.highlight then
-                    self:_glow(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+
+                -- Two-part enemy tank: the turret spins on the fixed hull from aim_angle;
+                -- its destruction explosion plays over the hull until the hull itself dies.
+                if e.turret_render then
+                    if e.turret_alive then
+                        local tr  = e.turret_render
+                        local rot = e.aim_angle * math.pi / 180
+                        g.draw(tr.img, e.x, e.y, rot, 1, 1, tr.ax, tr.ay)
+                    end
+                    if e.turret_fx then
+                        local img = e.turret_fx:current_image()
+                        if img then
+                            local iw, ih = img:getDimensions()
+                            g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+                        end
+                    end
+                end
+                -- overlay animation (non-destructive: hit flash, etc.)
+                if e.state == "animating" and e.anim then
+                    local img = e.anim:current_image()
+                    if img then
+                        local iw, ih = img:getDimensions()
+                        g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+                    end
+                end
+
+                -- Damage smoke emitters (persistent, threshold-based)
+                for _, se in ipairs(e._damage_smokes) do
+                    local img = se.anim:current_image()
+                    if img then
+                        local iw, ih = img:getDimensions()
+                        g.setColor(1, 1, 1, 0.85)
+                        g.draw(img, e.x + se.ox, e.y + se.oy, 0, 1, 1, iw / 2, ih / 2)
+                        g.setColor(1, 1, 1)
+                    end
+                end
+
+                -- One-shot hit smokes (SMOKE2)
+                for _, hs in ipairs(e._hit_smokes) do
+                    local img = hs.anim:current_image()
+                    if img then
+                        local iw, ih = img:getDimensions()
+                        g.draw(img, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, iw / 2, ih / 2)
+                    end
                 end
             else
-                g.setColor(1, 0, 1)
-                g.circle("fill", e.x, e.y, 3)
-                g.setColor(1, 1, 1)
-            end
-
-            -- Two-part enemy tank: the turret spins on the fixed hull from aim_angle;
-            -- its destruction explosion plays over the hull until the hull itself dies.
-            if e.turret_render then
-                if e.turret_alive then
-                    local tr  = e.turret_render
-                    local rot = e.aim_angle * math.pi / 180
-                    g.draw(tr.img, e.x, e.y, rot, 1, 1, tr.ax, tr.ay)
-                end
-                if e.turret_fx then
-                    local img = e.turret_fx:current_image()
+                -- Not alive: the persistent crater is drawn earlier (see _draw_craters)
+                -- so it stays at the bottom of the stack, under every entity.
+                if e.state == "exploding" and e.anim then
+                    local img = e.anim:current_image()
                     if img then
                         local iw, ih = img:getDimensions()
                         g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
                     end
                 end
             end
-            -- overlay animation (non-destructive: hit flash, etc.)
-            if e.state == "animating" and e.anim then
-                local img = e.anim:current_image()
-                if img then
-                    local iw, ih = img:getDimensions()
-                    g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
-                end
-            end
-
-            -- Damage smoke emitters (persistent, threshold-based)
-            for _, se in ipairs(e._damage_smokes) do
-                local img = se.anim:current_image()
-                if img then
-                    local iw, ih = img:getDimensions()
-                    g.setColor(1, 1, 1, 0.85)
-                    g.draw(img, e.x + se.ox, e.y + se.oy, 0, 1, 1, iw / 2, ih / 2)
-                    g.setColor(1, 1, 1)
-                end
-            end
-
-            -- One-shot hit smokes (SMOKE2)
-            for _, hs in ipairs(e._hit_smokes) do
-                local img = hs.anim:current_image()
-                if img then
-                    local iw, ih = img:getDimensions()
-                    g.draw(img, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, iw / 2, ih / 2)
-                end
-            end
-        else
-            -- Not alive: the persistent crater is drawn earlier (see _draw_craters)
-            -- so it stays at the bottom of the stack, under every entity.
-            if e.state == "exploding" and e.anim then
-                local img = e.anim:current_image()
-                if img then
-                    local iw, ih = img:getDimensions()
-                    g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
-                end
-            end
         end
-
-        ::continue::
     end
 end
 

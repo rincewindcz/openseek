@@ -232,46 +232,40 @@ function World:load(name)
     for id, raw in ipairs(self.stage.entities) do
         local entity = created[id]
         local cls    = self.stage.classes[raw.class + 1]
-        local tdef = top_class[raw.class]
-        if tdef then
-            local hull = hull_at[raw.x .. "," .. raw.y]
-            local r    = self.images[raw.class + 1]
-            if hull and r then
-                hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy }, tdef.spin)
-                goto continue
+        local tdef   = top_class[raw.class]
+        local hull   = tdef and hull_at[raw.x .. "," .. raw.y]
+        local r      = tdef and self.images[raw.class + 1]
+        if hull and r then
+            -- Fold the turret onto its co-located hull, dropping it as a standalone entity.
+            hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy }, tdef.spin)
+        elseif cls.kind_name == "enemy_helicopter" then
+            -- Enemy helicopters are not placed units: each marks a spawn point for the
+            -- airborne heli system and is never drawn or hit in place.
+            self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y }
+        elseif land_zone_class[raw.class] then
+            -- Land-here pads are drawn and removed by the RescueSystem, not the world.
+            self.land_zones[#self.land_zones + 1] = { ent = entity }
+        else
+            self.entities[#self.entities + 1] = entity
+            local list = cls.kind == 15 and self.decals or self.objects
+            list[#list + 1] = entity
+            if target_class[raw.class] then
+                self.targets[#self.targets + 1] = entity
+                entity.objective = true   -- white dot on the radar, reticle in the world
+            end
+            if rescue_zone_class[raw.class] then
+                self.rescue_zones[#self.rescue_zones + 1] = entity
+                entity.objective = true
+            end
+            if rescue_people_class[raw.class] then
+                self.rescue_people[#self.rescue_people + 1] = entity
+                entity.objective = true
+            end
+            local td = entity.type_data
+            if td and td.weapon and (td.detection_radius or 0) > 0 then
+                self.combatants[#self.combatants + 1] = entity
             end
         end
-        -- Enemy helicopters are not placed units: each marks a spawn point for the
-        -- airborne heli system and is never drawn or hit in place.
-        if cls.kind_name == "enemy_helicopter" then
-            self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y }
-            goto continue
-        end
-        -- Land-here pads are drawn and removed by the RescueSystem, not the world.
-        if land_zone_class[raw.class] then
-            self.land_zones[#self.land_zones + 1] = { ent = entity }
-            goto continue
-        end
-        self.entities[#self.entities + 1] = entity
-        local list = cls.kind == 15 and self.decals or self.objects
-        list[#list + 1] = entity
-        if target_class[raw.class] then
-            self.targets[#self.targets + 1] = entity
-            entity.objective = true   -- white dot on the radar, reticle in the world
-        end
-        if rescue_zone_class[raw.class] then
-            self.rescue_zones[#self.rescue_zones + 1] = entity
-            entity.objective = true
-        end
-        if rescue_people_class[raw.class] then
-            self.rescue_people[#self.rescue_people + 1] = entity
-            entity.objective = true
-        end
-        local td = entity.type_data
-        if td and td.weapon and (td.detection_radius or 0) > 0 then
-            self.combatants[#self.combatants + 1] = entity
-        end
-        ::continue::
     end
     -- Pair each hangar hut with the tank it hides before the draw order is fixed,
     -- so the hut's sort_bias can lift it above its tank.

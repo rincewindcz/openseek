@@ -57,6 +57,7 @@ local function after_stage_load()
 end
 
 function love.load(args)
+    print(("openSEEK starting (LOVE %s, %s)"):format(love.getVersion and select(4, love.getVersion()) or "?", _VERSION))
     love.graphics.setDefaultFilter("nearest", "nearest")
     Animation.load("data/animations.json")
     Audio.load("data/sounds.json")
