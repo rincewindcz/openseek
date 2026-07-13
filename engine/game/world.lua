@@ -38,6 +38,11 @@ local TURRET_DEFS = {
 -- shields it until the tank rides out to fire (see World:_link_hangar_tanks).
 local HIDE_TANK_HANGARS = { ["shut.bin"] = true }
 
+-- A kind-14 landing pad within this of a POWHERE marker is a rescue pad; farther
+-- (or on a stage with no POWHERE) it is a saboteur drop pad. Rescue pads sit
+-- 38-64px from their marker; saboteur stages carry no POWHERE at all.
+local PAD_RESCUE_RADIUS = 80
+
 function World:init()
     self.stage       = nil   -- decoded JSON table
     self.stage_name  = nil
@@ -129,10 +134,10 @@ function World:load(name)
     local target_class        = {}
     local rescue_zone_class   = {}
     local rescue_people_class = {}
-    local land_zone_class     = {}
-    -- lh.bin "land here" pads are only meaningful on rescue stages; elsewhere they
-    -- stay ordinary scenery so non-rescue maps are unchanged.
-    local is_rescue = self.stage.objectives and self.stage.objectives.rescue
+    -- kind-14 "land here" pads (lh.bin / landhere.bin). A pad next to a POWHERE
+    -- marker is a rescue landing pad (POWs walk to it); a landhere pad with no
+    -- POWHERE nearby is a saboteur drop pad. Classified by position in pass two.
+    local pad_class           = {}
     for _, c in ipairs(self.stage.classes) do
         local a     = c.asset and self.stage.assets[c.asset + 1]
         local fname = a and a.file and a.file:lower()
@@ -153,8 +158,8 @@ function World:load(name)
             if c.kind == 11 and (fname:match("^pow") or fname:match("people")) then
                 rescue_people_class[c.index] = true
             end
-            if is_rescue and c.kind == 14 and fname:match("^lh") then
-                land_zone_class[c.index] = true
+            if c.kind == 14 and (fname:match("^lh") or fname:match("^landhere")) then
+                pad_class[c.index] = true
             end
         end
     end
@@ -166,7 +171,8 @@ function World:load(name)
     self.targets       = {}   -- destroy-objective entities (class is_target)
     self.rescue_zones  = {}   -- powhere.bin landing markers (kind 9)
     self.rescue_people = {}   -- pow.bin / people.bin civilians to rescue (kind 11)
-    self.land_zones    = {}   -- lh.bin "land here" pads on rescue stages (owned by RescueSystem)
+    self.land_zones    = {}   -- rescue landing pads next to a POWHERE marker (owned by RescueSystem)
+    self.saboteur_pads = {}   -- landhere.bin drop pads with no POWHERE nearby (owned by SaboteurSystem)
     self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
     self.debris        = {}   -- flying explosion shrapnel {anim, x, y, vx, vy, age, lifetime}
     self.ground_fx     = {}   -- dust left on the ground when shrapnel lands {anim, x, y}
@@ -174,8 +180,9 @@ function World:load(name)
     self.air_units     = {}   -- live enemy helicopters (owned by the heli system)
 
     -- First pass: build every entity and index hulls by exact position.
-    local created = {}
-    local hull_at = {}
+    local created     = {}
+    local hull_at     = {}
+    local powhere_pos = {}   -- POWHERE marker positions, to classify nearby pads
     for id, raw in ipairs(self.stage.entities) do
         local cls    = self.stage.classes[raw.class + 1]
         local entity = Entity:new(id, raw, cls)
@@ -224,6 +231,9 @@ function World:load(name)
         if hull_class[raw.class] then
             hull_at[raw.x .. "," .. raw.y] = entity
         end
+        if rescue_zone_class[raw.class] then
+            powhere_pos[#powhere_pos + 1] = { x = raw.x, y = raw.y }
+        end
     end
 
     -- Second pass: fold each turret onto its co-located hull (dropping the turret
@@ -242,8 +252,9 @@ function World:load(name)
             -- Enemy helicopters are not placed units: each marks a spawn point for the
             -- airborne heli system and is never drawn or hit in place.
             self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y }
-        elseif land_zone_class[raw.class] then
-            -- Land-here pads are drawn and removed by the RescueSystem, not the world.
+        elseif pad_class[raw.class] and self:_near_any(raw.x, raw.y, powhere_pos, PAD_RESCUE_RADIUS) then
+            -- A pad by a POWHERE marker is a rescue landing pad: drawn and removed by
+            -- the RescueSystem, not the world.
             self.land_zones[#self.land_zones + 1] = { ent = entity }
         else
             self.entities[#self.entities + 1] = entity
@@ -260,6 +271,13 @@ function World:load(name)
             if rescue_people_class[raw.class] then
                 self.rescue_people[#self.rescue_people + 1] = entity
                 entity.objective = true
+            end
+            -- A landing pad reached here has no POWHERE nearby, so it is a saboteur drop
+            -- pad (lh.bin or landhere.bin). It stays an ordinary object (drawn by the
+            -- renderer) until the SaboteurSystem claims it, hiding and redrawing it with
+            -- a fade.
+            if pad_class[raw.class] then
+                self.saboteur_pads[#self.saboteur_pads + 1] = { ent = entity }
             end
             local td = entity.type_data
             if td and td.weapon and (td.detection_radius or 0) > 0 then
@@ -384,6 +402,16 @@ end
 
 function World:load_index(idx)
     self:load(self.stages[idx])
+end
+
+-- True if (x, y) lies within radius of any {x, y} point in the list (wrap-aware).
+function World:_near_any(x, y, points, radius)
+    local rr = radius * radius
+    for _, p in ipairs(points) do
+        local dx, dy = self:delta(x, y, p.x, p.y)
+        if dx * dx + dy * dy <= rr then return true end
+    end
+    return false
 end
 
 -- Shortest signed per-axis delta (a - b) on the seamlessly wrapped (toroidal)

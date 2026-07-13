@@ -742,8 +742,11 @@ function CombatSystem:_check_hit(projectile)
                 end
             end
         end
-        -- The player's own fire can kill a walking POW when that option is on.
+        -- The player's own fire can kill a walking POW / saboteur when that option is on.
         if self.world.rescue and self.world.rescue:projectile_hit(projectile.x, projectile.y, projectile.radius, true) then
+            return true
+        end
+        if self.world.saboteur and self.world.saboteur:projectile_hit(projectile.x, projectile.y, projectile.radius, true) then
             return true
         end
         -- Friendly fire (co-op option): a player round can hit the other player.
@@ -771,8 +774,11 @@ function CombatSystem:_check_hit(projectile)
                 end
             end
         end
-        -- Enemy rounds always cut down a walking POW caught in the open.
+        -- Enemy rounds always cut down a walking POW / saboteur caught in the open.
         if self.world.rescue and self.world.rescue:projectile_hit(projectile.x, projectile.y, projectile.radius, false) then
+            return true
+        end
+        if self.world.saboteur and self.world.saboteur:projectile_hit(projectile.x, projectile.y, projectile.radius, false) then
             return true
         end
     end

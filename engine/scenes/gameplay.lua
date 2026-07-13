@@ -40,6 +40,7 @@ function Gameplay:leave()
     app.helis:clear()
     app.powerups:reset(nil)
     app.rescue:clear()
+    app.saboteur:clear()
     self.mission       = nil
     app.camera.angle   = nil
     app.camera.view_oy = 0
@@ -114,6 +115,8 @@ function Gameplay:spawn_player(carry)
     app.powerups:reset(player)
     app.rescue.pow_counts = Mission.rescue_counts(world.stage_name)
     app.rescue:reset()
+    app.saboteur.spec = Mission.sabotage_spec(world.stage_name)
+    app.saboteur:reset()
     self.mission = Mission.for_stage(world, player, world.stage_name)
     camera.x, camera.y = player.x, player.y
     camera:start_zoom_intro(1.5, 1.0)   -- smooth zoom-in as the level opens
@@ -283,6 +286,7 @@ function Gameplay:update(dt)
     app.helis:update(dt)
     app.powerups:update(dt)
     app.rescue:update(dt)
+    app.saboteur:update(dt)
     if self.mission then self.mission:update(dt) end
     self:update_won(dt)
     app.camera.x     = player.x
@@ -304,6 +308,7 @@ function Gameplay:draw()
     app.renderer.highlight = app.debug_panel:highlight_entity()
     app.renderer:draw()
     app.rescue:draw()            -- land pads + walking POWs, on the ground under everything
+    app.saboteur:draw()          -- saboteur pads + walking saboteurs + target reticles
     app.powerups:draw()
     app.helis:draw_shadows()     -- aircraft ground shadows, under the flyers
     self.player:draw_shadow()

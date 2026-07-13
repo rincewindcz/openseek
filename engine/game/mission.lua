@@ -37,6 +37,12 @@ end
 -- contribute to the same goals.
 function Mission.coop(world, players)
     local def = objectives_from_stage(world.stage.objectives)
+    -- The saboteur objective lives in missions.json, not the stage's decoded block;
+    -- fold it into the shared co-op objective when its system is active.
+    if world.saboteur and world.saboteur.active then
+        def = def or { objectives = {} }
+        def.objectives[#def.objectives + 1] = { type = "sabotage" }
+    end
     if not def then return nil end
     return Mission:new(world, players, def)
 end
@@ -53,6 +59,18 @@ end
 function Mission.rescue_counts(stage_name)
     local def = defs[stage_name]
     return def and def.rescue_pow_counts or nil
+end
+
+-- The saboteur objective spec for a stage (target building, detonation style,
+-- killable flag, ...), read by the SaboteurSystem before it resets; nil when the
+-- stage has no sabotage objective.
+function Mission.sabotage_spec(stage_name)
+    local def = defs[stage_name]
+    if not def then return nil end
+    for _, spec in ipairs(def.objectives or {}) do
+        if spec.type == "sabotage" then return spec end
+    end
+    return nil
 end
 
 -- True if entity e satisfies a spec's filters: asset (.bin) filename, kind_name,
@@ -119,15 +137,9 @@ function Mission:_make_objective(spec)
         o.radius    = spec.radius or 40
         o.target    = spec.count or #o.zones
     elseif spec.type == "sabotage" then
-        o.targets = {}
-        for _, e in ipairs(self:_collect(spec)) do
-            o.targets[#o.targets + 1] = { ent = e, state = "pending", timer = 0 }
-        end
-        o.radius      = spec.deploy_radius or 40
-        o.deploy_time = spec.deploy_time or 1.5
-        o.deployed    = 0
-        o.evacuated   = 0
-        o.detonated   = false
+        -- The walking-saboteur objective is driven by the SaboteurSystem, which owns
+        -- the target buildings and their landing pads (reset before the mission).
+        o.target = self.world.saboteur and #self.world.saboteur.sites or 0
     elseif spec.type == "destroy_targets" then
         -- Co-op: every is_target entity collected by World:load.
         o.list   = self.world.targets
@@ -148,7 +160,7 @@ function Mission:_make_objective(spec)
     -- An objective with nothing to act on is satisfied so it can never block a win.
     local known = o.type == "destroy" or o.type == "rescue" or o.type == "sabotage"
         or o.type == "destroy_targets" or o.type == "rescue_people"
-    if not known or o.target == 0 or (o.type == "sabotage" and #o.targets == 0) then
+    if not known or o.target == 0 then
         o.done = true
     end
     return o
@@ -169,12 +181,18 @@ function Mission:update(dt)
     if self.state == "won" or self.state == "failed" then return end
     self.age = self.age + dt
     if self:_all_dead() then self.state = "failed"; return end
+    -- Losing a saboteur on a "killable" stage fails the mission outright.
+    if self.world.saboteur and self.world.saboteur:mission_failed() then
+        self.state = "failed"; return
+    end
 
+    -- Optional objectives (e.g. a secondary POW rescue) are tracked but never block
+    -- the return-to-base / win once every required objective is done.
     local all_done = true
     for _, o in ipairs(self.objectives) do
         if not o.done then
-            self:_update_objective(o, dt)
-            if not o.done then all_done = false end
+            self:_update_objective(o)
+            if not o.done and not o.spec.optional then all_done = false end
         end
     end
 
@@ -184,10 +202,10 @@ function Mission:update(dt)
     end
 end
 
-function Mission:_update_objective(o, dt)
+function Mission:_update_objective(o)
     if     o.type == "destroy"         then self:_update_destroy(o)
     elseif o.type == "rescue"          then self:_update_rescue(o)
-    elseif o.type == "sabotage"        then self:_update_sabotage(o, dt)
+    elseif o.type == "sabotage"        then self:_update_sabotage(o)
     elseif o.type == "destroy_targets" then self:_update_destroy_targets(o)
     elseif o.type == "rescue_people"   then self:_update_rescue_people(o) end
 end
@@ -253,43 +271,14 @@ function Mission:_update_rescue(o)
     if o.progress >= o.target then o.done = true end
 end
 
--- Land in front of each marked building to plant a charge; once every charge is
--- set the buildings blow, then the player must return to each to recover the
--- unit (evacuate). Charges and recovery accumulate dwell time while stationary.
-function Mission:_update_sabotage(o, dt)
-    local near = nil
-    if self.player:is_stationary() then
-        for _, t in ipairs(o.targets) do
-            local dx, dy = self.world:delta(self.player.x, self.player.y, t.ent.x, t.ent.y)
-            if dx * dx + dy * dy <= o.radius * o.radius then near = t; break end
-        end
-    end
-
-    if not o.detonated then
-        if near and near.state == "pending" then
-            near.timer = near.timer + dt
-            if near.timer >= o.deploy_time then
-                near.state = "deployed"
-                o.deployed = o.deployed + 1
-            end
-        end
-        if o.deployed >= #o.targets then
-            for _, t in ipairs(o.targets) do
-                if t.ent:is_alive() then t.ent:take_damage(t.ent.hp + 1) end
-                t.state = "armed"
-            end
-            o.detonated = true
-        end
-    else
-        if near and near.state == "armed" then
-            near.timer = near.timer + dt
-            if near.timer >= o.deploy_time * 2 then
-                near.state = "evacuated"
-                o.evacuated = o.evacuated + 1
-            end
-        end
-        if o.evacuated >= #o.targets then o.done = true end
-    end
+-- Progress mirrors the SaboteurSystem: a site clears once its building is blown
+-- and its saboteur recovered; the objective is done when every site is cleared.
+function Mission:_update_sabotage(o)
+    local s = self.world.saboteur
+    if not s then o.done = true; return end
+    o.progress = s:cleared_count()
+    o.target   = #s.sites
+    if s:all_cleared() then o.done = true end
 end
 
 function Mission:_at_home_base()
@@ -313,10 +302,7 @@ function Mission:objective_label(o)
     elseif o.type == "rescue" then
         return string.format("%s  %d/%d", s.label or "Rescue people", o.progress, o.target)
     elseif o.type == "sabotage" then
-        if not o.detonated then
-            return string.format("%s  %d/%d planted", s.label or "Plant charges", o.deployed, #o.targets)
-        end
-        return string.format("Evacuate units  %d/%d", o.evacuated, #o.targets)
+        return string.format("%s  %d/%d", s.label or "SABOTAGE BUILDINGS", o.progress, o.target)
     elseif o.type == "destroy_targets" then
         return string.format("%s  %d/%d", s.label or "DESTROY TARGETS", o.progress, o.target)
     elseif o.type == "rescue_people" then
@@ -331,8 +317,9 @@ function Mission:status_line()
     if self.state == "won"    then return "MISSION COMPLETE" end
     if self.state == "failed" then return "MISSION FAILED" end
     if self.briefing and self.age < 5 then return self.briefing end
+    -- Required objectives drive the banner; optional ones never hold up the prompt.
     for _, o in ipairs(self.objectives) do
-        if not o.done then return self:objective_label(o) end
+        if not o.done and not o.spec.optional then return self:objective_label(o) end
     end
     return "RETURN TO BASE"
 end

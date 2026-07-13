@@ -81,6 +81,8 @@ function CoopGameplay:enter()
     app.powerups:set_players(self.players)
     app.rescue.pow_counts = Mission.rescue_counts(world.stage_name)
     app.rescue:reset()
+    app.saboteur.spec = Mission.sabotage_spec(world.stage_name)
+    app.saboteur:reset()
     -- Shared co-op objective from the stage's decoded objectives (nil = free play).
     self.mission = Mission.coop(world, self.players)
 end
@@ -103,6 +105,7 @@ function CoopGameplay:leave()
     app.combat.effects       = {}
     app.helis:clear()
     app.powerups:reset(nil)
+    app.saboteur:clear()
     app.hud.player = nil
     app.hud.coplayer, app.hud.coplayer_color = nil, nil
     app.hud.view_w, app.hud.view_h = nil, nil
@@ -160,6 +163,7 @@ function CoopGameplay:update(dt)
     app.helis:update(dt)
     app.powerups:update(dt)
     app.rescue:update(dt)
+    app.saboteur:update(dt)
     if self.mission then self.mission:update(dt) end
     self:update_won(dt)
     app.world:update(dt)
@@ -185,6 +189,7 @@ function CoopGameplay:draw()
         g.setScissor(vx, 0, vw, H)
         app.renderer:_draw_world()
         app.rescue:draw()            -- land pads + walking POWs, on the ground under everything
+        app.saboteur:draw()          -- saboteur pads + walking saboteurs + target reticles
         app.powerups:draw()
         app.helis:draw_shadows()     -- aircraft ground shadows, under the flyers
         p:draw_shadow()

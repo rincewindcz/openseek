@@ -157,7 +157,7 @@ function Renderer:_draw_entities(list, vp)
         local in_vp = e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1
         -- Cull off-screen entities, kinds the editor hid, and emptied POW building
         -- markers (rescue_hidden) before drawing.
-        if in_vp and not hidden[cls.kind_name] and not e.rescue_hidden then
+        if in_vp and not hidden[cls.kind_name] and not e.rescue_hidden and not e.sabotage_hidden then
             if e.type_data and e.type_data.sprite then
                 -- Units with explicit alive/dead sprites (soldiers) draw
                 -- axis-aligned and persist as a corpse once dead.

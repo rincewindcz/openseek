@@ -17,10 +17,23 @@
       { "type": "destroy", "target": "snowchem.bin", "count": "all", "label": "DESTROY CHEMICAL PLANTS" }
     ]
   },
-  "stage12": {
-    "briefing": "Take out the hidden missile silos.",
+  "stage11": {
+    "briefing": "Land your saboteurs at the marked buildings, then extract them.",
     "objectives": [
-      { "type": "destroy", "target": "snuke.bin", "count": "all", "label": "DESTROY MISSILE SILOS" }
+      { "type": "sabotage", "target": "powhut.bin", "label": "SABOTAGE BUILDINGS" }
+    ]
+  },
+  "stage12": {
+    "briefing": "Take out the hidden missile silos. Rescue any POWs you find.",
+    "objectives": [
+      { "type": "destroy", "target": "snuke.bin", "count": "all", "label": "DESTROY MISSILE SILOS" },
+      { "type": "rescue_people", "optional": true, "label": "RESCUE POWS" }
+    ]
+  },
+  "stage13": {
+    "briefing": "Drop a saboteur at each enemy tent, then fly back and pick them all up. Do not let any of them get killed.",
+    "objectives": [
+      { "type": "sabotage", "target": "tentnew.bin", "detonate": "all", "killable": true, "label": "SABOTAGE TENTS" }
     ]
   },
   "stage20": {
@@ -46,6 +59,12 @@
     "objectives": [
       { "type": "destroy", "target": "powhut.bin", "count": "all", "label": "DESTROY BUNKERS" },
       { "type": "destroy", "target": "truck.bin",  "count": "all", "label": "DESTROY CONVOY" }
+    ]
+  },
+  "stage32": {
+    "briefing": "Sabotage the downed helicopters, then extract your agents before they are cut down.",
+    "objectives": [
+      { "type": "sabotage", "target": "crshchop.bin", "killable": true, "label": "SABOTAGE CRASH SITES" }
     ]
   },
   "stage33": {
