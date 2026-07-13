@@ -222,6 +222,27 @@
     "fps": 1,
     "loop": false
   },
+  "choppit1n": {
+    "frames": [
+      "player/choppit1n_f00.png",
+      "player/choppit1n_f01.png",
+      "player/choppit1n_f02.png",
+      "player/choppit1n_f03.png",
+      "player/choppit1n_f04.png",
+      "player/choppit1n_f05.png",
+      "player/choppit1n_f06.png",
+      "player/choppit1n_f07.png",
+      "player/choppit1n_f08.png",
+      "player/choppit1n_f09.png",
+      "player/choppit1n_f10.png",
+      "player/choppit1n_f11.png",
+      "player/choppit1n_f12.png",
+      "player/choppit1n_f13.png",
+      "player/choppit1n_f14.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
   "chopbnk1": {
     "frames": [
       "player/chopbnk1_f00.png",
@@ -237,6 +258,21 @@
     "fps": 1,
     "loop": false
   },
+  "chopbnk1n": {
+    "frames": [
+      "player/chopbnk1n_f00.png",
+      "player/chopbnk1n_f01.png",
+      "player/chopbnk1n_f02.png",
+      "player/chopbnk1n_f03.png",
+      "player/chopbnk1n_f04.png",
+      "player/chopbnk1n_f05.png",
+      "player/chopbnk1n_f06.png",
+      "player/chopbnk1n_f07.png",
+      "player/chopbnk1n_f08.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
   "chopdrp1": {
     "frames": [
       "player/chopdrp1_f00.png",
@@ -245,6 +281,18 @@
       "player/chopdrp1_f03.png",
       "player/chopdrp1_f04.png",
       "player/chopdrp1_f05.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "chopdrp1n": {
+    "frames": [
+      "player/chopdrp1n_f00.png",
+      "player/chopdrp1n_f01.png",
+      "player/chopdrp1n_f02.png",
+      "player/chopdrp1n_f03.png",
+      "player/chopdrp1n_f04.png",
+      "player/chopdrp1n_f05.png"
     ],
     "fps": 1,
     "loop": false
@@ -270,6 +318,27 @@
     "fps": 1,
     "loop": false
   },
+  "choppit2n": {
+    "frames": [
+      "player/choppit2n_f00.png",
+      "player/choppit2n_f01.png",
+      "player/choppit2n_f02.png",
+      "player/choppit2n_f03.png",
+      "player/choppit2n_f04.png",
+      "player/choppit2n_f05.png",
+      "player/choppit2n_f06.png",
+      "player/choppit2n_f07.png",
+      "player/choppit2n_f08.png",
+      "player/choppit2n_f09.png",
+      "player/choppit2n_f10.png",
+      "player/choppit2n_f11.png",
+      "player/choppit2n_f12.png",
+      "player/choppit2n_f13.png",
+      "player/choppit2n_f14.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
   "chopbnk2": {
     "frames": [
       "player/chopbnk2_f00.png",
@@ -285,6 +354,21 @@
     "fps": 1,
     "loop": false
   },
+  "chopbnk2n": {
+    "frames": [
+      "player/chopbnk2n_f00.png",
+      "player/chopbnk2n_f01.png",
+      "player/chopbnk2n_f02.png",
+      "player/chopbnk2n_f03.png",
+      "player/chopbnk2n_f04.png",
+      "player/chopbnk2n_f05.png",
+      "player/chopbnk2n_f06.png",
+      "player/chopbnk2n_f07.png",
+      "player/chopbnk2n_f08.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
   "chopdrp2": {
     "frames": [
       "player/chopdrp2_f00.png",
@@ -292,6 +376,17 @@
       "player/chopdrp2_f02.png",
       "player/chopdrp2_f03.png",
       "player/chopdrp2_f04.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "chopdrp2n": {
+    "frames": [
+      "player/chopdrp2n_f00.png",
+      "player/chopdrp2n_f01.png",
+      "player/chopdrp2n_f02.png",
+      "player/chopdrp2n_f03.png",
+      "player/chopdrp2n_f04.png"
     ],
     "fps": 1,
     "loop": false
@@ -317,6 +412,27 @@
     "fps": 1,
     "loop": false
   },
+  "choppit3n": {
+    "frames": [
+      "player/choppit3n_f00.png",
+      "player/choppit3n_f01.png",
+      "player/choppit3n_f02.png",
+      "player/choppit3n_f03.png",
+      "player/choppit3n_f04.png",
+      "player/choppit3n_f05.png",
+      "player/choppit3n_f06.png",
+      "player/choppit3n_f07.png",
+      "player/choppit3n_f08.png",
+      "player/choppit3n_f09.png",
+      "player/choppit3n_f10.png",
+      "player/choppit3n_f11.png",
+      "player/choppit3n_f12.png",
+      "player/choppit3n_f13.png",
+      "player/choppit3n_f14.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
   "chopbnk3": {
     "frames": [
       "player/chopbnk3_f00.png",
@@ -332,6 +448,21 @@
     "fps": 1,
     "loop": false
   },
+  "chopbnk3n": {
+    "frames": [
+      "player/chopbnk3n_f00.png",
+      "player/chopbnk3n_f01.png",
+      "player/chopbnk3n_f02.png",
+      "player/chopbnk3n_f03.png",
+      "player/chopbnk3n_f04.png",
+      "player/chopbnk3n_f05.png",
+      "player/chopbnk3n_f06.png",
+      "player/chopbnk3n_f07.png",
+      "player/chopbnk3n_f08.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
   "chopdrp3": {
     "frames": [
       "player/chopdrp3_f00.png",
@@ -339,6 +470,17 @@
       "player/chopdrp3_f02.png",
       "player/chopdrp3_f03.png",
       "player/chopdrp3_f04.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "chopdrp3n": {
+    "frames": [
+      "player/chopdrp3n_f00.png",
+      "player/chopdrp3n_f01.png",
+      "player/chopdrp3n_f02.png",
+      "player/chopdrp3n_f03.png",
+      "player/chopdrp3n_f04.png"
     ],
     "fps": 1,
     "loop": false
@@ -353,6 +495,20 @@
       "player/blade_f05.png",
       "player/blade_f06.png",
       "player/blade_f07.png"
+    ],
+    "fps": 30,
+    "loop": true
+  },
+  "bladen": {
+    "frames": [
+      "player/bladen_f00.png",
+      "player/bladen_f01.png",
+      "player/bladen_f02.png",
+      "player/bladen_f03.png",
+      "player/bladen_f04.png",
+      "player/bladen_f05.png",
+      "player/bladen_f06.png",
+      "player/bladen_f07.png"
     ],
     "fps": 30,
     "loop": true
@@ -399,6 +555,52 @@
       "player/bladeb_f37.png",
       "player/bladeb_f38.png",
       "player/bladeb_f39.png"
+    ],
+    "fps": 40,
+    "loop": true
+  },
+  "bladebn": {
+    "frames": [
+      "player/bladebn_f00.png",
+      "player/bladebn_f01.png",
+      "player/bladebn_f02.png",
+      "player/bladebn_f03.png",
+      "player/bladebn_f04.png",
+      "player/bladebn_f05.png",
+      "player/bladebn_f06.png",
+      "player/bladebn_f07.png",
+      "player/bladebn_f08.png",
+      "player/bladebn_f09.png",
+      "player/bladebn_f10.png",
+      "player/bladebn_f11.png",
+      "player/bladebn_f12.png",
+      "player/bladebn_f13.png",
+      "player/bladebn_f14.png",
+      "player/bladebn_f15.png",
+      "player/bladebn_f16.png",
+      "player/bladebn_f17.png",
+      "player/bladebn_f18.png",
+      "player/bladebn_f19.png",
+      "player/bladebn_f20.png",
+      "player/bladebn_f21.png",
+      "player/bladebn_f22.png",
+      "player/bladebn_f23.png",
+      "player/bladebn_f24.png",
+      "player/bladebn_f25.png",
+      "player/bladebn_f26.png",
+      "player/bladebn_f27.png",
+      "player/bladebn_f28.png",
+      "player/bladebn_f29.png",
+      "player/bladebn_f30.png",
+      "player/bladebn_f31.png",
+      "player/bladebn_f32.png",
+      "player/bladebn_f33.png",
+      "player/bladebn_f34.png",
+      "player/bladebn_f35.png",
+      "player/bladebn_f36.png",
+      "player/bladebn_f37.png",
+      "player/bladebn_f38.png",
+      "player/bladebn_f39.png"
     ],
     "fps": 40,
     "loop": true
@@ -453,6 +655,60 @@
       "player/bladep_f45.png",
       "player/bladep_f46.png",
       "player/bladep_f47.png"
+    ],
+    "fps": 40,
+    "loop": true
+  },
+  "bladepn": {
+    "frames": [
+      "player/bladepn_f00.png",
+      "player/bladepn_f01.png",
+      "player/bladepn_f02.png",
+      "player/bladepn_f03.png",
+      "player/bladepn_f04.png",
+      "player/bladepn_f05.png",
+      "player/bladepn_f06.png",
+      "player/bladepn_f07.png",
+      "player/bladepn_f08.png",
+      "player/bladepn_f09.png",
+      "player/bladepn_f10.png",
+      "player/bladepn_f11.png",
+      "player/bladepn_f12.png",
+      "player/bladepn_f13.png",
+      "player/bladepn_f14.png",
+      "player/bladepn_f15.png",
+      "player/bladepn_f16.png",
+      "player/bladepn_f17.png",
+      "player/bladepn_f18.png",
+      "player/bladepn_f19.png",
+      "player/bladepn_f20.png",
+      "player/bladepn_f21.png",
+      "player/bladepn_f22.png",
+      "player/bladepn_f23.png",
+      "player/bladepn_f24.png",
+      "player/bladepn_f25.png",
+      "player/bladepn_f26.png",
+      "player/bladepn_f27.png",
+      "player/bladepn_f28.png",
+      "player/bladepn_f29.png",
+      "player/bladepn_f30.png",
+      "player/bladepn_f31.png",
+      "player/bladepn_f32.png",
+      "player/bladepn_f33.png",
+      "player/bladepn_f34.png",
+      "player/bladepn_f35.png",
+      "player/bladepn_f36.png",
+      "player/bladepn_f37.png",
+      "player/bladepn_f38.png",
+      "player/bladepn_f39.png",
+      "player/bladepn_f40.png",
+      "player/bladepn_f41.png",
+      "player/bladepn_f42.png",
+      "player/bladepn_f43.png",
+      "player/bladepn_f44.png",
+      "player/bladepn_f45.png",
+      "player/bladepn_f46.png",
+      "player/bladepn_f47.png"
     ],
     "fps": 40,
     "loop": true
@@ -552,9 +808,25 @@
     "fps": 8,
     "loop": true
   },
+  "tankbgrnn": {
+    "frames": [
+      "player/tankbgrnn_f00.png",
+      "player/tankbgrnn_f01.png",
+      "player/tankbgrnn_f02.png"
+    ],
+    "fps": 8,
+    "loop": true
+  },
   "tanktop": {
     "frames": [
       "player/tanktop_f00.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "tanktopn": {
+    "frames": [
+      "player/tanktopn_f00.png"
     ],
     "fps": 1,
     "loop": false

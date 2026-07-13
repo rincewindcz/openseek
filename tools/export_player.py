@@ -150,6 +150,12 @@ def main():
     palette = pal_path.read_bytes()
     # The vehicle-select screen palette stores its 768 bytes first in the file.
     vselect = (game_dir / "data" / "VSELECT.BIN").read_bytes()[:768]
+    # Night mission (mission 3) uses a dark palette; the world sprites are baked
+    # per-mission, so the vehicle needs a matching dark set or it stays bright.
+    # Rendering the shared vehicle BINs through STAGE03's palette darkens every
+    # skin cleanly (verified), exported under the same prefix plus an "n" suffix.
+    night_pal_path = game_dir / "STAGE03" / "PAL1.BIN"
+    night = night_pal_path.read_bytes() if night_pal_path.exists() else None
     print(f"Game dir: {game_dir}")
     print(f"Palette:  {pal_path.name}")
     print(f"Output:   {out_dir}")
@@ -162,6 +168,18 @@ def main():
             continue
         pal = vselect if pal_name == VSELECT else palette
         export_sprite_group(src, prefix, out_dir, pal, keep)
+
+    # Night variants. Shadows are disabled on night missions, so skip them.
+    if night:
+        print()
+        print(f"Night variants (STAGE03/{night_pal_path.name}):")
+        for stem, prefix, keep, pal_name in PLAYER_SPRITES:
+            if prefix in ("chopshad", "tankshad"):
+                continue
+            src = game_dir / "data" / (stem + ".BIN")
+            if not src.exists():
+                continue
+            export_sprite_group(src, prefix + "n", out_dir, night, keep)
 
 
 if __name__ == "__main__":

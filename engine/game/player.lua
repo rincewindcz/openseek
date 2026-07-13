@@ -667,8 +667,18 @@ end
 
 -- sprite helpers
 
+-- Night missions ship a darker, palette-correct vehicle set under the same clip
+-- name plus an "n" suffix; resolve to it when one exists, else the day sprite.
+function Player:_clip(name)
+    if self.world and self.world:is_night() then
+        local night = name .. "n"
+        if Animation.clip(night) then return night end
+    end
+    return name
+end
+
 function Player:_frames(clip_name)
-    local clip = Animation.clip(clip_name)
+    local clip = Animation.clip(self:_clip(clip_name))
     return clip and clip.frames or {}
 end
 
@@ -694,7 +704,7 @@ end
 
 -- Current rotor frame: the active group's base plus the spin phase, wrapped.
 function Player:_rotor_image()
-    local clip = Animation.clip(self._rotor_clip)
+    local clip = Animation.clip(self:_clip(self._rotor_clip))
     if not clip or clip:is_empty() then return nil end
     local n   = clip:frame_count()
     local idx = self._rotor_group * 8 + (math.floor(self._rotor_spin) % 8)
@@ -851,7 +861,7 @@ function Player:draw_remote(g, cam, color)
         end
         local turret = self:_frames("tanktop")[1]
         if turret then
-            local ax, ay = Animation.frame_anchor("tanktop", 1)
+            local ax, ay = Animation.frame_anchor(self:_clip("tanktop"), 1)
             local trot   = (self.angle + self.turret_offset) * math.pi / 180 + (cam.angle or 0)
             g.draw(turret, sx, sy, trot, s, s, ax, ay)
         end
@@ -913,7 +923,7 @@ function Player:_draw_tank(g, cx, cy, s)
     -- heading relative to the hull. Anchored on its art center to spin in place.
     local img = self:_frames("tanktop")[1]  -- frame 0
     if img then
-        local ax, ay = Animation.frame_anchor("tanktop", 1)
+        local ax, ay = Animation.frame_anchor(self:_clip("tanktop"), 1)
         local rot    = self.turret_offset * math.pi / 180
         g.draw(img, cx, cy, rot, s, s, ax, ay)
     end

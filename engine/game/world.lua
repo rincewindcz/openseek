@@ -574,4 +574,11 @@ function World:shadows_enabled()
     return not NIGHT_MISSIONS[m]
 end
 
+-- Night missions render under a dark palette, so the player vehicle swaps to its
+-- palette-matched night sprite set (see Player:_clip).
+function World:is_night()
+    local m = self.stage_name and self.stage_name:match("^stage(%d)")
+    return NIGHT_MISSIONS[m] == true
+end
+
 return World
