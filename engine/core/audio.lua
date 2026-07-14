@@ -139,4 +139,9 @@ function Audio.stop_all()
     Audio._last = nil
 end
 
+-- Master output volume (0..1), the global mixer level for every source.
+function Audio.set_master(v)
+    love.audio.setVolume(math.max(0, math.min(1, v)))
+end
+
 return Audio

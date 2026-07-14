@@ -5,6 +5,7 @@ local Player       = require "engine.game.player"
 local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
 local Vehicles     = require "engine.game.vehicles"
+local Input        = require "engine.core.input"
 
 -- Single-player gameplay scene: player lifecycle, camera follow, the death /
 -- won / takeoff timers, the pause flag, and the in-game keys. Esc pushes the
@@ -82,6 +83,7 @@ function Gameplay:spawn_player(carry)
     player.chopper_skin = settings.chopper_skin
     player.world        = world
     player.camera       = camera
+    player.controls     = Input.map   -- single-player movement reads the rebindable map
     local def = app.vehicle_defs[settings.vehicle]
     if def then player:load_vehicle_def(def) end
     -- Weapon list: the equip-screen loadout snapshot when one was applied
@@ -282,7 +284,7 @@ function Gameplay:update(dt)
             end
         end
     end
-    if not player.death and (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl")) then
+    if not player.death and Input.held("fire") then
         self:fire_for(player)
     end
     app.combat:update(dt)
@@ -375,12 +377,12 @@ function Gameplay:game_keys(key)
     local app    = self.app
     local player = self.player
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
-    if key == "p"  then self.paused = not self.paused; return end
+    if Input.pressed("pause", key)   then self.paused = not self.paused; return end
     if key == "r"  then self.paused = false; self:restart(); return end
     if key == "f5" then player.unlimited = not player.unlimited; return end
     if key == "f6" then app.powerups.easy_mode = not app.powerups.easy_mode; return end
-    if key == "space" or key == "f" then self:toggle_land(player); return end
-    if key == "q" then
+    if Input.pressed("takeoff", key) then self:toggle_land(player); return end
+    if Input.pressed("weapon", key)  then
         self:cycle_weapon(player)
         self:sync_weapon_icon()
         return

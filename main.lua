@@ -12,6 +12,7 @@ local SaboteurSystem  = require "engine.game.saboteur"
 local Weather         = require "engine.game.weather"
 local LightFX         = require "engine.game.lightfx"
 local Config          = require "engine.core.config"
+local Input           = require "engine.core.input"
 local Mission         = require "engine.game.mission"
 local Screen          = require "engine.core.screen"
 local EndStats        = require "engine.ui.end_stats"
@@ -64,8 +65,10 @@ function love.load(args)
     print(("openSEEK starting (LOVE %s, %s)"):format(love.getVersion and select(4, love.getVersion()) or "?", _VERSION))
     love.graphics.setDefaultFilter("nearest", "nearest")
     Config.load()   -- overlay persisted advanced settings onto the defaults
+    Input.load()    -- overlay persisted key bindings onto the defaults
     Animation.load("data/animations.json")
     Audio.load("data/sounds.json")
+    Audio.set_master(Config.master_volume)
 
     local vehicle_defs = {}
     for _, fname in ipairs(love.filesystem.getDirectoryItems("data/vehicles")) do

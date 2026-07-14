@@ -40,6 +40,9 @@ local Config = {
     night_lighting   = true,
     night_brightness = 1.0,
 
+    -- Master audio volume (0..1), applied via love.audio.setVolume.
+    master_volume = 1.0,
+
     -- EXTRA features: additions absent from the original game, each toggleable so
     -- the classic behavior can be restored. See EXTRA.md. explosive_trees lets the
     -- tank bulldoze through trees (small blast, tiny armor cost) instead of getting
@@ -55,7 +58,7 @@ local SAVE_PATH = "data/settings.json"
 local PERSISTED = {
     "effects_flashes", "flash_intensity", "night_lighting", "night_brightness",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
-    "endstats_count_up", "explosive_trees", "tree_crush_speed",
+    "endstats_count_up", "explosive_trees", "tree_crush_speed", "master_volume",
 }
 
 -- Overlay any saved values onto the shipped defaults. Called once at startup.
