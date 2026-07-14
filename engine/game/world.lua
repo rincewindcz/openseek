@@ -613,4 +613,8 @@ function World:muzzle_light(x, y)
     if self.lightfx then self.lightfx:muzzle(x, y) end
 end
 
+function World:player_death_light(x, y)
+    if self.lightfx then self.lightfx:player_death(x, y) end
+end
+
 return World

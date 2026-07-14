@@ -380,12 +380,14 @@ end
 -- burns with explosions and smoke, then its turret blows. Idempotent.
 function Player:start_death()
     if self.death then return end
-    self.speed  = 0
-    self.strafe = 0
     if self:is_flyer() then
+        -- Keep the current velocity: a downed chopper carries its momentum forward
+        -- as it falls (see _update_death_chopper), instead of stopping dead.
         self.land_state = "landing"   -- drop frames driven by altitude
         self.death = { phase = "fall", t = 0, fx = {} }
     else
+        self.speed  = 0
+        self.strafe = 0
         self.death = { phase = "burn", t = 0, spawn = 0, fx = {}, turret_exploded = false }
     end
 end
@@ -416,12 +418,35 @@ function Player:death_done()
     return self.death ~= nil and self.death.phase == "done"
 end
 
+-- Advance a death fx entry. Animation entries expire when their clip ends; ballistic
+-- entries (a tossed turret / debris chunk with a velocity) integrate an arc under
+-- gravity, spin, optionally trail smoke, and expire on their ttl.
+function Player:_update_death_fx(d, e, dt)
+    if e.anim then e.anim:update(dt) end
+    if e.vx then
+        e.ox = e.ox + e.vx * dt
+        e.oy = e.oy + e.vy * dt
+        e.vy = e.vy + (e.gravity or 0) * dt
+        if e.spin then e.rot = (e.rot or 0) + e.spin * dt end
+        if e.trail then
+            e.trail_t = (e.trail_t or 0) - dt
+            if e.trail_t <= 0 then
+                e.trail_t = 0.03
+                d.fx[#d.fx + 1] = { anim = Animation.new("smoke"), ox = e.ox, oy = e.oy, scale = 0.55 }
+            end
+        end
+    end
+    if e.anim then return e.anim:is_done() end
+    e.age = (e.age or 0) + dt
+    return e.age >= (e.ttl or 1)
+end
+
 function Player:_update_death(dt)
     local d = self.death
     d.t = d.t + dt
-    for i = #d.fx, 1, -1 do
-        d.fx[i].anim:update(dt)
-        if d.fx[i].anim:is_done() then table.remove(d.fx, i) end
+    local n = #d.fx   -- fixed so smoke trails spawned this frame update next frame
+    for i = n, 1, -1 do
+        if self:_update_death_fx(d, d.fx[i], dt) then table.remove(d.fx, i) end
     end
     if self:is_flyer() then
         self:_update_death_chopper(dt, d)
@@ -433,11 +458,18 @@ end
 function Player:_update_death_chopper(dt, d)
     if d.phase == "fall" then
         self:_update_anims(dt)   -- rotor keeps spinning on the way down
+        -- Carry the momentum forward, bleeding it off with drag, so the wreck flies
+        -- on and the camera keeps panning instead of the heli stopping mid-air.
+        local drag  = math.max(0, 1 - dt * 0.6)
+        self.speed  = self.speed  * drag
+        self.strafe = self.strafe * drag
+        self:_move(dt)
         self.altitude = math.max(0, self.altitude - dt / FALL_TIME)
         if self.altitude <= 0 then
             d.phase = "boom"
             d.boom  = Animation.new("explosion_large")
             self:_death_blast()
+            if self.world then self.world:player_death_light(self.x, self.y) end
         end
     elseif d.phase == "boom" then
         if d.boom then
@@ -453,8 +485,10 @@ function Player:_update_death_tank(dt, d)
     if d.phase == "burn" then
         d.spawn = d.spawn - dt
         if d.spawn <= 0 then
-            d.spawn = 0.16
-            local clip = (math.random() < 0.5) and "explosion_medium" or "smoke"
+            d.spawn = 0.10
+            local r    = math.random()
+            local clip = (r < 0.4 and "explosion_small")
+                      or (r < 0.7 and "explosion_medium") or "smoke"
             d.fx[#d.fx + 1] = {
                 anim = Animation.new(clip),
                 ox   = (math.random() - 0.5) * 44,
@@ -464,11 +498,46 @@ function Player:_update_death_tank(dt, d)
         if d.t >= TANK_BURN then
             d.phase           = "turret"
             d.turret_exploded = true
-            d.fx[#d.fx + 1]   = { anim = Animation.new("explosion_large"), ox = 0, oy = -4 }
-            self:_death_blast()
+            self:_tank_blow(d)
         end
     elseif d.phase == "turret" then
-        if d.t >= TANK_BURN + 0.6 and #d.fx == 0 then d.phase = "done" end
+        if d.t >= TANK_BURN + 1.6 and #d.fx == 0 then d.phase = "done" end
+    end
+end
+
+-- The tank's final blast: a large detonation and death-light flash, the turret
+-- flung off spinning and trailing smoke, and a spray of debris chunks arcing out.
+function Player:_tank_blow(d)
+    d.fx[#d.fx + 1] = { anim = Animation.new("explosion_large"), ox = 0, oy = -4 }
+    self:_death_blast()
+    if self.world then self.world:player_death_light(self.x, self.y) end
+
+    local turret = self:_frames("tanktop")[1]
+    if turret then
+        local dir = (math.random() < 0.5) and -1 or 1
+        d.fx[#d.fx + 1] = {
+            img     = turret,
+            ox      = 0, oy = -4,
+            vx      = dir * (30 + math.random() * 30),
+            vy      = -(150 + math.random() * 50),
+            gravity = 260,
+            rot     = 0, spin = dir * (6 + math.random() * 4),
+            trail   = true, trail_t = 0,
+            ttl     = 1.3,
+        }
+    end
+
+    for _ = 1, 8 do
+        local a  = math.random() * math.pi * 2
+        local sp = 60 + math.random() * 90
+        d.fx[#d.fx + 1] = {
+            anim    = Animation.new(math.random() < 0.5 and "explosion_small" or "explosion_flak"),
+            ox      = 0, oy = -4,
+            vx      = math.cos(a) * sp,
+            vy      = math.sin(a) * sp - 60,
+            gravity = 220,
+            scale   = 0.5 + math.random() * 0.4,
+        }
     end
 end
 
@@ -816,13 +885,14 @@ function Player:_draw_death(g, cx, cy, s)
     else
         self:_draw_tank(g, cx, cy, s)   -- burning hull; turret skipped once exploded
     end
-    -- explosions / smoke around the wreck
+    -- explosions / smoke / flung debris around the wreck
     for _, e in ipairs(d.fx) do
-        local img = e.anim:current_image()
+        local img = e.img or (e.anim and e.anim:current_image())
         if img then
             local w, h = img:getDimensions()
+            local es   = s * (e.scale or 1)
             g.setColor(1, 1, 1)
-            g.draw(img, cx + e.ox * s, cy + e.oy * s, 0, s, s, w / 2, h / 2)
+            g.draw(img, cx + e.ox * s, cy + e.oy * s, e.rot or 0, es, es, w / 2, h / 2)
         end
     end
     g.setColor(1, 1, 1)

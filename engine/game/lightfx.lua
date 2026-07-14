@@ -130,6 +130,26 @@ function LightFX:explosion(x, y, size)
     end
 end
 
+-- The player vehicle's death: a much larger and longer light + burst than any
+-- ordinary explosion, plus a strong full-screen wash, so losing a vehicle reads
+-- as a major event.
+function LightFX:player_death(x, y)
+    if not self.enabled then return end
+    self.lights[#self.lights + 1] = {
+        x = x, y = y, radius = 270, intensity = 2.4,
+        r = 1.0, g = 0.80, b = 0.48, t = 0, ttl = 0.75,
+    }
+    self.bursts[#self.bursts + 1] = {
+        x = x, y = y, radius = 210,
+        r = 1.0, g = 0.74, b = 0.42, t = 0, dur = 0.6,
+    }
+    self.bursts[#self.bursts + 1] = {
+        x = x, y = y, radius = 120,
+        r = 1.0, g = 0.97, b = 0.90, t = 0, dur = 0.22,
+    }
+    self:flash(1.0, 0.86, 0.6, 0.55, 0.6)
+end
+
 -- Muzzle flash at the gun for any shooter. The point light only reads under the
 -- night light map; the bright pop shows on any stage.
 function LightFX:muzzle(x, y)
