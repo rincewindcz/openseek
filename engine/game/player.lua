@@ -466,9 +466,18 @@ end
 function Player:_update_death(dt)
     local d = self.death
     d.t = d.t + dt
-    local n = #d.fx   -- fixed so smoke trails spawned this frame update next frame
+    local n = #d.fx   -- fixed so fx spawned this frame update next frame
     for i = n, 1, -1 do
-        if self:_update_death_fx(d, d.fx[i], dt) then table.remove(d.fx, i) end
+        local e = d.fx[i]
+        if self:_update_death_fx(d, e, dt) then
+            -- A flung piece (the turret) detonates where it lands, rather than just
+            -- vanishing at the end of its arc.
+            if e.explode then
+                d.fx[#d.fx + 1] = { anim = Animation.new(e.explode), ox = e.ox, oy = e.oy }
+                if self.world then self.world:explosion_light(self.x, self.y, "medium") end
+            end
+            table.remove(d.fx, i)
+        end
     end
     if self:is_flyer() then
         self:_update_death_chopper(dt, d)
@@ -545,7 +554,7 @@ function Player:_tank_blow(d)
             gravity = 260,
             rot     = 0, spin = dir * (6 + math.random() * 4),
             trail   = true, trail_t = 0,
-            ttl     = 1.3,
+            ttl     = 1.3, explode = "explosion_medium",
         }
     end
 
