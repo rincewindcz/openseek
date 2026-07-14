@@ -92,6 +92,7 @@
     "collision_radius": 5,
     "detection_radius": 0,
     "explosion": "none",
+    "explosive_tree": true,
     "hit_radius": 0,
     "solid": true,
     "speed": 0,

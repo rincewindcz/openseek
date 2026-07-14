@@ -677,6 +677,25 @@ function Player:_apply_input(dt)
     end
 end
 
+-- HP the tank loses per tree it bulldozes through (EXTRA: explosive_trees). Tiny.
+local TREE_CRUSH_DAMAGE = 0.5
+
+-- Whether a hull-sized circle at (x, y) is blocked by a solid object. With the
+-- explosive_trees extra on, the tank instead pops a tree it drives into and passes
+-- through it for a tiny armor cost, rather than being stopped.
+function Player:_solid_at(x, y, r)
+    local blocked, e = self.world:blocked(x, y, r)
+    if not blocked then return false end
+    if Config.explosive_trees and e and e.type_data and e.type_data.explosive_tree then
+        self.world:crush_tree(e)
+        if not self.unlimited then
+            self.armor = math.max(0, self.armor - TREE_CRUSH_DAMAGE)
+        end
+        return false
+    end
+    return true
+end
+
 function Player:_move(dt)
     local sdt        = dt * Config.speed_scale
     local rad        = (self.angle - 90) * math.pi / 180
@@ -688,9 +707,9 @@ function Player:_move(dt)
         -- Axis-separated so the tank slides along obstacles instead of sticking.
         local r  = self.collision_radius
         local nx = self.x + dx
-        if self.world:blocked(nx, self.y, r) then nx = self.x end
+        if self:_solid_at(nx, self.y, r) then nx = self.x end
         local ny = self.y + dy
-        if self.world:blocked(nx, ny, r) then ny = self.y end
+        if self:_solid_at(nx, ny, r) then ny = self.y end
         self.x, self.y = nx, ny
     else
         self.x = self.x + dx

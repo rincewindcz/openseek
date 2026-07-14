@@ -43,6 +43,9 @@ local PAGES = {
         { key = "friendly_fire_pows",   label = "FRIENDLY FIRE",  kind = "toggle" },
         { key = "endstats_count_up",    label = "STATS COUNT UP", kind = "toggle" },
     } },
+    { title = "EXTRAS", options = {
+        { key = "explosive_trees", label = "EXPLOSIVE TREES", kind = "toggle" },
+    } },
 }
 
 local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end

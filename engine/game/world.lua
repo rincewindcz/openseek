@@ -489,6 +489,16 @@ function World:blocked(x, y, radius, ignore)
     return false
 end
 
+-- EXTRA (explosive_trees): a tank driving into a tree pops it in a small blast
+-- and clears it, rather than being stopped dead. Removes the tree from collision
+-- and rendering, and spawns the burst effect and a small light.
+function World:crush_tree(e)
+    e.state = "dead"
+    e.hp    = 0
+    if self.combat then self.combat:add_effect("explosion_small", e.x, e.y) end
+    if self.lightfx then self.lightfx:explosion(e.x, e.y, "flak") end
+end
+
 -- Fling a burst of tumbling iron/metal shrapnel from (x, y), e.g. a building or
 -- bomb blowing up. spread scales the scatter radius (default tight).
 function World:spawn_debris(x, y, n, spread)
