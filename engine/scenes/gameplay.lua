@@ -20,6 +20,7 @@ function Gameplay:enter()
     app.renderer.in_game = true
     app.camera:set_zoom(6)
     self:enter_weather()
+    app.lightfx:enter(app.world)
     self:spawn_player()
 end
 
@@ -30,6 +31,7 @@ function Gameplay:leave()
     self.pending_takeoff = false
     self:reset_end_stats()
     app.weather:set(nil)
+    app.lightfx:reset()
     app.renderer.in_game   = false
     self.player            = nil
     app.hud.player         = nil
@@ -299,6 +301,7 @@ function Gameplay:update(dt)
     end
     app.world:update(dt)
     app.weather:update(dt, app.camera)
+    app.lightfx:update(dt)
     app.debug_panel:update()
 end
 
@@ -319,6 +322,8 @@ function Gameplay:draw()
     self.player:draw()
     self.player:draw_world_front()
     app.weather:draw()
+    app.lightfx:draw_night(app.camera)
+    app.lightfx:draw_additive(app.camera)
     app.hud:draw()
     if mission and mission.state == "return_to_base" then self:draw_return_prompt() end
     if mission and mission.state == "won" and not app.end_stats:is_active() then

@@ -108,6 +108,7 @@ function Entity:_destroy_turret()
     local ex = (self.type_data and self.type_data.turret_explosion) or "medium"
     local fx = Animation.new("explosion_" .. ex)
     self.turret_fx = (not fx:is_done()) and fx or nil
+    if self.world then self.world:explosion_light(self.x, self.y, ex) end
 end
 
 -- Spawn a one-shot hit effect at the entity's position with a small random
@@ -140,6 +141,7 @@ function Entity:_start_death(dx, dy)
     local explosion = (self.type_data and self.type_data.explosion) or "none"
     self.anim  = Animation.new("explosion_" .. explosion)
     self.state = self.anim:is_done() and "dead" or "exploding"
+    if self.world then self.world:explosion_light(self.x, self.y, explosion) end
     -- Unit corpses (soldiers) get nudged in the direction of the killing shot.
     if dx and dy and self.type_data and self.type_data.sprite then
         local len = math.sqrt(dx * dx + dy * dy)

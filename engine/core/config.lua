@@ -1,5 +1,8 @@
--- Optional compatibility / gameplay tuning shared across systems. A future setup
--- menu will edit these; the F2 debug overlay toggles them live for testing.
+-- Optional compatibility / gameplay tuning shared across systems. The advanced
+-- settings page edits a subset of these (see PERSISTED); the F2 debug overlay
+-- toggles others live for testing.
+local json = require "lib.json"
+
 local Config = {
     -- Render pickups screen-aligned, the way the original engine did (it could not
     -- rotate sprites), instead of rotating them with the world.
@@ -25,6 +28,50 @@ local Config = {
     -- SCORE. true builds the values up from zero instead (icons and percentages
     -- rise as the score climbs), which reads more naturally.
     endstats_count_up = true,
+
+    -- Visual effect layer (engine/game/lightfx.lua). effects_flashes toggles the
+    -- modern oversaturation layer (muzzle flashes, explosion bursts, full-screen
+    -- washes); turn it off for the classic look. flash_intensity scales that
+    -- layer's brightness. night_lighting toggles the night light map (headlight
+    -- beam + scene darkening); night_brightness lifts the dimmed ambient toward
+    -- full daylight (1.0 = as authored per mission, higher = brighter).
+    effects_flashes  = true,
+    flash_intensity  = 1.0,
+    night_lighting   = true,
+    night_brightness = 1.0,
 }
+
+-- Player-editable keys persisted to the save directory, so the advanced settings
+-- survive restarts. Every value is a scalar (boolean / number).
+local SAVE_PATH = "data/settings.json"
+local PERSISTED = {
+    "effects_flashes", "flash_intensity", "night_lighting", "night_brightness",
+    "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
+    "endstats_count_up",
+}
+
+-- Overlay any saved values onto the shipped defaults. Called once at startup.
+function Config.load()
+    local raw = love.filesystem.read(SAVE_PATH)
+    if not raw then return end
+    local ok, data = pcall(json.decode, raw)
+    if not ok or type(data) ~= "table" then return end
+    for _, k in ipairs(PERSISTED) do
+        if data[k] ~= nil then Config[k] = data[k] end
+    end
+end
+
+-- Persist the editable keys. Only scalars, so the JSON is emitted directly (the
+-- bundled json module decodes but does not encode).
+function Config.save()
+    local parts = {}
+    for _, k in ipairs(PERSISTED) do
+        parts[#parts + 1] = string.format('  "%s": %s', k, tostring(Config[k]))
+    end
+    local encoded = "{\n" .. table.concat(parts, ",\n") .. "\n}\n"
+    local dir = SAVE_PATH:match("^(.*)/[^/]+$")
+    if dir then love.filesystem.createDirectory(dir) end
+    pcall(love.filesystem.write, SAVE_PATH, encoded)
+end
 
 return Config

@@ -140,6 +140,9 @@ function CombatSystem:add_effect(clip_name, x, y, opts)
     opts = opts or {}
     local anim = Animation.new(clip_name)
     if anim:is_done() then return end
+    -- Explosion clips (explosion_<size>) light the scene and pop a bright burst.
+    local size = clip_name:match("^explosion_(%a+)")
+    if size then self.world:explosion_light(x, y, size) end
     self.effects[#self.effects + 1] = {
         anim     = anim,
         x        = x,
@@ -175,6 +178,8 @@ end
 function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range_override, shooter)
     local weapon_def = self.weapons[weapon_name]
     if not weapon_def then return end
+    -- Muzzle flash at the gun for every shooter (player, ground AI, helis).
+    self.world:muzzle_light(x, y)
     level_idx = level_idx or 1
     local level = (weapon_def.levels and weapon_def.levels[level_idx]) or weapon_def
 

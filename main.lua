@@ -10,6 +10,8 @@ local Powerups        = require "engine.game.powerups"
 local RescueSystem    = require "engine.game.rescue"
 local SaboteurSystem  = require "engine.game.saboteur"
 local Weather         = require "engine.game.weather"
+local LightFX         = require "engine.game.lightfx"
+local Config          = require "engine.core.config"
 local Mission         = require "engine.game.mission"
 local Screen          = require "engine.core.screen"
 local EndStats        = require "engine.ui.end_stats"
@@ -24,6 +26,7 @@ local MissionBriefing = require "engine.scenes.mission_briefing"
 local MissionSelect   = require "engine.scenes.mission_select"
 local Equip           = require "engine.scenes.equip"
 local Shop            = require "engine.scenes.shop"
+local AdvancedSettings = require "engine.scenes.advanced_settings"
 local Overview        = require "engine.scenes.overview"
 local Gameplay        = require "engine.scenes.gameplay"
 local Sandbox         = require "engine.scenes.sandbox"
@@ -60,6 +63,7 @@ end
 function love.load(args)
     print(("openSEEK starting (LOVE %s, %s)"):format(love.getVersion and select(4, love.getVersion()) or "?", _VERSION))
     love.graphics.setDefaultFilter("nearest", "nearest")
+    Config.load()   -- overlay persisted advanced settings onto the defaults
     Animation.load("data/animations.json")
     Audio.load("data/sounds.json")
 
@@ -112,6 +116,8 @@ function love.load(args)
     app.rescue   = RescueSystem:new(world, app.combat)
     app.saboteur = SaboteurSystem:new(world, app.combat)
     app.weather  = Weather:new()
+    app.lightfx  = LightFX:new()
+    world.lightfx = app.lightfx   -- lets combat / entity emitters reach it via the world
     app.renderer:refresh_kinds()
 
     -- A 1x1 transparent hardware cursor, used to hide the pointer reliably (LOVE's
@@ -126,6 +132,7 @@ function love.load(args)
     scenes:register("mission_select",   MissionSelect:new(app))
     scenes:register("equip",            Equip:new(app))
     scenes:register("shop",             Shop:new(app))
+    scenes:register("advanced_settings", AdvancedSettings:new(app))
     scenes:register("overview",         Overview:new(app))
     scenes:register("gameplay",         Gameplay:new(app))
     scenes:register("sandbox",          Sandbox:new(app))

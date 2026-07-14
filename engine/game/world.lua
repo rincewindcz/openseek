@@ -24,6 +24,19 @@ local DEFAULT_GROUND = { 0.3, 0.5, 0 }
 -- shadows are disabled there. Keyed by mission digit, like MISSION_GROUND.
 local NIGHT_MISSIONS = { ["3"] = true }
 
+-- Per-mission night lighting (consumed by LightFX). ambient is the dimmed floor
+-- colour the scene multiplies down to; headlight is the vehicle beam: reach is
+-- how far ahead the lit pool sits and radius its size (world units), spread the
+-- cone half-angle (radians), color/intensity the warm lamp, gap the lamp offset
+-- from the vehicle centre. Missing missions fall back to LightFX defaults.
+local NIGHT_PARAMS = {
+    ["3"] = {
+        ambient   = { 0.46, 0.49, 0.60 },
+        headlight = { reach = 42, radius = 38, spread = 0.6,
+                      color = { 1.0, 0.92, 0.72 }, intensity = 1.2, gap = 6 },
+    },
+}
+
 local World = Class()
 
 -- Two-part objects folded at load: a co-located top sprite riding a hull. top is
@@ -579,6 +592,25 @@ end
 function World:is_night()
     local m = self.stage_name and self.stage_name:match("^stage(%d)")
     return NIGHT_MISSIONS[m] == true
+end
+
+-- Night lighting params for the active stage, or nil on day stages. Falls back
+-- to a generic night look when a night mission defines no explicit entry.
+function World:night_params()
+    if not self:is_night() then return nil end
+    local m = self.stage_name and self.stage_name:match("^stage(%d)")
+    return NIGHT_PARAMS[m]
+end
+
+-- Forwarders so combat / entity code can drive LightFX (set at wiring time)
+-- through the world they already hold, without depending on the app or the
+-- effect system directly. No-ops until LightFX is attached and enabled.
+function World:explosion_light(x, y, size)
+    if self.lightfx then self.lightfx:explosion(x, y, size) end
+end
+
+function World:muzzle_light(x, y)
+    if self.lightfx then self.lightfx:muzzle(x, y) end
 end
 
 return World

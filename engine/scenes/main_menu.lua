@@ -54,10 +54,7 @@ function MainMenu:_select(id)
     elseif id == "hiscores" then
         app.scenes:replace("hiscores")
     elseif id == "options" then
-        self.menu:hold()  -- stay active but black behind the screen so nothing shows through
-        local reopen = function() self:_open() end
-        app.screen:show("OPTPIC", { fade_in = 0.3, wait_key = true, fade_out = 0.3,
-            on_done = reopen, on_cancel = reopen })
+        app.scenes:replace("advanced_settings")
     elseif id == "mission" then
         app.scenes:replace("mission_select")   -- debug mission/phase picker
     elseif id == "editor" then
