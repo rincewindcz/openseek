@@ -254,6 +254,7 @@ function Gameplay:update(dt)
         return
     end
     player:update(dt)
+    if not player.death then app.combat:crush_units(player) end
     if app.settings.death_enabled and not player.death and player:is_dead() then
         -- Crashing on the way home with every objective already done still counts
         -- as a mission complete: flip to won now (before the death sets the mission

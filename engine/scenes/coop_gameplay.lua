@@ -151,6 +151,7 @@ function CoopGameplay:update(dt)
     end
     for _, p in ipairs(self.players) do
         p:update(dt)
+        if not p.death then app.combat:crush_units(p) end
         if not p.death and p:_held("fire") then self:fire_for(p) end
         if app.settings.death_enabled and not p.death and p:is_dead() then p:start_death() end
     end

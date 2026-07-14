@@ -697,6 +697,31 @@ function CombatSystem:_credit_kill(shooter, e)
     if cat then shooter.stat_kills[cat] = (shooter.stat_kills[cat] or 0) + 1 end
 end
 
+-- World radius around the tank hull that flattens infantry driven over.
+local CRUSH_RADIUS = 12
+
+-- Flatten enemy infantry a moving tank drives over, the original's run-over kill.
+-- Only foot units (soldiers) are crushable; buildings and vehicles are not. The
+-- kill is credited to the driver like a landed shot.
+function CombatSystem:crush_units(p)
+    if not (p and p.vehicle == "tank") then return end
+    if math.abs(p.speed or 0) < 5 then return end
+    for _, e in ipairs(self.world.entities) do
+        if e:is_alive() and e.type_data and e.type_data.sprite == "soldier" then
+            local dx, dy = self.world:delta(e.x, e.y, p.x, p.y)
+            local rr     = CRUSH_RADIUS + (e.type_data.hit_radius or 0)
+            if dx * dx + dy * dy < rr * rr then
+                e:take_damage(e.hp, dx, dy)   -- lethal; nudges the corpse away from the tank
+                if not e:is_alive() and p.stat_kills then
+                    p.score = (p.score or 0) + self:_kill_points(e)
+                    self:_credit_kill(p, e)
+                    if p.register_kill then p:register_kill() end
+                end
+            end
+        end
+    end
+end
+
 -- The impact effect a weapon spawns on the entity it hits. A list picks at
 -- random per hit (FFR alternates smoke/smoke2); a string is used as-is; nil lets
 -- the entity fall back to its default.
