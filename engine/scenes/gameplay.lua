@@ -350,7 +350,10 @@ function Gameplay:draw()
         if self.terminal_death then
             self:overlay_text("GAME OVER")
         else
-            self:overlay_text("MAYDAY MAYDAY", 0)   -- recoverable crash: no screen tint
+            -- recoverable loss, no screen tint: aircraft mayday vs a downed tank
+            local msg = (self.player and self.player.vehicle == "tank")
+                and "TANK DOWN" or "MAYDAY MAYDAY"
+            self:overlay_text(msg, 0)
         end
     end
     if app.end_stats:is_active() then app.end_stats:draw() end
