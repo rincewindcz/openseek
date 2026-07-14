@@ -50,6 +50,7 @@ function Player:init(x, y)
     self.overkill_until = 0     -- show the OVERKILL banner while time < this
 
     self.turret_offset    = 0    -- tank turret heading relative to the hull (deg)
+    self.tank_barrel      = 0    -- last-fired barrel, cycles 1->2->3 (triple gun)
     self.turret_rate      = 140
     self.collision_radius = 8
     self.world            = nil  -- set in game mode for collision queries
@@ -128,6 +129,27 @@ end
 function Player:fire_angle()
     if self.vehicle == "tank" then return self.angle + self.turret_offset end
     return self.angle
+end
+
+-- The tank's turret carries three barrels. In tanktop art space (barrels point
+-- north) the muzzle tips sit ~15px ahead of the turret pivot, spread laterally at
+-- these offsets (left, center, right).
+local TANK_BARREL_FWD = 15
+local TANK_BARREL_LAT = { -4.5, -0.5, 3.5 }
+
+-- World position of the next barrel's muzzle, advancing the 1->2->3 cycle. The
+-- turret sprite is drawn screen-fixed (sprite_scale px per art px), so an art
+-- offset spans (sprite_scale / base_zoom) world units. Falls back to the vehicle
+-- center with no camera. Only meaningful for the tank.
+function Player:tank_muzzle()
+    self.tank_barrel = (self.tank_barrel % 3) + 1
+    local base = (self.camera and self.camera:base_zoom()) or self.sprite_scale
+    local k    = self.sprite_scale / base
+    local fwd  = TANK_BARREL_FWD * k
+    local lat  = TANK_BARREL_LAT[self.tank_barrel] * k
+    local rad  = (self:fire_angle() - 90) * math.pi / 180
+    local fx, fy = math.cos(rad), math.sin(rad)
+    return self.x + fx * fwd - fy * lat, self.y + fy * fwd + fx * lat
 end
 
 -- ammo

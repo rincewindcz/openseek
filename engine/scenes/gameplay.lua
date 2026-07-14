@@ -301,6 +301,7 @@ function Gameplay:update(dt)
     end
     app.world:update(dt)
     app.weather:update(dt, app.camera)
+    app.lightfx.headlight_on = not player.death   -- vehicle lights cut on destruction
     app.lightfx:update(dt)
     app.debug_panel:update()
 end

@@ -79,9 +79,10 @@ function LightFX:init()
     self.lights  = {}      -- {x, y, radius, r, g, b, intensity, t, ttl}
     self.bursts  = {}      -- {x, y, radius, r, g, b, t, dur}
     self.flashes = {}      -- {r, g, b, a, t, dur}
-    self.canvas  = nil
-    self.cw      = 0
-    self.ch      = 0
+    self.canvas       = nil
+    self.cw           = 0
+    self.ch           = 0
+    self.headlight_on = true   -- cut when the player vehicle is destroyed
 end
 
 -- Enable the system for a stage. Reads the world's per-mission night params (nil
@@ -100,6 +101,7 @@ function LightFX:reset()
     self.lights  = {}
     self.bursts  = {}
     self.flashes = {}
+    self.headlight_on = true
 end
 
 -- emitters
@@ -237,7 +239,7 @@ function LightFX:draw_night(camera)
     local br = Config.night_brightness   -- lifts the floor toward daylight
     g.clear(math.min(1, a[1] * br), math.min(1, a[2] * br), math.min(1, a[3] * br), 1)
     g.setBlendMode("add")
-    self:_headlight(camera)
+    if self.headlight_on then self:_headlight(camera) end
     local z = camera:zoom()
     for _, l in ipairs(self.lights) do
         local sx, sy = camera:project(l.x, l.y)

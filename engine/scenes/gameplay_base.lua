@@ -63,7 +63,11 @@ function GameplayBase:fire_for(p)
     if not p:has_ammo(p.weapon_name) then return end
     local level = weapon_def.levels and weapon_def.levels[p.weapon_level] or weapon_def
     combat:tick_swing("player", p.weapon_name)
-    combat:fire(p.x, p.y, p:fire_angle(), p.weapon_name, "player", p.weapon_level, nil, p)
+    -- The tank fires from its three barrels in turn, so both the round and its
+    -- muzzle flash originate at the live barrel tip, not the turret center.
+    local fx, fy = p.x, p.y
+    if p.vehicle == "tank" then fx, fy = p:tank_muzzle() end
+    combat:fire(fx, fy, p:fire_angle(), p.weapon_name, "player", p.weapon_level, nil, p)
     -- Ammo drains per projectile the shot spawns (rockets fire 2/3/4 by level), not
     -- per trigger pull. Flame weapons spawn ground patches, not rounds, so bill one.
     local shots = 1
