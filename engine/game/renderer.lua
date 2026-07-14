@@ -120,10 +120,13 @@ function Renderer:draw_ground()
     self:_world_pass(self._draw_ground_layers)
 end
 
--- Object pass: the standing objects (trees, buildings, enemy units) and objective
--- markers, drawn above the ground vehicle so a taller tree sits over the tank.
-function Renderer:draw_objects()
-    self:_world_pass(self._draw_object_layers)
+-- Object pass. mode selects which objects to draw relative to a ground vehicle:
+-- "under" draws only flat ground clutter (non-solid scenery, decals, foot units)
+-- that a tank drives over; "over" draws the solid props (trees, buildings, turrets)
+-- that stand above it, plus the objective markers; nil draws everything (the
+-- normal path when there is no grounded vehicle to split around).
+function Renderer:draw_objects(mode)
+    self:_world_pass(function(_, vp) self:_draw_object_layers(vp, mode) end)
 end
 
 function Renderer:_draw_ground_layers(vp)
@@ -148,11 +151,12 @@ function Renderer:_draw_ground_layers(vp)
     self:_draw_craters(vp)
 end
 
-function Renderer:_draw_object_layers(vp)
+function Renderer:_draw_object_layers(vp, mode)
     local g = love.graphics
     local w = self.world
 
-    self:_draw_entities(w.objects, vp)
+    self:_draw_entities(w.objects, vp, mode)
+    if mode == "under" then return end   -- objectives/grid ride with the "over" pass
     self:_draw_objectives(vp)
 
     if self.show_grid then
@@ -167,7 +171,16 @@ function Renderer:_draw_object_layers(vp)
     end
 end
 
-function Renderer:_draw_entities(list, vp)
+-- Objects tall enough to stand over a ground vehicle: solid props (trees,
+-- buildings, turrets, enemy vehicles). Flat clutter the tank drives over (scenery
+-- stones/dunes, decals, foot soldiers) is non-solid and stays under it.
+local function is_occluder(e)
+    return e.type_data and e.type_data.solid or false
+end
+
+-- mode (optional) filters against the ground-vehicle split: "under" draws only
+-- non-occluders, "over" only occluders, nil draws all.
+function Renderer:_draw_entities(list, vp, mode)
     local g       = love.graphics
     local images  = self.world.images
     local classes = self.world.stage.classes
@@ -176,6 +189,8 @@ function Renderer:_draw_entities(list, vp)
     for _, e in ipairs(list) do
         local cls = classes[e.class_idx + 1]
         local in_vp = e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1
+        if mode == "under" and is_occluder(e) then in_vp = false end
+        if mode == "over" and not is_occluder(e) then in_vp = false end
         -- Cull off-screen entities, kinds the editor hid, and emptied POW building
         -- markers (rescue_hidden) before drawing.
         if in_vp and not hidden[cls.kind_name] and not e.rescue_hidden and not e.sabotage_hidden then
