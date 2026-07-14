@@ -681,17 +681,21 @@ end
 local TREE_CRUSH_DAMAGE = 0.5
 
 -- Whether a hull-sized circle at (x, y) is blocked by a solid object. With the
--- explosive_trees extra on, the tank instead pops a tree it drives into and passes
--- through it for a tiny armor cost, rather than being stopped.
+-- explosive_trees extra on, a tank at speed instead pops a tree it drives into and
+-- passes through it for a tiny armor cost, rather than being stopped; below the
+-- crush-speed threshold (a fraction of top speed) the tree still blocks.
 function Player:_solid_at(x, y, r)
     local blocked, e = self.world:blocked(x, y, r)
     if not blocked then return false end
     if Config.explosive_trees and e and e.type_data and e.type_data.explosive_tree then
-        self.world:crush_tree(e)
-        if not self.unlimited then
-            self.armor = math.max(0, self.armor - TREE_CRUSH_DAMAGE)
+        local top = self.max_fwd * self.speed_factor
+        if math.abs(self.speed) >= Config.tree_crush_speed * top then
+            self.world:crush_tree(e)
+            if not self.unlimited then
+                self.armor = math.max(0, self.armor - TREE_CRUSH_DAMAGE)
+            end
+            return false
         end
-        return false
     end
     return true
 end

@@ -43,8 +43,10 @@ local Config = {
     -- EXTRA features: additions absent from the original game, each toggleable so
     -- the classic behavior can be restored. See EXTRA.md. explosive_trees lets the
     -- tank bulldoze through trees (small blast, tiny armor cost) instead of getting
-    -- stuck on them.
-    explosive_trees = true,
+    -- stuck on them; tree_crush_speed is the fraction of top speed the tank must be
+    -- moving at for that to happen (slower than this and the tree still blocks).
+    explosive_trees  = true,
+    tree_crush_speed = 0.7,
 }
 
 -- Player-editable keys persisted to the save directory, so the advanced settings
@@ -53,7 +55,7 @@ local SAVE_PATH = "data/settings.json"
 local PERSISTED = {
     "effects_flashes", "flash_intensity", "night_lighting", "night_brightness",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
-    "endstats_count_up", "explosive_trees",
+    "endstats_count_up", "explosive_trees", "tree_crush_speed",
 }
 
 -- Overlay any saved values onto the shipped defaults. Called once at startup.

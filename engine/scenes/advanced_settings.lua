@@ -44,7 +44,8 @@ local PAGES = {
         { key = "endstats_count_up",    label = "STATS COUNT UP", kind = "toggle" },
     } },
     { title = "EXTRAS", options = {
-        { key = "explosive_trees", label = "EXPLOSIVE TREES", kind = "toggle" },
+        { key = "explosive_trees",  label = "EXPLOSIVE TREES", kind = "toggle" },
+        { key = "tree_crush_speed", label = "CRUSH SPEED",     kind = "range", min = 0.3, max = 1.0, step = 0.1 },
     } },
 }
 

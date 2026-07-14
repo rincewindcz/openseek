@@ -88,30 +88,45 @@ function Renderer:draw()
 end
 
 function Renderer:_draw_world()
-    local g  = love.graphics
-    local w  = self.world
-    local vp = self.camera:viewport()
+    self:draw_ground()
+    self:draw_objects()
+end
 
-    g.clear(w:ground_color())
+-- Run a layer function once per overlapping map copy so the world reads as
+-- seamless across the wrapped (toroidal) edges; culling uses the copy-local
+-- viewport. Shared by the ground and object passes.
+function Renderer:_world_pass(fn)
+    local g  = love.graphics
+    local vp = self.camera:viewport()
     g.push()
     self.camera:apply()
-
-    -- Draw the world once per overlapping map copy so it reads as seamless across
-    -- the wrapped (toroidal) edges; culling uses the copy-local viewport.
     for _, t in ipairs(self.camera:tiles()) do
         g.push()
         g.translate(t.ox, t.oy)
-        self:_draw_world_layers({
+        fn(self, {
             x0 = vp.x0 - t.ox, x1 = vp.x1 - t.ox,
             y0 = vp.y0 - t.oy, y1 = vp.y1 - t.oy,
         })
         g.pop()
     end
-
     g.pop()
 end
 
-function Renderer:_draw_world_layers(vp)
+-- Ground pass: terrain fill, decals, and craters. Everything a ground vehicle
+-- (the tank) sits on top of; drawn before the object layer so trees/buildings can
+-- occlude the tank. The grounded player is drawn between this and draw_objects.
+function Renderer:draw_ground()
+    love.graphics.clear(self.world:ground_color())
+    self:_world_pass(self._draw_ground_layers)
+end
+
+-- Object pass: the standing objects (trees, buildings, enemy units) and objective
+-- markers, drawn above the ground vehicle so a taller tree sits over the tank.
+function Renderer:draw_objects()
+    self:_world_pass(self._draw_object_layers)
+end
+
+function Renderer:_draw_ground_layers(vp)
     local g = love.graphics
     local w = self.world
 
@@ -131,6 +146,12 @@ function Renderer:_draw_world_layers(vp)
     end
 
     self:_draw_craters(vp)
+end
+
+function Renderer:_draw_object_layers(vp)
+    local g = love.graphics
+    local w = self.world
+
     self:_draw_entities(w.objects, vp)
     self:_draw_objectives(vp)
 

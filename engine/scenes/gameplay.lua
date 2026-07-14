@@ -311,18 +311,30 @@ function Gameplay:draw()
     local app     = self.app
     local mission = self.mission
     app.renderer.highlight = app.debug_panel:highlight_entity()
-    app.renderer:draw()
+    app.renderer:draw_ground()   -- terrain, decals, craters
+    -- A tank is a ground vehicle: draw it (and its smoke) between the ground and the
+    -- object layer so trees and buildings stand over it. A chopper is airborne and
+    -- keeps its original slot on top of everything.
+    local grounded = self.player.vehicle == "tank"
+    if grounded then
+        self.player:draw_world()
+        self.player:draw()
+        self.player:draw_world_front()
+    end
+    app.renderer:draw_objects()  -- trees, buildings, units, objective markers
     app.rescue:draw()            -- land pads + walking POWs, on the ground under everything
     app.saboteur:draw()          -- saboteur pads + walking saboteurs + target reticles
     app.powerups:draw()
     app.helis:draw_shadows()     -- aircraft ground shadows, under the flyers
-    self.player:draw_shadow()
-    self.player:draw_world()
+    self.player:draw_shadow()    -- flyer only (no-op for the grounded tank)
+    if not grounded then self.player:draw_world() end
     app.combat:draw()
     app.renderer:draw_debris()   -- shrapnel above the explosion effects
     app.helis:draw()             -- airborne enemy helicopters
-    self.player:draw()
-    self.player:draw_world_front()
+    if not grounded then
+        self.player:draw()
+        self.player:draw_world_front()
+    end
     app.weather:draw()
     app.lightfx:draw_night(app.camera)
     app.lightfx:draw_additive(app.camera)
