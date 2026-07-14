@@ -5,6 +5,7 @@ local Layout  = require "engine.ui.layout"
 local Config  = require "engine.core.config"
 local Input   = require "engine.core.input"
 local Audio   = require "engine.core.audio"
+local Display = require "engine.core.display"
 local Pointer = require "engine.ui.pointer"
 
 -- Advanced OpenSeek options: a category sidebar (VIDEO / AUDIO / CONTROLS /
@@ -37,13 +38,20 @@ local ARROW_GAP = 8
 local FADE_IN   = 0.25
 local FOOTER_Y  = 210
 
-local function apply_volume() Audio.set_master(Config.master_volume) end
+local function apply_volume()  Audio.set_master(Config.master_volume) end
+local function apply_display() Display.apply() end
 
 -- Categories listed in the sidebar. A category with `options` shows a rows panel;
 -- `kind = "controls"` builds its rows from the rebindable input actions; `kind =
 -- "exit"` leaves the screen when chosen. Every option key is a persisted Config
 -- field (or, for keybinds, an Input action).
 local CATEGORIES = {
+    { title = "DISPLAY", options = {
+        { key = "fullscreen",  label = "FULLSCREEN",  kind = "toggle", on_change = apply_display },
+        { key = "window_size", label = "WINDOW SIZE", kind = "choice", choices = Display.size_choices(), on_change = apply_display },
+        { key = "vsync",       label = "VSYNC",       kind = "toggle", on_change = apply_display },
+        { key = "show_fps",    label = "SHOW FPS",    kind = "toggle" },
+    } },
     { title = "VIDEO", options = {
         { key = "effects_flashes",  label = "FLASH FX",      kind = "toggle" },
         { key = "flash_intensity",  label = "FLASH LEVEL",   kind = "range", min = 0.0, max = 1.5, step = 0.1 },
@@ -141,6 +149,15 @@ function AdvancedSettings:_activate(dir)
         Input.reset()
     elseif opt.kind == "toggle" then
         Config[opt.key] = not Config[opt.key]
+        if opt.on_change then opt.on_change() end
+    elseif opt.kind == "choice" then
+        local idx = 1
+        for i, c in ipairs(opt.choices) do
+            if c.value == Config[opt.key] then idx = i; break end
+        end
+        idx = ((idx - 1 + dir) % #opt.choices) + 1
+        Config[opt.key] = opt.choices[idx].value
+        if opt.on_change then opt.on_change() end
     else
         local v = Config[opt.key] + opt.step * dir
         v = math.floor(v / opt.step + 0.5) * opt.step   -- snap off float drift
@@ -178,6 +195,11 @@ function AdvancedSettings:_value_text(opt)
         return ""
     elseif opt.kind == "toggle" then
         return Config[opt.key] and "ON" or "OFF"
+    elseif opt.kind == "choice" then
+        for _, c in ipairs(opt.choices) do
+            if c.value == Config[opt.key] then return c.label end
+        end
+        return tostring(Config[opt.key])
     end
     return string.format("%d%%", math.floor(Config[opt.key] * 100 + 0.5))
 end
@@ -232,7 +254,7 @@ function AdvancedSettings:mousepressed(x, y)
     self.cursor = pi
     local opt = self:_options()[pi]
     if not opt then return end
-    if opt.kind == "range" then
+    if opt.kind == "range" or opt.kind == "choice" then
         local dx = Pointer.to_design(x, y, DESIGN_W, DESIGN_H)
         self:_activate(dx >= (PANEL_LX + VALUE_RX) / 2 and 1 or -1)
     else

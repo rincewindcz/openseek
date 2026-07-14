@@ -43,6 +43,13 @@ local Config = {
     -- Master audio volume (0..1), applied via love.audio.setVolume.
     master_volume = 1.0,
 
+    -- Display: window mode applied via love.window (engine/core/display.lua).
+    -- window_size matches a label in Display.SIZES. show_fps draws an FPS counter.
+    fullscreen  = false,
+    vsync       = true,
+    window_size = "1280 x 720",
+    show_fps    = false,
+
     -- EXTRA features: additions absent from the original game, each toggleable so
     -- the classic behavior can be restored. See EXTRA.md. explosive_trees lets the
     -- tank bulldoze through trees (small blast, tiny armor cost) instead of getting
@@ -59,6 +66,7 @@ local PERSISTED = {
     "effects_flashes", "flash_intensity", "night_lighting", "night_brightness",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
     "endstats_count_up", "explosive_trees", "tree_crush_speed", "master_volume",
+    "fullscreen", "vsync", "window_size", "show_fps",
 }
 
 -- Overlay any saved values onto the shipped defaults. Called once at startup.
@@ -72,12 +80,20 @@ function Config.load()
     end
 end
 
+-- Encode a scalar Config value (boolean / number / string) as JSON.
+local function encode_value(v)
+    if type(v) == "string" then
+        return '"' .. v:gsub('[\\"]', "\\%0") .. '"'
+    end
+    return tostring(v)
+end
+
 -- Persist the editable keys. Only scalars, so the JSON is emitted directly (the
 -- bundled json module decodes but does not encode).
 function Config.save()
     local parts = {}
     for _, k in ipairs(PERSISTED) do
-        parts[#parts + 1] = string.format('  "%s": %s', k, tostring(Config[k]))
+        parts[#parts + 1] = string.format('  "%s": %s', k, encode_value(Config[k]))
     end
     local encoded = "{\n" .. table.concat(parts, ",\n") .. "\n}\n"
     local dir = SAVE_PATH:match("^(.*)/[^/]+$")

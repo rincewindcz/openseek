@@ -13,6 +13,7 @@ local Weather         = require "engine.game.weather"
 local LightFX         = require "engine.game.lightfx"
 local Config          = require "engine.core.config"
 local Input           = require "engine.core.input"
+local Display         = require "engine.core.display"
 local Mission         = require "engine.game.mission"
 local Screen          = require "engine.core.screen"
 local EndStats        = require "engine.ui.end_stats"
@@ -66,6 +67,7 @@ function love.load(args)
     love.graphics.setDefaultFilter("nearest", "nearest")
     Config.load()   -- overlay persisted advanced settings onto the defaults
     Input.load()    -- overlay persisted key bindings onto the defaults
+    Display.apply() -- restore the saved window mode (size / fullscreen / vsync)
     Animation.load("data/animations.json")
     Audio.load("data/sounds.json")
     Audio.set_master(Config.master_volume)
@@ -174,6 +176,14 @@ function love.draw()
     -- is up front) and over the end-of-phase stats screen.
     if ((top and top.ui_pointer) and not app.screen:is_active()) or app.end_stats:is_active() then
         Pointer.draw()
+    end
+
+    if Config.show_fps then
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.print("FPS " .. love.timer.getFPS(), 5, 5)
+        love.graphics.setColor(1, 1, 0.4, 1)
+        love.graphics.print("FPS " .. love.timer.getFPS(), 4, 4)
+        love.graphics.setColor(1, 1, 1, 1)
     end
 end
 
