@@ -79,11 +79,12 @@ function AdvancedSettings:init(app)
     self.capturing = nil      -- input action awaiting a key press, or nil
     self.t         = 0
 
-    -- CONTROLS rows, built once from the rebindable actions.
+    -- CONTROLS rows, built once from the rebindable actions plus a reset action.
     self.control_opts = {}
     for _, a in ipairs(Input.ACTIONS) do
         self.control_opts[#self.control_opts + 1] = { label = a.label, action = a.key, kind = "keybind" }
     end
+    self.control_opts[#self.control_opts + 1] = { label = "RESET TO DEFAULTS", kind = "reset" }
 
     local ok, img = pcall(love.graphics.newImage, "assets/fullscreen/MAINP.png")
     if ok then img:setFilter("linear", "linear"); self.bg = img end
@@ -136,6 +137,8 @@ function AdvancedSettings:_activate(dir)
     if not opt then return end
     if opt.kind == "keybind" then
         self.capturing = opt.action
+    elseif opt.kind == "reset" then
+        Input.reset()
     elseif opt.kind == "toggle" then
         Config[opt.key] = not Config[opt.key]
     else
@@ -171,6 +174,8 @@ function AdvancedSettings:_value_text(opt)
     if opt.kind == "keybind" then
         if self.capturing == opt.action then return "PRESS KEY" end
         return Input.display(opt.action)
+    elseif opt.kind == "reset" then
+        return ""
     elseif opt.kind == "toggle" then
         return Config[opt.key] and "ON" or "OFF"
     end

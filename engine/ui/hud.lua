@@ -393,15 +393,21 @@ function Hud:_draw_cursor(g, item, x, y, s)
     -- Green dot: forward/back maps to Y, strafe to X, plus a lateral push from
     -- turning. A sustained turn drives the dot all the way to the box edge (and to
     -- the corner together with forward motion), like the original.
-    local max_s  = p.max_fwd      or 260
-    local max_r  = p.strafe_speed or 140
-    local fx     = math.max(-1, math.min(1, (p.strafe or 0) / max_r + (p.turn_cursor or 0)))
+    local max_s  = (p.max_fwd and p.max_fwd > 0) and p.max_fwd or 260
+    -- The tank has no strafe (strafe_speed 0); its X comes purely from the turn
+    -- cursor, so guard the divide and skip the strafe term.
+    local max_r  = (p.strafe_speed and p.strafe_speed > 0) and p.strafe_speed or nil
+    local strafe = max_r and (p.strafe or 0) / max_r or 0
+    local fx     = math.max(-1, math.min(1, strafe + (p.turn_cursor or 0)))
     local dx     = fx * inner
     local dy     = -(p.speed or 0) / max_s * inner
     local dot_x  = x + half + dx - dot_sz / 2
     local dot_y  = y + half + dy - dot_sz / 2
 
-    if p.land_state == "airborne" or p.land_state == "taking_off" then
+    -- Green while the vehicle is under power: an airborne chopper, or the tank,
+    -- which is always driving. Otherwise (a grounded chopper) a dim amber.
+    local ground_vehicle = p.is_flyer and not p:is_flyer()
+    if p.land_state == "airborne" or p.land_state == "taking_off" or ground_vehicle then
         g.setColor(0.1, 1.0, 0.15, 1.0)
     else
         g.setColor(0.85, 0.75, 0.1, 1.0)
