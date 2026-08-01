@@ -191,6 +191,10 @@ fullscreen fade overlay plus the top scene. Each top-level mode is a scene in
   `ui/info_screen.lua` shell: backdrop, one-shot title zoom-in, EXIT button).
   The high-score table persists to `data/highscores.json`; a game-over score
   that makes the top 10 opens a name-entry row.
+- **advanced_settings** (OPTIONS entry): the options screen edited live over
+  the menu backdrop, with pages for visual effects, audio, the EXTRAS, DISPLAY
+  (fullscreen / window size / vsync / FPS), and the rebindable CONTROLS; changes
+  persist through `core/config.lua` (`data/settings.json`, `data/keybinds.json`).
 - **overview** (EDITOR entry): free-roam camera over the stage, stage/kind
   pickers, the SETUP/START/EDITOR/VIEW panel, and the mode-launch keys. The
   entity editor (the shared `dev/debug_panel.lua`) is always on here (not F2
@@ -199,6 +203,8 @@ fullscreen fade overlay plus the top scene. Each top-level mode is a scene in
   debug mission/phase picker.
 - **equip**: the vehicle select and equip screen between the briefing's PLAY
   and the game (skipped when `assets/equip/` is not exported).
+- **shop**: the briefing's SHOP button opens the `POWUP` / `POWUPT` weapon
+  shop, buying weapon levels with medals into the shared loadout.
 - **gameplay** (`F1`): camera locks to the player, world rotates so the player
   faces up, combat runs. **sandbox** (`F3`) extends it with a live
   vehicle-parameter editor.
@@ -250,8 +256,9 @@ Engine modules (`engine/`), all built on the tiny `core/class.lua` helper:
 | `ui/layout.lua` | Shared 320x240 design space (`DESIGN_W`/`DESIGN_H`) and the `fit` letterbox transform (scale + centering offsets) used by every non-game screen and `ui/pointer.lua`. |
 
 Scene modules (`engine/scenes/`), one per top-level mode, all subclassing
-`core/scene.lua`: `title`, `main_menu`, `credits`, `hiscores`,
-`mission_briefing`, `mission_select`, `equip`,
+`core/scene.lua`: `title`, `main_menu`, `advanced_settings` (the OPTIONS
+screen), `credits`, `hiscores`,
+`mission_briefing`, `mission_select`, `equip`, `shop`,
 `overview`, `gameplay_base` (shared firing / weapon cycling / landing /
 mission-won sequencing), `gameplay`, `sandbox` (extends gameplay; a live
 mouse/keyboard player-vehicle editor), `coop_setup`, `coop_gameplay`,
