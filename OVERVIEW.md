@@ -228,7 +228,7 @@ Engine modules (`engine/`), all built on the tiny `core/class.lua` helper:
 | `game/renderer.lua` | Draws world layers bottom-to-top in two passes: a ground pass (`draw_ground`: ground dust, decals, segments, destruction craters) and an object pass (`draw_objects`: objects y-sorted and culled, objective markers, grid). The gameplay scene draws a grounded vehicle (the tank) between the two so the object layer stands over it; `draw_objects(mode)` splits objects by solidity so only tall props (trees, buildings, turrets, marked `solid`) occlude the tank while flat clutter (scenery, decals, foot units) stays under it. A chopper is airborne and keeps its slot on top of everything. Non-gameplay scenes call `draw_objects()` (no mode) for the original single-pass order. Flying shrapnel is a separate overlay (`draw_debris`) drawn after the explosion effects. |
 | `ui/hud.lua` | Sprite-based gauges, weapon icon, acceleration box, and radar from `data/hud.json`. The radar draws dots by priority (buildings, then enemies, then airborne helicopters in pink from `world.air_units`, then objectives on top in white) so the goal is never hidden. The acceleration box uses the original `BOX.BIN` art with a green dot driven by speed/strafe plus a small turn nudge. Per mission it prefers override art in `assets/hud/stage{m}/` when present (mission 3 ships a full custom armour/fuel/weapons/scanner/box set, 1-2 only armour), falling back per item to the shared `assets/hud/` set (`Hud:set_mission`). A global `Config.hud_scale` grows every element and its edge inset together so corner-anchored items stay in their corners. The `number` item type draws bitmap-font counters (CHARS gold digits via `engine/core/font.lua`) with an optional marker sprite, either trailing the icon or (with `text_on_icon` + `text_dx`/`text_dy`) placed in a slot inside it: score (top-left, `SCORE` marker + 8 digits), lives (top-right before fuel, `LIVES` marker + 1 digit), carried POWs (bottom-left, the `POWCOUNT` "[soldier] POW =" plate with the count in its bottom-right slot, shown only while POWs are aboard the vehicle), and current-weapon ammo (the count in the weapon sprite's own `x` slot, hidden when infinite; `relative_to: "weapon"` pins it to the weapon item's offset so it rides along when the weapon sprite is repositioned). A kill streak (`Player:register_kill`, several kills inside a short window) shows the blinking stage `OVERKILL` word. |
 | `game/powerups.lua` | Power-up drops from destroyed large buildings: spawn, ttl/blink, fly-over vs land-on collection, and effect application. Frames from the `pickup` clip. Honors `Config.axis_aligned_pickups` (draws them screen-upright, like the original engine, instead of rotating with the world). |
-| `game/mission.lua` | Per-stage win conditions: destroy / rescue / sabotage objectives, progress tracking, and the return-to-base landing requirement. Data-driven from `data/missions.json`, falling back to the stage's own decoded `objectives` block when a stage has no explicit entry (so single player and co-op share the same goals). POWHERE rescue objectives delegate their progress to `rescue.lua`; loose-civilian rescue stages keep the simple fly-over collection. `rescue_pow_counts` (per stage) sets exact POWs per building. |
+| `game/mission.lua` | Per-stage win conditions: destroy / rescue / sabotage objectives, progress tracking, and the return-to-base landing requirement. Data-driven from `data/missions.json`, falling back to the stage's own decoded `objectives` block when a stage has no explicit entry. One builder serves every mode: `Mission.for_stage(world, players, stage_name)` takes the list of contributing players (one in single player, both in co-op), so the modes cannot drift apart. POWHERE rescue objectives delegate their progress to `rescue.lua`; loose-civilian rescue stages keep the simple fly-over collection. `rescue_pow_counts` (per stage) sets exact POWs per building. |
 | `game/rescue.lua` | POW rescue from POWHERE buildings: pairs each `powhere.bin` marker with the nearest `lh.bin` land pad and with the destructible building directly under it (any co-located `structure`, e.g. `bunker2.bin`/`powhut.bin`, paired like a tank hull under its turret) which it shields from damage while the building still holds POWs. Landing on the pad for 1.0s sends POWs (`newdude0`/`pow0`/`pow1` walk clips, rotated to face their path) out one by one from the building edge nearest the pad (so they appear beside, not on top of, the building) to the vehicle (rescued on contact, added to `Player.pows`); leaving sends them back inside. The land pad fades out the moment a vehicle sits on it and fades back in if the vehicle leaves before the building is emptied. A POW can be shot in the open (enemy fire always, friendly fire only with `Config.friendly_fire_pows`), which drops it from the required count and leaves a dead-soldier body (`soldier_dead` pose) on the ground like a felled soldier. Emptying a building fades out its marker and land pad and unshields the building. The POWHERE marker and its land pad are the only in-world cue (no reticle ring). Land pads honor `Config.axis_aligned_pickups` like power-ups. POW counts come from `Mission.rescue_counts` (per-building) or a random 1-3. |
 | `core/animation.lua` | Shared immutable `AnimClip` definitions plus per-instance `AnimState` playback. Loads `data/animations.json`. |
 | `core/audio.lua` | Minimal sound manager. Loads the catalog `data/sounds.json` (ordered categories of `{name, file, label, rate}`, produced by `tools/export_sounds.py`), creates `love.audio` sources lazily, and plays a clip by name (`Audio.play`), retriggering from the start on repeat. A missing catalog is a no-op so the app still runs before sounds are exported. Used by the sound gallery (`scenes/sound_gallery.lua`). |
@@ -319,10 +319,30 @@ player's color (P1 blue, P2 orange) and shows it on the radar (`hud.coplayer`);
 the two vehicles are y-sorted so the southern one draws on top, identically in
 both halves.
 
-It is co-op: a single shared objective is built from the stage's decoded
-`objectives` block via `Mission.coop` (destroy all `world.targets` / rescue
-`world.rescue_people`, then any player returns to base; fail only when both are
-down). Each player keeps an own `score` (kills attributed to `proj.shooter` in
+It is co-op, and it runs the **same rules as single player**, only with two
+players contributing to them. `Mission.for_stage(world, players, stage_name)`
+builds one shared objective the same way for both modes: the stage's
+`data/missions.json` def when it has one (destroy / rescue / sabotage specs,
+`home_base_asset`, `rescue_pow_counts`, `optional` flags), otherwise its decoded
+`objectives` block. Either player can satisfy any objective and either can fly the
+return-to-base landing. A tank-only phase (`vehicle` in `missions.json`) locks both
+setup boxes to the tank, the way the equip screen locks single player. Each player
+carries their own `lives`: a downed vehicle plays out its wreck, spends a life and
+respawns on the base pad with the stage's progress intact
+(`CoopGameplay:_update_down`), a player out of vehicles stays down, and the mission
+fails only when both are down (`Mission:_all_dead`), so a lone survivor can still
+finish the phase. Going down on the way home with every objective met still
+completes the phase. `R` reloads the stage before re-entering, like the
+single-player restart. Night stages get the light map and flash layer per half
+(`lightfx:draw_night` / `draw_additive` per viewport camera, the headlight
+following each half's own player). Per-half overlays mirror the single-player ones
+(return-to-base prompt, `MAYDAY MAYDAY` / `TANK DOWN`, `GAME OVER`).
+
+What co-op still does not share with a campaign phase: it is entered from the
+overview (`F7`), so it uses the free-play weapon lists rather than an equip-screen
+loadout, and it has no briefing, shop or phase-to-phase progression.
+
+Each player keeps an own `score` (kills attributed to `proj.shooter` in
 `CombatSystem`). Friendly fire (`combat.friendly_fire`, default off) lets a
 player's rounds hit the other. P1 uses WASD + L-Shift/L-Ctrl/Q/E, P2 uses arrows
 + R-Shift/R-Ctrl/Num0/NumEnter; `Player.controls` holds the per-player bindings
@@ -399,11 +419,13 @@ Two layers cooperate, both keyed off the JSON contract:
   (`decode_level.py`). `world.lua` collects the matching entities
   (`targets`, `rescue_zones`, `rescue_people`) at load and `renderer.lua` draws the
   on-map markers and objective banner. No hand authoring required; covers all 20
-  stages (phases 11/13/32 carry no resolvable goal and show nothing).
+  stages (phases 11/13/32 carry no goal in the decoded block: their objectives are
+  the hand-authored saboteur missions below).
 - **Hand-authored missions (win/lose).** `data/missions.json` is a map of stage
   name to a richer mission def driving the live win/lose simulation
-  (return-to-base, carried people, sabotage). A stage without an entry has no win
-  condition (free play) but is still visualized from the objective block above.
+  (return-to-base, carried people, sabotage). A stage without an entry falls back to
+  the decoded block above, so every stage has a win condition in both single player
+  and co-op.
 
 ```jsonc
 {

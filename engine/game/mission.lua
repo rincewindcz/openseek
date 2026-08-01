@@ -23,25 +23,12 @@ end
 
 -- Build a mission for the named stage: an explicit missions.json def if one
 -- exists, otherwise the stage's own decoded objectives. nil when neither yields
--- an objective.
-function Mission.for_stage(world, player, stage_name)
+-- an objective. players is the list contributing to the goals: one entry in
+-- single player, both in co-op, so every mode runs the same rules.
+function Mission.for_stage(world, players, stage_name)
     local def = defs[stage_name]
     if not (def and def.objectives) then
         def = objectives_from_stage(world.stage.objectives)
-    end
-    if not def then return nil end
-    return Mission:new(world, { player }, def)
-end
-
--- Shared co-op objective from the stage's decoded objectives block; both players
--- contribute to the same goals.
-function Mission.coop(world, players)
-    local def = objectives_from_stage(world.stage.objectives)
-    -- The saboteur objective lives in missions.json, not the stage's decoded block;
-    -- fold it into the shared co-op objective when its system is active.
-    if world.saboteur and world.saboteur.active then
-        def = def or { objectives = {} }
-        def.objectives[#def.objectives + 1] = { type = "sabotage" }
     end
     if not def then return nil end
     return Mission:new(world, players, def)
@@ -141,7 +128,8 @@ function Mission:_make_objective(spec)
         -- the target buildings and their landing pads (reset before the mission).
         o.target = self.world.saboteur and #self.world.saboteur.sites or 0
     elseif spec.type == "destroy_targets" then
-        -- Co-op: every is_target entity collected by World:load.
+        -- Every is_target entity collected by World:load (the decoded fallback,
+        -- and stages whose target asset is shared with a non-target class).
         o.list   = self.world.targets
         o.target = #o.list
     elseif spec.type == "rescue_people" then
@@ -256,14 +244,16 @@ function Mission:_update_destroy(o)
 end
 
 function Mission:_update_rescue(o)
-    if self.player:is_stationary() then
-        for _, z in ipairs(o.zones) do
-            if not o.collected[z.id] then
-                local dx, dy = self.world:delta(self.player.x, self.player.y, z.x, z.y)
-                if dx * dx + dy * dy <= o.radius * o.radius then
-                    o.collected[z.id] = true
-                    o.progress = o.progress + 1
-                    self.player.pows = (self.player.pows or 0) + 1
+    for _, p in ipairs(self.players) do
+        if p:is_stationary() then
+            for _, z in ipairs(o.zones) do
+                if not o.collected[z.id] then
+                    local dx, dy = self.world:delta(p.x, p.y, z.x, z.y)
+                    if dx * dx + dy * dy <= o.radius * o.radius then
+                        o.collected[z.id] = true
+                        o.progress = o.progress + 1
+                        p.pows = (p.pows or 0) + 1
+                    end
                 end
             end
         end

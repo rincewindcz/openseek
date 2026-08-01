@@ -121,7 +121,7 @@ function Gameplay:spawn_player(carry)
     app.rescue:reset()
     app.saboteur.spec = Mission.sabotage_spec(world.stage_name)
     app.saboteur:reset()
-    self.mission = Mission.for_stage(world, player, world.stage_name)
+    self.mission = Mission.for_stage(world, { player }, world.stage_name)
     camera.x, camera.y = player.x, player.y
     camera:start_zoom_intro(1.5, 1.0)   -- smooth zoom-in as the level opens
     self.pending_takeoff = true         -- chopper takes off when the zoom-in ends

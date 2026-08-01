@@ -2,6 +2,7 @@ local Class        = require "engine.core.class"
 local Scene        = require "engine.core.scene"
 local Animation    = require "engine.core.animation"
 local Vehicles     = require "engine.game.vehicles"
+local Mission      = require "engine.game.mission"
 local CoopGameplay = require "engine.scenes.coop_gameplay"
 
 -- 2P setup overlay over the overview: each player toggles their own vehicle
@@ -37,7 +38,23 @@ local function draw_vehicle_icon(g, vehicle, cx, cy, scale, skin)
     end
 end
 
+-- The vehicle a tank-only phase forces on both players, as the equip screen does
+-- in single player; nil when they may choose.
+function CoopSetup:_forced_vehicle()
+    return Mission.required_vehicle(self.app.world.stage_name)
+end
+
+function CoopSetup:enter()
+    local forced = self:_forced_vehicle()
+    if not forced then return end
+    local coop = self.app.settings.coop
+    for i = 1, 2 do
+        if coop.vehicle[i] ~= forced then coop.vehicle[i], coop.skin[i] = forced, 1 end
+    end
+end
+
 function CoopSetup:_toggle_vehicle(idx)
+    if self:_forced_vehicle() then return end
     local coop = self.app.settings.coop
     coop.vehicle[idx], coop.skin[idx] = Vehicles.cycle(coop.vehicle[idx], coop.skin[idx])
 end
@@ -64,7 +81,9 @@ function CoopSetup:_draw_player_box(g, idx, bx, by, bw, bh)
     draw_vehicle_icon(g, coop.vehicle[idx], bx + bw / 2, by + bh / 2 + 6, 2, coop.skin[idx])
     g.setColor(1, 1, 1, 1)
     local name = Vehicles.label(coop.vehicle[idx], coop.skin[idx])
-    g.print("< " .. name .. " >", bx + bw / 2 - 40, by + bh - 22)
+    -- A forced-vehicle phase drops the pick arrows: the choice is locked.
+    if not self:_forced_vehicle() then name = "< " .. name .. " >" end
+    g.print(name, bx + bw / 2 - 40, by + bh - 22)
 end
 
 function CoopSetup:draw()
@@ -95,7 +114,12 @@ function CoopSetup:draw()
 
     g.setColor(0.6, 0.6, 0.6, 1)
     local fy = ty + 78
-    g.print("P1 (blue): A/D pick vehicle      P2 (orange): Left/Right pick vehicle", screen_w / 2 - 240, fy)
+    if self:_forced_vehicle() then
+        g.print("This phase is " .. self:_forced_vehicle():upper() .. " only: vehicle locked for both players",
+            screen_w / 2 - 240, fy)
+    else
+        g.print("P1 (blue): A/D pick vehicle      P2 (orange): Left/Right pick vehicle", screen_w / 2 - 240, fy)
+    end
     g.print("G god mode      F friendly fire      SPACE start      Esc cancel", screen_w / 2 - 240, fy + 22)
     g.print("In game  P1: WASD + L-Shift/L-Ctrl/Q/E    P2: Arrows + R-Shift/R-Ctrl/Num0/NumEnter",
         screen_w / 2 - 240, fy + 46)
@@ -106,7 +130,11 @@ function CoopSetup:keypressed(key)
     local app  = self.app
     local coop = app.settings.coop
     if     key == "escape" then app.scenes:switch("overview")
-    elseif key == "space"  then app.scenes:switch("coop_gameplay")
+    elseif key == "space"  then
+        -- Starting a co-op phase turns on the lives + game-over flow, exactly as
+        -- the briefing's PLAY does for single player; G god mode still opts out.
+        app.settings.death_enabled = true
+        app.scenes:switch("coop_gameplay")
     elseif key == "g"      then coop.god = not coop.god
     elseif key == "f"      then coop.ff  = not coop.ff
     elseif key == P1_CONTROLS.left or key == P1_CONTROLS.right then self:_toggle_vehicle(1)

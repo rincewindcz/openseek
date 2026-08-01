@@ -233,7 +233,15 @@ function LightFX:draw_night(camera)
         self.cw, self.ch = w, h
     end
 
+    -- The light map is built in viewport-local pixels (camera:project /
+    -- screen_center already are), so the canvas pass runs under an identity
+    -- transform with no scissor; the caller's translate and scissor apply when
+    -- the finished map is composited below. Split screen relies on this.
     local prev = g.getCanvas()
+    local clip_x, clip_y, clip_w, clip_h = g.getScissor()
+    g.push()
+    g.origin()
+    g.setScissor()
     g.setCanvas(self.canvas)
     local a  = self.night.ambient
     local br = Config.night_brightness   -- lifts the floor toward daylight
@@ -247,6 +255,8 @@ function LightFX:draw_night(camera)
         self:_stamp(sx, sy, l.radius * z, l.r, l.g, l.b, l.intensity * fade)
     end
     g.setCanvas(prev)
+    g.pop()
+    if clip_x then g.setScissor(clip_x, clip_y, clip_w, clip_h) end
 
     g.setBlendMode("multiply", "premultiplied")
     g.setColor(1, 1, 1, 1)

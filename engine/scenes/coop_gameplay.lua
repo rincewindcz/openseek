@@ -1,6 +1,7 @@
 local Class        = require "engine.core.class"
 local GameplayBase = require "engine.scenes.gameplay_base"
 local Camera       = require "engine.core.camera"
+local Font         = require "engine.core.font"
 local Player       = require "engine.game.player"
 local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
@@ -25,6 +26,10 @@ CoopGameplay.P2_CONTROLS = {
 }
 
 local COLORS = CoopGameplay.COLORS
+
+-- Beat between a wreck finishing and the vehicle being back on the pad. Single
+-- player holds its crash picture for the same time before respawning.
+local RESPAWN_DELAY = 0.8
 
 function CoopGameplay:make_player(idx, sx, sy)
     local app  = self.app
@@ -52,6 +57,9 @@ function CoopGameplay:enter()
     self:reset_end_stats()
     app.renderer.in_game = true
     self:enter_weather()
+    app.lightfx:enter(world)
+    self.death_timers = {}
+    self.out          = {}   -- players who spent their last vehicle
 
     local sx, sy = world:player_start()
     self.players = {
@@ -83,8 +91,9 @@ function CoopGameplay:enter()
     app.rescue:reset()
     app.saboteur.spec = Mission.sabotage_spec(world.stage_name)
     app.saboteur:reset()
-    -- Shared co-op objective from the stage's decoded objectives (nil = free play).
-    self.mission = Mission.coop(world, self.players)
+    -- One shared objective, built by the same rules as single player (the stage's
+    -- missions.json def, else its decoded objectives); both players contribute.
+    self.mission = Mission.for_stage(world, self.players, world.stage_name)
 end
 
 function CoopGameplay:leave()
@@ -92,6 +101,7 @@ function CoopGameplay:leave()
     self.paused = false
     self:reset_end_stats()
     app.weather:set(nil)
+    app.lightfx:reset()
     app.renderer.in_game = false
     -- Restore the shared overview camera on every system that was pointed at
     -- a split camera, or the overview renders through a stale half-view.
@@ -105,13 +115,16 @@ function CoopGameplay:leave()
     app.combat.effects       = {}
     app.helis:clear()
     app.powerups:reset(nil)
+    app.rescue:clear()
     app.saboteur:clear()
     app.hud.player = nil
     app.hud.coplayer, app.hud.coplayer_color = nil, nil
     app.hud.view_w, app.hud.view_h = nil, nil
-    self.players = {}
-    self.cameras = {}
-    self.mission = nil
+    self.players      = {}
+    self.cameras      = {}
+    self.death_timers = {}
+    self.out          = {}
+    self.mission      = nil
     app.camera.angle   = nil
     app.camera.view_oy = 0
     app.camera:set_zoom(app.viewer_zoom_index)
@@ -137,6 +150,65 @@ function CoopGameplay:collect_stats()
     return { phase = Stats.stage_phase(world.stage_name), participants = participants }
 end
 
+-- A downed player, on single-player rules: the wreck plays out, a life is spent,
+-- and the vehicle is put back on the base pad with the stage's progress intact.
+-- Out of vehicles the player stays down; the mission fails once both are (see
+-- Mission:_all_dead), so a lone survivor can still finish the phase.
+function CoopGameplay:_update_down(idx, p, dt)
+    if self.out[idx] or not p:death_done() then return end
+    -- Objectives were finished as the vehicle went down: the stats screen is
+    -- taking over, so no life is spent (single player does the same).
+    if self.mission and self.mission.state == "won" then return end
+    local t = (self.death_timers[idx] or RESPAWN_DELAY) - dt
+    self.death_timers[idx] = t
+    if t > 0 then return end
+    self.death_timers[idx] = nil
+    p.lives = math.max(0, (p.lives or 0) - 1)
+    if p.lives <= 0 then
+        self.out[idx] = true
+        return
+    end
+    p:respawn(p.home_x or p.x, p.home_y or p.y)
+    p:take_off()   -- no-op for the tank
+    local cam = self.cameras[idx]
+    if cam then cam.x, cam.y = p.x, p.y end
+    -- Both players were down for a frame but this one had a vehicle left: the
+    -- mission is live again, like a single-player respawn.
+    if self.mission and self.mission.state == "failed" then self.mission.state = "active" end
+end
+
+-- Centered lines inside one split-screen half. GameplayBase:overlay_text works
+-- in window space, so it cannot be used under a half's viewport transform.
+function CoopGameplay:_half_text(vw, vh, lines, dim)
+    local g = love.graphics
+    if dim and dim > 0 then
+        g.setColor(0, 0, 0, dim)
+        g.rectangle("fill", 0, 0, vw, vh)
+    end
+    local font = Font.get("chars")
+    local s    = 3
+    local y    = (vh - #lines * font.line_height * s) / 2
+    for _, ln in ipairs(lines) do
+        font:print(ln, (vw - font:width(ln, s)) / 2, y, { scale = s })
+        y = y + font.line_height * s + 8
+    end
+    g.setColor(1, 1, 1)
+end
+
+-- Per-half status, mirroring the single-player overlays: the blinking
+-- return-to-base prompt, a recoverable loss, or game over for a player who has
+-- spent every vehicle.
+function CoopGameplay:_draw_half_status(idx, p, vw, vh)
+    if self.out[idx] then
+        self:_half_text(vw, vh, { "GAME OVER" }, 0.55)
+    elseif p.death then
+        self:_half_text(vw, vh, { p.vehicle == "tank" and "TANK DOWN" or "MAYDAY MAYDAY" }, 0)
+    elseif self.mission and self.mission.state == "return_to_base"
+        and math.floor(love.timer.getTime() * 1.5) % 2 == 0 then
+        self:_half_text(vw, vh, { "MISSION COMPLETE", "RETURN TO BASE" }, 0)
+    end
+end
+
 function CoopGameplay:update(dt)
     local app = self.app
     if self.paused then return end
@@ -149,11 +221,19 @@ function CoopGameplay:update(dt)
         end
         return
     end
-    for _, p in ipairs(self.players) do
+    for i, p in ipairs(self.players) do
         p:update(dt)
         if not p.death then app.combat:crush_units(p) end
         if not p.death and p:_held("fire") then self:fire_for(p) end
-        if app.settings.death_enabled and not p.death and p:is_dead() then p:start_death() end
+        if app.settings.death_enabled and not p.death and p:is_dead() then
+            -- Going down on the way home with every objective already met still
+            -- completes the phase, as in single player.
+            if self.mission and self.mission.state == "return_to_base" then
+                self.mission.state = "won"
+            end
+            p:start_death()
+        end
+        self:_update_down(i, p, dt)
     end
     for i, p in ipairs(self.players) do
         local c = self.cameras[i]
@@ -169,6 +249,7 @@ function CoopGameplay:update(dt)
     self:update_won(dt)
     app.world:update(dt)
     app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
+    app.lightfx:update(dt)
 end
 
 function CoopGameplay:draw()
@@ -218,11 +299,17 @@ function CoopGameplay:draw()
             if other then other:draw_remote(g, cam, COLORS[3 - i]) end
         end
         p:draw_world_front()
+        -- Night light map and flash layer per half, from this half's camera; the
+        -- headlight follows the player it belongs to and cuts on destruction.
+        app.lightfx.headlight_on = not p.death
+        app.lightfx:draw_night(cam)
+        app.lightfx:draw_additive(cam)
         app.hud.player         = p
         app.hud.coplayer       = other
         app.hud.coplayer_color = other and COLORS[3 - i] or nil
         app.hud.view_w, app.hud.view_h = vw, H
         app.hud:draw()
+        self:_draw_half_status(i, p, vw, H)
         g.setScissor()
         g.pop()
     end
@@ -249,7 +336,14 @@ function CoopGameplay:keypressed(key)
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
     if key == "escape" then app.scenes:push("main_menu"); return end
     if key == "p" then self.paused = not self.paused; return end
-    if key == "r" then app.scenes:switch("coop_gameplay"); return end   -- full re-enter
+    if key == "r" then
+        -- Restart reloads the stage first, like single player, so destroyed
+        -- entities and spent objectives come back.
+        app.world:load(app.world.stage_name)
+        app.after_stage_load()
+        app.scenes:switch("coop_gameplay")
+        return
+    end
     if key == "f5" then
         local coop = app.settings.coop
         coop.god = not coop.god
