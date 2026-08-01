@@ -42,7 +42,7 @@ end
 -- order) when supplied, otherwise a random 1-3.
 function RescueSystem:_count_for(idx)
     local c = self.pow_counts and self.pow_counts[idx]
-    return c or math.random(1, 3)
+    return c or self.world.rng:random(1, 3)
 end
 
 function RescueSystem:_nearest_land(zone, taken)
@@ -156,7 +156,7 @@ function RescueSystem:_emerge(site, target)
         state   = "out",
         target  = target,
         heading = 0,
-        anim    = Animation.new(POW_CLIPS[math.random(#POW_CLIPS)]),
+        anim    = Animation.new(POW_CLIPS[self.world.rng:random(#POW_CLIPS)]),
     }
 end
 

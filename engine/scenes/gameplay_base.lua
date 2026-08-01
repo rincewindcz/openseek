@@ -1,7 +1,10 @@
-local Class    = require "engine.core.class"
-local Scene    = require "engine.core.scene"
-local Font     = require "engine.core.font"
-local Vehicles = require "engine.game.vehicles"
+local Class       = require "engine.core.class"
+local Scene       = require "engine.core.scene"
+local Font        = require "engine.core.font"
+local Vehicles    = require "engine.game.vehicles"
+local Rng         = require "engine.core.rng"
+local InputSource = require "engine.core.input_source"
+local Replay      = require "engine.game.replay"
 
 -- Shared base for the gameplay scenes (single player, sandbox, co-op split):
 -- firing, weapon cycling, landing, the mission-won -> DESTRUCTION STATS
@@ -26,7 +29,7 @@ end
 -- Centered title in the game's bitmap body font (same as the score readout)
 -- over a dimmed screen. No subtitle / key hints: game mode shows game-font
 -- text only.
-function GameplayBase:overlay_text(title, dim)
+function GameplayBase:draw_overlay_text(title, dim)
     local g = love.graphics
     local screen_w, screen_h = g.getDimensions()
     g.setColor(0, 0, 0, dim or 0.55)
@@ -99,6 +102,29 @@ function GameplayBase:select_weapon(p, i)
     p.weapon_name  = name
     p.weapon_level = p.weapon_levels and p.weapon_levels[name] or 1
     p.fire_timer   = 0
+    local def = self.app.combat.weapons[name]
+    p.weapon_icon = def and def.icon or 0
+end
+
+-- Take this tick's input frame for p from its source and apply the edge actions
+-- it carries. Everything the player can do that changes the simulation arrives
+-- here, so a recorded frame drives the game exactly like a live key.
+-- See DETERMINISM.md.
+function GameplayBase:apply_input(p, source)
+    local frame = source:frame(self.app.tick)
+    p.frame = frame
+    for _, event in ipairs(frame.events) do
+        if     event == "takeoff"     then self:toggle_land(p)
+        elseif event == "weapon"      then self:cycle_weapon(p)
+        elseif event == "god"         then p.unlimited = not p.unlimited
+        elseif event == "pickup_mode" then
+            self.app.powerups.easy_mode = not self.app.powerups.easy_mode
+        else
+            local slot = event:match("^slot:(%d)$")
+            if slot then self:select_weapon(p, tonumber(slot)) end
+        end
+    end
+    return frame
 end
 
 -- Cycle p's weapon to the next one in its list.
@@ -119,6 +145,210 @@ function GameplayBase:toggle_land(p)
     elseif p.land_state == "grounded" then
         p:take_off()
     end
+end
+
+-- replay: recording, playback and divergence checking
+
+local CHECK_INTERVAL = 60   -- ticks between state checksums (one per simulated second)
+local VERIFY_SCALE   = 20   -- simulated ticks per real tick while verifying a replay
+
+-- A phase always starts from a pristine stage. Re-entering the game should not
+-- inherit the previous run's damage, and a recording is only reproducible if the
+-- world it starts from is identical to the one its replay will load.
+function GameplayBase:reload_stage()
+    local app     = self.app
+    local playing = app.replay_play
+    local stage   = (playing and playing.header.stage) or app.world.stage_name
+    app.world:load(stage)
+    app.after_stage_load()
+end
+
+-- Leaving a phase: flush the recording, and drop any playback so the next run is
+-- live again.
+function GameplayBase:end_session()
+    self:save_recording()
+    if self.playback then
+        self.app.replay_play   = nil
+        self.app.replay_verify = false
+        self.playback = nil
+    end
+    self.tick_scale = 1
+end
+
+-- Start a phase's randomness and simulation clock. Called before anything rolls
+-- (POW counts, heli spawns), so a replayed phase rolls the recorded numbers.
+function GameplayBase:seed_phase()
+    local app = self.app
+    self.playback = app.replay_play
+    self.desync   = nil
+    self.recording = nil
+    if self.playback then
+        self.params = Replay.decode_map(self.playback.header.params)
+        Replay.apply_params(self.params)
+        self.seed = self.playback:number("seed", 0)
+        self.tick_scale = app.replay_verify and VERIFY_SCALE or 1
+    else
+        self.params = Replay.params_now()
+        self.seed = Rng.new_seed()
+        self.tick_scale = 1
+    end
+    app.tick = 0
+    app.world:reset_rng(self.seed)
+end
+
+-- Describe the starting conditions precisely enough to reproduce the run.
+function GameplayBase:replay_header(mode, players)
+    local app    = self.app
+    local header = {
+        build   = Replay.build_id(),
+        stage   = app.world.stage_name,
+        mode    = mode,
+        seed    = self.seed,
+        players = #players,
+        params  = Replay.encode_map(Replay.params_now()),
+        death   = tostring(app.settings.death_enabled and true or false),
+        easy_pickups = tostring(app.powerups.easy_mode and true or false),
+        friendly_fire = tostring(app.combat.friendly_fire and true or false),
+    }
+    for slot, p in ipairs(players) do
+        local key = "player." .. slot .. "."
+        header[key .. "vehicle"] = p.vehicle
+        header[key .. "skin"]    = p.chopper_skin or 1
+        header[key .. "lives"]   = p.lives or 3
+        header[key .. "god"]     = tostring(p.unlimited and true or false)
+        header[key .. "weapons"] = Replay.encode_list(p.weapon_list or Vehicles.WEAPONS[p.vehicle])
+        if p.weapon_levels then header[key .. "levels"] = Replay.encode_map(p.weapon_levels) end
+        header[key .. "ammo"]    = Replay.encode_map(p.ammo)
+    end
+    return header
+end
+
+-- Playback: restore the recorded mode flags before the players are built.
+function GameplayBase:apply_replay_settings()
+    if not self.playback then return end
+    local app, header = self.app, self.playback.header
+    app.settings.death_enabled = header.death == "true"
+    app.powerups.easy_mode     = header.easy_pickups == "true"
+    app.combat.friendly_fire   = header.friendly_fire == "true"
+end
+
+-- Playback: restore a recorded player's starting state. Called after the player
+-- is built and its ammo seeded, so it wins over the live settings.
+function GameplayBase:apply_replay_player(p, slot)
+    if not self.playback then return end
+    local header = self.playback.header
+    local key    = "player." .. slot .. "."
+    p.lives     = tonumber(header[key .. "lives"]) or p.lives
+    p.unlimited = header[key .. "god"] == "true"
+    local weapons = Replay.decode_list(header[key .. "weapons"])
+    if #weapons > 0 then
+        p.weapon_list = weapons
+        p.weapon_name = weapons[1]
+    end
+    local levels = header[key .. "levels"]
+    if levels then
+        p.weapon_levels = Replay.decode_map(levels)
+        p.weapon_level  = p.weapon_levels[p.weapon_name] or 1
+    end
+    local ammo = Replay.decode_map(header[key .. "ammo"])
+    if next(ammo) then p.ammo = ammo end
+end
+
+-- The vehicle and skin a replay recorded for a slot, or nil when not replaying.
+function GameplayBase:replay_vehicle(slot)
+    if not self.playback then return nil end
+    local key = "player." .. slot .. "."
+    return self.playback.header[key .. "vehicle"],
+        tonumber(self.playback.header[key .. "skin"]) or 1
+end
+
+-- Build one input source per player slot: recorded frames on playback, the live
+-- keyboard otherwise. bindings is one key-binding table per slot.
+function GameplayBase:begin_input(mode, players, bindings)
+    local app = self.app
+    self.sources = {}
+    if self.playback then
+        self.playback:rewind()
+        for slot = 1, #players do
+            self.sources[slot] = InputSource.Replay:new(self.playback, slot)
+        end
+    else
+        for slot, binding in ipairs(bindings) do
+            self.sources[slot] = InputSource.Local:new(binding)
+        end
+        if app.record_runs then
+            self.recording = Replay:new(self:replay_header(mode, players))
+        end
+    end
+    self.source = self.sources[1]
+end
+
+-- End of a simulated tick: store this tick's input and a periodic checksum, or on
+-- playback compare that checksum and remember the first tick that disagrees.
+-- Recorded parameters are re-applied so a live options edit cannot change the run.
+function GameplayBase:tick_replay(players)
+    local app  = self.app
+    local tick = app.tick
+    Replay.apply_params(self.params)   -- a live options edit cannot change a run in progress
+    if self.recording then
+        for slot, p in ipairs(players) do
+            self.recording:record_input(tick, slot, p.frame)
+        end
+        if tick % CHECK_INTERVAL == 0 then
+            self.recording:record_check(tick, Replay.checksum(app.world, players, app.combat))
+        end
+    elseif self.playback then
+        local expected = self.playback:check_for(tick)
+        if expected and not self.desync then
+            if Replay.checksum(app.world, players, app.combat) ~= expected then
+                self.desync = tick
+            end
+        end
+        if self.desync or tick >= self.playback.length then
+            self:finish_playback()
+        end
+    end
+end
+
+-- Write the recording out. Called when the phase ends, however it ends.
+function GameplayBase:save_recording()
+    if not (self.recording and self.recording.length > 0) then return end
+    self.recording:save()
+    self.recording = nil
+end
+
+-- Playback reached its last recorded tick, diverged, or was cut short (the phase
+-- ended or the viewer bailed out): report and go back to the replay list.
+function GameplayBase:finish_playback(reason)
+    local app = self.app
+    app.replay_result = {
+        ok      = self.desync == nil and reason == nil,
+        reason  = reason,
+        tick    = app.tick,
+        length  = self.playback.length,
+        desync  = self.desync,
+        name    = self.playback.path,
+    }
+    self.playback     = nil
+    app.replay_play   = nil
+    app.replay_verify = false
+    self.tick_scale   = 1
+    app.scenes:switch("replays")
+end
+
+-- A "REPLAY" tag over the game while a recording is being played back, with the
+-- tick counter so a divergence report can be lined up with what was on screen.
+function GameplayBase:draw_replay_tag()
+    if not self.playback then return end
+    local g = love.graphics
+    local text = string.format("REPLAY  %d / %d%s", self.app.tick, self.playback.length,
+        self.app.replay_verify and "  (verifying)" or "")
+    local w = g.getFont():getWidth(text) + 16
+    g.setColor(0, 0, 0, 0.55)
+    g.rectangle("fill", g.getWidth() / 2 - w / 2, 4, w, 20, 3)
+    g.setColor(1, 0.85, 0.35, 1)
+    g.print(text, g.getWidth() / 2 - w / 2 + 8, 7)
+    g.setColor(1, 1, 1, 1)
 end
 
 -- Mission won: hold MISSION COMPLETE briefly, then start the DESTRUCTION

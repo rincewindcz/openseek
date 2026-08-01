@@ -202,12 +202,14 @@ function Overview:_draw_panel()
 
     -- START box
     y = y + setup_h + 6
-    local start_h = 22 + 6 * ROW_H + 6
+    local start_h = 22 + 7 * ROW_H + 6
     g.setColor(COLORS.bg); g.rectangle("fill", x, y, PANEL_W, start_h, 4)
     yy = section(g, "START", x, y + 4)
     yy = row(g, "[F1]",  "Play",              nil, nil, x, yy)
     yy = row(g, "[F3]",  "Sandbox (vehicle)", nil, nil, x, yy)
     yy = row(g, "[F7]",  "2P split screen",   nil, nil, x, yy)
+    yy = row(g, "[F4]",  "Replays",           app.record_runs and "REC" or nil,
+          app.record_runs and COLORS.on or nil, x, yy)
     yy = row(g, "[F8]",  "Animation gallery", nil, nil, x, yy)
     yy = row(g, "[F9]",  "Font gallery",      nil, nil, x, yy)
     row(g, "[F10]", "Sound gallery",     nil, nil, x, yy)
@@ -279,6 +281,7 @@ function Overview:keypressed(key)
     if key == "f9"  then app.scenes:switch("font_gallery");  return end
     if key == "f10" then app.scenes:switch("sound_gallery"); return end
     if key == "f7"  then app.scenes:switch("coop_setup");    return end
+    if key == "f4"  then app.scenes:switch("replays");       return end
     if key == "f2"  then return end   -- editor is always on here; F2 is a no-op
     if app.debug_panel.enabled and app.debug_panel:keypressed(key) then return end
     if key == "f1" then

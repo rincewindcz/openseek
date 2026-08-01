@@ -643,7 +643,7 @@ end
 -- travel direction wherever it connects, matching the original game's impact.
 function CombatSystem:_ffr_shrapnel(projectile)
     if projectile.weapon_def.proj_sprite ~= "ffr" then return end
-    local n = math.random(0, 2)
+    local n = self.world.rng:random(0, 2)
     if n > 0 then
         self.world:spawn_directional_debris(projectile.x, projectile.y, projectile.vx, projectile.vy, n, "metal8")
     end
@@ -733,7 +733,7 @@ end
 -- the entity fall back to its default.
 function CombatSystem:_hit_clip(weapon_def)
     local h = weapon_def.hit_effect
-    if type(h) == "table" then return h[math.random(#h)] end
+    if type(h) == "table" then return h[self.world.rng:random(#h)] end
     return h
 end
 
@@ -824,7 +824,7 @@ end
 -- A random scorch (fire / smoke) burst on the player's vehicle when it is hit.
 -- Attached to the player so it draws on top of the vehicle, not under it.
 function CombatSystem:_player_hit_fx(p)
-    local clip = PLAYER_HIT_FX[math.random(#PLAYER_HIT_FX)]
+    local clip = PLAYER_HIT_FX[self.world.rng:random(#PLAYER_HIT_FX)]
     if p.add_hit_fx then
         p:add_hit_fx(clip, clip == "fire" and 0.6 or nil)
     else
@@ -837,7 +837,7 @@ end
 function CombatSystem:_bomb_detonate(projectile)
     self:add_effect(projectile.weapon_def.explosion or "explosion_large", projectile.x, projectile.y, { scale = 1.5 })
     -- Same flying iron/metal shrapnel (and the dust it leaves) as a building blast.
-    self.world:spawn_debris(projectile.x, projectile.y, 5 + math.random(0, 3), 1.4)
+    self.world:spawn_debris(projectile.x, projectile.y, 5 + self.world.rng:random(0, 3), 1.4)
     local r  = projectile.aoe > 0 and projectile.aoe or 80
     local r2 = r * r
     for _, e in ipairs(self.world.entities) do

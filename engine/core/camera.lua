@@ -23,6 +23,15 @@ function Camera:dims()
     return love.graphics.getDimensions()
 end
 
+-- Game-mode framing: drop the focus point below the viewport center so more of
+-- the world ahead of the vehicle is visible. Reading the viewport lives here, in
+-- presentation code, and never in a gameplay scene: the simulation may not depend
+-- on the view (DETERMINISM.md).
+function Camera:set_game_focus()
+    local _, h = self:dims()
+    self.view_oy = h * 0.24
+end
+
 -- Screen pixel the focus point (camera x,y) maps to. In game mode the vehicle
 -- sits below center so more of the world ahead is visible.
 function Camera:screen_center()

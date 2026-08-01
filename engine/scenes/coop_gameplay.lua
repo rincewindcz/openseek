@@ -35,9 +35,10 @@ function CoopGameplay:make_player(idx, sx, sy)
     local app  = self.app
     local coop = app.settings.coop
     local p = Player:new(sx, sy)
+    local replay_vehicle, replay_skin = self:replay_vehicle(idx)
     p.world_size   = app.world.stage.world_size
-    p.vehicle      = coop.vehicle[idx]
-    p.chopper_skin = coop.skin[idx]
+    p.vehicle      = replay_vehicle or coop.vehicle[idx]
+    p.chopper_skin = replay_skin or coop.skin[idx]
     p.world        = app.world
     p.controls     = (idx == 1) and CoopGameplay.P1_CONTROLS or CoopGameplay.P2_CONTROLS
     local def = app.vehicle_defs[p.vehicle]
@@ -46,13 +47,16 @@ function CoopGameplay:make_player(idx, sx, sy)
     if weapon_list then p.weapon_name = weapon_list[1] end
     p:seed_ammo(app.combat.weapons)
     p.unlimited = coop.god
+    self:apply_replay_player(p, idx)   -- playback: the recorded loadout wins
     return p
 end
 
 function CoopGameplay:enter()
     local app = self.app
+    self:reload_stage()   -- a phase starts from a fresh stage (recordings depend on it)
     local world, combat = app.world, app.combat
-    app.tick = 0   -- the phase's simulation clock starts here
+    self:seed_phase()              -- randomness and clock, before anything rolls
+    self:apply_replay_settings()   -- playback: the recorded mode flags
     app.viewer_zoom_index = app.camera.zoom_index
     self.paused = false
     self:reset_end_stats()
@@ -69,11 +73,10 @@ function CoopGameplay:enter()
     }
     for _, p in ipairs(self.players) do p.home_x, p.home_y = sx, sy end
     self.cameras = { Camera:new(world.stage.world_size), Camera:new(world.stage.world_size) }
-    local _, screen_h = love.graphics.getDimensions()
     for i, p in ipairs(self.players) do
         local c = self.cameras[i]
         c:set_zoom(6)
-        c.view_oy = screen_h * 0.24
+        c:set_game_focus()
         c.x, c.y  = p.x, p.y
         c.angle   = p:camera_angle()
         p.camera  = c
@@ -81,9 +84,11 @@ function CoopGameplay:enter()
     end
 
     local coop = app.settings.coop
+    self:begin_input("coop", self.players,
+        { CoopGameplay.P1_CONTROLS, CoopGameplay.P2_CONTROLS })
     combat.players       = self.players
     combat.player        = self.players[1]
-    combat.friendly_fire = coop.ff
+    if not self.playback then combat.friendly_fire = coop.ff end
     combat.projectiles   = {}
     combat.effects       = {}
     app.helis:reset()
@@ -99,6 +104,7 @@ end
 
 function CoopGameplay:leave()
     local app = self.app
+    self:end_session()
     self.paused = false
     self:reset_end_stats()
     app.weather:set(nil)
@@ -178,7 +184,7 @@ function CoopGameplay:_update_down(idx, p, dt)
     if self.mission and self.mission.state == "failed" then self.mission.state = "active" end
 end
 
--- Centered lines inside one split-screen half. GameplayBase:overlay_text works
+-- Centered lines inside one split-screen half. GameplayBase:draw_overlay_text works
 -- in window space, so it cannot be used under a half's viewport transform.
 function CoopGameplay:_half_text(vw, vh, lines, dim)
     local g = love.graphics
@@ -214,6 +220,8 @@ function CoopGameplay:update(dt)
     local app = self.app
     if self.paused then return end
     if app.end_stats:is_active() then
+        -- The recording stopped when the phase did, so playback is done too.
+        if self.playback then self:finish_playback("phase ended"); return end
         app.end_stats:update(dt)
         if app.end_stats:is_active() then
             app.world:update(dt)
@@ -223,6 +231,7 @@ function CoopGameplay:update(dt)
         return
     end
     for i, p in ipairs(self.players) do
+        self:apply_input(p, self.sources[i])
         p:update(dt)
         if not p.death then app.combat:crush_units(p) end
         if not p.death and p:_held("fire") then self:fire_for(p) end
@@ -251,6 +260,7 @@ function CoopGameplay:update(dt)
     app.world:update(dt)
     app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
     app.lightfx:update(dt)
+    self:tick_replay(self.players)
 end
 
 function CoopGameplay:draw()
@@ -324,19 +334,24 @@ function CoopGameplay:draw()
         app.end_stats:draw()
     elseif self.mission then
         if self.mission.state == "won" then
-            self:overlay_text("MISSION COMPLETE")
+            self:draw_overlay_text("MISSION COMPLETE")
         elseif self.mission.state == "failed" then
-            self:overlay_text("MISSION FAILED")
+            self:draw_overlay_text("MISSION FAILED")
         end
     end
-    if self.paused then self:overlay_text("PAUSE") end
+    self:draw_replay_tag()
+    if self.paused then self:draw_overlay_text("PAUSE") end
 end
 
 function CoopGameplay:keypressed(key)
     local app = self.app
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
-    if key == "escape" then app.scenes:push("main_menu"); return end
+    if key == "escape" then
+        if self.playback then self:finish_playback("stopped") else app.scenes:push("main_menu") end
+        return
+    end
     if key == "p" then self.paused = not self.paused; return end
+    if self.playback then return end
     if key == "r" then
         -- Restart reloads the stage first, like single player, so destroyed
         -- entities and spent objectives come back.
@@ -346,15 +361,14 @@ function CoopGameplay:keypressed(key)
         return
     end
     if key == "f5" then
-        local coop = app.settings.coop
-        coop.god = not coop.god
-        for _, p in ipairs(self.players) do p.unlimited = coop.god end
+        app.settings.coop.god = not app.settings.coop.god
+        for _, src in ipairs(self.sources) do src:queue("god") end
         return
     end
-    if key == "f6" then app.powerups.easy_mode = not app.powerups.easy_mode; return end
-    for _, p in ipairs(self.players) do
-        if key == p.controls.weapon then self:cycle_weapon(p) end
-        if key == p.controls.action then self:toggle_land(p) end
+    if key == "f6" then self.sources[1]:queue("pickup_mode"); return end
+    for i, p in ipairs(self.players) do
+        if key == p.controls.weapon then self.sources[i]:queue("weapon") end
+        if key == p.controls.action then self.sources[i]:queue("takeoff") end
     end
 end
 

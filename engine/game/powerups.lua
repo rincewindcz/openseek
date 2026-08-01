@@ -58,7 +58,7 @@ function Powerups:_pickup_frames()
 end
 
 function Powerups:_random_kind()
-    local r = math.random() * TOTAL_WEIGHT
+    local r = self.world.rng:random() * TOTAL_WEIGHT
     for _, k in ipairs(KINDS) do
         r = r - k.weight
         if r <= 0 then return k end

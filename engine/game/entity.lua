@@ -121,8 +121,8 @@ function Entity:on_hit(clip)
     if anim:is_done() then return end  -- clip not found / empty
     self._hit_smokes[#self._hit_smokes + 1] = {
         anim = anim,
-        ox   = (math.random() - 0.5) * 12,
-        oy   = (math.random() - 0.5) * 12,
+        ox   = (self.world.rng:random() - 0.5) * 12,
+        oy   = (self.world.rng:random() - 0.5) * 12,
     }
 end
 
@@ -160,7 +160,7 @@ function Entity:_start_death(dx, dy)
     -- large buildings drop a random pickup most of the time.
     if self.drop_kind then
         self.drop_powerup = self.drop_kind
-    elseif self.crater_eligible and math.random() < DROP_CHANCE then
+    elseif self.crater_eligible and self.world.rng:random() < DROP_CHANCE then
         self.drop_powerup = true
     end
     -- Clear smoke effects when dying
@@ -218,8 +218,8 @@ function Entity:update(dt)
             local anim = Animation.new("smoke")
             self._damage_smokes[#self._damage_smokes + 1] = {
                 anim = anim,
-                ox   = (math.random() - 0.5) * 20,
-                oy   = (math.random() - 0.5) * 20,
+                ox   = (self.world.rng:random() - 0.5) * 20,
+                oy   = (self.world.rng:random() - 0.5) * 20,
             }
         end
         while #self._damage_smokes > target do
@@ -230,8 +230,8 @@ function Entity:update(dt)
             se.anim:update(dt)
             if se.anim:is_done() then
                 se.anim:reset()
-                se.ox = (math.random() - 0.5) * 20
-                se.oy = (math.random() - 0.5) * 20
+                se.ox = (self.world.rng:random() - 0.5) * 20
+                se.oy = (self.world.rng:random() - 0.5) * 20
             end
         end
     end

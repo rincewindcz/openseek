@@ -6,18 +6,25 @@ local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
 local Vehicles     = require "engine.game.vehicles"
 local Input        = require "engine.core.input"
+local InputFrame   = require "engine.core.input_frame"
 
 -- Single-player gameplay scene: player lifecycle, camera follow, the death /
 -- won / takeoff timers, the pause flag, and the in-game keys. Esc pushes the
 -- main menu over the running game (RESUME pops back).
 local Gameplay = Class(GameplayBase)
 
+-- Ticks between spending a life and the vehicle being back on the pad. Counted in
+-- simulation ticks, not by the crash picture's fade: the respawn has to land on
+-- the same tick every run for a recording to replay it (co-op uses the same beat).
+local RESPAWN_TICKS = 48
+
 function Gameplay:enter()
     local app = self.app
-    app.tick = 0   -- the phase's simulation clock starts here
+    self:reload_stage()   -- a phase starts from a fresh stage (recordings depend on it)
     app.viewer_zoom_index = app.camera.zoom_index
     self.paused          = false
     self.death_timer     = nil
+    self.respawn_tick    = nil
     self.pending_takeoff = false
     app.renderer.in_game = true
     app.camera:set_zoom(6)
@@ -28,8 +35,10 @@ end
 
 function Gameplay:leave()
     local app = self.app
+    self:end_session()
     self.paused          = false
     self.death_timer     = nil
+    self.respawn_tick    = nil
     self.pending_takeoff = false
     self:reset_end_stats()
     app.weather:set(nil)
@@ -63,8 +72,12 @@ end
 -- which start over with full lives and a zero score.
 function Gameplay:spawn_player(carry)
     local app = self.app
+    self:save_recording()          -- a restart closes the previous recording
+    self:seed_phase()              -- randomness and clock, before anything rolls
+    self:apply_replay_settings()   -- playback: the recorded mode flags
     local world, camera, combat = app.world, app.camera, app.combat
     local settings = app.settings
+    local replay_vehicle, replay_skin = self:replay_vehicle(1)
     local sx, sy = world:player_start()
     local prev   = self.player
     local player = Player:new(sx, sy)
@@ -80,12 +93,12 @@ function Gameplay:spawn_player(carry)
     end
     player.world_size   = world.stage.world_size
     player.home_x, player.home_y = sx, sy
-    player.vehicle      = settings.vehicle
-    player.chopper_skin = settings.chopper_skin
+    player.vehicle      = replay_vehicle or settings.vehicle
+    player.chopper_skin = replay_skin or settings.chopper_skin
     player.world        = world
     player.camera       = camera
     player.controls     = Input.map   -- single-player movement reads the rebindable map
-    local def = app.vehicle_defs[settings.vehicle]
+    local def = app.vehicle_defs[player.vehicle]
     if def then player:load_vehicle_def(def) end
     -- Weapon list: the equip-screen loadout snapshot when one was applied
     -- (campaign / mission play), else the free-play full list. The loadout
@@ -104,13 +117,14 @@ function Gameplay:spawn_player(carry)
             player:_apply_config()
         end
     else
-        local weapon_list = Vehicles.WEAPONS[settings.vehicle]
+        local weapon_list = Vehicles.WEAPONS[player.vehicle]
         if weapon_list then player.weapon_name = weapon_list[1] end
     end
     player:seed_ammo(combat.weapons, loadout and loadout.counts)
+    self:apply_replay_player(player, 1)   -- playback: the recorded loadout wins
+    self:begin_input("single", { player }, { Input.map })
     self:sync_weapon_icon()
-    local _, screen_h = love.graphics.getDimensions()
-    camera.view_oy = screen_h * 0.24
+    camera:set_game_focus()
     app.hud.player     = player
     combat.player      = player
     combat.players     = { player }
@@ -153,18 +167,15 @@ function Gameplay:on_vehicle_lost()
     player.lives = math.max(0, (player.lives or 0) - 1)
     local pic    = (player.vehicle == "tank") and "TANKEND" or "DEATHPIC"
     if player.lives > 0 then
-        -- Recoverable: flash the crash picture briefly, then drop straight back
-        -- into the game at the base. A key/click only continues (never bails to a
-        -- different mode), so RESUME keeps working.
-        local continue = function() self:respawn_at_base() end
-        app.screen:show(pic, {
-            fade_in   = 0.1,
-            hold      = 0.5,
-            fade_out  = 0.1,
-            on_done   = continue,
-            on_cancel = continue,
-        })
+        -- Recoverable: the respawn is scheduled on the simulation clock, and the
+        -- crash picture only flashes over it (skipped while replaying, which has
+        -- no viewer to inform).
+        self.respawn_tick = app.tick + RESPAWN_TICKS
+        if not self.playback then
+            app.screen:show(pic, { fade_in = 0.1, hold = 0.5, fade_out = 0.1 })
+        end
     else
+        if self.playback then self:finish_playback("game over"); return end
         local score = player.score or 0
         app.campaign = false   -- out of lives: the run is over
         app.screen:show(pic, {
@@ -183,6 +194,7 @@ end
 function Gameplay:respawn_at_base()
     local app    = self.app
     local player = self.player
+    self.respawn_tick = nil
     player:respawn(player.home_x or player.x, player.home_y or player.y)
     if self.mission and self.mission.state == "failed" then
         self.mission.state = "active"
@@ -248,6 +260,8 @@ function Gameplay:update(dt)
     local player = self.player
     if self.paused then return end
     if app.end_stats:is_active() then
+        -- The recording stopped when the phase did, so playback is done too.
+        if self.playback then self:finish_playback("phase ended"); return end
         app.end_stats:update(dt)
         if app.end_stats:is_active() then
             app.world:update(dt)
@@ -256,6 +270,7 @@ function Gameplay:update(dt)
         end
         return
     end
+    local frame = self:apply_input(player, self.source)
     player:update(dt)
     if not player.death then app.combat:crush_units(player) end
     if app.settings.death_enabled and not player.death and player:is_dead() then
@@ -274,6 +289,10 @@ function Gameplay:update(dt)
     -- After the crash animation finishes, hold briefly then spend a life and bring
     -- up the crash picture (a quick beat for a recoverable crash, a longer one on
     -- game over); see on_vehicle_lost.
+    if self.respawn_tick and app.tick >= self.respawn_tick then
+        self.respawn_tick = nil
+        self:respawn_at_base()
+    end
     if player:death_done() and not app.screen:is_active() then
         if self.death_timer == nil then
             self.death_timer = self.terminal_death and 3.0 or 0.8
@@ -285,7 +304,7 @@ function Gameplay:update(dt)
             end
         end
     end
-    if not player.death and Input.held("fire") then
+    if not player.death and InputFrame.held(frame, "fire") then
         self:fire_for(player)
     end
     app.combat:update(dt)
@@ -308,6 +327,7 @@ function Gameplay:update(dt)
     app.lightfx.headlight_on = not player.death   -- vehicle lights cut on destruction
     app.lightfx:update(dt)
     app.debug_panel:update()
+    self:tick_replay({ player })
 end
 
 function Gameplay:draw()
@@ -347,20 +367,21 @@ function Gameplay:draw()
     app.hud:draw()
     if mission and mission.state == "return_to_base" then self:draw_return_prompt() end
     if mission and mission.state == "won" and not app.end_stats:is_active() then
-        self:overlay_text("MISSION COMPLETE")
+        self:draw_overlay_text("MISSION COMPLETE")
     end
     if mission and mission.state == "failed" then
         if self.terminal_death then
-            self:overlay_text("GAME OVER")
+            self:draw_overlay_text("GAME OVER")
         else
             -- recoverable loss, no screen tint: aircraft mayday vs a downed tank
             local msg = (self.player and self.player.vehicle == "tank")
                 and "TANK DOWN" or "MAYDAY MAYDAY"
-            self:overlay_text(msg, 0)
+            self:draw_overlay_text(msg, 0)
         end
     end
     if app.end_stats:is_active() then app.end_stats:draw() end
-    if self.paused then self:overlay_text("PAUSE") end
+    self:draw_replay_tag()
+    if self.paused then self:draw_overlay_text("PAUSE") end
     app.debug_panel:draw()
 end
 
@@ -379,15 +400,15 @@ function Gameplay:game_keys(key)
     local player = self.player
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
     if Input.pressed("pause", key)   then self.paused = not self.paused; return end
-    if key == "r"  then self.paused = false; self:restart(); return end
-    if key == "f5" then player.unlimited = not player.unlimited; return end
-    if key == "f6" then app.powerups.easy_mode = not app.powerups.easy_mode; return end
-    if Input.pressed("takeoff", key) then self:toggle_land(player); return end
-    if Input.pressed("weapon", key)  then
-        self:cycle_weapon(player)
-        self:sync_weapon_icon()
+    if self.playback then
+        if key == "escape" then self:finish_playback("stopped") end
         return
     end
+    if key == "r"  then self.paused = false; self:restart(); return end
+    if key == "f5" then self.source:queue("god"); return end
+    if key == "f6" then self.source:queue("pickup_mode"); return end
+    if Input.pressed("takeoff", key) then self.source:queue("takeoff"); return end
+    if Input.pressed("weapon", key)  then self.source:queue("weapon"); return end
     if key == "e" then
         -- Free-play level cycling; with an equip loadout the level is the
         -- owned upgrade level and stays fixed.
@@ -400,11 +421,7 @@ function Gameplay:game_keys(key)
     end
     if Overview.picker_keys(app, key) then return end
     local slot = key:match("^(%d)$")
-    if slot then
-        self:select_weapon(player, tonumber(slot))
-        self:sync_weapon_icon()
-        return
-    end
+    if slot then self.source:queue("slot:" .. slot); return end
     if key == "escape" then app.scenes:push("main_menu") end
 end
 

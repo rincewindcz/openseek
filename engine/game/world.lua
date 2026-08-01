@@ -3,6 +3,7 @@ local json      = require "lib.json"
 local Entity    = require "engine.game.entity"
 local Animation = require "engine.core.animation"
 local Mathx     = require "engine.core.mathx"
+local Rng       = require "engine.core.rng"
 
 -- Tumbling iron/metal shrapnel flung out by an explosion (buildings and bombs).
 -- The clips loop, so each piece is bounded by its own lifetime. When a piece lands a
@@ -60,6 +61,7 @@ function World:init()
     self.stage       = nil   -- decoded JSON table
     self.stage_name  = nil
     self.time        = 0     -- simulation clock: accumulated fixed dt since the stage loaded
+    self.rng         = Rng:new(0)   -- simulation randomness; reseeded per phase
     self.stages      = {}    -- sorted list of available stage names
     self.stage_index = 1
     self.images      = {}    -- class index+1 -> {img, ox, oy} or nil
@@ -463,6 +465,14 @@ function World:player_start()
     return c, c
 end
 
+-- Restart the simulation randomness from a known seed. Called at the start of
+-- every phase (and by replay playback with the recorded seed), so two runs of the
+-- same stage with the same inputs roll the same numbers. See DETERMINISM.md.
+function World:reset_rng(seed)
+    self.rng = Rng:new(seed or 0)
+    self.time = 0
+end
+
 -- Position of the friendly base pad, or nil if the stage has none. The mission
 -- system uses this as the return-to-base landing point.
 function World:home_base()
@@ -504,17 +514,17 @@ end
 -- Fling a burst of tumbling iron/metal shrapnel from (x, y), e.g. a building or
 -- bomb blowing up. spread scales the scatter radius (default tight).
 function World:spawn_debris(x, y, n, spread)
-    n = n or (4 + math.random(0, 3))
+    n = n or (4 + self.rng:random(0, 3))
     spread = spread or 1
     for _ = 1, n do
-        local anim = Animation.new(DEBRIS_CLIPS[math.random(#DEBRIS_CLIPS)])
+        local anim = Animation.new(DEBRIS_CLIPS[self.rng:random(#DEBRIS_CLIPS)])
         if not anim:is_done() then
-            local a  = math.random() * 2 * math.pi
-            local sp = (40 + math.random() * 80) * spread
+            local a  = self.rng:random() * 2 * math.pi
+            local sp = (40 + self.rng:random() * 80) * spread
             self.debris[#self.debris + 1] = {
                 anim = anim, x = x, y = y,
                 vx = math.cos(a) * sp, vy = math.sin(a) * sp,
-                age = 0, lifetime = 0.6 + math.random() * 0.6,
+                age = 0, lifetime = 0.6 + self.rng:random() * 0.6,
             }
         end
     end
@@ -531,12 +541,12 @@ function World:spawn_directional_debris(x, y, dx, dy, n, clip)
     for _ = 1, n do
         local anim = Animation.new(clip or "metal8")
         if not anim:is_done() then
-            local a  = base + (math.random() - 0.5) * 0.5
-            local sp = 280 + math.random() * 180
+            local a  = base + (self.rng:random() - 0.5) * 0.5
+            local sp = 280 + self.rng:random() * 180
             self.debris[#self.debris + 1] = {
                 anim = anim, x = x, y = y,
                 vx = math.cos(a) * sp, vy = math.sin(a) * sp,
-                age = 0, lifetime = 0.5 + math.random() * 0.35,
+                age = 0, lifetime = 0.5 + self.rng:random() * 0.35,
                 fade = true, fade_time = 0.22, alpha = 1,
             }
         end
@@ -545,7 +555,7 @@ end
 
 -- A dust puff settling on the ground where a shrapnel piece landed.
 function World:add_ground_dust(x, y)
-    local anim = Animation.new(DUST_CLIPS[math.random(#DUST_CLIPS)])
+    local anim = Animation.new(DUST_CLIPS[self.rng:random(#DUST_CLIPS)])
     if anim:is_done() then return end
     self.ground_fx[#self.ground_fx + 1] = { anim = anim, x = x, y = y }
 end

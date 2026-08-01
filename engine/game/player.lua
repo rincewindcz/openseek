@@ -1,7 +1,8 @@
-local Class     = require "engine.core.class"
-local Animation = require "engine.core.animation"
-local Config    = require "engine.core.config"
-local Shadow    = require "engine.game.shadow"
+local Class      = require "engine.core.class"
+local Animation  = require "engine.core.animation"
+local InputFrame = require "engine.core.input_frame"
+local Config     = require "engine.core.config"
+local Shadow     = require "engine.game.shadow"
 
 local Player = Class()
 
@@ -36,6 +37,7 @@ function Player:init(x, y)
     self.weapon_name  = "chaingun"
     self.weapon_level = 1
     self.fire_timer   = 0
+    self.frame        = InputFrame.EMPTY   -- this tick's input, set by the gameplay scene
 
     self.ammo         = {}      -- weapon_name -> rounds left (absent = infinite)
     self.unlimited    = false   -- god mode: skip ammo/fuel/armor consumption
@@ -56,10 +58,9 @@ function Player:init(x, y)
     self.world            = nil  -- set in game mode for collision queries
     self.camera           = nil  -- set in game mode for screen placement
 
-    -- Movement key bindings. A binding is a key name or a list of names (any
-    -- held counts). The single-player default accepts WASD and the arrows; split
-    -- screen assigns each player a distinct set. fire / weapon / action keys are
-    -- read by main.lua, not here.
+    -- Key bindings for this player. The gameplay scene builds an input source
+    -- from them and matches keypressed against them; movement itself is read from
+    -- the per-tick frame above, never from the keyboard.
     self.controls = {
         up    = { "w", "up" },    down  = { "s", "down" },
         left  = { "a", "left" },  right = { "d", "right" },
@@ -247,7 +248,7 @@ end
 function Player:add_hit_fx(clip, lifetime)
     self._hit_fx[#self._hit_fx + 1] = {
         anim = Animation.new(clip), age = 0, lifetime = lifetime,
-        ox = (math.random() - 0.5) * 24, oy = (math.random() - 0.5) * 24,
+        ox = (self.world.rng:random() - 0.5) * 24, oy = (self.world.rng:random() - 0.5) * 24,
     }
 end
 
@@ -305,7 +306,7 @@ function Player:_update_damage_smoke(dt)
     if #self._smoke_puffs < target then
         self._smoke_timer = self._smoke_timer - dt
         if self._smoke_timer <= 0 then
-            self._smoke_timer = 0.04 + math.random() * 0.10
+            self._smoke_timer = 0.04 + self.world.rng:random() * 0.10
             -- Puffs drift along the vehicle's heading at a fraction of its current
             -- speed so the trail streams out behind a moving vehicle instead of
             -- hanging stationary in the air.
@@ -313,13 +314,13 @@ function Player:_update_damage_smoke(dt)
             local strafe_rad = rad + math.pi / 2
             local vx         = math.cos(rad) * self.speed + math.cos(strafe_rad) * self.strafe
             local vy         = math.sin(rad) * self.speed + math.sin(strafe_rad) * self.strafe
-            local drift      = 0.25 + math.random() * 0.5
+            local drift      = 0.25 + self.world.rng:random() * 0.5
             self._smoke_puffs[#self._smoke_puffs + 1] = {
-                x     = self.x + (math.random() - 0.5) * 30,
-                y     = self.y + (math.random() - 0.5) * 30,
+                x     = self.x + (self.world.rng:random() - 0.5) * 30,
+                y     = self.y + (self.world.rng:random() - 0.5) * 30,
                 vx    = vx * drift,
                 vy    = vy * drift,
-                front = math.random() < 0.5,
+                front = self.world.rng:random() < 0.5,
                 anim  = Animation.new("smoke"),
             }
         end
@@ -523,13 +524,13 @@ function Player:_update_death_tank(dt, d)
         d.spawn = d.spawn - dt
         if d.spawn <= 0 then
             d.spawn = 0.10
-            local r    = math.random()
+            local r    = self.world.rng:random()
             local clip = (r < 0.4 and "explosion_small")
                       or (r < 0.7 and "explosion_medium") or "smoke"
             d.fx[#d.fx + 1] = {
                 anim = Animation.new(clip),
-                ox   = (math.random() - 0.5) * 44,
-                oy   = (math.random() - 0.5) * 36,
+                ox   = (self.world.rng:random() - 0.5) * 44,
+                oy   = (self.world.rng:random() - 0.5) * 36,
             }
         end
         if d.t >= TANK_BURN then
@@ -551,29 +552,29 @@ function Player:_tank_blow(d)
 
     local turret = self:_frames("tanktop")[1]
     if turret then
-        local dir = (math.random() < 0.5) and -1 or 1
+        local dir = (self.world.rng:random() < 0.5) and -1 or 1
         d.fx[#d.fx + 1] = {
             img     = turret,
             ox      = 0, oy = -4,
-            vx      = dir * (30 + math.random() * 30),
-            vy      = -(150 + math.random() * 50),
+            vx      = dir * (30 + self.world.rng:random() * 30),
+            vy      = -(150 + self.world.rng:random() * 50),
             gravity = 260,
-            rot     = 0, spin = dir * (6 + math.random() * 4),
+            rot     = 0, spin = dir * (6 + self.world.rng:random() * 4),
             trail   = true, trail_t = 0,
             ttl     = 1.3, explode = "explosion_medium",
         }
     end
 
     for _ = 1, 8 do
-        local a  = math.random() * math.pi * 2
-        local sp = 60 + math.random() * 90
+        local a  = self.world.rng:random() * math.pi * 2
+        local sp = 60 + self.world.rng:random() * 90
         d.fx[#d.fx + 1] = {
-            anim    = Animation.new(math.random() < 0.5 and "explosion_small" or "explosion_flak"),
+            anim    = Animation.new(self.world.rng:random() < 0.5 and "explosion_small" or "explosion_flak"),
             ox      = 0, oy = -4,
             vx      = math.cos(a) * sp,
             vy      = math.sin(a) * sp - 60,
             gravity = 220,
-            scale   = 0.5 + math.random() * 0.4,
+            scale   = 0.5 + self.world.rng:random() * 0.4,
         }
     end
 end
@@ -605,17 +606,12 @@ function Player:_update_altitude(dt)
     end
 end
 
--- True if any key bound to the named action is held.
+-- True if the action is held in this tick's input frame. The frame is set by the
+-- gameplay scene from the player's input source (keyboard, replay, later a
+-- network peer); the player never reads the keyboard itself, so a run driven by
+-- recorded frames behaves exactly like the live one. See DETERMINISM.md.
 function Player:_held(action)
-    local b = self.controls and self.controls[action]
-    if not b then return false end
-    if type(b) == "table" then
-        for _, k in ipairs(b) do
-            if love.keyboard.isDown(k) then return true end
-        end
-        return false
-    end
-    return love.keyboard.isDown(b)
+    return InputFrame.held(self.frame, action)
 end
 
 function Player:_apply_input(dt)

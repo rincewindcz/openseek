@@ -39,6 +39,7 @@ local FontGallery     = require "engine.scenes.font_gallery"
 local SoundGallery    = require "engine.scenes.sound_gallery"
 local Credits         = require "engine.scenes.credits"
 local HiScores        = require "engine.scenes.hiscores"
+local Replays         = require "engine.scenes.replays"
 
 -- The shared app context handed to every scene: the world and the systems
 -- around it, the fullscreen fade overlay, the stats screen, and the pre-game
@@ -97,6 +98,10 @@ function love.load(args)
         vehicle_defs      = vehicle_defs,
         after_stage_load  = after_stage_load,
         tick              = 0,     -- fixed simulation ticks since the phase started
+        record_runs       = true,  -- write a replay file for every phase played
+        replay_play       = nil,   -- Replay being played back (set by the replay picker)
+        replay_verify     = false, -- playback at speed, only to check for divergence
+        replay_result     = nil,   -- outcome of the last playback, shown by the picker
         viewer_zoom_index = 4,     -- overview zoom, restored when a game mode ends
         campaign          = false, -- NEW GAME run: advance phase->phase, accumulate score
         run_score         = 0,     -- score carried across phases of a campaign run
@@ -150,6 +155,7 @@ function love.load(args)
     scenes:register("sound_gallery",    SoundGallery:new(app))
     scenes:register("credits",          Credits:new(app))
     scenes:register("hiscores",         HiScores:new(app))
+    scenes:register("replays",          Replays:new(app))
     scenes:switch("title")
 end
 
@@ -174,10 +180,15 @@ function love.update(dt)
     accumulator = math.min(accumulator + dt, TICK * MAX_CATCHUP)
     while accumulator >= TICK do
         accumulator = accumulator - TICK
-        app.tick = app.tick + 1
-        app.scenes:dispatch("update", TICK)
-        -- The tick may have handed off (mission complete, game over): the new
-        -- scene owns the rest of this frame.
+        -- tick_scale > 1 fast-forwards the simulation (replay verification): the
+        -- step stays TICK, only more of them run per frame.
+        for _ = 1, (top.tick_scale or 1) do
+            app.tick = app.tick + 1
+            app.scenes:dispatch("update", TICK)
+            -- The tick may have handed off (mission complete, game over, replay
+            -- finished): the new scene owns the rest of this frame.
+            if app.scenes:top() ~= top then break end
+        end
         if app.scenes:top() ~= top then accumulator = 0; break end
     end
 end

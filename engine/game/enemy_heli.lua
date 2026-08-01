@@ -96,8 +96,8 @@ function HeliSystem:_spawn_one(player)
         if dx * dx + dy * dy > vr * vr then choices[#choices + 1] = s end
     end
     if #choices == 0 then choices = self.spawns end
-    local s    = choices[math.random(#choices)]
-    local pick = WEAPON_POOL[math.random(#WEAPON_POOL)]
+    local s    = choices[self.world.rng:random(#choices)]
+    local pick = WEAPON_POOL[self.world.rng:random(#WEAPON_POOL)]
     local dx, dy = self.world:delta(player.x, player.y, s.x, s.y)
     local heli = {
         x = s.x, y = s.y,
@@ -106,11 +106,11 @@ function HeliSystem:_spawn_one(player)
         weapon = pick.weapon, level = pick.level,
         burst = pick.burst, intra = pick.intra, cooldown = pick.cooldown,
         burst_left = pick.burst,
-        dir = (math.random() < 0.5) and 1 or -1,
-        phase = math.random() * math.pi * 2,
+        dir = (self.world.rng:random() < 0.5) and 1 or -1,
+        phase = self.world.rng:random() * math.pi * 2,
         reload = 0.8, alert_t = 0,
         smoke = {}, smoke_t = 0, hitfx = {},
-        rotor_spin = math.random() * math.pi * 2,
+        rotor_spin = self.world.rng:random() * math.pi * 2,
         hit_radius = HIT_RADIUS,
         state = "alive",
     }
@@ -123,11 +123,11 @@ function HeliSystem:hit(heli, dmg, shooter)
     heli.hp = heli.hp - dmg
     -- A scorch burst on the hull at each hit, like the original (fire loops, so it
     -- needs a lifetime; smoke2 plays once and culls itself).
-    local clip = math.random() < 0.5 and "fire" or "smoke2"
+    local clip = self.world.rng:random() < 0.5 and "fire" or "smoke2"
     heli.hitfx[#heli.hitfx + 1] = {
         anim     = Animation.new(clip), age = 0,
         lifetime = clip == "fire" and 0.5 or nil,
-        ox = (math.random() - 0.5) * 18, oy = (math.random() - 0.5) * 18,
+        ox = (self.world.rng:random() - 0.5) * 18, oy = (self.world.rng:random() - 0.5) * 18,
     }
     if heli.hp <= 0 then
         heli.hp    = 0
@@ -257,14 +257,14 @@ function HeliSystem:_update_dying(heli, dt)
     if heli.fire_t <= 0 then
         heli.fire_t = 0.12
         heli.smoke[#heli.smoke + 1] = {
-            x = heli.x + (math.random() - 0.5) * 16, y = heli.y + (math.random() - 0.5) * 16,
+            x = heli.x + (self.world.rng:random() - 0.5) * 16, y = heli.y + (self.world.rng:random() - 0.5) * 16,
             vx = 0, vy = 0, lifetime = 0.6,
-            anim = Animation.new(math.random() < 0.5 and "fire" or "smoke"),
+            anim = Animation.new(self.world.rng:random() < 0.5 and "fire" or "smoke"),
         }
     end
     if heli.die_t >= DYING_TIME then
         self.combat:add_effect("explosion_large", heli.x, heli.y, {})
-        self.world:spawn_debris(heli.x, heli.y, 5 + math.random(0, 3), 1.3)
+        self.world:spawn_debris(heli.x, heli.y, 5 + self.world.rng:random(0, 3), 1.3)
         self:_blast(heli)
         heli.state = "removed"
         self.timer = math.min(self.timer, SPAWN_DELAY)
@@ -319,11 +319,11 @@ function HeliSystem:_update_smoke(heli, dt)
     if n < target then
         heli.smoke_t = heli.smoke_t - dt
         if heli.smoke_t <= 0 then
-            heli.smoke_t = 0.06 + math.random() * 0.1
+            heli.smoke_t = 0.06 + self.world.rng:random() * 0.1
             local rad   = (heli.heading - 90) * math.pi / 180
-            local drift = (0.3 + math.random() * 0.4) * SPEED
+            local drift = (0.3 + self.world.rng:random() * 0.4) * SPEED
             heli.smoke[#heli.smoke + 1] = {
-                x = heli.x + (math.random() - 0.5) * 14, y = heli.y + (math.random() - 0.5) * 14,
+                x = heli.x + (self.world.rng:random() - 0.5) * 14, y = heli.y + (self.world.rng:random() - 0.5) * 14,
                 vx = math.cos(rad) * drift, vy = math.sin(rad) * drift,
                 dmg = true, anim = Animation.new("smoke"),
             }
