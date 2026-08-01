@@ -96,6 +96,7 @@ function love.load(args)
         scenes            = SceneManager:new(),
         vehicle_defs      = vehicle_defs,
         after_stage_load  = after_stage_load,
+        tick              = 0,     -- fixed simulation ticks since the phase started
         viewer_zoom_index = 4,     -- overview zoom, restored when a game mode ends
         campaign          = false, -- NEW GAME run: advance phase->phase, accumulate score
         run_score         = 0,     -- score carried across phases of a campaign run
@@ -152,9 +153,33 @@ function love.load(args)
     scenes:switch("title")
 end
 
+-- Fixed simulation step. A gameplay scene (Scene.fixed_step) advances in whole
+-- ticks of TICK seconds regardless of the frame rate, so the same inputs always
+-- produce the same run; every other scene keeps the real frame delta. The
+-- catch-up clamp keeps a stall (stage load, alt-tab, a slow frame) from turning
+-- into a burst of ticks that would jump the vehicle across the map.
+-- See DETERMINISM.md.
+local TICK        = 1 / 60
+local MAX_CATCHUP = 5
+local accumulator = 0
+
 function love.update(dt)
     app.screen:update(dt)
-    app.scenes:dispatch("update", dt)
+    local top = app.scenes:top()
+    if not (top and top.fixed_step) then
+        accumulator = 0
+        app.scenes:dispatch("update", dt)
+        return
+    end
+    accumulator = math.min(accumulator + dt, TICK * MAX_CATCHUP)
+    while accumulator >= TICK do
+        accumulator = accumulator - TICK
+        app.tick = app.tick + 1
+        app.scenes:dispatch("update", TICK)
+        -- The tick may have handed off (mission complete, game over): the new
+        -- scene owns the rest of this frame.
+        if app.scenes:top() ~= top then accumulator = 0; break end
+    end
 end
 
 function love.draw()

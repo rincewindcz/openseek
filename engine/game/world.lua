@@ -59,6 +59,7 @@ local PAD_RESCUE_RADIUS = 80
 function World:init()
     self.stage       = nil   -- decoded JSON table
     self.stage_name  = nil
+    self.time        = 0     -- simulation clock: accumulated fixed dt since the stage loaded
     self.stages      = {}    -- sorted list of available stage names
     self.stage_index = 1
     self.images      = {}    -- class index+1 -> {img, ox, oy} or nil
@@ -99,6 +100,7 @@ function World:load(name)
     if not data then error("stage not found: " .. name) end
     self.stage      = json.decode(data)
     self.stage_name = name
+    self.time       = 0   -- a fresh stage restarts the simulation clock
     for i, s in ipairs(self.stages) do
         if s == name then self.stage_index = i end
     end
@@ -549,6 +551,7 @@ function World:add_ground_dust(x, y)
 end
 
 function World:update(dt)
+    self.time = self.time + dt
     for _, e in ipairs(self.entities) do
         e:update(dt)
     end

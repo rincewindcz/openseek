@@ -14,6 +14,7 @@ local Gameplay = Class(GameplayBase)
 
 function Gameplay:enter()
     local app = self.app
+    app.tick = 0   -- the phase's simulation clock starts here
     app.viewer_zoom_index = app.camera.zoom_index
     self.paused          = false
     self.death_timer     = nil

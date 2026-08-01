@@ -319,7 +319,8 @@ function Hud:_draw_sight(g, item, s)
     local locking = level.locking or weapon_def.homing
     local tgt
     if locking then
-        tgt = self.combat:player_lock_target(p.x, p.y, p:fire_angle(), self.combat:player_range(), weapon_def.target_kind)
+        tgt = self.combat:player_lock_target(p.x, p.y, p:fire_angle(),
+            self.combat:player_range(weapon_def), weapon_def.target_kind)
         if tgt then tx, ty = cam:project(self:_target_center(tgt)) end
     end
 

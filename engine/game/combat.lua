@@ -196,9 +196,9 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
         return self:_fire_flame(x, y, fwd_x, fwd_y, rad, weapon_def, level)
     end
 
-    -- Range cap: player shots are limited to ~1.5x the visible screen so they
-    -- cannot cross the map; enemies pass their attack range so their shots reach.
-    local max_range = range_override or self:player_range()
+    -- Range cap: player shots carry the weapon's range so they cannot cross the
+    -- map; enemies pass their attack range so their shots reach.
+    local max_range = range_override or self:player_range(weapon_def)
 
     -- Multi-frame projectile sprites animate (the tracer streak that grows).
     local sprite    = self:_resolve_sprite(weapon_def)
@@ -496,12 +496,18 @@ function CombatSystem:player_lock_target(x, y, facing_deg, range, kind)
     return best
 end
 
--- Range a player's shots reach: ~1.5x the visible screen, so they can't cross
--- the map. Shared by fire() and the HUD sight so the reticle's lock range and
--- the missile's lock range agree.
-function CombatSystem:player_range()
-    local screen_w, screen_h = love.graphics.getDimensions()
-    return 1.5 * math.max(screen_w, screen_h) / self.camera:zoom()
+-- Range a player's shots reach, in world pixels, so they cannot cross the map.
+-- Shared by fire() and the HUD sight so the reticle's lock range and the
+-- missile's lock range agree. A weapon may override it with `range` in
+-- data/weapons.json; the default is what the old viewport-derived formula
+-- (1.5x the visible screen) produced at the shipped 1280x720 window and the
+-- gameplay zoom. It is deliberately no longer read from the window: the
+-- simulation may not depend on the view (a wider window used to shoot further,
+-- and the two co-op halves disagreed with single player). See DETERMINISM.md.
+local DEFAULT_PLAYER_RANGE = 640
+
+function CombatSystem:player_range(weapon_def)
+    return (weapon_def and weapon_def.range) or DEFAULT_PLAYER_RANGE
 end
 
 -- Rotate a homing projectile's velocity toward its (moving) target, capped at

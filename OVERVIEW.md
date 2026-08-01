@@ -182,7 +182,13 @@ HUD) have been re-exported with the fixed decoder.
 Love2D entry point is `main.lua`: it builds the shared systems into an `app`
 context table, registers the scenes with the stack-based scene manager
 (`core/scene_manager.lua`), and delegates every `love.*` callback to the
-fullscreen fade overlay plus the top scene. Each top-level mode is a scene in
+fullscreen fade overlay plus the top scene. `love.update` runs a **fixed
+simulation step**: a scene marked `fixed_step` (the gameplay scenes, via
+`GameplayBase`) is advanced in whole 1/60 s ticks counted in `app.tick`, with
+catch-up clamped to 5 ticks so a stall cannot jump the vehicle; every other scene
+keeps the real frame delta. Gameplay therefore plays out identically at any frame
+rate, which is the first requirement for recording and replaying a run
+(`DETERMINISM.md`). Each top-level mode is a scene in
 `engine/scenes/`:
 
 - **title** -> **main_menu**: the boot flow; the menu is also pushed over a
@@ -470,7 +476,7 @@ the player must land on it to win.
 | File | Contents |
 |------|----------|
 | `assets/stageMP.json` + `assets/stageMP/*.png` | Decoded stages and sprites. Each stage JSON includes an `objectives` block and a per-class `is_target` flag; each render PNG is the axis-aligned `frame_base` (frame 0). Unit classes also export a sibling dead-pose frame (`{stem}_f{frame_base + dead_frame_offset}.png`) the engine derives by name. |
-| `data/weapons.json` | Weapon and projectile definitions: per-level upgrades, `short`/`icon` (WEAPONS.BIN), `ammo_max`/`ammo_pickup`, plus `alternate_side`/`trail` (mega missile) and `flame` cone params (napalm). |
+| `data/weapons.json` | Weapon and projectile definitions: per-level upgrades, `short`/`icon` (WEAPONS.BIN), `ammo_max`/`ammo_pickup`, plus `alternate_side`/`trail` (mega missile) and `flame` cone params (napalm). Optional `range` overrides how far a player's shots reach (world px, default 640); it is a fixed distance, never derived from the window size. |
 | `data/entity_types.json` | Per-kind combat data (hit radius, explosion, weapon, ranges, `solid`, `collision_radius`, `muzzle_offset`, unit `sprite`/`dead_sprite` fallback clips, `dead_frame_offset` for the per-stage corpse frame, two-part tank `turret_hp`/`turret_explosion`, hangar-tank `ride_linger`). |
 | `data/enemy_overrides.json` | Per-sprite enemy weapon overrides (asset filename -> weapon), for turrets that share the `flak_turret` kind but fire different weapons. |
 | `data/enemy_fire_rates.json` | Per-stage enemy fire-rate overrides (stage name -> asset filename -> shots/sec), e.g. GUN1 firing faster in later mission-0 phases. |

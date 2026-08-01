@@ -52,6 +52,7 @@ end
 function CoopGameplay:enter()
     local app = self.app
     local world, combat = app.world, app.combat
+    app.tick = 0   -- the phase's simulation clock starts here
     app.viewer_zoom_index = app.camera.zoom_index
     self.paused = false
     self:reset_end_stats()

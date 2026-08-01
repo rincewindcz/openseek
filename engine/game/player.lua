@@ -192,16 +192,22 @@ local OVERKILL_WINDOW = 2.0
 local OVERKILL_KILLS  = 3
 local OVERKILL_SHOW   = 1.5
 
-function Player:register_kill(now)
-    now = now or love.timer.getTime()
+-- The simulation clock (accumulated fixed ticks), never the wall clock: streak
+-- timing is player state and has to replay identically. See DETERMINISM.md.
+function Player:_now()
+    return (self.world and self.world.time) or 0
+end
+
+function Player:register_kill()
+    local now = self:_now()
     local t = self._kill_times
     t[#t + 1] = now
     while t[1] and now - t[1] > OVERKILL_WINDOW do table.remove(t, 1) end
     if #t >= OVERKILL_KILLS then self.overkill_until = now + OVERKILL_SHOW end
 end
 
-function Player:overkill_active(now)
-    return (now or love.timer.getTime()) < (self.overkill_until or 0)
+function Player:overkill_active()
+    return self:_now() < (self.overkill_until or 0)
 end
 
 function Player:_apply_config()

@@ -9,6 +9,9 @@ local Vehicles = require "engine.game.vehicles"
 -- collect_stats() for the stats screen.
 local GameplayBase = Class(Scene)
 
+-- The gameplay scenes are the simulation: main.lua steps them at a fixed rate.
+GameplayBase.fixed_step = true
+
 -- Weather overlay per mission digit (snow on the winter world, rain on the
 -- jungle world); other missions run clear.
 local WEATHER_FOR_MISSION = { [1] = "snow", [2] = "rain" }

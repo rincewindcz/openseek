@@ -32,6 +32,13 @@ local BLAST_RADIUS = 70
 local BLAST_DAMAGE = 40
 local SPRITE_ROT   = 0   -- extra rotation if the badheli frame 0 is not nose-north
 local ROTOR_SPEED  = 15  -- rad/s the rotor disc spins (one blade frame, rotated)
+-- World radius around the player a spawn marker must sit outside of, so a heli
+-- always flies in from beyond the player's view. Fixed rather than measured from
+-- the viewport: the simulation may not depend on the view, which used to make
+-- spawn choice differ by window size and between the two co-op halves (the value
+-- is what the old formula yielded at 1280x720 and the gameplay zoom, margin
+-- included). See DETERMINISM.md.
+local SPAWN_CLEAR_RADIUS = 235
 
 local HeliSystem = Class()
 
@@ -79,16 +86,10 @@ function HeliSystem:clear()
     self.world.air_units = self.helis
 end
 
-function HeliSystem:_view_radius()
-    local cam = self.combat.camera
-    local vw, vh = cam:dims()
-    return math.max(vw, vh) / cam:zoom() / 2
-end
-
 function HeliSystem:_spawn_one(player)
     if #self.spawns == 0 or not self.sprite then return end
-    -- Prefer a marker currently off-screen so the heli flies in from outside view.
-    local vr = self:_view_radius() * 1.1
+    -- Prefer a marker currently out of view so the heli flies in from outside it.
+    local vr = SPAWN_CLEAR_RADIUS
     local choices = {}
     for _, s in ipairs(self.spawns) do
         local dx, dy = self.world:delta(s.x, s.y, player.x, player.y)
