@@ -326,6 +326,17 @@ function CombatSystem:tick_swing(owner, weapon_name)
     if not self._swing[key] then self._swing[key] = 0 end
 end
 
+-- Clear everything that lives for the length of one phase. The swing phase and
+-- the alternate-side toggle are per-run firing state: left over from a previous
+-- phase they would aim the first shots of the next one differently, which a
+-- replay of that phase cannot reproduce. See DETERMINISM.md.
+function CombatSystem:reset_phase()
+    self.projectiles = {}
+    self.effects     = {}
+    self._swing      = {}
+    self._alt        = {}
+end
+
 -- Fire a single shot from an entity along its current aim, mirroring the AI's
 -- muzzle placement. Used by the overview entity editor's FIRE action (and any
 -- other one-shot trigger). Returns true if a shot was actually fired.

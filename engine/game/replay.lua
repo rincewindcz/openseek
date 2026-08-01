@@ -12,7 +12,7 @@ local InputFrame = require "engine.core.input_frame"
 --   key=value            header lines: build, stage, mode, seed, params, players
 --   --                   end of header
 --   i <tick> <slot> <mask> [event,event]
---   c <tick> <hash>
+--   c <tick> <hash> <players> <entities> <misc>
 --
 -- Input lines are delta encoded: one is written only when a slot's held mask
 -- changes or the tick carries an edge event, so a quiet minute costs a handful of
@@ -38,7 +38,7 @@ end
 function Replay:init(header)
     self.header  = header or {}
     self.inputs  = {}    -- slot -> ordered list of {tick, mask, events}
-    self.checks  = {}    -- ordered list of {tick, hash}
+    self.checks  = {}    -- ordered list of {tick, hash, players, entities, misc}
     self.length  = 0     -- last recorded tick
     self._last   = {}    -- slot -> last recorded mask, for delta encoding
     self._cursor = {}    -- slot -> playback position in inputs[slot]
@@ -57,8 +57,14 @@ function Replay:record_input(tick, slot, frame)
     if tick > self.length then self.length = tick end
 end
 
-function Replay:record_check(tick, hash)
-    self.checks[#self.checks + 1] = { tick = tick, hash = hash }
+-- parts is a Replay.checksum_parts table; the components travel with the combined
+-- hash so playback can say which part of the state diverged.
+function Replay:record_check(tick, parts)
+    if type(parts) == "number" then parts = { all = parts } end
+    self.checks[#self.checks + 1] = {
+        tick = tick, hash = parts.all,
+        players = parts.players, entities = parts.entities, misc = parts.misc,
+    }
     if tick > self.length then self.length = tick end
 end
 
@@ -84,15 +90,25 @@ function Replay:frame_for(tick, slot)
     return InputFrame.new(record.mask, {})
 end
 
--- The recorded hash for a tick, or nil when that tick was not checkpointed.
+-- The recorded checkpoint for a tick, or nil when that tick was not checkpointed.
 function Replay:check_for(tick)
     local entry = self.checks[self._check_at]
     while entry and entry.tick < tick do
         self._check_at = self._check_at + 1
         entry = self.checks[self._check_at]
     end
-    if entry and entry.tick == tick then return entry.hash end
+    if entry and entry.tick == tick then return entry end
     return nil
+end
+
+-- Which components of a checkpoint disagree with the live state, as a list of
+-- names ("player", "entities", "projectiles/rng"); empty when they all match.
+function Replay.check_diff(entry, parts)
+    local out = {}
+    if entry.players  and entry.players  ~= parts.players  then out[#out + 1] = "player" end
+    if entry.entities and entry.entities ~= parts.entities then out[#out + 1] = "entities" end
+    if entry.misc     and entry.misc     ~= parts.misc     then out[#out + 1] = "projectiles/rng" end
+    return out
 end
 
 -- checksum
@@ -106,23 +122,29 @@ local function fold(hash, s)
     return hash
 end
 
--- A number that changes whenever the simulation state does: player kinematics and
--- resources, every entity's health and state, the live projectile count, how many
--- random numbers have been drawn, and the simulation clock. "%.17g" round-trips a
--- double exactly, so a difference of one bit is caught. Compared every checkpoint
--- during playback to locate the first diverging tick.
-function Replay.checksum(world, players, combat)
-    local hash = 5381
+-- The simulation state as three hashes plus their combination: player kinematics
+-- and resources, every entity's health and state, and the rest (live projectile
+-- count, random numbers drawn, the simulation clock). "%.17g" round-trips a double
+-- exactly, so a difference of one bit is caught. Splitting them lets a divergence
+-- report name the part that moved instead of only the tick.
+function Replay.checksum_parts(world, players, combat)
+    local ph = 5381
     for _, p in ipairs(players or {}) do
-        hash = fold(hash, string.format("%.17g;%.17g;%.17g;%.17g;%.17g;%d;%d|",
+        ph = fold(ph, string.format("%.17g;%.17g;%.17g;%.17g;%.17g;%d;%d|",
             p.x, p.y, p.angle, p.armor or 0, p.fuel or 0, p.lives or 0, p.pows or 0))
     end
+    local eh = 5381
     for _, e in ipairs(world.entities) do
-        hash = fold(hash, string.format("%.17g;%s|", e.hp or 0, e.state or ""))
+        eh = fold(eh, string.format("%.17g;%s|", e.hp or 0, e.state or ""))
     end
-    hash = fold(hash, string.format("%d;%d;%.17g",
+    local mh = fold(5381, string.format("%d;%d;%.17g",
         #((combat and combat.projectiles) or {}), world.rng.draws, world.time))
-    return hash
+    local all = fold(fold(fold(5381, tostring(ph)), tostring(eh)), tostring(mh))
+    return { all = all, players = ph, entities = eh, misc = mh }
+end
+
+function Replay.checksum(world, players, combat)
+    return Replay.checksum_parts(world, players, combat).all
 end
 
 -- serialization
@@ -156,7 +178,8 @@ function Replay:serialize()
         out[#out + 1] = string.format("i %d %d %d%s", r.tick, r.slot, r.mask, encode_events(r.events))
     end
     for _, c in ipairs(self.checks) do
-        out[#out + 1] = string.format("c %d %d", c.tick, c.hash)
+        out[#out + 1] = string.format("c %d %d %d %d %d", c.tick, c.hash,
+            c.players or 0, c.entities or 0, c.misc or 0)
     end
     return table.concat(out, "\n") .. "\n"
 end
@@ -184,10 +207,16 @@ local function parse(text)
                     if tonumber(tick) > replay.length then replay.length = tonumber(tick) end
                 end
             elseif kind == "c" then
-                local tick, hash = rest:match("^(%d+) (%d+)$")
-                if tick then
-                    replay.checks[#replay.checks + 1] = { tick = tonumber(tick), hash = tonumber(hash) }
-                    if tonumber(tick) > replay.length then replay.length = tonumber(tick) end
+                -- "c tick hash [players entities misc]": the component hashes are
+                -- optional so a file written before they existed still loads.
+                local nums = {}
+                for n in rest:gmatch("%-?%d+") do nums[#nums + 1] = tonumber(n) end
+                if nums[1] and nums[2] then
+                    replay.checks[#replay.checks + 1] = {
+                        tick = nums[1], hash = nums[2],
+                        players = nums[3], entities = nums[4], misc = nums[5],
+                    }
+                    if nums[1] > replay.length then replay.length = nums[1] end
                 end
             end
         end

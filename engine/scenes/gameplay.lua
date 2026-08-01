@@ -6,6 +6,7 @@ local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
 local Vehicles     = require "engine.game.vehicles"
 local Input        = require "engine.core.input"
+local Camera       = require "engine.core.camera"
 local InputFrame   = require "engine.core.input_frame"
 
 -- Single-player gameplay scene: player lifecycle, camera follow, the death /
@@ -27,7 +28,7 @@ function Gameplay:enter()
     self.respawn_tick    = nil
     self.pending_takeoff = false
     app.renderer.in_game = true
-    app.camera:set_zoom(6)
+    app.camera:set_zoom(Camera.GAME_ZOOM_INDEX)
     self:enter_weather()
     app.lightfx:enter(app.world)
     self:spawn_player()
@@ -48,8 +49,7 @@ function Gameplay:leave()
     app.hud.player         = nil
     app.combat.player      = nil
     app.combat.players     = {}
-    app.combat.projectiles = {}
-    app.combat.effects     = {}
+    app.combat:reset_phase()
     app.helis:clear()
     app.powerups:reset(nil)
     app.rescue:clear()
@@ -128,8 +128,7 @@ function Gameplay:spawn_player(carry)
     app.hud.player     = player
     combat.player      = player
     combat.players     = { player }
-    combat.projectiles = {}
-    combat.effects     = {}
+    combat:reset_phase()
     app.helis:reset()
     app.powerups:reset(player)
     app.rescue.pow_counts = Mission.rescue_counts(world.stage_name)
@@ -270,6 +269,7 @@ function Gameplay:update(dt)
         end
         return
     end
+    self:begin_tick()
     local frame = self:apply_input(player, self.source)
     player:update(dt)
     if not player.death then app.combat:crush_units(player) end
@@ -396,8 +396,7 @@ end
 
 -- The in-game keys after the debug (and sandbox) layers had their chance.
 function Gameplay:game_keys(key)
-    local app    = self.app
-    local player = self.player
+    local app = self.app
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
     if Input.pressed("pause", key)   then self.paused = not self.paused; return end
     if self.playback then
@@ -409,16 +408,7 @@ function Gameplay:game_keys(key)
     if key == "f6" then self.source:queue("pickup_mode"); return end
     if Input.pressed("takeoff", key) then self.source:queue("takeoff"); return end
     if Input.pressed("weapon", key)  then self.source:queue("weapon"); return end
-    if key == "e" then
-        -- Free-play level cycling; with an equip loadout the level is the
-        -- owned upgrade level and stays fixed.
-        if player.weapon_levels then return end
-        local weapon_def = app.combat.weapons[player.weapon_name]
-        if weapon_def and weapon_def.levels then
-            player.weapon_level = player.weapon_level % #weapon_def.levels + 1
-        end
-        return
-    end
+    if key == "e" then self.source:queue("level"); return end
     if Overview.picker_keys(app, key) then return end
     local slot = key:match("^(%d)$")
     if slot then self.source:queue("slot:" .. slot); return end

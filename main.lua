@@ -40,6 +40,7 @@ local SoundGallery    = require "engine.scenes.sound_gallery"
 local Credits         = require "engine.scenes.credits"
 local HiScores        = require "engine.scenes.hiscores"
 local Replays         = require "engine.scenes.replays"
+local Selftest        = require "engine.dev.selftest"
 
 -- The shared app context handed to every scene: the world and the systems
 -- around it, the fullscreen fade overlay, the stats screen, and the pre-game
@@ -82,8 +83,22 @@ function love.load(args)
         end
     end
 
+    -- Command line: `love . stage12` opens a stage, `love . --selftest [ticks]
+    -- [stage]` runs the determinism self-test (below). Flags and the tick count
+    -- are skipped when looking for the stage name.
+    local stage_arg, selftest_ticks, selftest = nil, nil, false
+    for _, a in ipairs(args or {}) do
+        if a == "--selftest" then
+            selftest = true
+        elseif tonumber(a) then
+            selftest_ticks = selftest_ticks or tonumber(a)
+        elseif not a:match("^%-%-") then
+            stage_arg = stage_arg or a
+        end
+    end
+
     local world = World:new()
-    world:load(args[1] or world.stages[1])
+    world:load(stage_arg or world.stages[1])
     local camera = Camera:new(world.stage.world_size)
 
     app = {
@@ -157,6 +172,12 @@ function love.load(args)
     scenes:register("hiscores",         HiScores:new(app))
     scenes:register("replays",          Replays:new(app))
     scenes:switch("title")
+
+    -- Run one scripted phase twice and compare the simulation tick by tick, then
+    -- quit. See engine/dev/selftest.lua.
+    if selftest then
+        love.event.quit(Selftest.run(app, selftest_ticks, stage_arg) and 0 or 1)
+    end
 end
 
 -- Fixed simulation step. A gameplay scene (Scene.fixed_step) advances in whole
@@ -164,7 +185,11 @@ end
 -- produce the same run; every other scene keeps the real frame delta. The
 -- catch-up clamp keeps a stall (stage load, alt-tab, a slow frame) from turning
 -- into a burst of ticks that would jump the vehicle across the map.
--- See DETERMINISM.md.
+--
+-- The scene counts the ticks it actually simulates (GameplayBase:begin_tick), not
+-- this loop: a tick the scene skips (paused, stats screen) must not advance the
+-- clock a recording is keyed to, or playback would simulate ticks the recording
+-- never covered. See DETERMINISM.md.
 local TICK        = 1 / 60
 local MAX_CATCHUP = 5
 local accumulator = 0
@@ -183,7 +208,6 @@ function love.update(dt)
         -- tick_scale > 1 fast-forwards the simulation (replay verification): the
         -- step stays TICK, only more of them run per frame.
         for _ = 1, (top.tick_scale or 1) do
-            app.tick = app.tick + 1
             app.scenes:dispatch("update", TICK)
             -- The tick may have handed off (mission complete, game over, replay
             -- finished): the new scene owns the rest of this frame.

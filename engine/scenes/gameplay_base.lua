@@ -106,6 +106,12 @@ function GameplayBase:select_weapon(p, i)
     p.weapon_icon = def and def.icon or 0
 end
 
+-- Count a tick the scene is actually simulating. Called once per update, after
+-- the early returns (pause, stats screen) that skip simulation entirely.
+function GameplayBase:begin_tick()
+    self.app.tick = self.app.tick + 1
+end
+
 -- Take this tick's input frame for p from its source and apply the edge actions
 -- it carries. Everything the player can do that changes the simulation arrives
 -- here, so a recorded frame drives the game exactly like a live key.
@@ -117,6 +123,7 @@ function GameplayBase:apply_input(p, source)
         if     event == "takeoff"     then self:toggle_land(p)
         elseif event == "weapon"      then self:cycle_weapon(p)
         elseif event == "god"         then p.unlimited = not p.unlimited
+        elseif event == "level"       then self:cycle_weapon_level(p)
         elseif event == "pickup_mode" then
             self.app.powerups.easy_mode = not self.app.powerups.easy_mode
         else
@@ -136,6 +143,16 @@ function GameplayBase:cycle_weapon(p)
         if w == p.weapon_name then idx = i; break end
     end
     self:select_weapon(p, idx % #weapon_list + 1)
+end
+
+-- Free-play weapon level cycling. With an equip loadout every weapon is fixed at
+-- its owned level, so this does nothing.
+function GameplayBase:cycle_weapon_level(p)
+    if p.weapon_levels then return end
+    local weapon_def = self.app.combat.weapons[p.weapon_name]
+    if weapon_def and weapon_def.levels then
+        p.weapon_level = p.weapon_level % #weapon_def.levels + 1
+    end
 end
 
 -- Toggle a flyer between airborne and grounded; no-op for a tank.
@@ -179,9 +196,10 @@ end
 -- (POW counts, heli spawns), so a replayed phase rolls the recorded numbers.
 function GameplayBase:seed_phase()
     local app = self.app
-    self.playback = app.replay_play
-    self.desync   = nil
-    self.recording = nil
+    self.playback     = app.replay_play
+    self.desync       = nil
+    self.desync_parts = nil
+    self.recording    = nil
     if self.playback then
         self.params = Replay.decode_map(self.playback.header.params)
         Replay.apply_params(self.params)
@@ -276,7 +294,9 @@ function GameplayBase:begin_input(mode, players, bindings)
         for slot, binding in ipairs(bindings) do
             self.sources[slot] = InputSource.Local:new(binding)
         end
-        if app.record_runs then
+        -- The sandbox edits vehicle parameters live, outside the input frame, so
+        -- its runs cannot be replayed and are not recorded.
+        if app.record_runs and not self.no_record then
             self.recording = Replay:new(self:replay_header(mode, players))
         end
     end
@@ -295,13 +315,16 @@ function GameplayBase:tick_replay(players)
             self.recording:record_input(tick, slot, p.frame)
         end
         if tick % CHECK_INTERVAL == 0 then
-            self.recording:record_check(tick, Replay.checksum(app.world, players, app.combat))
+            self.recording:record_check(tick,
+                Replay.checksum_parts(app.world, players, app.combat))
         end
     elseif self.playback then
         local expected = self.playback:check_for(tick)
         if expected and not self.desync then
-            if Replay.checksum(app.world, players, app.combat) ~= expected then
+            local parts = Replay.checksum_parts(app.world, players, app.combat)
+            if parts.all ~= expected.hash then
                 self.desync = tick
+                self.desync_parts = Replay.check_diff(expected, parts)
             end
         end
         if self.desync or tick >= self.playback.length then
@@ -327,6 +350,7 @@ function GameplayBase:finish_playback(reason)
         tick    = app.tick,
         length  = self.playback.length,
         desync  = self.desync,
+        parts   = self.desync_parts,
         name    = self.playback.path,
     }
     self.playback     = nil

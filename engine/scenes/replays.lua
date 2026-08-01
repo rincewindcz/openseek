@@ -106,8 +106,10 @@ function Replays:draw()
     if result then
         if result.desync then
             g.setColor(COLORS.fail)
-            g.print(string.format("DIVERGED at tick %d (%.1f s into the run)",
-                result.desync, result.desync / 60), x, y)
+            local parts = (result.parts and #result.parts > 0)
+                and (": " .. table.concat(result.parts, ", ")) or ""
+            g.print(string.format("DIVERGED at tick %d (%.1f s into the run)%s",
+                result.desync, result.desync / 60, parts), x, y)
         elseif result.ok then
             g.setColor(COLORS.ok)
             g.print(string.format("VERIFIED: %d ticks replayed, every checkpoint matched",

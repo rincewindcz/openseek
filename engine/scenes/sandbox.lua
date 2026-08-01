@@ -6,6 +6,10 @@ local Gameplay = require "engine.scenes.gameplay"
 -- data/vehicles/<vehicle>.json.
 local Sandbox = Class(Gameplay)
 
+-- Live parameter editing changes the simulation outside the input frame, so a
+-- sandbox run is not reproducible and is never recorded (see DETERMINISM.md).
+Sandbox.no_record = true
+
 local PARAMS = {
     { name="sprite_scale",   step=0.5  },
     { name="rotor_y_offset", step=1    },

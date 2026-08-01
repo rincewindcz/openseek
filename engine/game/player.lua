@@ -2,6 +2,7 @@ local Class      = require "engine.core.class"
 local Animation  = require "engine.core.animation"
 local InputFrame = require "engine.core.input_frame"
 local Config     = require "engine.core.config"
+local Camera     = require "engine.core.camera"
 local Shadow     = require "engine.game.shadow"
 
 local Player = Class()
@@ -140,11 +141,13 @@ local TANK_BARREL_LAT = { -4.5, -0.5, 3.5 }
 
 -- World position of the next barrel's muzzle, advancing the 1->2->3 cycle. The
 -- turret sprite is drawn screen-fixed (sprite_scale px per art px), so an art
--- offset spans (sprite_scale / base_zoom) world units. Falls back to the vehicle
--- center with no camera. Only meaningful for the tank.
+-- offset spans (sprite_scale / zoom) world units. The zoom here is the fixed
+-- gameplay reference, not the live camera: where a shell leaves the barrel is
+-- simulation, and must not change when the player zooms. Only meaningful for the
+-- tank.
 function Player:tank_muzzle()
     self.tank_barrel = (self.tank_barrel % 3) + 1
-    local base = (self.camera and self.camera:base_zoom()) or self.sprite_scale
+    local base = Camera.game_zoom()
     local k    = self.sprite_scale / base
     local fwd  = TANK_BARREL_FWD * k
     local lat  = TANK_BARREL_LAT[self.tank_barrel] * k

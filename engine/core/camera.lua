@@ -2,7 +2,14 @@ local Class = require "engine.core.class"
 
 local ZOOMS = { 0.125, 0.25, 0.5, 1, 2, 3, 4, 6, 8 }
 
+-- The zoom a gameplay scene opens at. Simulation code that has to convert between
+-- art pixels and world units uses this fixed reference (Camera.game_zoom), never
+-- the live zoom the player can change with the wheel. See DETERMINISM.md.
+local GAME_ZOOM_INDEX = 6
+
 local Camera = Class()
+
+Camera.GAME_ZOOM_INDEX = GAME_ZOOM_INDEX
 
 function Camera:init(world_size)
     self.world_size = world_size or 4096
@@ -49,9 +56,16 @@ function Camera:zoom()
     return ZOOMS[self.zoom_index]
 end
 
--- The discrete target zoom, ignoring any in-progress intro tween. Used where a
--- value must stay fixed across the smooth zoom (e.g. the weather field's tile
--- size, so the lattice does not reflow while the intro animates).
+-- The fixed gameplay zoom, independent of any camera instance and of what the
+-- player has zoomed to. Simulation code converting art pixels to world units uses
+-- this; presentation uses the live zoom.
+function Camera.game_zoom()
+    return ZOOMS[GAME_ZOOM_INDEX]
+end
+
+-- The discrete target zoom of this camera, ignoring any in-progress intro tween.
+-- Used where a value must stay fixed across the smooth zoom (e.g. the weather
+-- field's tile size, so the lattice does not reflow while the intro animates).
 function Camera:base_zoom()
     return ZOOMS[self.zoom_index]
 end

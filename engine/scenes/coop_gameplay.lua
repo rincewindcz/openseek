@@ -75,7 +75,7 @@ function CoopGameplay:enter()
     self.cameras = { Camera:new(world.stage.world_size), Camera:new(world.stage.world_size) }
     for i, p in ipairs(self.players) do
         local c = self.cameras[i]
-        c:set_zoom(6)
+        c:set_zoom(Camera.GAME_ZOOM_INDEX)
         c:set_game_focus()
         c.x, c.y  = p.x, p.y
         c.angle   = p:camera_angle()
@@ -89,8 +89,7 @@ function CoopGameplay:enter()
     combat.players       = self.players
     combat.player        = self.players[1]
     if not self.playback then combat.friendly_fire = coop.ff end
-    combat.projectiles   = {}
-    combat.effects       = {}
+    combat:reset_phase()
     app.helis:reset()
     app.powerups:set_players(self.players)
     app.rescue.pow_counts = Mission.rescue_counts(world.stage_name)
@@ -118,8 +117,7 @@ function CoopGameplay:leave()
     app.combat.players       = {}
     app.combat.player        = nil
     app.combat.friendly_fire = false
-    app.combat.projectiles   = {}
-    app.combat.effects       = {}
+    app.combat:reset_phase()
     app.helis:clear()
     app.powerups:reset(nil)
     app.rescue:clear()
@@ -230,6 +228,7 @@ function CoopGameplay:update(dt)
         end
         return
     end
+    self:begin_tick()
     for i, p in ipairs(self.players) do
         self:apply_input(p, self.sources[i])
         p:update(dt)
