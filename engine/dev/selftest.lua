@@ -1,19 +1,25 @@
 local Replay     = require "engine.game.replay"
 local InputFrame = require "engine.core.input_frame"
 
--- Determinism self-test: runs the same scripted input through a phase twice and
--- compares the simulation state tick by tick, reporting the first tick that
--- differs and which part of the state moved. It bypasses recording entirely, so
--- it separates "the simulation is not deterministic" from "the recorder is
--- wrong". Run it from the repo root:
+-- Determinism self-test: drives a scripted phase three ways and compares the
+-- simulation state tick by tick, reporting the first tick that differs and which
+-- part of the state moved.
 --
---   love . --selftest              (1800 ticks of stage00)
+--   1. the same script twice          - is the simulation itself deterministic
+--   2. record the script, replay it   - is the recorder faithful
+--   3. the same, pausing part way     - does pausing move the simulation clock
+--
+-- Case 1 bypasses recording, so a failure there separates "the simulation is not
+-- deterministic" from "the recorder is wrong". Run it from the repo root:
+--
+--   love . --selftest              (600 ticks, about 10 s of play)
 --   love . --selftest 3600 stage12
 --
 -- See DETERMINISM.md.
 local Selftest = {}
 
-local TICK = 1 / 60
+local TICK     = 1 / 60
+local PAUSE_AT = 0.5   -- fraction of the run at which the pause case pauses
 
 -- A scripted run that exercises the systems a quiet run would not: thrust, turns
 -- both ways, sustained fire, weapon changes, and a landing attempt.
@@ -42,14 +48,15 @@ end
 
 -- The state fingerprint, split so a divergence names the part that moved.
 local function sample(app, scene)
-    local players = { scene.player }
+    local p = scene.player
+    if not p then return nil end   -- the scene handed off mid-tick
+    local players = { p }
     local world   = app.world
     local ent_hp, ent_state = 0, 0
     for i, e in ipairs(world.entities) do
         ent_hp = (ent_hp + (e.hp or 0) * i) % 2147483647
         ent_state = (ent_state + #tostring(e.state or "") * i) % 2147483647
     end
-    local p = scene.player
     return {
         all    = Replay.checksum(world, players, app.combat),
         px     = p.x, py = p.y, angle = p.angle,
@@ -82,12 +89,17 @@ end
 local function drive(app, scene, ticks, hook)
     local samples = {}
     local dispatches = 0
+    scene._pause_at = math.floor(ticks * PAUSE_AT)
     while #samples < ticks and dispatches < ticks * 3 do
         if app.scenes:top() ~= scene then break end
         dispatches = dispatches + 1
         local before = app.tick
         app.scenes:dispatch("update", TICK)
-        if app.tick > before then samples[app.tick] = sample(app, scene) end
+        if app.tick > before then
+            local s = sample(app, scene)
+            if not s then break end   -- scene handed off (mission over, playback ended)
+            samples[app.tick] = s
+        end
         if hook then hook(scene, app.tick, dispatches) end
     end
     return samples
@@ -128,7 +140,7 @@ end
 -- Pausing must not move the simulation clock, or every tick after it lands in the
 -- recording under the wrong number and the replay desyncs from there.
 local function pause_hook(scene, tick, _dispatches)
-    if tick == 900 then scene.paused = true end
+    if tick == scene._pause_at then scene.paused = true end
     if scene.paused then
         scene._pause_left = (scene._pause_left or 45) - 1
         if scene._pause_left <= 0 then scene.paused = false end
@@ -163,9 +175,9 @@ local function compare(label, a_run, b_run)
 end
 
 function Selftest.run(app, ticks, stage)
-    ticks = ticks or 1800
+    ticks = ticks or 600
     stage = stage or app.world.stage_name
-    print(("selftest: %s, %d ticks, two passes"):format(stage, ticks))
+    print(("selftest: %s, %d ticks per case"):format(stage, ticks))
     local script = build_script(stage, ticks)
 
     local ok = true
