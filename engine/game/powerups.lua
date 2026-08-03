@@ -115,6 +115,7 @@ end
 function Powerups:_apply(def, p)
     p = p or self.player
     if not p then return end
+    self.world:sound(def.kind == "medal" and "pickup.medal" or "pickup.item", p.x, p.y)
     if def.kind == "fuel" then
         p:refuel()
     elseif def.kind == "armor" then

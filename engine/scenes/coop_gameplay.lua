@@ -27,6 +27,9 @@ CoopGameplay.P2_CONTROLS = {
 
 local COLORS = CoopGameplay.COLORS
 
+-- Stereo side each half owns, fed to the sound system's listeners.
+local SPLIT_BIAS = { -1, 1 }
+
 -- Beat between a wreck finishing and the vehicle being back on the pad. Single
 -- player holds its crash picture for the same time before respawning.
 local RESPAWN_DELAY = 0.8
@@ -63,6 +66,8 @@ function CoopGameplay:enter()
     app.renderer.in_game = true
     self:enter_weather()
     app.lightfx:enter(world)
+    self:begin_audio()
+    self:enter_music()
     self.death_timers = {}
     self.out          = {}   -- players who spent their last vehicle
 
@@ -80,6 +85,10 @@ function CoopGameplay:enter()
         c.x, c.y  = p.x, p.y
         c.angle   = p:camera_angle()
         p.camera  = c
+    end
+    -- Listeners before the lift-off, or the takeoff sound has nobody to reach.
+    self:update_audio(self.players, self.cameras, SPLIT_BIAS)
+    for _, p in ipairs(self.players) do
         p:take_off()   -- choppers lift off; no-op for the tank
     end
 
@@ -108,6 +117,7 @@ function CoopGameplay:leave()
     self:reset_end_stats()
     app.weather:set(nil)
     app.lightfx:reset()
+    self:end_audio()
     app.renderer.in_game = false
     -- Restore the shared overview camera on every system that was pointed at
     -- a split camera, or the overview renders through a stale half-view.
@@ -216,8 +226,12 @@ end
 
 function CoopGameplay:update(dt)
     local app = self.app
-    if self.paused then return end
+    if self.paused then
+        if app.sound then app.sound:stop_loops() end
+        return
+    end
     if app.end_stats:is_active() then
+        if app.sound then app.sound:stop_loops() end
         -- The recording stopped when the phase did, so playback is done too.
         if self.playback then self:finish_playback("phase ended"); return end
         app.end_stats:update(dt)
@@ -257,6 +271,9 @@ function CoopGameplay:update(dt)
     if self.mission then self.mission:update(dt) end
     self:update_won(dt)
     app.world:update(dt)
+    -- One listener per half, each biased toward its own side of the stereo image
+    -- so a blast on the right half is heard on the right (engine/game/sound.lua).
+    self:update_audio(self.players, self.cameras, SPLIT_BIAS)
     app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
     app.lightfx:update(dt)
     self:tick_replay(self.players)

@@ -40,8 +40,23 @@ local Config = {
     night_lighting   = true,
     night_brightness = 1.0,
 
-    -- Master audio volume (0..1), applied via love.audio.setVolume.
+    -- Audio. master_volume is applied via love.audio.setVolume; the five bus
+    -- volumes scale their own event category on top of it (engine/core/audio.lua,
+    -- buses named in data/audio.json). audio_positional pans world sounds in the
+    -- listener's frame and muffles distant ones; off centres everything flat.
+    -- coop_split_pan is how far a split-screen half pulls its own sounds toward
+    -- its side of the stereo image (0 = purely directional, 1 = hard to its own
+    -- side). voice_callouts enables the radio lines.
     master_volume = 1.0,
+    sfx_volume    = 1.0,
+    voice_volume  = 1.0,
+    engine_volume = 0.8,
+    ui_volume     = 0.7,
+    music_volume  = 0.6,
+
+    audio_positional = true,
+    coop_split_pan   = 0.35,
+    voice_callouts   = true,
 
     -- Display: window mode applied via love.window (engine/core/display.lua).
     -- window_size matches a label in Display.SIZES. show_fps draws an FPS counter.
@@ -65,7 +80,9 @@ local SAVE_PATH = "data/settings.json"
 local PERSISTED = {
     "effects_flashes", "flash_intensity", "night_lighting", "night_brightness",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
-    "endstats_count_up", "explosive_trees", "tree_crush_speed", "master_volume",
+    "endstats_count_up", "explosive_trees", "tree_crush_speed",
+    "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
+    "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",
     "fullscreen", "vsync", "window_size", "show_fps",
 }
 

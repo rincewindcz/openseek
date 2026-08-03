@@ -640,4 +640,17 @@ function World:player_death_light(x, y)
     if self.lightfx then self.lightfx:player_death(x, y) end
 end
 
+-- Same forwarder shape for audio: simulation code names an event and where it
+-- happened, the sound system decides which listener hears it, how loud and from
+-- which side. A no-op until the sound system is attached, and never read back
+-- into the simulation (DETERMINISM.md).
+function World:sound(event, x, y, opts)
+    if self.sound_sys then self.sound_sys:emit(event, x, y, opts) end
+end
+
+-- A radio callout. Not placed in the world: it comes over the headset.
+function World:say(event)
+    if self.sound_sys then self.sound_sys:say(event) end
+end
+
 return World

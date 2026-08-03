@@ -31,6 +31,8 @@ function Gameplay:enter()
     app.camera:set_zoom(Camera.GAME_ZOOM_INDEX)
     self:enter_weather()
     app.lightfx:enter(app.world)
+    self:begin_audio()
+    self:enter_music()
     self:spawn_player()
 end
 
@@ -44,6 +46,7 @@ function Gameplay:leave()
     self:reset_end_stats()
     app.weather:set(nil)
     app.lightfx:reset()
+    self:end_audio()
     app.renderer.in_game   = false
     self.player            = nil
     app.hud.player         = nil
@@ -257,8 +260,12 @@ end
 function Gameplay:update(dt)
     local app    = self.app
     local player = self.player
-    if self.paused then return end
+    if self.paused then
+        if app.sound then app.sound:stop_loops() end
+        return
+    end
     if app.end_stats:is_active() then
+        if app.sound then app.sound:stop_loops() end
         -- The recording stopped when the phase did, so playback is done too.
         if self.playback then self:finish_playback("phase ended"); return end
         app.end_stats:update(dt)
@@ -323,6 +330,7 @@ function Gameplay:update(dt)
         self.pending_takeoff = false
     end
     app.world:update(dt)
+    self:update_audio({ player }, { app.camera })
     app.weather:update(dt, app.camera)
     app.lightfx.headlight_on = not player.death   -- vehicle lights cut on destruction
     app.lightfx:update(dt)

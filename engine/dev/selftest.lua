@@ -177,6 +177,9 @@ end
 function Selftest.run(app, ticks, stage)
     ticks = ticks or 600
     stage = stage or app.world.stage_name
+    -- The passes run far faster than real time, so nothing should sound.
+    app.audio_mute = true
+    if app.sound then app.sound:set_muted(true) end
     print(("selftest: %s, %d ticks per case"):format(stage, ticks))
     local script = build_script(stage, ticks)
 

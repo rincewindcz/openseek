@@ -2,6 +2,7 @@ local Class   = require "engine.core.class"
 local Scene   = require "engine.core.scene"
 local Menu    = require "engine.ui.menu"
 local Loadout = require "engine.game.loadout"
+local Sound   = require "engine.game.sound"
 
 -- Main menu scene. Switched to after the title card, or pushed over a running
 -- gameplay scene (Esc in game), in which case RESUME pops back to the game.
@@ -18,6 +19,7 @@ end
 function MainMenu:enter()
     -- Pushed over a game = RESUME available; switched to = a fresh menu.
     self.over_game = self.app.scenes:depth() > 1
+    if not self.over_game then Sound.play_music("menu") end
     self:_open()
 end
 

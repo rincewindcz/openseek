@@ -180,7 +180,13 @@ end
 
 function Player:consume_ammo(name, cost)
     if self.unlimited or self.ammo[name] == nil then return end
-    self.ammo[name] = math.max(0, self.ammo[name] - (cost or 1))
+    local left = math.max(0, self.ammo[name] - (cost or 1))
+    -- Dry click on the round that empties the bay, so the player hears the
+    -- weapon go out rather than only seeing the counter.
+    if left == 0 and self.ammo[name] > 0 and self.world then
+        self.world:sound("vehicle.reload", self.x, self.y)
+    end
+    self.ammo[name] = left
 end
 
 function Player:add_ammo(name, amount)
@@ -412,6 +418,7 @@ end
 -- burns with explosions and smoke, then its turret blows. Idempotent.
 function Player:start_death()
     if self.death then return end
+    if self.world then self.world:say("voice.mayday") end
     if self:is_flyer() then
         -- Keep the current velocity: a downed chopper carries its momentum forward
         -- as it falls (see _update_death_chopper), instead of stopping dead.
@@ -510,7 +517,10 @@ function Player:_update_death_chopper(dt, d)
             d.phase = "boom"
             d.boom  = Animation.new("explosion_large")
             self:_death_blast()
-            if self.world then self.world:player_death_light(self.x, self.y) end
+            if self.world then
+                self.world:player_death_light(self.x, self.y)
+                self.world:sound("explosion.bomb", self.x, self.y)
+            end
         end
     elseif d.phase == "boom" then
         if d.boom then
@@ -551,7 +561,10 @@ end
 function Player:_tank_blow(d)
     d.fx[#d.fx + 1] = { anim = Animation.new("explosion_large"), ox = 0, oy = -4 }
     self:_death_blast()
-    if self.world then self.world:player_death_light(self.x, self.y) end
+    if self.world then
+        self.world:player_death_light(self.x, self.y)
+        self.world:sound("explosion.bomb", self.x, self.y)
+    end
 
     local turret = self:_frames("tanktop")[1]
     if turret then
@@ -761,6 +774,7 @@ function Player:take_off()
     if not self:is_flyer() then return end
     if self.land_state ~= "grounded" then return end
     self.land_state = "taking_off"
+    if self.world then self.world:sound("vehicle.takeoff", self.x, self.y) end
 end
 
 function Player:land()

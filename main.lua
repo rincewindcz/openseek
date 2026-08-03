@@ -20,6 +20,7 @@ local EndStats        = require "engine.ui.end_stats"
 local Pointer         = require "engine.ui.pointer"
 local SceneManager    = require "engine.core.scene_manager"
 local Audio           = require "engine.core.audio"
+local Sound           = require "engine.game.sound"
 local json            = require "lib.json"
 
 local Title           = require "engine.scenes.title"
@@ -72,7 +73,8 @@ function love.load(args)
     Display.apply() -- restore the saved window mode (size / fullscreen / vsync)
     Animation.load("data/animations.json")
     Audio.load("data/sounds.json")
-    Audio.set_master(Config.master_volume)
+    Audio.load_events("data/audio.json")
+    Sound.apply_config()
 
     local vehicle_defs = {}
     for _, fname in ipairs(love.filesystem.getDirectoryItems("data/vehicles")) do
@@ -145,6 +147,8 @@ function love.load(args)
     app.weather  = Weather:new()
     app.lightfx  = LightFX:new()
     world.lightfx = app.lightfx   -- lets combat / entity emitters reach it via the world
+    app.sound    = Sound:new(world)
+    world.sound_sys = app.sound   -- same route for the audio emitters (World:sound / :say)
     app.renderer:refresh_kinds()
 
     -- A 1x1 transparent hardware cursor, used to hide the pointer reliably (LOVE's
@@ -196,6 +200,7 @@ local accumulator = 0
 
 function love.update(dt)
     app.screen:update(dt)
+    Audio.update(dt)   -- mixer housekeeping (duck release, music fades): real time, not ticks
     local top = app.scenes:top()
     if not (top and top.fixed_step) then
         accumulator = 0

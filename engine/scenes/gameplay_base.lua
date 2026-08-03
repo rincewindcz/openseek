@@ -5,6 +5,7 @@ local Vehicles    = require "engine.game.vehicles"
 local Rng         = require "engine.core.rng"
 local InputSource = require "engine.core.input_source"
 local Replay      = require "engine.game.replay"
+local Sound       = require "engine.game.sound"
 
 -- Shared base for the gameplay scenes (single player, sandbox, co-op split):
 -- firing, weapon cycling, landing, the mission-won -> DESTRUCTION STATS
@@ -162,6 +163,46 @@ function GameplayBase:toggle_land(p)
     elseif p.land_state == "grounded" then
         p:take_off()
     end
+end
+
+-- audio: listeners and the engine bed
+
+-- Start a phase's audio. Verification and the self-test fast-forward the
+-- simulation, which would fire thousands of events a second, so both run silent.
+function GameplayBase:begin_audio()
+    local app = self.app
+    if not app.sound then return end
+    app.sound:set_muted(app.replay_verify or app.audio_mute or false)
+end
+
+-- Crossfade to the stage's music: a track named after the stage, then one named
+-- after its mission, then a generic one. All optional (see Sound.play_music).
+function GameplayBase:enter_music()
+    local stage = self.app.world.stage_name or ""
+    Sound.play_music(stage, "mission" .. (stage:match("^stage(%d)") or ""), "game")
+end
+
+-- Point the sound system at this scene's cameras and run the engine bed.
+-- `biases` gives each listener its side of a split screen (-1 left, 1 right);
+-- single player passes none.
+function GameplayBase:update_audio(players, cameras, biases)
+    local sound = self.app.sound
+    if not sound then return end
+    local listeners = {}
+    for i, cam in ipairs(cameras) do
+        listeners[i] = { x = cam.x, y = cam.y, angle = cam.angle, bias = biases and biases[i] or 0 }
+    end
+    sound:set_listeners(listeners)
+    sound:update_vehicles(players)
+end
+
+-- Nothing in the world is audible any more: drop the listeners so a stray event
+-- from a torn-down system cannot play, and stop the engine bed.
+function GameplayBase:end_audio()
+    local app = self.app
+    if not app.sound then return end
+    app.sound:clear_listeners()
+    app.sound:set_muted(app.audio_mute or false)
 end
 
 -- replay: recording, playback and divergence checking

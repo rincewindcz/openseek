@@ -132,17 +132,24 @@ function CombatSystem:init(world, camera)
     self._alt        = {}   -- per owner+weapon side toggle for alternate_side weapons
 end
 
--- Spawn a transient world-space effect. opts: {rot, scale, damage, radius, lifetime}.
--- A damage effect applies its damage once to entities within radius. lifetime
--- bounds looping clips (napalm fire); non-looping clips also cull when their
--- anim ends.
+-- Spawn a transient world-space effect. opts: {rot, scale, damage, radius,
+-- lifetime, sound}. A damage effect applies its damage once to entities within
+-- radius. lifetime bounds looping clips (napalm fire); non-looping clips also
+-- cull when their anim ends. `sound` overrides the explosion event this effect
+-- would otherwise emit (false silences it).
 function CombatSystem:add_effect(clip_name, x, y, opts)
     opts = opts or {}
     local anim = Animation.new(clip_name)
     if anim:is_done() then return end
-    -- Explosion clips (explosion_<size>) light the scene and pop a bright burst.
+    -- Explosion clips (explosion_<size>) light the scene, pop a bright burst and
+    -- sound off.
     local size = clip_name:match("^explosion_(%a+)")
-    if size then self.world:explosion_light(x, y, size) end
+    if size then
+        self.world:explosion_light(x, y, size)
+        if opts.sound ~= false then
+            self.world:sound(opts.sound or ("explosion." .. size), x, y)
+        end
+    end
     self.effects[#self.effects + 1] = {
         anim     = anim,
         x        = x,
@@ -178,8 +185,11 @@ end
 function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range_override, shooter)
     local weapon_def = self.weapons[weapon_name]
     if not weapon_def then return end
-    -- Muzzle flash at the gun for every shooter (player, ground AI, helis).
+    -- Muzzle flash and report at the gun for every shooter (player, ground AI,
+    -- helis). The event is named after the weapon; data/audio.json decides which
+    -- clip that is, and an unmapped weapon simply fires silently.
     self.world:muzzle_light(x, y)
+    self.world:sound("weapon." .. weapon_name, x, y)
     level_idx = level_idx or 1
     local level = (weapon_def.levels and weapon_def.levels[level_idx]) or weapon_def
 
@@ -729,6 +739,7 @@ function CombatSystem:crush_units(p)
             local rr     = CRUSH_RADIUS + (e.type_data.hit_radius or 0)
             if dx * dx + dy * dy < rr * rr then
                 e:take_damage(e.hp, dx, dy)   -- lethal; nudges the corpse away from the tank
+                self.world:sound("impact.crush", e.x, e.y)
                 if not e:is_alive() and p.stat_kills then
                     p.score = (p.score or 0) + self:_kill_points(e)
                     self:_credit_kill(p, e)
@@ -763,6 +774,11 @@ function CombatSystem:_check_hit(projectile)
                     if dx * dx + dy * dy < (projectile.radius + hit_radius) ^ 2 then
                         e:on_hit(self:_hit_clip(projectile.weapon_def))
                         e:take_damage(projectile.damage, projectile.vx, projectile.vy)
+                        -- A round that carries no burst of its own still cracks off
+                        -- the target it did not kill; a kill has its own explosion.
+                        if e:is_alive() and (projectile.weapon_def.explosion or "explosion_none") == "explosion_none" then
+                            self.world:sound("impact.ricochet", projectile.x, projectile.y)
+                        end
                         if projectile.aoe > 0 then self:_apply_aoe(projectile) end
                         if projectile.shooter and not e:is_alive() then
                             projectile.shooter.score = (projectile.shooter.score or 0) + self:_kill_points(e)
@@ -835,6 +851,7 @@ end
 -- A random scorch (fire / smoke) burst on the player's vehicle when it is hit.
 -- Attached to the player so it draws on top of the vehicle, not under it.
 function CombatSystem:_player_hit_fx(p)
+    self.world:sound("impact.player", p.x, p.y)
     local clip = PLAYER_HIT_FX[self.world.rng:random(#PLAYER_HIT_FX)]
     if p.add_hit_fx then
         p:add_hit_fx(clip, clip == "fire" and 0.6 or nil)
@@ -846,7 +863,8 @@ end
 -- A landed bomb: a big explosion, a scatter of iron/metal shrapnel, and full
 -- damage to everything inside the blast radius.
 function CombatSystem:_bomb_detonate(projectile)
-    self:add_effect(projectile.weapon_def.explosion or "explosion_large", projectile.x, projectile.y, { scale = 1.5 })
+    self:add_effect(projectile.weapon_def.explosion or "explosion_large", projectile.x, projectile.y,
+        { scale = 1.5, sound = "explosion.bomb" })
     -- Same flying iron/metal shrapnel (and the dust it leaves) as a building blast.
     self.world:spawn_debris(projectile.x, projectile.y, 5 + self.world.rng:random(0, 3), 1.4)
     local r  = projectile.aoe > 0 and projectile.aoe or 80

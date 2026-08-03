@@ -5,6 +5,7 @@ local Layout  = require "engine.ui.layout"
 local Config  = require "engine.core.config"
 local Input   = require "engine.core.input"
 local Audio   = require "engine.core.audio"
+local Sound   = require "engine.game.sound"
 local Display = require "engine.core.display"
 local Pointer = require "engine.ui.pointer"
 
@@ -38,7 +39,7 @@ local ARROW_GAP = 8
 local FADE_IN   = 0.25
 local FOOTER_Y  = 210
 
-local function apply_volume()  Audio.set_master(Config.master_volume) end
+local function apply_volume()  Sound.apply_config() end
 local function apply_display() Display.apply() end
 
 -- Categories listed in the sidebar. A category with `options` shows a rows panel;
@@ -59,7 +60,15 @@ local CATEGORIES = {
         { key = "night_brightness", label = "NIGHT AMBIENT", kind = "range", min = 0.5, max = 2.0, step = 0.1 },
     } },
     { title = "AUDIO", options = {
-        { key = "master_volume", label = "MASTER VOLUME", kind = "range", min = 0.0, max = 1.0, step = 0.05, on_change = apply_volume },
+        { key = "master_volume",         label = "MASTER VOLUME", kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = apply_volume },
+        { key = "sfx_volume",            label = "EFFECTS",       kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = apply_volume },
+        { key = "engine_volume",         label = "ENGINES",       kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = apply_volume },
+        { key = "voice_volume",          label = "RADIO",         kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = apply_volume },
+        { key = "ui_volume",             label = "MENU",          kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = apply_volume },
+        { key = "music_volume",          label = "MUSIC",         kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = apply_volume },
+        { key = "audio_positional",      label = "DIRECTIONAL",   kind = "toggle" },
+        { key = "coop_split_pan",        label = "SPLIT PANNING", kind = "range",  min = 0.0, max = 1.0, step = 0.05 },
+        { key = "voice_callouts",        label = "RADIO CALLS",   kind = "toggle" },
     } },
     { title = "CONTROLS", kind = "controls" },
     { title = "GAMEPLAY", options = {
@@ -123,19 +132,25 @@ end
 function AdvancedSettings:_move_cat(dir)
     self.cat    = ((self.cat - 1 + dir) % #CATEGORIES) + 1
     self.cursor = 1
+    Audio.play_event("ui.move")
 end
 
 function AdvancedSettings:_move(dir)
     local n = #self:_options()
     if n == 0 then return end
     self.cursor = ((self.cursor - 1 + dir) % n) + 1
+    Audio.play_event("ui.move")
 end
 
 -- Open the selected category: leave for EXIT, otherwise move focus into its rows.
 function AdvancedSettings:_enter_category()
     local cat = self:_category()
     if cat.kind == "exit" then self:_exit(); return end
-    if #self:_options() > 0 then self.focus = "panel"; self.cursor = 1 end
+    if #self:_options() > 0 then
+        self.focus  = "panel"
+        self.cursor = 1
+        Audio.play_event("ui.confirm")
+    end
 end
 
 -- Change the focused option. dir is +1 / -1 (a toggle ignores its magnitude); a
@@ -143,6 +158,9 @@ end
 function AdvancedSettings:_activate(dir)
     local opt = self:_options()[self.cursor]
     if not opt then return end
+    -- The click doubles as the audition for the volume rows: it plays through
+    -- the mixer, so the level the row just set is what the player hears.
+    Audio.play_event("ui.confirm")
     if opt.kind == "keybind" then
         self.capturing = opt.action
     elseif opt.kind == "reset" then
@@ -183,7 +201,7 @@ function AdvancedSettings:keypressed(key)
         elseif key == "left"  then self:_activate(-1)
         elseif key == "right" then self:_activate(1)
         elseif key == "return" or key == "space" or key == "kpenter" then self:_activate(1)
-        elseif key == "escape" then self.focus = "menu" end
+        elseif key == "escape" then self.focus = "menu"; Audio.play_event("ui.back") end
     end
 end
 

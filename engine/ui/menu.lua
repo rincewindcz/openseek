@@ -2,6 +2,7 @@ local Class    = require "engine.core.class"
 local Font     = require "engine.core.font"
 local Layout   = require "engine.ui.layout"
 local Pointer  = require "engine.ui.pointer"
+local Audio    = require "engine.core.audio"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
 -- OPTIONS / CREDITS / HIGH SCORES / LOAD / SAVE / ORDER INFO / EXIT over the
@@ -126,7 +127,7 @@ function Menu:open()
     self.pressed = nil      -- entry armed by mouse/touch down, fires on release
     self.sel_blink_t = SEL_BLINK_TIME  -- start with no blink in progress
     if self.entries[self.cursor] and self.entries[self.cursor].enabled == false then
-        self:_move(1)
+        self:_move(1, true)
     end
     local e = self.entries[self.cursor]
     self.arrow_y = e and e.mid_y or ROW_Y0  -- snap on open, tween on navigation
@@ -149,17 +150,22 @@ function Menu:set_enabled(id, enabled)
     end
     if not self.active then return end
     if self.entries[self.cursor] and self.entries[self.cursor].enabled == false then
-        self:_move(1)
+        self:_move(1, true)
     end
 end
 
-function Menu:_move(dir)
+-- quiet: land on the entry without the navigation click, for the corrective
+-- moves open() and set_enabled() make when the cursor sits on a disabled entry.
+function Menu:_move(dir, quiet)
     local n = #self.entries
     local i = self.cursor
     for _ = 1, n do
         i = ((i - 1 + dir) % n) + 1
         if self.entries[i].enabled ~= false then
-            if i ~= self.cursor then self.sel_blink_t = 0 end  -- one-shot blink
+            if i ~= self.cursor then
+                self.sel_blink_t = 0   -- one-shot blink
+                if not quiet then Audio.play_event("ui.move") end
+            end
             self.cursor = i
             return
         end
@@ -186,6 +192,7 @@ function Menu:hover(x, y)
     if i and i ~= self.cursor then
         self.sel_blink_t = 0
         self.cursor = i
+        Audio.play_event("ui.move")
     end
 end
 
@@ -208,6 +215,7 @@ function Menu:release(x, y)
         if e and e.enabled ~= false then
             self.confirming = e.id
             self.confirm_t = 0
+            Audio.play_event("ui.confirm")
         end
     end
 end
@@ -226,6 +234,7 @@ function Menu:keypressed(key)
         if e and e.enabled ~= false then
             self.confirming = e.id
             self.confirm_t = 0
+            Audio.play_event("ui.confirm")
         end
     end
 end

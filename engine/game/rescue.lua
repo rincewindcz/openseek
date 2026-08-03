@@ -186,6 +186,7 @@ function RescueSystem:_update_pow(pow, site, dt, lander)
             site.rescued     = site.rescued + 1
             pow.target.pows  = (pow.target.pows or 0) + 1
             pow.target.score = (pow.target.score or 0) + 150
+            self.world:say("voice.pow_aboard")
         else
             site.inside = site.inside + 1   -- back inside, waits to be rescued again
         end
@@ -217,6 +218,7 @@ end
 
 function RescueSystem:_clear_site(site)
     site.cleared = true
+    self.world:say("voice.pow_delivered")
     for _, b in ipairs(site.buildings) do b.protected = false end
     site.zone.rescue_hidden = true
 end

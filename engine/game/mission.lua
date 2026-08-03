@@ -176,17 +176,27 @@ function Mission:update(dt)
 
     -- Optional objectives (e.g. a secondary POW rescue) are tracked but never block
     -- the return-to-base / win once every required objective is done.
-    local all_done = true
+    local all_done, cleared = true, false
     for _, o in ipairs(self.objectives) do
         if not o.done then
             self:_update_objective(o)
+            if o.done then cleared = true end
             if not o.done and not o.spec.optional then all_done = false end
         end
     end
+    -- An objective finishing is called out, except the last one: that rolls
+    -- straight into the return-to-base line below.
+    if cleared and not all_done then self.world:say("voice.objective_cleared") end
 
     if all_done then
-        if self.state == "active" then self.state = "return_to_base" end
-        if self:_at_home_base() then self.state = "won" end
+        if self.state == "active" then
+            self.state = "return_to_base"
+            self.world:say("voice.return_to_base")
+        end
+        if self:_at_home_base() then
+            self.state = "won"
+            self.world:say("voice.mission_complete")
+        end
     end
 end
 
