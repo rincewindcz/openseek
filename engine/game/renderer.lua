@@ -112,19 +112,20 @@ function Renderer:_world_pass(fn)
     g.pop()
 end
 
--- Ground pass: terrain fill, decals, and craters. Everything a ground vehicle
--- (the tank) sits on top of; drawn before the object layer so trees/buildings can
--- occlude the tank. The grounded player is drawn between this and draw_objects.
+-- Ground pass: terrain fill, decals, and craters. Everything a vehicle on the
+-- ground (a tank, or a chopper on its skids) sits on top of; drawn before the
+-- object layer so trees/buildings can occlude it. Grounded players are drawn
+-- between this and draw_objects.
 function Renderer:draw_ground()
     love.graphics.clear(self.world:ground_color())
     self:_world_pass(self._draw_ground_layers)
 end
 
--- Object pass. mode selects which objects to draw relative to a ground vehicle:
--- "under" draws only flat ground clutter (non-solid scenery, decals, foot units)
--- that a tank drives over; "over" draws the solid props (trees, buildings, turrets)
--- that stand above it, plus the objective markers; nil draws everything (the
--- normal path when there is no grounded vehicle to split around).
+-- Object pass. mode selects which objects to draw relative to a vehicle on the
+-- ground: "under" draws only flat ground clutter (non-solid scenery, decals, foot
+-- units) that a tank drives over; "over" draws the solid props (trees, buildings,
+-- turrets) that stand above it, plus the objective markers; nil draws everything
+-- (the normal path when no vehicle is on the ground to split around).
 function Renderer:draw_objects(mode)
     self:_world_pass(function(_, vp) self:_draw_object_layers(vp, mode) end)
 end

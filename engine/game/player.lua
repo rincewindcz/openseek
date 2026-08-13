@@ -128,6 +128,14 @@ function Player:is_flyer()
     return self.vehicle ~= "tank"
 end
 
+-- Draw layer: off the ground, so above the world objects and the enemy flyers.
+-- A tank never is; a chopper stops being one the moment it touches down, which
+-- is what puts a landed chopper back under the trees and under a passing enemy
+-- helicopter. Used by the gameplay scenes' draw order.
+function Player:is_airborne()
+    return self:is_flyer() and self.altitude > 0
+end
+
 -- Heading projectiles travel along: the turret for tanks, the hull otherwise.
 function Player:fire_angle()
     if self.vehicle == "tank" then return self.angle + self.turret_offset end

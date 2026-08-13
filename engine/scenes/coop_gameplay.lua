@@ -30,12 +30,24 @@ local COLORS = CoopGameplay.COLORS
 -- Stereo side each half owns, fed to the sound system's listeners.
 local SPLIT_BIAS = { -1, 1 }
 
--- Draw layer of a player's vehicle: a chopper is airborne, so it is always above
--- a tank, whoever is driving which. Same-layer vehicles order by world y.
-local GROUND, AIR = 0, 1
-
-local function vehicle_layer(p)
-    return p.vehicle == "tank" and GROUND or AIR
+-- Split the half's two vehicles into the draw layers the single-player scene
+-- uses (Gameplay:draw): one on the ground goes in with the world objects, over
+-- the flat clutter and under the solid props and the enemy flyers; an airborne
+-- one goes above all of that. A tank is always grounded, a chopper only while it
+-- sits on its skids. Within a layer the southern (larger y) vehicle is on top,
+-- and the returned lists are back-to-front, so both halves agree on the order
+-- (the local vehicle is centered, the teammate placed by projection).
+local function draw_layers(local_p, remote_p)
+    local ground, air = {}, {}
+    local layer = local_p:is_airborne() and air or ground
+    layer[1] = local_p
+    if remote_p then
+        layer = remote_p:is_airborne() and air or ground
+        layer[#layer + 1] = remote_p
+    end
+    if #ground == 2 and ground[1].y > ground[2].y then ground[1], ground[2] = ground[2], ground[1] end
+    if #air    == 2 and air[1].y    > air[2].y    then air[1],    air[2]    = air[2],    air[1]    end
+    return ground, air
 end
 
 -- Beat between a wreck finishing and the vehicle being back on the pad. Single
@@ -287,6 +299,16 @@ function CoopGameplay:update(dt)
     self:tick_replay(self.players)
 end
 
+-- One vehicle in half i: the half's own player is drawn centered by its camera,
+-- the teammate is projected into this half and tinted with its colour.
+function CoopGameplay:_draw_vehicle(pl, local_p, i, cam)
+    if pl == local_p then
+        pl:draw()
+    else
+        pl:draw_remote(love.graphics, cam, COLORS[3 - i])
+    end
+end
+
 function CoopGameplay:draw()
     local app = self.app
     local g    = love.graphics
@@ -304,36 +326,31 @@ function CoopGameplay:draw()
         g.push()
         g.translate(vx, 0)
         g.setScissor(vx, 0, vw, H)
-        app.renderer:_draw_world()
+        local ground, air = draw_layers(p, other)
+        app.renderer:draw_ground()   -- terrain, decals, craters
+        if #ground > 0 then
+            app.renderer:draw_objects("under")   -- flat clutter the vehicles sit on
+            for _, pl in ipairs(ground) do
+                if pl == p then p:draw_world() end   -- smoke behind the local vehicle
+                self:_draw_vehicle(pl, p, i, cam)
+                if pl == p then p:draw_world_front() end
+            end
+            app.renderer:draw_objects("over")    -- trees/buildings + objective markers
+        else
+            app.renderer:draw_objects()          -- nothing on the ground to split around
+        end
         app.rescue:draw()            -- land pads + walking POWs, on the ground under everything
         app.saboteur:draw()          -- saboteur pads + walking saboteurs + target reticles
         app.powerups:draw()
         app.helis:draw_shadows()     -- aircraft ground shadows, under the flyers
         p:draw_shadow()
         if other then other:draw_remote_shadow(g, cam) end
-        p:draw_world()
+        if p:is_airborne() then p:draw_world() end
         app.combat:draw()
         app.renderer:draw_debris()   -- shrapnel above the explosion effects
         app.helis:draw()             -- airborne enemy helicopters
-        -- Draw both vehicles back-to-front: the chopper's AIR layer always sits
-        -- above the tank's GROUND layer, whichever player is in which, and two of
-        -- the same layer order by world y so the southern one is on top. The order
-        -- is identical in both halves (the local one centered, the teammate placed
-        -- by projection). Whoever is in front is drawn last.
-        local p_front = true
-        if other then
-            local lp, lo = vehicle_layer(p), vehicle_layer(other)
-            if lp ~= lo then p_front = lp > lo
-            else p_front = p.y >= other.y end
-        end
-        if other and p_front then
-            other:draw_remote(g, cam, COLORS[3 - i])
-            p:draw()
-        else
-            p:draw()
-            if other then other:draw_remote(g, cam, COLORS[3 - i]) end
-        end
-        p:draw_world_front()
+        for _, pl in ipairs(air) do self:_draw_vehicle(pl, p, i, cam) end
+        if p:is_airborne() then p:draw_world_front() end
         -- Night light map and flash layer per half, from this half's camera; the
         -- headlight follows the player it belongs to and cuts on destruction.
         app.lightfx.headlight_on = not p.death
