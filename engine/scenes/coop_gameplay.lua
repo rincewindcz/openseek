@@ -30,6 +30,14 @@ local COLORS = CoopGameplay.COLORS
 -- Stereo side each half owns, fed to the sound system's listeners.
 local SPLIT_BIAS = { -1, 1 }
 
+-- Draw layer of a player's vehicle: a chopper is airborne, so it is always above
+-- a tank, whoever is driving which. Same-layer vehicles order by world y.
+local GROUND, AIR = 0, 1
+
+local function vehicle_layer(p)
+    return p.vehicle == "tank" and GROUND or AIR
+end
+
 -- Beat between a wreck finishing and the vehicle being back on the pad. Single
 -- player holds its crash picture for the same time before respawning.
 local RESPAWN_DELAY = 0.8
@@ -307,18 +315,18 @@ function CoopGameplay:draw()
         app.combat:draw()
         app.renderer:draw_debris()   -- shrapnel above the explosion effects
         app.helis:draw()             -- airborne enemy helicopters
-        -- Draw both vehicles back-to-front: a chopper always sits above a tank (it is
-        -- airborne), and two of the same layer order by world y so the southern one is
-        -- on top, identically in both halves (the local one centered, the teammate
-        -- placed by projection). Without this the teammate always covered the local
-        -- player, and a tank could end up over a flying chopper.
-        local function layer(pl) return pl.vehicle == "tank" and 0 or 1 end
-        local p_front
+        -- Draw both vehicles back-to-front: the chopper's AIR layer always sits
+        -- above the tank's GROUND layer, whichever player is in which, and two of
+        -- the same layer order by world y so the southern one is on top. The order
+        -- is identical in both halves (the local one centered, the teammate placed
+        -- by projection). Whoever is in front is drawn last.
+        local p_front = true
         if other then
-            if layer(p) ~= layer(other) then p_front = layer(p) > layer(other)
+            local lp, lo = vehicle_layer(p), vehicle_layer(other)
+            if lp ~= lo then p_front = lp > lo
             else p_front = p.y >= other.y end
         end
-        if other and not p_front then
+        if other and p_front then
             other:draw_remote(g, cam, COLORS[3 - i])
             p:draw()
         else
