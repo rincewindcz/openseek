@@ -1,5 +1,6 @@
 local Class  = require "engine.core.class"
 local json   = require "lib.json"
+local Assets = require "engine.core.assets"
 local Config = require "engine.core.config"
 local Font   = require "engine.core.font"
 
@@ -76,7 +77,7 @@ function Hud:_preload_item(item, prefix)
     local function over(path)
         if not prefix then return path end
         local o = path:gsub("^hud/", prefix)
-        return love.filesystem.getInfo("assets/" .. o) and o or path
+        return Assets.exists(o) and o or path
     end
 
     if item.sprite_pattern then
@@ -86,8 +87,20 @@ function Hud:_preload_item(item, prefix)
         while true do
             local p = string.format(item.sprite_pattern, i)
             if override then p = p:gsub("^hud/", prefix) end
-            if not love.filesystem.getInfo("assets/" .. p) then break end
+            if not Assets.exists(p) then break end
             item._frames[i + 1] = self:_img(p)
+            i = i + 1
+        end
+    end
+    -- One marker sprite per player slot (the co-op P1..P4 labels). Shipped art,
+    -- so no per-mission override pass over it.
+    if item.icon_pattern then
+        item._icons = {}
+        local i = 0
+        while true do
+            local p = string.format(item.icon_pattern, i)
+            if not Assets.exists(p) then break end
+            item._icons[i + 1] = self:_img(p)
             i = i + 1
         end
     end
@@ -107,7 +120,7 @@ end
 
 function Hud:_img(path)
     if self._cache[path] == nil then
-        local ok, img = pcall(love.graphics.newImage, "assets/" .. path)
+        local ok, img = pcall(love.graphics.newImage, Assets.path(path))
         if ok then
             img:setFilter("nearest", "nearest")
             self._cache[path] = img
@@ -169,6 +182,16 @@ function Hud:_number_value(item)
     return nil
 end
 
+-- The marker sprite left of the readout: a fixed icon, or one frame per player
+-- slot from icon_pattern (the P1..P4 score labels), clamped to the last frame.
+function Hud:_number_icon(item)
+    if item._icons and #item._icons > 0 then
+        local i = math.max(1, math.min(#item._icons, self.player.index or 1))
+        return item._icons[i]
+    end
+    return item.icon and self:_img(item.icon)
+end
+
 function Hud:_draw_number(g, item, x, y, s)
     local val = self:_number_value(item)
     if val == nil then return end
@@ -179,14 +202,24 @@ function Hud:_draw_number(g, item, x, y, s)
     if item.prefix then str = item.prefix .. str end
 
     local font  = Font.get(item.font or "chars")
-    local icon  = item.icon and self:_img(item.icon)
+    local icon  = self:_number_icon(item)
     local iconw = icon and (icon:getWidth() * s + (item.gap or 2) * s) or 0
     local left  = x
     if item.align == "right" then left = x - iconw - font:width(str, s) end
 
     if icon then
-        g.setColor(1, 1, 1)
-        g.draw(icon, left, y + (item.icon_dy or 0) * s, 0, s, s)
+        local iy = y + (item.icon_dy or 0) * s
+        -- icon_color marks a mask sprite (white on alpha): tint it and cast the
+        -- same down-right black shadow the mask fonts get. Sprites decoded from
+        -- the original art carry their own palette and baked shadow.
+        if item.icon_color then
+            g.setColor(0, 0, 0)
+            g.draw(icon, left + s, iy + s, 0, s, s)
+            g.setColor(item.icon_color)
+        else
+            g.setColor(1, 1, 1)
+        end
+        g.draw(icon, left, iy, 0, s, s)
     end
     -- text_on_icon: the count sits in a slot inside the marker sprite (e.g. the
     -- POWCOUNT "POW =" plate), placed by text_dx/text_dy in sprite pixels from the

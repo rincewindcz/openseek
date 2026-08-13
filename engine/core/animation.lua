@@ -1,5 +1,6 @@
-local Class = require "engine.core.class"
-local json  = require "lib.json"
+local Class  = require "engine.core.class"
+local json   = require "lib.json"
+local Assets = require "engine.core.assets"
 
 -- AnimClip
 -- Immutable definition loaded once from animations.json.
@@ -16,7 +17,7 @@ function AnimClip:init(def, image_cache)
     for _, path in ipairs(def.frames or {}) do
         local img = image_cache[path]
         if not img then
-            local ok, loaded = pcall(love.graphics.newImage, "assets/" .. path)
+            local ok, loaded = pcall(love.graphics.newImage, Assets.path(path))
             if ok then
                 loaded:setFilter("nearest", "nearest")
                 image_cache[path] = loaded
@@ -25,7 +26,7 @@ function AnimClip:init(def, image_cache)
         end
         if img then
             self.frames[#self.frames + 1] = img
-            self.frame_paths[#self.frames] = "assets/" .. path
+            self.frame_paths[#self.frames] = Assets.path(path)
         end
     end
 end

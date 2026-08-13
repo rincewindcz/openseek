@@ -2,6 +2,7 @@
 __pycache__/
 *.png
 !assets/**/*.png
+!content/**/*.png
 *.exe
 *.bin
 *.BIN

@@ -326,6 +326,7 @@ end
 function GameplayBase:begin_input(mode, players, bindings)
     local app = self.app
     self.sources = {}
+    for slot, p in ipairs(players) do p.index = slot end
     if self.playback then
         self.playback:rewind()
         for slot = 1, #players do

@@ -1,4 +1,5 @@
 local Class  = require "engine.core.class"
+local Assets = require "engine.core.assets"
 local Config = require "engine.core.config"
 local Layout = require "engine.ui.layout"
 
@@ -65,7 +66,7 @@ function EndStats:_asset(path, quiet)
         -- Check the file exists before newImage: love.js (Lua 5.1 web build) raises
         -- an uncatchable error when newImage is handed a missing path, unlike native
         -- LOVE where pcall would swallow it. getInfo is the portable existence probe.
-        local full = "assets/" .. path
+        local full = Assets.path(path)
         local img
         if love.filesystem.getInfo(full) then
             img = love.graphics.newImage(full)
