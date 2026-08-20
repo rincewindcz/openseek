@@ -139,10 +139,11 @@ All built on the tiny `core/class.lua` helper.
 | `game/weather.lua` | World-space tiled particle field: snow on mission 1, rain on mission 2. Presentation only, on the global RNG. |
 | `game/vehicles.lua` | Vehicle catalogue: free-play weapon cycles, the equip-screen bay and special lists, bay counts, the skin picker cycle, UI labels. |
 | `game/loadout.lua` | Campaign weapon inventory: owned level per weapon, bay assignments (bay 1 fixed chain gun), the loaded special, `weapon_list` with bay-count ammo multipliers, `buy` from medals, and `active(app)` picking campaign vs MISSION-mode purse. |
-| `game/stats.lua` | Destruction-stats bookkeeping shared by gameplay and the end screen: kind tables, `kind_category`, `destructible_totals`, `stage_phase`. |
+| `game/score.lua` | Scoring rules ported from the original (`research/SCORE.md`): per-kill values, the phase-end bonus weights, and the bonus-vehicle ladder (one spare every 15000 points, capped at 9). Every score credit goes through `Score.award`. |
+| `game/stats.lua` | Destruction-stats bookkeeping shared by gameplay and the end screen: the original's kind / class-flag categories, `class_category`, `destructible_totals`, `stage_phase`. |
 | `game/replay.lua` | Recorded run: header, delta encoded per-tick input, periodic state checksums, the `replays/*.osr` file format, the listing, and `Replay.checksum`. |
-| `ui/hud.lua` | Sprite gauges, weapon icon, acceleration box, radar with priority layering, bitmap-font counters (score, lives, POWs, ammo), the OVERKILL streak banner. Per-mission override art from `assets/hud/stage{m}/`, scaled by `Config.hud_scale`. |
-| `ui/end_stats.lua` | End-of-phase DESTRUCTION STATS screen: five tallied lines with proportional `KILLICON` rows, the spinning OK badge, a running total, count-up or count-down. Co-op shows a value column per player. |
+| `ui/hud.lua` | Sprite gauges, weapon icon, acceleration box, radar with priority layering, bitmap-font counters (score, lives, POWs, ammo), the OVERKILL streak banner. The score readout rolls up to a new total (`Config.score_count_up`), eased on frame time in `Hud:update`, one readout per player. Per-mission override art from `assets/hud/stage{m}/`, scaled by `Config.hud_scale`. |
+| `ui/end_stats.lua` | End-of-phase DESTRUCTION STATS screen: five tallied lines with proportional `KILLICON` rows, the spinning OK badge, a running total, count-up or count-down. The first two lines read as a percentage of the stage total but pay per unit destroyed, as in the original. Co-op shows a value column per player. |
 | `ui/equip_screen.lua` | The EQUIP CHOPPER / EQUIP TANK widget layer over `assets/equip/layout.json`: weapon rows in their live state, level pips, specials, OK / EXIT / TANK|CHOP. Edits the passed `Loadout` in place. |
 | `ui/shop_screen.lua` | The `POWUP` / `POWUPT` shop: three level buttons per weapon category (owned ringed, affordable bright, too expensive dimmed), direct purchase from the shared medal purse. |
 | `ui/menu.lua` | Main-menu widget over the `MAINP` backdrop, rendered from the `mainmen` word-art font, hover-to-focus with press/release confirm, disabled entries dimmed. |
@@ -360,9 +361,9 @@ before re-entering, like the single-player restart.
 
 What co-op does not share with a campaign phase: it is entered from the overview,
 so it uses the free-play weapon lists rather than an equip loadout, and it has no
-briefing, shop or phase-to-phase progression. Each player keeps their own score
-from kills attributed to `proj.shooter`, and the stats screen shows a column per
-player. Controls: P1 WASD + L-Shift / L-Ctrl / Q / E, P2 arrows + R-Shift /
+briefing, shop or phase-to-phase progression. Each player keeps their own score,
+bonus-vehicle threshold and destruction columns, all fed from kills attributed to
+`proj.shooter`, and the stats screen shows a column per player. Controls: P1 WASD + L-Shift / L-Ctrl / Q / E, P2 arrows + R-Shift /
 R-Ctrl / Num0 / NumEnter.
 
 ## 8. Audio

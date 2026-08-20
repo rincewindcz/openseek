@@ -86,13 +86,16 @@ function Gameplay:spawn_player(carry)
     local player = Player:new(sx, sy)
     self.player = player
     if carry and prev then
-        player.lives = prev.lives
-        player.score = prev.score
+        player.lives           = prev.lives
+        player.score           = prev.score
+        player.next_bonus_life = prev.next_bonus_life
     elseif app.campaign then
-        -- Entering a campaign phase: seed the running score and remaining lives
-        -- carried from the previous phase (zero / full on the first phase).
-        player.score = app.run_score
-        player.lives = app.run_lives
+        -- Entering a campaign phase: seed the running score, the bonus-vehicle
+        -- threshold and the remaining lives carried from the previous phase
+        -- (zero / full on the first phase).
+        player.score           = app.run_score
+        player.lives           = app.run_lives
+        player.next_bonus_life = app.run_bonus_life
     end
     player.world_size   = world.stage.world_size
     player.home_x, player.home_y = sx, sy
@@ -217,8 +220,9 @@ function Gameplay:on_stats_done()
         app.scenes:switch("main_menu")   -- single stage done: back to the menu
         return
     end
-    app.run_score = self.player.score or app.run_score
-    app.run_lives = self.player.lives or app.run_lives
+    app.run_score      = self.player.score or app.run_score
+    app.run_lives      = self.player.lives or app.run_lives
+    app.run_bonus_life = self.player.next_bonus_life or app.run_bonus_life
     -- Carry the medals picked up this phase into the shop purse for the next one.
     if app.loadout then
         app.loadout.medals = app.loadout.medals + (self.player.medals or 0)

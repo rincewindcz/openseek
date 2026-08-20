@@ -207,7 +207,6 @@ function SaboteurSystem:_update_saboteur(site, dt, lander)
         if lander then
             site.recovered = true
             lander.pows  = (lander.pows or 0) + 1
-            lander.score = (lander.score or 0) + 150
         end
     end
 end

@@ -5,6 +5,7 @@ local Vehicles    = require "engine.game.vehicles"
 local Rng         = require "engine.core.rng"
 local InputSource = require "engine.core.input_source"
 local Replay      = require "engine.game.replay"
+local Score       = require "engine.game.score"
 local Sound       = require "engine.game.sound"
 
 -- Shared base for the gameplay scenes (single player, sandbox, co-op split):
@@ -273,7 +274,11 @@ function GameplayBase:replay_header(mode, players)
         local key = "player." .. slot .. "."
         header[key .. "vehicle"] = p.vehicle
         header[key .. "skin"]    = p.chopper_skin or 1
-        header[key .. "lives"]   = p.lives or 3
+        header[key .. "lives"]   = p.lives or Score.START_LIVES
+        -- Score and the bonus-vehicle threshold decide when a spare is handed
+        -- out mid-phase, so they are starting conditions, not presentation.
+        header[key .. "score"]   = p.score or 0
+        header[key .. "bonus"]   = p.next_bonus_life or Score.BONUS_LIFE_STEP
         header[key .. "god"]     = tostring(p.unlimited and true or false)
         header[key .. "weapons"] = Replay.encode_list(p.weapon_list or Vehicles.WEAPONS[p.vehicle])
         if p.weapon_levels then header[key .. "levels"] = Replay.encode_map(p.weapon_levels) end
@@ -297,8 +302,10 @@ function GameplayBase:apply_replay_player(p, slot)
     if not self.playback then return end
     local header = self.playback.header
     local key    = "player." .. slot .. "."
-    p.lives     = tonumber(header[key .. "lives"]) or p.lives
-    p.unlimited = header[key .. "god"] == "true"
+    p.lives           = tonumber(header[key .. "lives"]) or p.lives
+    p.score           = tonumber(header[key .. "score"]) or p.score
+    p.next_bonus_life = tonumber(header[key .. "bonus"]) or p.next_bonus_life
+    p.unlimited       = header[key .. "god"] == "true"
     local weapons = Replay.decode_list(header[key .. "weapons"])
     if #weapons > 0 then
         p.weapon_list = weapons

@@ -33,11 +33,56 @@ local RADAR_COLOR_BUILDING  = { 0.33, 0.18, 0.07 }
 local RADAR_COLOR_OBJECTIVE = { 1.0, 1.0, 1.0 }
 local RADAR_COLOR_AIR       = { 1.0, 0.4, 0.8 }   -- enemy helicopters (pinkish)
 
+-- Score count-up: exponential approach rate (per second) and the floor speed
+-- (points per second) that keeps the last few digits from crawling.
+local ROLL_RATE     = 9
+local ROLL_MIN_RATE = 60
+
 function Hud:init()
     self.player = nil
     self.world  = nil
     self.items  = {}
     self._cache = {}
+    -- Rolling score readouts, one entry per player seen (weak keys: a player from
+    -- a finished phase drops out on its own). Presentation only.
+    self._score_roll = setmetatable({}, { __mode = "k" })
+end
+
+-- Ease the score readouts toward their players' real scores. Driven from
+-- love.update on frame time, not on simulation ticks: this is presentation and
+-- must never feed back into the run (see DETERMINISM.md).
+function Hud:update(dt)
+    if not Config.score_count_up then return end
+    for p, roll in pairs(self._score_roll) do
+        local target = p.score or 0
+        local diff   = target - roll.shown
+        if diff < 1 then
+            roll.shown = target   -- the last digit, or a reset: land at once
+        else
+            -- Exponential approach: a big jump moves fast at first and eases into
+            -- the final digits, with a floor so the tail still arrives promptly.
+            local step = math.max(diff * (1 - math.exp(-ROLL_RATE * dt)), ROLL_MIN_RATE * dt)
+            roll.shown = math.min(target, roll.shown + step)
+        end
+    end
+end
+
+-- The score to draw for a player: the rolling readout when the count-up is on,
+-- the real score otherwise. Seeing a player for the first time starts its
+-- readout at the current score, so a carried campaign total does not roll up
+-- from zero when a phase opens.
+function Hud:_score_readout(p)
+    local score = p.score or 0
+    if not Config.score_count_up then
+        self._score_roll[p] = nil
+        return score
+    end
+    local roll = self._score_roll[p]
+    if not roll then
+        roll = { shown = score }
+        self._score_roll[p] = roll
+    end
+    return math.floor(roll.shown)
 end
 
 function Hud:load(path)
@@ -174,7 +219,7 @@ end
 function Hud:_number_value(item)
     local p = self.player
     local v = item.value
-    if     v == "score" then return p.score or 0
+    if     v == "score" then return self:_score_readout(p)
     elseif v == "lives" then return p.lives or 0
     elseif v == "pows"  then return p.pows  or 0
     elseif v == "ammo"  then return p.ammo[p.weapon_name]   -- nil => infinite

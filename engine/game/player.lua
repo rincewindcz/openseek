@@ -4,6 +4,7 @@ local InputFrame = require "engine.core.input_frame"
 local Config     = require "engine.core.config"
 local Camera     = require "engine.core.camera"
 local Shadow     = require "engine.game.shadow"
+local Score      = require "engine.game.score"
 
 local Player = Class()
 
@@ -40,15 +41,16 @@ function Player:init(x, y)
     self.fire_timer   = 0
     self.frame        = InputFrame.EMPTY   -- this tick's input, set by the gameplay scene
 
-    self.ammo         = {}      -- weapon_name -> rounds left (absent = infinite)
-    self.unlimited    = false   -- god mode: skip ammo/fuel/armor consumption
-    self.medals       = 0
-    self.pows         = 0       -- people (POWs/allies) currently carried
-    self.score        = 0       -- own kill/rescue score (co-op split screen)
-    self.index        = 1       -- input slot (1-based), set by begin_input; HUD label only
-    self.stat_kills   = { ground = 0, building = 0, chopper = 0 }  -- per-player end-of-phase stats
-    self.lives        = 3       -- spare vehicles
-    self.death        = nil     -- death sequence state (set by start_death)
+    self.ammo            = {}      -- weapon_name -> rounds left (absent = infinite)
+    self.unlimited       = false   -- god mode: skip ammo/fuel/armor consumption
+    self.medals          = 0
+    self.pows            = 0       -- personnel aboard; also the phase-end rescue tally
+    self.score           = 0       -- own kill/rescue score (co-op split screen)
+    self.next_bonus_life = Score.BONUS_LIFE_STEP  -- score that earns the next spare vehicle
+    self.index           = 1       -- input slot (1-based), set by begin_input; HUD label only
+    self.stat_kills      = { ground = 0, building = 0, chopper = 0 }  -- per-player end-of-phase stats
+    self.lives           = Score.START_LIVES      -- spare vehicles
+    self.death           = nil     -- death sequence state (set by start_death)
 
     self._kill_times    = {}    -- recent kill timestamps, for the overkill streak
     self.overkill_until = 0     -- show the OVERKILL banner while time < this

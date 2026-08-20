@@ -15,6 +15,7 @@ local Config          = require "engine.core.config"
 local Input           = require "engine.core.input"
 local Display         = require "engine.core.display"
 local Mission         = require "engine.game.mission"
+local Score           = require "engine.game.score"
 local Screen          = require "engine.core.screen"
 local EndStats        = require "engine.ui.end_stats"
 local Pointer         = require "engine.ui.pointer"
@@ -122,7 +123,8 @@ function love.load(args)
         viewer_zoom_index = 4,     -- overview zoom, restored when a game mode ends
         campaign          = false, -- NEW GAME run: advance phase->phase, accumulate score
         run_score         = 0,     -- score carried across phases of a campaign run
-        run_lives         = 3,     -- spare vehicles carried across phases of a campaign run
+        run_lives         = Score.START_LIVES,        -- spare vehicles carried across phases of a run
+        run_bonus_life    = Score.BONUS_LIFE_STEP,    -- next bonus-vehicle threshold, carried with the score
         settings = {
             vehicle       = "chopper",
             chopper_skin  = 1,     -- player chopper variant (1 green, 2 magenta, 3 white)
@@ -200,6 +202,7 @@ local accumulator = 0
 
 function love.update(dt)
     app.screen:update(dt)
+    app.hud:update(dt) -- rolling score readout: presentation, on frame time
     Audio.update(dt)   -- mixer housekeeping (duck release, music fades): real time, not ticks
     local top = app.scenes:top()
     if not (top and top.fixed_step) then

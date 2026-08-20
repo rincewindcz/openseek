@@ -3,6 +3,7 @@ local Animation = require "engine.core.animation"
 local Config    = require "engine.core.config"
 local Shadow    = require "engine.game.shadow"
 local Mathx     = require "engine.core.mathx"
+local Score     = require "engine.game.score"
 
 -- Each spawned heli gets exactly one of these, picked at random. air_to_air uses
 -- its locking level so the missile homes (the original game's heli weapon);
@@ -39,6 +40,8 @@ local ROTOR_SPEED  = 15  -- rad/s the rotor disc spins (one blade frame, rotated
 -- is what the old formula yielded at 1280x720 and the gameplay zoom, margin
 -- included). See DETERMINISM.md.
 local SPAWN_CLEAR_RADIUS = 235
+-- Fallback score value if the stage carries no badheli class to read it from.
+local DEFAULT_POINTS = 500
 
 local HeliSystem = Class()
 
@@ -53,6 +56,7 @@ function HeliSystem:init(world, combat)
     self.rotor_img = nil
     self.rotor_ax, self.rotor_ay = 0, 0
     self.kills  = 0   -- enemy helicopters shot down (end-of-phase stats)
+    self.points = DEFAULT_POINTS
 end
 
 -- Read the stage's spawn markers and the badheli render image. Called on each
@@ -65,8 +69,12 @@ function HeliSystem:reset()
     self.kills  = 0
     self.world.air_units = self.helis
     self.sprite = nil
+    self.points = DEFAULT_POINTS
     for _, c in ipairs(self.world.stage.classes) do
         if c.kind_name == "enemy_helicopter" then
+            -- Score value comes from the same class record as the sprite: the
+            -- badheli class hit_points, like any other destroyed entity.
+            if (c.hit_points or 0) > 0 then self.points = c.hit_points end
             local r = self.world.images[c.index + 1]
             if r and r.img then self.sprite = r.img; break end
         end
@@ -135,7 +143,7 @@ function HeliSystem:hit(heli, dmg, shooter)
         heli.die_t = 0
         self.kills = (self.kills or 0) + 1
         if shooter then
-            shooter.score = (shooter.score or 0) + 70
+            Score.award(shooter, self.points or DEFAULT_POINTS)
             if shooter.stat_kills then
                 shooter.stat_kills.chopper = (shooter.stat_kills.chopper or 0) + 1
             end

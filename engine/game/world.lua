@@ -264,7 +264,7 @@ function World:load(name)
         local r      = tdef and self.images[raw.class + 1]
         if hull and r then
             -- Fold the turret onto its co-located hull, dropping it as a standalone entity.
-            hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy }, tdef.spin)
+            hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy }, tdef.spin, cls)
         elseif cls.kind_name == "enemy_helicopter" then
             -- Enemy helicopters are not placed units: each marks a spawn point for the
             -- airborne heli system and is never drawn or hit in place.

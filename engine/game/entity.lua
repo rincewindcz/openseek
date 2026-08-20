@@ -68,6 +68,9 @@ function Entity:is_alive()
     return self.state ~= "dead" and self.state ~= "exploding"
 end
 
+-- Returns what this hit destroyed ("turret" or "hull"), else nil. Scoring counts
+-- the two separately: a folded turret is its own entity in the original, worth
+-- its own points and its own line in the destruction stats.
 function Entity:take_damage(amount, dx, dy)
     if not self:is_alive() then return end
     -- A POW building stays indestructible while it still holds prisoners.
@@ -79,6 +82,7 @@ function Entity:take_damage(amount, dx, dy)
         if self.turret_hp <= 0 then
             self.turret_hp = 0
             self:_destroy_turret()
+            return "turret"
         end
         return
     end
@@ -86,15 +90,20 @@ function Entity:take_damage(amount, dx, dy)
     if self.hp <= 0 then
         self.hp = 0
         self:_start_death(dx, dy)
+        return "hull"
     end
 end
 
 -- Fold a co-located turret entity onto this hull. render = {img, ax, ay} drawn
 -- by the renderer, rotated to aim_angle about (ax, ay). spin (deg/s) makes the
 -- turret rotate continuously (radar dish) instead of being aimed by the AI.
-function Entity:attach_turret(render, spin)
+-- turret_class is the folded entity's stage class: it keeps the turret's own
+-- score value and stats category, which the original credits separately.
+function Entity:attach_turret(render, spin, turret_class)
     self.turret_render = render
     self.turret_spin   = spin
+    self.turret_class  = turret_class
+    self.turret_points = (turret_class and turret_class.hit_points) or 0
     self.has_turret    = true
     self.turret_alive  = true
     self.turret_max_hp = (self.type_data and self.type_data.turret_hp)

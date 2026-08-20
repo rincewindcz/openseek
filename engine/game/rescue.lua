@@ -185,7 +185,6 @@ function RescueSystem:_update_pow(pow, site, dt, lander)
         if pow.state == "out" then
             site.rescued     = site.rescued + 1
             pow.target.pows  = (pow.target.pows or 0) + 1
-            pow.target.score = (pow.target.score or 0) + 150
             self.world:say("voice.pow_aboard")
         else
             site.inside = site.inside + 1   -- back inside, waits to be rescued again

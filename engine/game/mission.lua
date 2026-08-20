@@ -234,7 +234,6 @@ function Mission:_update_rescue_people(o)
                         o.collected[z.id] = true
                         o.progress = o.progress + 1
                         p.pows  = (p.pows or 0) + 1
-                        p.score = (p.score or 0) + 150
                     end
                 end
             end

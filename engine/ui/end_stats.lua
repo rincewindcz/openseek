@@ -1,6 +1,7 @@
 local Class  = require "engine.core.class"
 local Assets = require "engine.core.assets"
 local Config = require "engine.core.config"
+local Score  = require "engine.game.score"
 local Layout = require "engine.ui.layout"
 
 -- End-of-phase DESTRUCTION STATS screen. Drawn over the dimmed game once the
@@ -31,9 +32,6 @@ local LINE_TIME    = 0.7  -- seconds to tally one line
 local LINE_STAGGER = 0.45 -- gap between successive lines starting
 local CLOSE_SPEED  = 1.6  -- reverse-tally rate on close, relative to the count-up
 local BADGE_FPS    = 18
-
--- Bonus points folded into TOTAL SCORE per line unit.
-local PTS = { ground = 10, buildings = 10, choppers = 100, rescues = 200, ok = 250 }
 
 function EndStats:init()
     self.active = false
@@ -88,24 +86,30 @@ end
 -- player yields one (gold) column; co-op yields one tinted column per player.
 -- A participant: { player, color, ground={killed,total}, buildings={killed,total},
 -- choppers, rescues }.
+-- The first two lines show a percentage of the stage's destructible total, but
+-- the bonus they carry is per unit destroyed, as in the original: the percentage
+-- is a readout, never a score input.
 local function participant_cols(p)
     local function pct(c) return (c and c.total and c.total > 0) and (c.killed / c.total * 100) or 0 end
+    local ground_killed = (p.ground and p.ground.killed) or 0
+    local build_killed  = (p.buildings and p.buildings.killed) or 0
     local ground   = math.floor(pct(p.ground) + 0.5)
     local build    = math.floor(pct(p.buildings) + 0.5)
     local choppers = p.choppers or 0
     local rescues  = p.rescues  or 0
-    -- Provisional OK rating: one point per fully cleared objective category.
+    -- Provisional OK rating: one point per fully cleared objective category. The
+    -- original's counter behind this line is not yet understood, only its weight.
     local ok = 0
     if p.ground and p.ground.total > 0 and ground >= 100 then ok = ok + 1 end
     if p.buildings and p.buildings.total > 0 and build >= 100 then ok = ok + 1 end
     if choppers > 0 then ok = ok + 1 end
     if rescues > 0 then ok = ok + 1 end
     return {
-        ground    = { value = ground,   bonus = ground * PTS.ground },
-        buildings = { value = build,    bonus = build  * PTS.buildings },
-        choppers  = { value = choppers, bonus = choppers * PTS.choppers },
-        rescues   = { value = rescues,  bonus = rescues * PTS.rescues },
-        ok        = { value = ok,       bonus = ok * PTS.ok },
+        ground    = { value = ground,   bonus = Score.line_bonus("ground",    ground_killed) },
+        buildings = { value = build,    bonus = Score.line_bonus("buildings", build_killed) },
+        choppers  = { value = choppers, bonus = Score.line_bonus("choppers",  choppers) },
+        rescues   = { value = rescues,  bonus = Score.line_bonus("rescues",   rescues) },
+        ok        = { value = ok,       bonus = Score.line_bonus("ok",        ok) },
     }
 end
 
@@ -197,7 +201,8 @@ function EndStats:_total_score()
 end
 
 -- Fold each player's earned bonus into their own score (co-op keeps the two
--- scores separate); idempotent.
+-- scores separate); idempotent. Credited through Score.award so the phase bonus
+-- can hand out bonus vehicles like any other points.
 function EndStats:_apply_final()
     if self.applied then return end
     self.applied = true
@@ -209,7 +214,8 @@ function EndStats:_apply_final()
                     if col.player == p.player then bonus = bonus + col.bonus end
                 end
             end
-            p.player.score = p._base + bonus
+            p.player.score = p._base
+            Score.award(p.player, bonus)
         end
     end
 end

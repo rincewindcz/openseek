@@ -3,6 +3,7 @@ local json      = require "lib.json"
 local Animation = require "engine.core.animation"
 local Config    = require "engine.core.config"
 local Mathx     = require "engine.core.mathx"
+local Score     = require "engine.game.score"
 local Stats     = require "engine.game.stats"
 
 -- Projectile
@@ -709,19 +710,29 @@ function CombatSystem:_update_effects(dt)
     self.effects = live
 end
 
--- Score awarded to the player who lands the killing hit.
-function CombatSystem:_kill_points(e)
-    return 50 + (e.max_hp or 0)
+-- Points for a destroyed entity: its class hit_points, the value the original
+-- credits the moment anything dies (a tank is worth 200 because it has 200 HP).
+-- A folded turret carries its own class value.
+function CombatSystem:_kill_points(e, what)
+    if what == "turret" then return e.turret_points or 0 end
+    local cls = self.world.stage.classes[e.class_idx + 1]
+    return (cls and cls.hit_points) or 0
 end
 
--- DESTRUCTION STATS category of a killed entity ("ground" / "building" / nil),
--- credited to the player who landed the killing hit (co-op per-player columns).
-function CombatSystem:_credit_kill(shooter, e)
+-- Bank a kill on the player who landed the killing hit: points (with the
+-- bonus-life ladder), the DESTRUCTION STATS column (co-op keeps a column per
+-- player), and the kill-streak clock. what is "turret" or "hull".
+function CombatSystem:_credit_kill(shooter, e, what)
     if not (shooter and shooter.stat_kills) then return end
-    local cls  = self.world.stage.classes[e.class_idx + 1]
-    local kind = cls and cls.kind_name
-    local cat  = Stats.kind_category(kind)
+    Score.award(shooter, self:_kill_points(e, what))
+    local cat
+    if what == "turret" then
+        cat = Stats.class_category(e.turret_class)
+    else
+        cat = Stats.class_category(self.world.stage.classes[e.class_idx + 1])
+    end
     if cat then shooter.stat_kills[cat] = (shooter.stat_kills[cat] or 0) + 1 end
+    if shooter.register_kill then shooter:register_kill() end
 end
 
 -- World radius around the tank hull that flattens infantry driven over.
@@ -738,13 +749,10 @@ function CombatSystem:crush_units(p)
             local dx, dy = self.world:delta(e.x, e.y, p.x, p.y)
             local rr     = CRUSH_RADIUS + (e.type_data.hit_radius or 0)
             if dx * dx + dy * dy < rr * rr then
-                e:take_damage(e.hp, dx, dy)   -- lethal; nudges the corpse away from the tank
+                -- lethal; nudges the corpse away from the tank
+                local killed = e:take_damage(e.hp, dx, dy)
                 self.world:sound("impact.crush", e.x, e.y)
-                if not e:is_alive() and p.stat_kills then
-                    p.score = (p.score or 0) + self:_kill_points(e)
-                    self:_credit_kill(p, e)
-                    if p.register_kill then p:register_kill() end
-                end
+                if killed then self:_credit_kill(p, e, killed) end
             end
         end
     end
@@ -773,18 +781,14 @@ function CombatSystem:_check_hit(projectile)
                     local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
                     if dx * dx + dy * dy < (projectile.radius + hit_radius) ^ 2 then
                         e:on_hit(self:_hit_clip(projectile.weapon_def))
-                        e:take_damage(projectile.damage, projectile.vx, projectile.vy)
+                        local killed = e:take_damage(projectile.damage, projectile.vx, projectile.vy)
                         -- A round that carries no burst of its own still cracks off
                         -- the target it did not kill; a kill has its own explosion.
                         if e:is_alive() and (projectile.weapon_def.explosion or "explosion_none") == "explosion_none" then
                             self.world:sound("impact.ricochet", projectile.x, projectile.y)
                         end
                         if projectile.aoe > 0 then self:_apply_aoe(projectile) end
-                        if projectile.shooter and not e:is_alive() then
-                            projectile.shooter.score = (projectile.shooter.score or 0) + self:_kill_points(e)
-                            self:_credit_kill(projectile.shooter, e)
-                            if projectile.shooter.register_kill then projectile.shooter:register_kill() end
-                        end
+                        if killed then self:_credit_kill(projectile.shooter, e, killed) end
                         return true
                     end
                 end
@@ -874,12 +878,8 @@ function CombatSystem:_bomb_detonate(projectile)
             local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
             if dx * dx + dy * dy < r2 then
                 e:on_hit()
-                e:take_damage(projectile.damage, dx, dy)
-                if projectile.shooter and not e:is_alive() then
-                    projectile.shooter.score = (projectile.shooter.score or 0) + self:_kill_points(e)
-                    self:_credit_kill(projectile.shooter, e)
-                    if projectile.shooter.register_kill then projectile.shooter:register_kill() end
-                end
+                local killed = e:take_damage(projectile.damage, dx, dy)
+                if killed then self:_credit_kill(projectile.shooter, e, killed) end
             end
         end
     end
@@ -891,7 +891,8 @@ function CombatSystem:_apply_aoe(projectile)
         if e:is_alive() and not e.hide_shielded then
             local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
             if dx * dx + dy * dy < r2 then
-                e:take_damage(projectile.damage * 0.5)
+                local killed = e:take_damage(projectile.damage * 0.5)
+                if killed then self:_credit_kill(projectile.shooter, e, killed) end
             end
         end
     end

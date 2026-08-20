@@ -77,6 +77,7 @@ local CATEGORIES = {
         { key = "axis_aligned_pickups", label = "CLASSIC PICKUPS", kind = "toggle" },
         { key = "friendly_fire_pows",   label = "FRIENDLY FIRE",   kind = "toggle" },
         { key = "endstats_count_up",    label = "STATS COUNT UP",  kind = "toggle" },
+        { key = "score_count_up",       label = "SCORE COUNT UP",  kind = "toggle" },
     } },
     { title = "EXTRAS", options = {
         { key = "explosive_trees",  label = "EXPLOSIVE TREES", kind = "toggle" },
