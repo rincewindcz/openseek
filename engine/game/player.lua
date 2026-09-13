@@ -904,7 +904,8 @@ end
 -- around it), so the silhouette is upright too; the cast direction is the fixed
 -- world bottom-right rotated by the camera angle, sliding out and fading in with
 -- altitude (a landed chopper casts none). Skipped for tanks and night missions.
-function Player:draw_shadow()
+-- soft: inside the soft-shadow pass, where the rotor casts too.
+function Player:draw_shadow(soft)
     if not self:is_flyer() then return end
     if not (self.world and self.world:shadows_enabled()) then return end
     local alt = self.altitude
@@ -928,8 +929,41 @@ function Player:draw_shadow()
     local dy = Shadow.DIR_X * math.sin(a) + Shadow.DIR_Y * math.cos(a)
     local shadow_offset = Shadow.OFFSET * s * alt
     local w, h = body:getDimensions()
-    Shadow.draw(body, cx + dx * shadow_offset, cy + dy * shadow_offset, 0, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
+    local sx, sy = cx + dx * shadow_offset, cy + dy * shadow_offset
+    Shadow.draw(body, sx, sy, 0, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
+    local rotor = soft and self:_rotor_image()
+    if rotor then
+        local rw, rh = rotor:getDimensions()
+        local rs     = s * (ROTOR_MIN_SCALE + (1 - ROTOR_MIN_SCALE) * alt)
+        Shadow.draw(rotor, sx, sy + self.rotor_y_offset, 0, rs, rs, rw / 2, rh / 2, Shadow.ROTOR_ALPHA * alt)
+    end
     g.setColor(1, 1, 1)
+end
+
+-- Ground shadows of the chopper's damage smoke, cast from full flying height.
+-- Soft-shadow pass only; a tank's smoke casts none.
+function Player:draw_smoke_shadows()
+    if not self.camera or #self._smoke_puffs == 0 or not self:is_flyer() then return end
+    if not (self.world and self.world:shadows_enabled()) then return end
+    local g  = love.graphics
+    local dx = Shadow.DIR_X * Shadow.OFFSET
+    local dy = Shadow.DIR_Y * Shadow.OFFSET
+    g.push()
+    self.camera:apply()
+    for _, t in ipairs(self.camera:tiles()) do
+        g.push()
+        g.translate(t.ox, t.oy)
+        for _, puff in ipairs(self._smoke_puffs) do
+            local img = puff.anim:current_image()
+            if img then
+                local w, h = img:getDimensions()
+                Shadow.draw(img, puff.x + dx, puff.y + dy, 0, 1.2, 1.2, w / 2, h / 2, Shadow.SMOKE_ALPHA)
+            end
+        end
+        g.pop()
+    end
+    g.setColor(1, 1, 1)
+    g.pop()
 end
 
 function Player:draw()
@@ -1050,7 +1084,8 @@ end
 -- silhouette turned to our heading in that camera's frame); the cast direction is
 -- the fixed world bottom-right rotated by the camera angle, sliding out and fading
 -- in with altitude. Skipped for tanks, night missions, and grounded/dead flyers.
-function Player:draw_remote_shadow(g, cam)
+-- soft: inside the soft-shadow pass, where the rotor casts too.
+function Player:draw_remote_shadow(g, cam, soft)
     if self.death then return end
     if not self:is_flyer() then return end
     if not (self.world and self.world:shadows_enabled()) then return end
@@ -1067,7 +1102,14 @@ function Player:draw_remote_shadow(g, cam)
     local dy = Shadow.DIR_X * math.sin(a) + Shadow.DIR_Y * math.cos(a)
     local shadow_offset = Shadow.OFFSET * s * alt
     local w, h          = body:getDimensions()
-    Shadow.draw(body, sx + dx * shadow_offset, sy + dy * shadow_offset, base, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
+    local shx, shy      = sx + dx * shadow_offset, sy + dy * shadow_offset
+    Shadow.draw(body, shx, shy, base, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
+    local rotor = soft and self:_rotor_image()
+    if rotor then
+        local rw, rh = rotor:getDimensions()
+        local rs     = s * (ROTOR_MIN_SCALE + (1 - ROTOR_MIN_SCALE) * alt)
+        Shadow.draw(rotor, shx, shy, base, rs, rs, rw / 2, rh / 2, Shadow.ROTOR_ALPHA * alt)
+    end
     g.setColor(1, 1, 1)
 end
 

@@ -5,6 +5,7 @@ local Config    = require "engine.core.config"
 local Mathx     = require "engine.core.mathx"
 local Score     = require "engine.game.score"
 local Stats     = require "engine.game.stats"
+local Shadow    = require "engine.game.shadow"
 
 -- Projectile
 
@@ -161,6 +162,7 @@ function CombatSystem:add_effect(clip_name, x, y, opts)
         radius   = opts.radius or 0,
         lifetime = opts.lifetime,
         delay    = opts.delay or 0,   -- seconds before the effect ignites (napalm wave)
+        shadow   = opts.shadow,       -- airborne puff (a missile trail) that casts a ground shadow
         age      = 0,
         hit      = false,
     }
@@ -640,7 +642,8 @@ function CombatSystem:update(dt)
         -- Drop a trail puff every trail_interval px travelled.
         if projectile.trail and projectile._trail_dist >= projectile.trail_interval then
             projectile._trail_dist = 0
-            self:add_effect(projectile.trail, projectile.x, projectile.y, {})
+            self:add_effect(projectile.trail, projectile.x, projectile.y,
+                { shadow = projectile.weapon_def.shadow })
         end
         local ended
         if projectile.bomb_phase then
@@ -896,6 +899,46 @@ function CombatSystem:_apply_aoe(projectile)
             end
         end
     end
+end
+
+-- Ground shadows of airborne shots: the sprite and trail puffs of every weapon
+-- flagged `shadow` (missiles), cast at full flying height in the fixed world
+-- bottom-right like the heli shadows. Presentation extra, drawn by the gameplay
+-- scenes inside the soft-shadow pass (engine/game/postfx.lua).
+function CombatSystem:draw_shadows()
+    if #self.projectiles == 0 and #self.effects == 0 then return end
+    if not self.world:shadows_enabled() then return end
+    local g  = love.graphics
+    local dx = Shadow.DIR_X * Shadow.OFFSET
+    local dy = Shadow.DIR_Y * Shadow.OFFSET
+    g.push()
+    self.camera:apply()
+    for _, t in ipairs(self.camera:tiles()) do
+        g.push()
+        g.translate(t.ox, t.oy)
+        for _, effect in ipairs(self.effects) do
+            local img = effect.shadow and effect.age >= effect.delay and effect.anim:current_image() or nil
+            if img then
+                local iw, ih = img:getDimensions()
+                Shadow.draw(img, effect.x + dx, effect.y + dy, effect.rot, effect.scale, effect.scale,
+                    iw / 2, ih / 2, Shadow.SMOKE_ALPHA)
+            end
+        end
+        for _, projectile in ipairs(self.projectiles) do
+            local weapon_def = projectile.weapon_def
+            local img = weapon_def.shadow and weapon_def.proj_type ~= "bullet" and projectile:get_image() or nil
+            if img then
+                local extra  = (weapon_def.proj_sprite_rot or 0) * math.pi / 180
+                local ax, ay = projectile:get_anchor()
+                local scale  = projectile.scale or 1
+                Shadow.draw(img, projectile.x + dx, projectile.y + dy, projectile.angle_rad + extra,
+                    scale, scale, ax, ay, Shadow.ALPHA)
+            end
+        end
+        g.pop()
+    end
+    g.setColor(1, 1, 1)
+    g.pop()
 end
 
 function CombatSystem:draw()

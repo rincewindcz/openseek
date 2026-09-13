@@ -4,7 +4,7 @@ local json   = require "lib.json"
 
 -- Gameplay post-processing: a filmic grade over the world view (warm tone,
 -- saturation, S-curve contrast, local sharpening, bloom, vignette, animated
--- grain) plus softened aircraft ground shadows. Gameplay scenes bracket their
+-- grain) plus softened ground shadows. Gameplay scenes bracket their
 -- world pass with begin_world / end_world (the HUD and overlays stay outside, so
 -- they are never filtered) and their shadow draws with begin_shadows /
 -- end_shadows. Each pass costs nothing when its strengths are zero.
@@ -29,7 +29,7 @@ PostFX.STRENGTHS = {
 local DEFAULT_LOOK = {
     exposure = 1, warmth = { 1, 1, 1 }, saturation = 0, contrast = 0, sharpen = 0,
     bloom_threshold = 1, bloom_gain = 0, bloom_tint = { 1, 1, 1 }, bloom_spread = 1,
-    vignette = 0, vignette_power = 2, grain = 0, shadow_blur = 0, shadow_gain = 1,
+    vignette = 0, vignette_power = 2, grain = 0, shadow_blur = 0, shadow_passes = 1, shadow_gain = 1,
 }
 
 local data
@@ -301,21 +301,32 @@ function PostFX:end_world(vx, vy, vw, vh)
     g.pop()
 end
 
+-- Collect shadow silhouettes into their own target. Casters are merged with a
+-- max blend, so overlapping shadows (a heli over its own smoke) do not darken
+-- each other, as with one sun.
 function PostFX:begin_shadows()
     self.shadows_on = self:soft_shadows_active()
     if not self.shadows_on then return end
-    self:_ensure(love.graphics.getDimensions())
+    local g = love.graphics
+    self:_ensure(g.getDimensions())
     self.shadow_prev = redirect(self.shadow, 0, 0, 0, 0)
+    self.shadow_blend, self.shadow_alpha_mode = g.getBlendMode()
+    g.setBlendMode("lighten", "premultiplied")
 end
 
 -- Blur the collected silhouettes at half size and lay them back over the ground,
--- darkened to keep their weight once spread out.
+-- darkened to keep their weight once spread out. The blur stays a true gaussian
+-- by repeating narrow passes (spread capped at MAX_SPREAD texels) instead of
+-- widening one pass, whose sparse taps would stamp offset copies of the shape.
+local MAX_SPREAD = 1.5
+
 function PostFX:end_shadows()
     if not self.shadows_on then return end
     self.shadows_on = false
     local g    = love.graphics
     local look = load_data().look
     local k    = Config.postfx_soft_shadows
+    g.setBlendMode(self.shadow_blend, self.shadow_alpha_mode)
     local sx, sy, sw, sh = g.getScissor()
     g.setCanvas(self.shadow_prev)
     g.push("all")
@@ -324,12 +335,14 @@ function PostFX:end_shadows()
     g.setColor(1, 1, 1, 1)
     g.setBlendMode("replace", "premultiplied")
     local hw, hh = self.shadow_a:getDimensions()
-    local spread = look.shadow_blur * k
+    local spread = math.min(MAX_SPREAD, look.shadow_blur * k * self.h / 1080)
     pass(self.shadow_a, self.shadow, nil)
-    send(self.blur_shader, "dir", { spread / hw, 0 })
-    pass(self.shadow_b, self.shadow_a, self.blur_shader)
-    send(self.blur_shader, "dir", { 0, spread / hh })
-    pass(self.shadow_a, self.shadow_b, self.blur_shader)
+    for _ = 1, look.shadow_passes do
+        send(self.blur_shader, "dir", { spread / hw, 0 })
+        pass(self.shadow_b, self.shadow_a, self.blur_shader)
+        send(self.blur_shader, "dir", { 0, spread / hh })
+        pass(self.shadow_a, self.shadow_b, self.blur_shader)
+    end
 
     g.setCanvas(self.shadow_prev)
     if sx then g.setScissor(sx, sy, sw, sh) end

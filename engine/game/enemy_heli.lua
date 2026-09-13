@@ -342,8 +342,10 @@ end
 -- Ground shadows for every live heli, drawn before the hulls (a flat black body
 -- silhouette slid out in the fixed world bottom-right). The offset is in world
 -- space so the camera rotation swings it around like the player's; a downed heli's
--- shadow shrinks to nothing as it falls. Disabled on night missions.
-function HeliSystem:draw_shadows()
+-- shadow shrinks to nothing as it falls. Disabled on night missions. soft: inside
+-- the soft-shadow pass, where the rotor and the damage smoke (from full flying
+-- height) cast too.
+function HeliSystem:draw_shadows(soft)
     if #self.helis == 0 or not self.sprite then return end
     if not self.world:shadows_enabled() then return end
     local g   = love.graphics
@@ -355,15 +357,29 @@ function HeliSystem:draw_shadows()
         g.push()
         g.translate(t.ox, t.oy)
         for _, heli in ipairs(self.helis) do
+            if soft then
+                for _, s in ipairs(heli.smoke) do
+                    local img = s.anim:current_image()
+                    if img then
+                        local img_w, img_h = img:getDimensions()
+                        Shadow.draw(img, s.x + Shadow.DIR_X * Shadow.OFFSET, s.y + Shadow.DIR_Y * Shadow.OFFSET,
+                            0, 1, 1, img_w / 2, img_h / 2, Shadow.SMOKE_ALPHA)
+                    end
+                end
+            end
             if heli.state ~= "removed" then
                 local alt = 1 - (heli.fall or 0)
                 if alt > 0 then
                     local shadow_offset = Shadow.OFFSET * alt
                     local rot           = (heli.heading + (heli.spin or 0) + SPRITE_ROT) * math.pi / 180
                     local fall_scale    = 1 - 0.5 * (heli.fall or 0)
-                    Shadow.draw(self.sprite,
-                        heli.x + Shadow.DIR_X * shadow_offset, heli.y + Shadow.DIR_Y * shadow_offset,
-                        rot, fall_scale, fall_scale, iw / 2, ih / 2, Shadow.ALPHA * alt)
+                    local sx = heli.x + Shadow.DIR_X * shadow_offset
+                    local sy = heli.y + Shadow.DIR_Y * shadow_offset
+                    Shadow.draw(self.sprite, sx, sy, rot, fall_scale, fall_scale, iw / 2, ih / 2, Shadow.ALPHA * alt)
+                    if soft and self.rotor_img then
+                        Shadow.draw(self.rotor_img, sx, sy, heli.rotor_spin, fall_scale, fall_scale,
+                            self.rotor_ax, self.rotor_ay, Shadow.ROTOR_ALPHA * alt)
+                    end
                 end
             end
         end

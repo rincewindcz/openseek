@@ -1,4 +1,5 @@
--- Helicopter ground shadows. The sun is fixed at the top-left of the unrotated
+-- Ground shadows of aircraft (and, with soft shadows on, their rotors, damage
+-- smoke, and missiles with their trails). The sun is fixed at the top-left of the unrotated
 -- world, so shadows fall toward the bottom-right; because the world rotates in
 -- game mode the shadow swings around the aircraft as the player turns. A shadow
 -- is the aircraft body sprite drawn as a flat black silhouette (its own alpha as
@@ -10,6 +11,8 @@ local Shadow = {}
 Shadow.DIR_X  = 0.7071
 Shadow.DIR_Y  = 0.7071
 Shadow.ALPHA  = 0.4    -- silhouette opacity at full altitude
+Shadow.SMOKE_ALPHA = 0.3   -- smoke puff silhouettes, thinner than a solid body
+Shadow.ROTOR_ALPHA = 0.3   -- spinning rotor blades, blurred into a faint disc
 Shadow.OFFSET = 12     -- offset at full altitude (world px; scaled by draw size for screen-space callers)
 
 -- Draw an image as a flat black silhouette. Caller restores the draw color.

@@ -343,10 +343,15 @@ function CoopGameplay:draw()
         app.rescue:draw()            -- land pads + walking POWs, on the ground under everything
         app.saboteur:draw()          -- saboteur pads + walking saboteurs + target reticles
         app.powerups:draw()
+        local soft = app.postfx:soft_shadows_active()
         app.postfx:begin_shadows()
-        app.helis:draw_shadows()     -- aircraft ground shadows, under the flyers
-        p:draw_shadow()
-        if other then other:draw_remote_shadow(g, cam) end
+        app.helis:draw_shadows(soft) -- aircraft ground shadows, under the flyers
+        p:draw_shadow(soft)
+        if other then other:draw_remote_shadow(g, cam, soft) end
+        if soft then
+            p:draw_smoke_shadows()
+            app.combat:draw_shadows()
+        end
         app.postfx:end_shadows()
         if p:is_airborne() then p:draw_world() end
         app.combat:draw()
