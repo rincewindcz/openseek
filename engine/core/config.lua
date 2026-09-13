@@ -44,6 +44,20 @@ local Config = {
     night_lighting   = true,
     night_brightness = 1.0,
 
+    -- Gameplay post-processing (engine/game/postfx.lua): a filmic grade over the
+    -- world view, never the HUD. postfx_enabled is the master switch; each
+    -- strength (0..1) scales one part of the look defined in data/postfx.json.
+    -- postfx_preset names the preset the strengths match ("custom" when none).
+    postfx_enabled      = true,
+    postfx_preset       = "none",
+    postfx_grade        = 0.0,
+    postfx_contrast     = 0.0,
+    postfx_sharpen      = 0.0,
+    postfx_bloom        = 0.0,
+    postfx_vignette     = 0.0,
+    postfx_grain        = 0.0,
+    postfx_soft_shadows = 0.0,
+
     -- Audio. master_volume is applied via love.audio.setVolume; the five bus
     -- volumes scale their own event category on top of it (engine/core/audio.lua,
     -- buses named in data/audio.json). audio_positional pans world sounds in the
@@ -83,6 +97,8 @@ local Config = {
 local SAVE_PATH = "data/settings.json"
 local PERSISTED = {
     "effects_flashes", "flash_intensity", "night_lighting", "night_brightness",
+    "postfx_enabled", "postfx_preset", "postfx_grade", "postfx_contrast", "postfx_sharpen",
+    "postfx_bloom", "postfx_vignette", "postfx_grain", "postfx_soft_shadows",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
     "endstats_count_up", "score_count_up", "explosive_trees", "tree_crush_speed",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",

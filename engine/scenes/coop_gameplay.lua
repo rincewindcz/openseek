@@ -327,6 +327,7 @@ function CoopGameplay:draw()
         g.translate(vx, 0)
         g.setScissor(vx, 0, vw, H)
         local ground, air = draw_layers(p, other)
+        app.postfx:begin_world()
         app.renderer:draw_ground()   -- terrain, decals, craters
         if #ground > 0 then
             app.renderer:draw_objects("under")   -- flat clutter the vehicles sit on
@@ -342,9 +343,11 @@ function CoopGameplay:draw()
         app.rescue:draw()            -- land pads + walking POWs, on the ground under everything
         app.saboteur:draw()          -- saboteur pads + walking saboteurs + target reticles
         app.powerups:draw()
+        app.postfx:begin_shadows()
         app.helis:draw_shadows()     -- aircraft ground shadows, under the flyers
         p:draw_shadow()
         if other then other:draw_remote_shadow(g, cam) end
+        app.postfx:end_shadows()
         if p:is_airborne() then p:draw_world() end
         app.combat:draw()
         app.renderer:draw_debris()   -- shrapnel above the explosion effects
@@ -356,6 +359,7 @@ function CoopGameplay:draw()
         app.lightfx.headlight_on = not p.death
         app.lightfx:draw_night(cam)
         app.lightfx:draw_additive(cam)
+        app.postfx:end_world(vx, 0, vw, H)
         app.hud.player         = p
         app.hud.coplayer       = other
         app.hud.coplayer_color = other and COLORS[3 - i] or nil

@@ -30,7 +30,7 @@ n+1 frame model.
 
 | Metric | Value |
 |--------|-------|
-| Engine | 16013 lines Lua, 64 files in `engine/` + `main.lua` + `conf.lua` |
+| Engine | 16673 lines Lua, 67 files in `engine/` + `main.lua` + `conf.lua` |
 | Scenes | 18 registered, plus the shared `gameplay_base` |
 | Asset pipeline | 9783 lines Python, 36 tools in `tools/` |
 | Stages | 20 / 20 decoded, rendered and playable |
@@ -56,7 +56,7 @@ gaps. Everything under Partial or Missing is tracked in `TODO.md`.
 | Enemy AI | Partial | Turrets, tanks, soldiers, patrol routes, hangar tanks, two-part units, enemy helicopters. No line of sight: enemies fire through buildings |
 | Missions and objectives | Done | Destroy / POW rescue / sabotage, return to base, end-of-phase stats. All 20 stages have a win condition |
 | Equip, shop, HUD | Partial | Full equip and shop screens with a campaign inventory; 5 catalogued weapons have no definition yet and render darkened |
-| Effects | Done | Night lighting, flash FX, weather, shadows, shrapnel, ground dust, smoke and hit effects |
+| Effects | Done | Night lighting, flash FX, post-processing (grade, bloom, vignette, grain, soft shadows), weather, shadows, shrapnel, ground dust, smoke and hit effects |
 | Determinism and replay | Done | Fixed 60 Hz tick, seeded RNG, input frames, recorded runs, `F4` browser, self-test |
 | Netplay | Missing | Prerequisites all landed; transport and lockstep remain (`DETERMINISM.md` section 5) |
 | Audio | Done | Directional mixer: 59 SFX on named events, per-listener panning and distance, split-screen aware, engine loops, radio callouts, five volume buses. Music is a wired bus with no bundled tracks |
@@ -87,7 +87,7 @@ Each top-level mode is a scene in `engine/scenes/`, subclassing
 |-------|------|
 | `title` -> `main_menu` | Boot flow. The menu is also pushed over a running game (`Esc`), where RESUME pops back |
 | `credits` / `hiscores` | Info screens over the shared `ui/info_screen.lua` shell. The top-10 table persists and opens a name-entry row on a qualifying score |
-| `advanced_settings` | The OPTIONS screen: DISPLAY, VIDEO, AUDIO, CONTROLS, GAMEPLAY, EXTRAS pages editing `Config` live |
+| `advanced_settings` | The OPTIONS screen: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS pages editing `Config` live |
 | `mission_briefing` / `mission_select` | Pre-mission menu (briefing text, phase selectors, SHOP / PLAY) and the debug mission/phase picker |
 | `equip` | Vehicle select and weapon-bay equip between PLAY and the phase; skipped when `assets/equip/` is absent |
 | `shop` | The `POWUP` / `POWUPT` weapon shop, buying levels with medals |
@@ -134,6 +134,7 @@ All built on the tiny `core/class.lua` helper.
 | `game/powerups.lua` | Power-up drops from destroyed large buildings: spawn, ttl and blink, fly-over vs land-on collection, effect application. |
 | `game/renderer.lua` | Draws world layers bottom to top in two passes, a ground pass (dust, decals, segments, craters) and an object pass (y-sorted, culled, objective markers), so tall props occlude a vehicle on the ground while flat clutter stays under it. Which pass a player vehicle is drawn in follows `Player:is_airborne()`: a tank and a landed chopper go between the two, an airborne chopper above the object pass and above the enemy flyers. In co-op the two vehicles are split into the same layers and ordered by world y within one, so both halves agree. Flying shrapnel is a separate overlay. |
 | `game/lightfx.lua` | Night light map (ambient dimming, headlight cone, explosion and muzzle point lights) and the additive oversaturation layer. See `EXTRA.md`. |
+| `game/postfx.lua` | Gameplay post-processing over the world view (HUD excluded): colour grade, S-curve contrast, sharpen, quarter-size bloom, per-viewport vignette and grain in one composite shader, plus aircraft shadows collected into their own target and blurred. Look constants and presets in `data/postfx.json`. See `EXTRA.md`. |
 | `game/sound.lua` | Directional game audio over `core/audio.lua`: per-camera listeners, loudest-listener selection, panning in the rotated view frame, distance attenuation in fixed world units, vehicle engine loops and the radio callout queue. Fed from the simulation through `World:sound` / `World:say`. See section 8. |
 | `game/shadow.lua` | Helicopter ground shadows: one light model plus a helper that masks the body sprite to a flat silhouette, scaled by altitude, skipped on night missions. |
 | `game/weather.lua` | World-space tiled particle field: snow on mission 1, rain on mission 2. Presentation only, on the global RNG. |
@@ -355,7 +356,7 @@ It runs the **same rules as single player**, only with two players contributing.
 same way for both modes, so they cannot drift apart: either player can satisfy
 any objective and either can fly the return-to-base landing. A tank-only phase
 locks both setup boxes to the tank. Each player carries their own `lives` and
-respawns on the base pad with the stage's progress intact; the mission fails only
+respawns on the base pad, facing north, with the stage's progress intact; the mission fails only
 when both are down, so a lone survivor can still finish. `R` reloads the stage
 before re-entering, like the single-player restart.
 
@@ -446,6 +447,7 @@ or `.mp3` dropped into `assets/music/` is picked up by its bare filename:
 | `content/hud/player_f0N.png` | Co-op score labels P1-P4, generated by `tools/gen_hud_labels.py`. White-on-alpha masks tinted by `icon_color`, with the HUD casting the drop shadow. Original artwork, not decoded from the game. |
 | `data/sounds.json` + `assets/sounds/*.wav` | Imported SFX: ordered categories of `{name, file, label, rate}`; the WAVs are mono 8-bit PCM decoded from the game's IFF 8SVX `SFX/`. |
 | `data/audio.json` | Sound events: `name -> {clip, bus, gain, pitch, pitch_var, cooldown, min_dist, max_dist, max_voices, priority}` over a `defaults` block. Hand maintained, unlike the generated `sounds.json`. See section 8. |
+| `data/postfx.json` | Post-processing look: `look` holds what 100% of each strength means (exposure, warmth, saturation, contrast, sharpen, bloom threshold / gain / tint / spread, vignette amount / power, grain, shadow blur / gain); `presets` is the ordered NONE / MILD / FULL list of strength values. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Persisted player state, written to the LOVE save directory at runtime. |
 | `assets/fonts/<name>.{png,json}` | Bitmap fonts: one glyph atlas plus per-glyph metrics, `charmap` / `word` mapping, and `mode` (`mask` or `truecolor`). |
 | `assets/fonts/main.{png,json}` | The menu word-art face completed to a full alphabet: the 20 letters `mainmen` recovers plus `B J K Q Y Z` synthesized by `tools/gen_main_font.py`. |

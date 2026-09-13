@@ -8,9 +8,10 @@ local Audio   = require "engine.core.audio"
 local Sound   = require "engine.game.sound"
 local Display = require "engine.core.display"
 local Pointer = require "engine.ui.pointer"
+local PostFX  = require "engine.game.postfx"
 
--- Advanced OpenSeek options: a category sidebar (VIDEO / AUDIO / CONTROLS /
--- GAMEPLAY / EXTRAS / EXIT) with the selected category's option rows on the right,
+-- Advanced OpenSeek options: a category sidebar (DISPLAY / VIDEO / EFFECTS /
+-- AUDIO / CONTROLS / GAMEPLAY / EXTRAS / EXIT) with the selected category's option rows on the right,
 -- over the pulsating main-menu backdrop. Reached from the main menu's OPTIONS
 -- entry. Toggles/ranges edit engine/core/config live; CONTROLS rebinds the central
 -- key map (engine/core/input). Config and bindings are written to the save
@@ -41,6 +42,8 @@ local FOOTER_Y  = 210
 
 local function apply_volume()  Sound.apply_config() end
 local function apply_display() Display.apply() end
+local function apply_preset()  PostFX.apply_preset(Config.postfx_preset) end
+local function match_preset()  Config.postfx_preset = PostFX.match_preset() end
 
 -- Categories listed in the sidebar. A category with `options` shows a rows panel;
 -- `kind = "controls"` builds its rows from the rebindable input actions; `kind =
@@ -58,6 +61,17 @@ local CATEGORIES = {
         { key = "flash_intensity",  label = "FLASH LEVEL",   kind = "range", min = 0.0, max = 1.5, step = 0.1 },
         { key = "night_lighting",   label = "NIGHT LIGHT",   kind = "toggle" },
         { key = "night_brightness", label = "NIGHT AMBIENT", kind = "range", min = 0.5, max = 2.0, step = 0.1 },
+    } },
+    { title = "EFFECTS", options = {
+        { key = "postfx_enabled",      label = "POST FX",      kind = "toggle" },
+        { key = "postfx_preset",       label = "PRESET",       kind = "choice", choices = PostFX.preset_choices(), on_change = apply_preset },
+        { key = "postfx_grade",        label = "COLOR GRADE",  kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = match_preset },
+        { key = "postfx_contrast",     label = "CONTRAST",     kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = match_preset },
+        { key = "postfx_sharpen",      label = "SHARPEN",      kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = match_preset },
+        { key = "postfx_bloom",        label = "BLOOM",        kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = match_preset },
+        { key = "postfx_vignette",     label = "VIGNETTE",     kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = match_preset },
+        { key = "postfx_grain",        label = "GRAIN",        kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = match_preset },
+        { key = "postfx_soft_shadows", label = "SOFT SHADOWS", kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = match_preset },
     } },
     { title = "AUDIO", options = {
         { key = "master_volume",         label = "MASTER VOLUME", kind = "range",  min = 0.0, max = 1.0, step = 0.05, on_change = apply_volume },
@@ -174,7 +188,10 @@ function AdvancedSettings:_activate(dir)
         for i, c in ipairs(opt.choices) do
             if c.value == Config[opt.key] then idx = i; break end
         end
-        idx = ((idx - 1 + dir) % #opt.choices) + 1
+        -- Hidden choices (a preset's CUSTOM state) are shown but never cycled to.
+        repeat
+            idx = ((idx - 1 + dir) % #opt.choices) + 1
+        until not opt.choices[idx].hidden
         Config[opt.key] = opt.choices[idx].value
         if opt.on_change then opt.on_change() end
     else

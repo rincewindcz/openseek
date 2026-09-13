@@ -346,6 +346,7 @@ function Gameplay:draw()
     local app     = self.app
     local mission = self.mission
     app.renderer.highlight = app.debug_panel:highlight_entity()
+    app.postfx:begin_world()     -- world view only; the HUD and overlays stay unfiltered
     app.renderer:draw_ground()   -- terrain, decals, craters
     -- A vehicle on the ground draws (with its smoke) over flat clutter (stones,
     -- dunes, decals) but under the solid props (trees, buildings) that stand taller
@@ -365,8 +366,10 @@ function Gameplay:draw()
     app.rescue:draw()            -- land pads + walking POWs, on the ground under everything
     app.saboteur:draw()          -- saboteur pads + walking saboteurs + target reticles
     app.powerups:draw()
+    app.postfx:begin_shadows()
     app.helis:draw_shadows()     -- aircraft ground shadows, under the flyers
     self.player:draw_shadow()    -- flyer only (no-op for the grounded tank)
+    app.postfx:end_shadows()
     if not grounded then self.player:draw_world() end
     app.combat:draw()
     app.renderer:draw_debris()   -- shrapnel above the explosion effects
@@ -378,6 +381,7 @@ function Gameplay:draw()
     app.weather:draw()
     app.lightfx:draw_night(app.camera)
     app.lightfx:draw_additive(app.camera)
+    app.postfx:end_world(0, 0, love.graphics.getDimensions())
     app.hud:draw()
     if mission and mission.state == "return_to_base" then self:draw_return_prompt() end
     if mission and mission.state == "won" and not app.end_stats:is_active() then

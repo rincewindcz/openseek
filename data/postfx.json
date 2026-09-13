@@ -1,0 +1,32 @@
+{
+  "look": {
+    "exposure": 0.95,
+    "warmth": [0.92, 0.84, 0.62],
+    "saturation": 0.15,
+    "contrast": 0.5,
+    "sharpen": 1.2,
+    "bloom_threshold": 0.65,
+    "bloom_gain": 1.0,
+    "bloom_tint": [1.0, 0.85, 0.6],
+    "bloom_spread": 1.5,
+    "vignette": 0.33,
+    "vignette_power": 2.4,
+    "grain": 0.07,
+    "shadow_blur": 4.0,
+    "shadow_gain": 1.6
+  },
+  "presets": [
+    {
+      "name": "none", "label": "NONE",
+      "values": { "grade": 0, "contrast": 0, "sharpen": 0, "bloom": 0, "vignette": 0, "grain": 0, "soft_shadows": 0 }
+    },
+    {
+      "name": "mild", "label": "MILD",
+      "values": { "grade": 0.5, "contrast": 0.4, "sharpen": 0.4, "bloom": 0.35, "vignette": 0.5, "grain": 0.2, "soft_shadows": 0.5 }
+    },
+    {
+      "name": "full", "label": "FULL",
+      "values": { "grade": 1, "contrast": 1, "sharpen": 1, "bloom": 1, "vignette": 1, "grain": 1, "soft_shadows": 1 }
+    }
+  ]
+}

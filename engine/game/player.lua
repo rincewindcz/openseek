@@ -443,11 +443,14 @@ function Player:start_death()
 end
 
 -- Respawn the same vehicle at (x, y) after a crash: a fresh, fully fuelled and
--- undamaged vehicle, parked and ready. Keeps score, lives, weapon and ammo; the
--- world (destroyed enemies, objective progress) is left untouched by the caller.
--- Carried POWs are lost with the wreck.
+-- undamaged vehicle, parked facing north like a fresh spawn. Keeps score, lives,
+-- weapon and ammo; the world (destroyed enemies, objective progress) is left
+-- untouched by the caller. Carried POWs are lost with the wreck.
 function Player:respawn(x, y)
     self.x, self.y   = x, y
+    self.angle       = 0
+    self.turret_offset = 0
+    self.turn_cursor = 0
     self.speed       = 0
     self.strafe      = 0
     self.altitude    = 0

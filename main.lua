@@ -11,6 +11,7 @@ local RescueSystem    = require "engine.game.rescue"
 local SaboteurSystem  = require "engine.game.saboteur"
 local Weather         = require "engine.game.weather"
 local LightFX         = require "engine.game.lightfx"
+local PostFX          = require "engine.game.postfx"
 local Config          = require "engine.core.config"
 local Input           = require "engine.core.input"
 local Display         = require "engine.core.display"
@@ -149,6 +150,7 @@ function love.load(args)
     app.weather  = Weather:new()
     app.lightfx  = LightFX:new()
     world.lightfx = app.lightfx   -- lets combat / entity emitters reach it via the world
+    app.postfx   = PostFX:new()
     app.sound    = Sound:new(world)
     world.sound_sys = app.sound   -- same route for the audio emitters (World:sound / :say)
     app.renderer:refresh_kinds()
