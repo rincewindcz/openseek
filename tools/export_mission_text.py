@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Export the original per-phase mission descriptions to data/mission_text.json.
+Export the original per-phase mission descriptions to assets/mission_text.json.
 
 The originals live as plain ASCII in the game's MT0.BIN .. MT4.BIN (one file per
 mission, opened as data\\mt%d.bin by mission_select_menu @ 0x203250). Each file
@@ -72,12 +72,12 @@ def parse_mission(data):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Export original mission text to data/mission_text.json")
+    ap = argparse.ArgumentParser(description="Export original mission text to assets/mission_text.json")
     ap.add_argument("--game-dir", default=None)
     args = ap.parse_args()
 
     game_dir = find_game_dir(args.game_dir)
-    out_path = REPO_ROOT / "data" / "mission_text.json"
+    out_path = REPO_ROOT / "assets" / "mission_text.json"
 
     result = {}
     for m in range(MISSIONS):

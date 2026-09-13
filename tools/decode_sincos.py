@@ -99,7 +99,7 @@ def main():
         plt.axhline(0, color="black", linewidth=0.5)
         plt.xlabel("Angle (degrees)")
         plt.ylabel("Value")
-        plt.title(f"{src.name} — {n} entries, scale={scale}")
+        plt.title(f"{src.name} - {n} entries, scale={scale}")
         plt.legend()
         plt.tight_layout()
         out = src.with_suffix(".png")

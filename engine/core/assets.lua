@@ -19,6 +19,15 @@ local Assets = {}
 local PACK    = "assets/"
 local CONTENT = "content/"
 
+-- Pack files the boot path cannot run without.
+local REQUIRED = {
+    "stage00.json",
+    "fonts/chars.json",
+    "fullscreen/TITLE.png",
+    "sounds.json",
+    "mission_text.json",
+}
+
 function Assets.path(p)
     if p:sub(1, #CONTENT) == CONTENT then return p end
     return PACK .. p
@@ -26,6 +35,13 @@ end
 
 function Assets.exists(p)
     return love.filesystem.getInfo(Assets.path(p)) ~= nil
+end
+
+function Assets.pack_present()
+    for _, p in ipairs(REQUIRED) do
+        if not Assets.exists(p) then return false end
+    end
+    return true
 end
 
 return Assets

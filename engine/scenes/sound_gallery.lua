@@ -3,15 +3,15 @@ local Scene = require "engine.core.scene"
 local Audio = require "engine.core.audio"
 
 -- Test scene reached from the overview/editor (F10): every imported sound in
--- data/sounds.json laid out by category as clickable rows. Click a row to play
+-- assets/sounds.json laid out by category as clickable rows. Click a row to play
 -- it (a ▶ triangle) and select it; the sounding row shows a ■ stop square and a
 -- click stops it. The categories are rough, so a selected sound can be re-filed:
 -- number keys 1-9 move it to that category, [ / ] to the previous/next one, and
--- [S] saves the new layout back to data/sounds.json. Categories pack left-to-
+-- [S] saves the new layout back to assets/sounds.json. Categories pack left-to-
 -- right into columns so they fit any window height.
 local SoundGallery = Class(Scene)
 
-local SOUNDS_PATH = "data/sounds.json"
+local SOUNDS_PATH = "assets/sounds.json"
 
 local COL_W    = 300
 local COL_GAP  = 16

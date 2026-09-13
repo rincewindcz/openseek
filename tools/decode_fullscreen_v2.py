@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Seek and Destroy — fullscreen image decoder v2
+Seek and Destroy - fullscreen image decoder v2
 ===============================================
 
 Handles the palette problem documented in ARTICLE_2.md:
@@ -22,7 +22,7 @@ Two operating modes:
 
 Usage
 -----
-  # Accurate decode (recommended — provide a DOSBox screenshot)
+  # Accurate decode (recommended - provide a DOSBox screenshot)
   ./decode_fullscreen_v2.py data/TITLE.BIN --dosbox-ref tools/TITLE_BIN.png -o title.png
 
   # Fallback decode (embedded palette, wrong colours)
@@ -203,7 +203,7 @@ def main() -> None:
         palette_source = f"DOSBox reference: {ref_path.name}"
     else:
         palette = embedded_palette(data[HEADER_SIZE:])
-        palette_source = "embedded block × 4 (APPROXIMATE — colours will be wrong)"
+        palette_source = "embedded block × 4 (APPROXIMATE - colours will be wrong)"
 
     print(f"Palette source: {palette_source}")
 

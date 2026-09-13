@@ -1,7 +1,5 @@
 *.png
 *.BIN
 
-# Recovered menu-title palette and the reference screenshot it is derived from
-# (see menutitle.py) are tracked source-of-truth, not scratch output.
+# Reconstructed menu-title palette (see menutitle.py), tracked source-of-truth.
 !MENUTITLE_PAL.BIN
-!reference/credits_reference.png

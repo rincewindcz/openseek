@@ -9,7 +9,7 @@ rate, compression) and a BODY chunk of samples. Most are uncompressed
 
 Output:
   assets/sounds/<name>.wav   mono 8-bit PCM WAV, one per source file
-  data/sounds.json           catalog: ordered categories -> [{name,file,label,rate}]
+  assets/sounds.json         catalog: ordered categories -> [{name,file,label,rate}]
 
 <name> is the lowercased source filename with non-alphanumerics turned into
 underscores, so BOMB.SFX -> bomb_sfx and BOMB.SPC -> bomb_spc stay distinct.
@@ -27,7 +27,7 @@ import sys
 
 REPO      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR   = os.path.join(REPO, "assets", "sounds")
-CATALOG   = os.path.join(REPO, "data", "sounds.json")
+CATALOG   = os.path.join(REPO, "assets", "sounds.json")
 DEFAULT_SRC = os.path.expanduser("~/dos/seek/SFX")
 
 FIB_DELTA = [-34, -21, -13, -8, -5, -3, -2, -1, 0, 1, 2, 3, 5, 8, 13, 21]

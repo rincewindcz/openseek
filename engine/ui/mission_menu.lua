@@ -13,7 +13,7 @@ local Layout  = require "engine.ui.layout"
 -- Buttons behave like real buttons: the focused one wears a SELFOCUS ring;
 -- pressing (mouse/touch down, or keyboard) swaps to the button's down frame, and
 -- the action only fires on release over the same button. The mission text is the
--- original per-phase briefing from data/mission_text.json (see
+-- original per-phase briefing from assets/mission_text.json (see
 -- tools/export_mission_text.py), not an invented one-liner.
 --
 -- Widgets come from tools/export_mission.py (assets/mission/); the backdrop and
@@ -76,7 +76,7 @@ function MissionMenu:init()
 
     self.focus = img("assets/hud/selfocus_f01.png")     -- ring around focused button
 
-    local raw = love.filesystem.read("data/mission_text.json")
+    local raw = love.filesystem.read("assets/mission_text.json")
     self.text = raw and json.decode(raw) or {}
 
     self._cache = {}       -- path -> image | false

@@ -2,7 +2,7 @@ local json = require "lib.json"
 
 -- Sound mixer. Two things live here:
 --
---   The clip catalog exported by tools/export_sounds.py (data/sounds.json:
+--   The clip catalog exported by tools/export_sounds.py (assets/sounds.json:
 --   ordered categories of {name, file, label, rate}), which the F10 gallery
 --   browses, auditions and re-files.
 --
@@ -112,7 +112,7 @@ local function json_string(s)
     end) .. '"'
 end
 
--- Persist the current categorization back to data/sounds.json, preserving the
+-- Persist the current categorization back to assets/sounds.json, preserving the
 -- exported shape (ordered categories of {name, title, items:[{name,file,label,
 -- rate}]}). Returns true on success.
 function Audio.save(path)

@@ -22,6 +22,7 @@ local EndStats        = require "engine.ui.end_stats"
 local Pointer         = require "engine.ui.pointer"
 local SceneManager    = require "engine.core.scene_manager"
 local Audio           = require "engine.core.audio"
+local Assets          = require "engine.core.assets"
 local Sound           = require "engine.game.sound"
 local json            = require "lib.json"
 
@@ -67,14 +68,43 @@ local function after_stage_load()
     end
 end
 
+-- Without the decoded pack nothing past this point can load, so the app is
+-- reduced to one static message until the user quits.
+local function show_missing_data()
+    local font = love.graphics.newFont(24)
+    local text = "MISSING GAME DATA"
+    love.update, love.wheelmoved, love.mousemoved, love.mousepressed = nil, nil, nil, nil
+    love.mousereleased, love.touchmoved, love.touchpressed, love.touchreleased = nil, nil, nil, nil
+    love.draw = function()
+        local g = love.graphics
+        local screen_w, screen_h = g.getDimensions()
+        g.clear(0, 0, 0, 1)
+        g.setFont(font)
+        g.setColor(1, 1, 1, 1)
+        g.print(text, math.floor((screen_w - font:getWidth(text)) / 2),
+            math.floor((screen_h - font:getHeight()) / 2))
+    end
+    love.keypressed = function(key)
+        if key == "escape" then love.event.quit() end
+    end
+end
+
 function love.load(args)
     print(("openSEEK starting (LOVE %s, %s)"):format(love.getVersion and select(4, love.getVersion()) or "?", _VERSION))
     love.graphics.setDefaultFilter("nearest", "nearest")
     Config.load()   -- overlay persisted advanced settings onto the defaults
     Input.load()    -- overlay persisted key bindings onto the defaults
     Display.apply() -- restore the saved window mode (size / fullscreen / vsync)
+    if not Assets.pack_present() then
+        print("openSEEK: game data not found in assets/")
+        for _, a in ipairs(args or {}) do
+            if a == "--selftest" then love.event.quit(1) end
+        end
+        show_missing_data()
+        return
+    end
     Animation.load("data/animations.json")
-    Audio.load("data/sounds.json")
+    Audio.load(Assets.path("sounds.json"))
     Audio.load_events("data/audio.json")
     Sound.apply_config()
 
