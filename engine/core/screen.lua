@@ -27,8 +27,9 @@ end
 
 -- opts: fade_in, hold, fade_out (seconds); wait_key (hold until a key dismisses
 -- it instead of timing out); tag (small bottom-right build-tag text drawn at the
--- overlay's alpha); on_done (called once fully faded out); on_cancel (called when
--- the overlay is cancelled, so the shower decides where Esc goes).
+-- overlay's alpha); skippable (Enter / Space cancel it like Esc, in any phase);
+-- on_done (called once fully faded out); on_cancel (called when the overlay is
+-- cancelled, so the shower decides where Esc goes).
 function Screen:show(name, opts)
     opts = opts or {}
     self.active = {
@@ -37,6 +38,7 @@ function Screen:show(name, opts)
         hold      = opts.hold     or 1.5,
         fade_out  = opts.fade_out or 0.5,
         wait_key  = opts.wait_key or false,
+        skippable = opts.skippable or false,
         timeout   = opts.timeout,   -- wait_key overlays: auto-advance after this many seconds
         tag       = opts.tag,
         on_done   = opts.on_done,
@@ -88,9 +90,16 @@ function Screen:update(dt)
     end
 end
 
--- Dismiss a wait_key overlay; returns true if a key was consumed.
-function Screen:keypressed()
+local SKIP_KEYS = { ["return"] = true, kpenter = true, space = true }
+
+-- Dismiss a wait_key overlay, or cancel a skippable one on Enter / Space;
+-- returns true if a key was consumed.
+function Screen:keypressed(key)
     local overlay = self.active
+    if overlay and overlay.skippable and SKIP_KEYS[key] then
+        self:cancel()
+        return true
+    end
     if overlay and overlay.phase == "wait" then
         overlay.t = 0
         overlay.phase = "out"

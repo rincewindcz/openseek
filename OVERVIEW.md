@@ -85,7 +85,7 @@ Each top-level mode is a scene in `engine/scenes/`, subclassing
 
 | Scene | Role |
 |-------|------|
-| `title` -> `main_menu` | Boot flow. The menu is also pushed over a running game (`Esc`), where RESUME pops back |
+| `title` -> `main_menu` | Boot flow; `Enter`, `Space` or `Esc` skips the title card. The menu is also pushed over a running game (`Esc`), where RESUME pops back |
 | `credits` / `hiscores` | Info screens over the shared `ui/info_screen.lua` shell. The top-10 table persists and opens a name-entry row on a qualifying score |
 | `advanced_settings` | The OPTIONS screen: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS pages editing `Config` live |
 | `mission_briefing` / `mission_select` | Pre-mission menu (briefing text, phase selectors, SHOP / PLAY) and the debug mission/phase picker |

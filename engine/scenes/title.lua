@@ -2,8 +2,8 @@ local Class = require "engine.core.class"
 local Scene = require "engine.core.scene"
 
 -- Boot scene: the TITLE card fading in over black. Draws an opaque fill every
--- frame so the overview never flashes during the intro; done or Esc drops
--- into the main menu.
+-- frame so the overview never flashes during the intro; done, Esc, Enter or
+-- Space drops into the main menu.
 local Title = Class(Scene)
 
 function Title:enter()
@@ -14,6 +14,7 @@ function Title:enter()
         hold      = 2.0,
         fade_out  = 0.6,
         tag       = "OPENSEEK 0.9",
+        skippable = true,
         on_done   = to_menu,
         on_cancel = to_menu,
     })

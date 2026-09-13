@@ -146,7 +146,13 @@ uniform float vignette_gain;
 uniform float vignette_power;
 uniform float grain_gain;
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+// Sine-free hash (Dave Hoskins, hash13): stable at any pixel coordinate, unlike
+// fract(sin(x) * k), whose float precision bands and coarsens as x grows.
+float hash(vec3 p) {
+    p = fract(p * 0.1031);
+    p += dot(p, p.zyx + 31.32);
+    return fract((p.x + p.y) * p.z);
+}
 
 vec4 effect(vec4 color, Image tex, vec2 uv, vec2 px) {
     vec3 c = Texel(tex, uv).rgb;
@@ -165,11 +171,13 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 px) {
     vec2 q = (px - viewport.xy) / viewport.zw * 2.0 - 1.0;
     c *= clamp(1.0 - vignette * vignette_gain * pow(length(q), vignette_power), 0.0, 1.0);
 
-    float g = hash(floor((px - viewport.xy) / px_size) + grain_seed) - 0.5;
+    float g = hash(vec3(floor((px - viewport.xy) / px_size), grain_seed)) - 0.5;
     c += g * grain * grain_gain * (1.0 - abs(luma(c) * 2.0 - 1.0) * 0.5);
     return vec4(clamp(c, 0.0, 1.0), 1.0);
 }
 ]]
+
+local GRAIN_FRAMES = 64   -- distinct grain patterns cycled at 24 per second
 
 -- Unused uniforms are compiled out; sending one would raise.
 local function send(shader, name, ...)
@@ -277,7 +285,7 @@ function PostFX:end_world(vx, vy, vw, vh)
     send(s, "texel", { 1 / self.w, 1 / self.h })
     send(s, "viewport", { vx, vy, vw, vh })
     send(s, "px_size", px_size)
-    send(s, "grain_seed", math.floor(love.timer.getTime() * 24) % 997)
+    send(s, "grain_seed", math.floor(love.timer.getTime() * 24) % GRAIN_FRAMES)
     send(s, "grade", Config.postfx_grade)
     send(s, "contrast", Config.postfx_contrast)
     send(s, "sharpen", Config.postfx_sharpen)
