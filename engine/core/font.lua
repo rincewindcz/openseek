@@ -22,7 +22,7 @@ local cache = {}
 Font.NAMES = {
     "phasenum", "gov", "gov2", "overkill",
     "chars", "charspow", "charstit", "hichars", "hichars2", "savechar", "endchars", "keysfont",
-    "mainmen",
+    "mainmen", "main",
 }
 
 function Font.get(name)

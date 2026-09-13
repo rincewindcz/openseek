@@ -34,7 +34,7 @@ n+1 frame model.
 | Scenes | 18 registered, plus the shared `gameplay_base` |
 | Asset pipeline | 9783 lines Python, 36 tools in `tools/` |
 | Stages | 20 / 20 decoded, rendered and playable |
-| Exported art | 2074 PNG, 8 bitmap fonts, 30 fullscreen pictures, 59 WAV |
+| Exported art | 2074 PNG, 9 bitmap fonts, 30 fullscreen pictures, 59 WAV |
 | Data tables | `weapons` (16), `entity_types` (10 kinds), `animations` (69 clips), `missions` (16 stages), `mission_text` (20 stages), `audio` (39 events) |
 | Lint | `luacheck engine main.lua conf.lua`: 0 warnings / 0 errors |
 
@@ -448,9 +448,11 @@ or `.mp3` dropped into `assets/music/` is picked up by its bare filename:
 | `data/audio.json` | Sound events: `name -> {clip, bus, gain, pitch, pitch_var, cooldown, min_dist, max_dist, max_voices, priority}` over a `defaults` block. Hand maintained, unlike the generated `sounds.json`. See section 8. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Persisted player state, written to the LOVE save directory at runtime. |
 | `assets/fonts/<name>.{png,json}` | Bitmap fonts: one glyph atlas plus per-glyph metrics, `charmap` / `word` mapping, and `mode` (`mask` or `truecolor`). |
+| `assets/fonts/main.{png,json}` | The menu word-art face completed to a full alphabet: the 20 letters `mainmen` recovers plus `B J K Q Y Z` synthesized by `tools/gen_main_font.py`. |
 | `assets/equip/*.png` + `layout.json` | Equip screen art: re-rendered EQPCHP / EQPTNK backdrops, weapon rows in 3 states, buttons, level pips, gold digits, and every widget's design-space rect. |
 | `assets/phend/*.png` + `layout.json` | DESTRUCTION STATS art in the PHASEPAL palette: header, phase digits, the five label strips, the `%` glyph, the `STATNUMS` digit font. |
 | `assets/{credits,hiscore,pow,phase,mission,mainmen,hud,effects,player,fullscreen}/` | Per-screen sprite batteries, each exported in its own palette. |
+| `assets/mainmen/font_synth/*.png` | The six word-art letters the menu words never spell, drawn to the original's construction rules. Original artwork, not decoded from the game. |
 
 ## 10. Building assets
 
