@@ -11,7 +11,7 @@ local InputSource = {}
 -- Live keyboard. bindings maps an action to a key name or a list of key names
 -- (any held counts), so it takes either the rebindable single-player map
 -- (engine/core/input.lua) or a co-op player's fixed key set. touch, when given,
--- is anything answering held(action) (engine/ui/touch_controls.lua).
+-- is anything answering held(action) and turn() (engine/ui/touch_controls.lua).
 local LocalSource = Class()
 InputSource.Local = LocalSource
 
@@ -47,7 +47,7 @@ function LocalSource:frame(_tick)
     end
     local events = self.pending
     self.pending = {}
-    return InputFrame.new(mask, events)
+    return InputFrame.new(mask, events, self.touch and self.touch:turn() or nil)
 end
 
 -- Recorded input. provider is anything answering frame_for(tick, slot), i.e. a

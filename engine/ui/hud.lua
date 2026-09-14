@@ -1,8 +1,9 @@
-local Class  = require "engine.core.class"
-local json   = require "lib.json"
-local Assets = require "engine.core.assets"
-local Config = require "engine.core.config"
-local Font   = require "engine.core.font"
+local Class   = require "engine.core.class"
+local json    = require "lib.json"
+local Assets  = require "engine.core.assets"
+local Config  = require "engine.core.config"
+local Display = require "engine.core.display"
+local Font    = require "engine.core.font"
 
 local Hud = Class()
 
@@ -190,7 +191,7 @@ function Hud:draw()
     if self.view_w then screen_w, screen_h = self.view_w, self.view_h end
     -- The global HUD scale grows each element and its inset from the anchored edge
     -- together, so a corner-anchored item stays in its corner as it gets bigger.
-    local hud_scale = Config.hud_scale or 1
+    local hud_scale = (Config.hud_scale or 1) * Display.view_scale()
     for _, item in ipairs(self.items) do
         local anchor, offx, offy = self:_anchor_offset(item)
         local fn     = ANCHOR[anchor]

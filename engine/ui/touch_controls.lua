@@ -1,19 +1,28 @@
-local Class   = require "engine.core.class"
-local Font    = require "engine.core.font"
-local Pointer = require "engine.ui.pointer"
+local Class      = require "engine.core.class"
+local Font       = require "engine.core.font"
+local Mathx      = require "engine.core.mathx"
+local InputFrame = require "engine.core.input_frame"
+local Pointer    = require "engine.ui.pointer"
 
 -- On-screen controls for touch play in the single-player gameplay scene. The left
 -- half of the screen is a floating stick (it centers wherever the thumb lands),
 -- the right side carries the action buttons. Held state is sampled by the input
--- source once per tick like a key (held); button presses queue edge events on
--- the source, so touch reaches the simulation only through the input frame.
+-- source once per tick like a key (held), with the stick angle as an analog
+-- turn (turn); button presses queue edge events on the source, so touch reaches
+-- the simulation only through the input frame.
 -- Drawn while the last pointer input was a touch.
 local TouchControls = Class()
 
 -- Sizes and positions in units of screen height; x is measured from the right
 -- edge, y from the bottom edge.
 local STICK_RADIUS = 0.13
-local DEAD_ZONE    = 0.3    -- fraction of STICK_RADIUS before a direction counts
+local DEAD_ZONE    = 0.25   -- fraction of STICK_RADIUS before the stick counts
+
+-- Stick angle, measured from straight up (or straight down when reversing):
+-- within STRAIGHT it steers straight, and the turn rate grows linearly to full
+-- at a sideways push. Within DRIVE_ARC it also drives forward or back.
+local STRAIGHT  = math.rad(8)
+local DRIVE_ARC = math.rad(65)
 local BUTTON_R     = 0.075
 local LABEL_SCALE  = 2
 
@@ -106,18 +115,36 @@ function TouchControls:_stick_offset()
     return dx, dy, radius
 end
 
+-- Stick angle from the nearest vertical in [-pi/2, pi/2] (positive to the right)
+-- and the vertical offset, or nil inside the dead zone.
+function TouchControls:_stick_angle()
+    if not self.stick then return nil end
+    local dx, dy, radius = self:_stick_offset()
+    if dx * dx + dy * dy < (DEAD_ZONE * radius) ^ 2 then return nil end
+    return Mathx.atan2(dx, math.abs(dy)), dy
+end
+
 function TouchControls:held(action)
     for _, b in pairs(self.pressed) do
         if b.held == action then return true end
     end
-    if not self.stick then return false end
-    local dx, dy, radius = self:_stick_offset()
-    local dead = DEAD_ZONE * radius
-    if action == "up"    then return dy < -dead end
-    if action == "down"  then return dy >  dead end
-    if action == "left"  then return dx < -dead end
-    if action == "right" then return dx >  dead end
+    local a, dy = self:_stick_angle()
+    if not a then return false end
+    if action == "up"    then return dy < 0 and math.abs(a) <= DRIVE_ARC end
+    if action == "down"  then return dy > 0 and math.abs(a) <= DRIVE_ARC end
+    if action == "left"  then return a < -STRAIGHT end
+    if action == "right" then return a >  STRAIGHT end
     return false
+end
+
+-- Analog turn in InputFrame steps, or nil when the stick is not steering.
+function TouchControls:turn()
+    local a = self:_stick_angle()
+    if not a or math.abs(a) <= STRAIGHT then return nil end
+    local k    = math.min(1, (math.abs(a) - STRAIGHT) / (math.pi / 2 - STRAIGHT))
+    local step = math.floor(k * InputFrame.TURN_STEPS + 0.5)
+    if step == 0 then return nil end
+    return a < 0 and -step or step
 end
 
 function TouchControls:draw()

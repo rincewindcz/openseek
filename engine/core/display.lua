@@ -16,6 +16,18 @@ Display.SIZES = {
     { label = "1280 x 960",  w = 1280, h = 960 },
 }
 
+-- The screen height the gameplay zoom and the HUD layout are tuned for.
+local REFERENCE_HEIGHT = 720
+local MOBILE_OS        = { Android = true, iOS = true }
+
+-- Gameplay framing multiplier for the world zoom and the HUD. Phones and tablets
+-- frame the game as if the screen were REFERENCE_HEIGHT tall, so a dense display
+-- does not shrink the HUD or widen the view; desktop and web keep 1.
+function Display.view_scale()
+    if not MOBILE_OS[love.system.getOS()] then return 1 end
+    return love.graphics.getHeight() / REFERENCE_HEIGHT
+end
+
 local function size_for(value)
     for _, s in ipairs(Display.SIZES) do
         if s.label == value then return s end
@@ -40,6 +52,7 @@ function Display.apply()
         fullscreen     = Config.fullscreen and true or false,
         fullscreentype = "desktop",
         resizable      = love.system.getOS() ~= "Web",
+        usedpiscale    = false,
         vsync          = Config.vsync and 1 or 0,
     })
 end

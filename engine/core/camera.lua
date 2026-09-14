@@ -1,4 +1,5 @@
-local Class = require "engine.core.class"
+local Class   = require "engine.core.class"
+local Display = require "engine.core.display"
 
 local ZOOMS = { 0.125, 0.25, 0.5, 1, 2, 3, 4, 6, 8 }
 
@@ -46,14 +47,16 @@ function Camera:screen_center()
     return w / 2, h / 2 + self.view_oy
 end
 
+-- Live screen pixels per world unit: the discrete zoom (or the intro tween)
+-- times the display's view scale (Display.view_scale).
 function Camera:zoom()
     local za = self.zoom_anim
     if za then
         local k = math.min(1, za.t / za.dur)
         k = 1 - (1 - k) * (1 - k) * (1 - k)   -- ease-out cubic
-        return za.from + (za.to - za.from) * k
+        return (za.from + (za.to - za.from) * k) * Display.view_scale()
     end
-    return ZOOMS[self.zoom_index]
+    return ZOOMS[self.zoom_index] * Display.view_scale()
 end
 
 -- The fixed gameplay zoom, independent of any camera instance and of what the
@@ -67,12 +70,12 @@ end
 -- Used where a value must stay fixed across the smooth zoom (e.g. the weather
 -- field's tile size, so the lattice does not reflow while the intro animates).
 function Camera:base_zoom()
-    return ZOOMS[self.zoom_index]
+    return ZOOMS[self.zoom_index] * Display.view_scale()
 end
 
--- Ratio of the (possibly mid-intro) zoom to the discrete target zoom: 1.0 in
--- normal play, <1 during the level-start zoom-in. Screen-space sprites such as
--- the player scale by this so they grow with the animated world.
+-- Ratio of the live zoom to the bare discrete target zoom: the view scale in
+-- normal play, less during the level-start zoom-in. Screen-space sprites such as
+-- the player scale by this so they grow with the world.
 function Camera:zoom_ratio()
     return self:zoom() / ZOOMS[self.zoom_index]
 end

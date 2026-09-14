@@ -84,14 +84,30 @@ function PostFX.match_preset()
     return "custom"
 end
 
+-- LOVE compiles OpenGL ES pixel shaders at mediump, 16-bit on many mobile GPUs:
+-- too coarse for window-pixel coordinates (the grain hash bands) and one-texel
+-- offsets on a wide canvas. Every shader here opts into highp where available.
+-- LOVE declares effect() before this code at mediump, so the parameters keep
+-- that precision and the texture coordinate is read from its highp varying.
+local PRECISION = [[
+#if defined(GL_ES) && defined(GL_FRAGMENT_PRECISION_HIGH)
+precision highp float;
+#endif
+]]
+
+local EFFECT = [[
+vec4 effect(mediump vec4 color, Image tex, mediump vec2 texcoord, mediump vec2 screen) {
+    vec2 uv = VaryingTexCoord.st;
+]]
+
 local LUMA = [[
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 ]]
 
 -- Separable 9-tap gaussian in 5 bilinear taps; dir is the texel step times the spread.
-local BLUR_SRC = [[
+local BLUR_SRC = PRECISION .. [[
 uniform vec2 dir;
-vec4 effect(vec4 color, Image tex, vec2 uv, vec2 px) {
+]] .. EFFECT .. [[
     vec4 s = Texel(tex, uv) * 0.227027;
     s += (Texel(tex, uv + dir * 1.384615) + Texel(tex, uv - dir * 1.384615)) * 0.316216;
     s += (Texel(tex, uv + dir * 3.230769) + Texel(tex, uv - dir * 3.230769)) * 0.070270;
@@ -101,13 +117,13 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 px) {
 
 -- Bright pass into a quarter-size target: four bilinear taps cover the 4x4 source
 -- block, so thin bright sprites (tracers, rotor tips) are not skipped.
-local BRIGHT_SRC = LUMA .. [[
+local BRIGHT_SRC = PRECISION .. LUMA .. [[
 uniform vec2 texel;
 uniform float threshold;
 vec3 bright(vec3 c) {
     return c * clamp((luma(c) - threshold) / max(1.0 - threshold, 0.001), 0.0, 1.0);
 }
-vec4 effect(vec4 color, Image tex, vec2 uv, vec2 px) {
+]] .. EFFECT .. [[
     vec3 s = bright(Texel(tex, uv + vec2(-texel.x, -texel.y)).rgb)
            + bright(Texel(tex, uv + vec2( texel.x, -texel.y)).rgb)
            + bright(Texel(tex, uv + vec2(-texel.x,  texel.y)).rgb)
@@ -116,14 +132,14 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 px) {
 }
 ]]
 
-local SHADOW_SRC = [[
+local SHADOW_SRC = PRECISION .. [[
 uniform float gain;
-vec4 effect(vec4 color, Image tex, vec2 uv, vec2 px) {
+]] .. EFFECT .. [[
     return vec4(0.0, 0.0, 0.0, min(1.0, Texel(tex, uv).a * gain) * color.a);
 }
 ]]
 
-local COMPOSITE_SRC = LUMA .. [[
+local COMPOSITE_SRC = PRECISION .. LUMA .. [[
 uniform Image bloom_tex;
 uniform vec2 texel;
 uniform vec4 viewport;
@@ -154,7 +170,8 @@ float hash(vec3 p) {
     return fract((p.x + p.y) * p.z);
 }
 
-vec4 effect(vec4 color, Image tex, vec2 uv, vec2 px) {
+]] .. EFFECT .. [[
+    vec2 px = uv / texel;   // window pixel: the world canvas covers the window
     vec3 c = Texel(tex, uv).rgb;
     vec2 o = texel * px_size;
     vec3 n = Texel(tex, uv + vec2(o.x, 0.0)).rgb + Texel(tex, uv - vec2(o.x, 0.0)).rgb

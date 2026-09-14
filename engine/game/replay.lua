@@ -8,18 +8,19 @@ local InputFrame = require "engine.core.input_frame"
 --
 -- File format (text, one record per line):
 --
---   OSREPLAY 1
+--   OSREPLAY 2
 --   key=value            header lines: build, stage, mode, seed, params, players
 --   --                   end of header
---   i <tick> <slot> <mask> [event,event]
+--   i <tick> <slot> <mask>[:<turn>] [event,event]
 --   c <tick> <hash> <players> <entities> <misc>
 --
--- Input lines are delta encoded: one is written only when a slot's held mask
--- changes or the tick carries an edge event, so a quiet minute costs a handful of
+-- turn is the analog turn step (InputFrame.TURN_STEPS); a line without it is
+-- digital. Input lines are delta encoded: one is written only when a slot's held
+-- mask or turn changes or the tick carries an edge event, so a quiet minute costs a handful of
 -- lines. A tick with no line repeats the previous mask with no events.
 local Replay = Class()
 
-Replay.FORMAT = 1
+Replay.FORMAT = 2
 Replay.DIR    = "replays"
 
 -- Config keys that change the simulation. They are stored in the header and
@@ -40,7 +41,7 @@ function Replay:init(header)
     self.inputs  = {}    -- slot -> ordered list of {tick, mask, events}
     self.checks  = {}    -- ordered list of {tick, hash, players, entities, misc}
     self.length  = 0     -- last recorded tick
-    self._last   = {}    -- slot -> last recorded mask, for delta encoding
+    self._last   = {}    -- slot -> last recorded frame, for delta encoding
     self._cursor = {}    -- slot -> playback position in inputs[slot]
     self._check_at = 1   -- playback position in checks
 end
@@ -49,11 +50,13 @@ end
 
 function Replay:record_input(tick, slot, frame)
     local last = self._last[slot]
-    if last and last == frame.mask and #frame.events == 0 then return end
+    if last and last.mask == frame.mask and last.turn == frame.turn and #frame.events == 0 then
+        return
+    end
     local list = self.inputs[slot] or {}
     self.inputs[slot] = list
-    list[#list + 1] = { tick = tick, mask = frame.mask, events = frame.events }
-    self._last[slot] = frame.mask
+    list[#list + 1] = { tick = tick, mask = frame.mask, turn = frame.turn, events = frame.events }
+    self._last[slot] = frame
     if tick > self.length then self.length = tick end
 end
 
@@ -86,8 +89,8 @@ function Replay:frame_for(tick, slot)
     self._cursor[slot] = i
     local record = list[i]
     if not record then return InputFrame.EMPTY end
-    if record.tick == tick then return InputFrame.new(record.mask, record.events) end
-    return InputFrame.new(record.mask, {})
+    if record.tick == tick then return InputFrame.new(record.mask, record.events, record.turn) end
+    return InputFrame.new(record.mask, {}, record.turn)
 end
 
 -- The recorded checkpoint for a tick, or nil when that tick was not checkpointed.
@@ -167,7 +170,7 @@ function Replay:serialize()
     local merged = {}
     for slot, list in pairs(self.inputs) do
         for _, r in ipairs(list) do
-            merged[#merged + 1] = { tick = r.tick, slot = slot, mask = r.mask, events = r.events }
+            merged[#merged + 1] = { tick = r.tick, slot = slot, mask = r.mask, turn = r.turn, events = r.events }
         end
     end
     table.sort(merged, function(a, b)
@@ -175,7 +178,8 @@ function Replay:serialize()
         return a.slot < b.slot
     end)
     for _, r in ipairs(merged) do
-        out[#out + 1] = string.format("i %d %d %d%s", r.tick, r.slot, r.mask, encode_events(r.events))
+        local turn = r.turn and (":" .. r.turn) or ""
+        out[#out + 1] = string.format("i %d %d %d%s%s", r.tick, r.slot, r.mask, turn, encode_events(r.events))
     end
     for _, c in ipairs(self.checks) do
         out[#out + 1] = string.format("c %d %d %d %d %d", c.tick, c.hash,
@@ -196,14 +200,16 @@ local function parse(text)
         else
             local kind, rest = line:match("^(%a) (.+)$")
             if kind == "i" then
-                local tick, slot, mask, events = rest:match("^(%d+) (%d+) (%d+)%s*(.*)$")
+                local tick, slot, mask, turn, events = rest:match("^(%d+) (%d+) (%d+):?(%-?%d*)%s*(.*)$")
                 if tick then
                     local list = {}
                     for e in (events or ""):gmatch("[^,]+") do list[#list + 1] = e end
                     local s = tonumber(slot)
                     replay.inputs[s] = replay.inputs[s] or {}
                     local into = replay.inputs[s]
-                    into[#into + 1] = { tick = tonumber(tick), mask = tonumber(mask), events = list }
+                    into[#into + 1] = {
+                        tick = tonumber(tick), mask = tonumber(mask), turn = tonumber(turn), events = list,
+                    }
                     if tonumber(tick) > replay.length then replay.length = tonumber(tick) end
                 end
             elseif kind == "c" then

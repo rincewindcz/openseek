@@ -648,9 +648,15 @@ function Player:_apply_input(dt)
     -- Turn rates are gameplay speeds, so they take the global multiplier (movement
     -- is scaled in _move); acceleration ramps below stay on real dt.
     local turn_dt = dt * Config.speed_scale
-    local rotate   = 0
-    if self:_held("left")  then rotate = rotate - 1 end
-    if self:_held("right") then rotate = rotate + 1 end
+    -- An analog frame (touch stick) scales every turn and strafe rate by its
+    -- deflection; a digital one turns at full rate.
+    local analog  = InputFrame.turn(self.frame)
+    local rotate  = analog
+    if not analog then
+        rotate = 0
+        if self:_held("left")  then rotate = rotate - 1 end
+        if self:_held("right") then rotate = rotate + 1 end
+    end
 
     local modifier = self:_held("modifier")
     local hull_turn = 0
@@ -669,7 +675,9 @@ function Player:_apply_input(dt)
     else
         -- chopper: smooth strafe toward target while shift is held
         local strafe_target = 0
-        if modifier then
+        if modifier and analog then
+            strafe_target = analog * self.strafe_speed
+        elseif modifier then
             if self:_held("left")  then strafe_target = -self.strafe_speed end
             if self:_held("right") then strafe_target =  self.strafe_speed end
         end

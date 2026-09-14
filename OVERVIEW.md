@@ -145,9 +145,9 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 |--------|----------------|
 | `core/camera` | Zoom, pan, world rotation, culling, wrap tiles, fixed `game_zoom`. |
 | `core/config` | Tuning and compatibility flags; `PERSISTED` keys saved to `data/settings.json`. |
-| `core/display` | Window size, fullscreen, vsync. |
+| `core/display` | Window size, fullscreen, vsync, mobile `view_scale`. |
 | `core/input` | Rebindable single-player key map (`data/keybinds.json`). |
-| `core/input_frame` | Per-player tick input: held bitmask + edge events. Bit order is replay format. |
+| `core/input_frame` | Per-player tick input: held bitmask + edge events + optional analog turn (`TURN_STEPS` 32). Bit order is replay format. |
 | `core/input_source` | `Local` (keyboard per tick), `Replay`, `Remote` (stub). |
 | `core/rng` | Seeded per-phase RNG with draw counter. |
 | `core/animation` | `AnimClip` from `data/animations.json`, per-instance `AnimState`. |
@@ -186,7 +186,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/info_screen` | CREDITS / HIGH SCORES shell. |
 | `ui/pointer` | Mouse / touch pointer in 320x240 design space. |
 | `ui/layout` | 320x240 design space, letterbox `fit`. |
-| `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state read by `InputSource.Local`, buttons queue edge events. Drawn while the last input was touch. |
+| `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Drawn while the last input was touch. |
 | `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay. |
 | `dev/selftest` | Scripted phase run three ways, compared per tick. |
 
@@ -225,7 +225,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 |------|---------|
 | D1 | Fixed 60 Hz tick, catch-up max 5 ticks, no render interpolation. |
 | D2 | Simulation must not read `love.timer.getTime`, `love.keyboard.*`, window or viewport size, camera zoom, `math.random`. Presentation must not write simulation state. Enforced by `tools/check_determinism.sh`; functions named `*draw*` are exempt. |
-| D3 | All input enters as `InputFrame` `{ mask, events }` per player per tick. |
+| D3 | All input enters as `InputFrame` `{ mask, events, turn }` per player per tick. `turn` (nil = digital) scales turn and strafe rates. |
 | D4 | `world.rng` seeded per phase, draws counted. Presentation uses `math.random`. |
 | D5 | Simulation `Config` keys (`Replay.PARAMS`) copied to `world.params` at phase start, re-applied every tick. F5 / F6 / E are recorded events. |
 | D6 | Replays store input and checksums, not state. |
@@ -241,7 +241,8 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   235, `Camera.game_zoom()`).
 - File: `replays/<stage>-<timestamp>.osr` in the save directory. JSON header
   (build, platform, stage, mode, seed, per-player vehicle / skin / lives / score /
-  bonus threshold / loadout, params) + delta-encoded `{tick, slot, mask, events}`
+  bonus threshold / loadout, params) + delta-encoded `{tick, slot, mask, turn, events}`
+  (format 2 input line: `i <tick> <slot> <mask>[:<turn>] [events]`)
   + checksum every 60 ticks.
 - Checksum: FNV-1a over exact double bits of player kinematics, entity health and
   state, projectile count, RNG draw count. Checkpoints carry per-component hashes.
@@ -648,3 +649,10 @@ turret, 6 tank, 7 soldier aggressive, 8 soldier, 9 powerup marker, 10 truck,
 On the web build (`love.system.getOS() == "Web"`) the window is not resizable;
 the page scales the 1280x720 canvas to the viewport. Lowpass filters are skipped
 when `love.audio.isEffectsSupported()` is false.
+
+`usedpiscale` is off (`conf.lua`, `Display.apply`): units are pixels on every
+platform. On Android and iOS `Display.view_scale()` (screen height / 720)
+multiplies the camera zoom, the player sprite scale (`Camera:zoom_ratio`) and
+the HUD scale. PostFX shaders request `highp` on OpenGL ES; `effect` parameters
+stay `mediump` (LOVE's prototype) and the texture coordinate comes from
+`VaryingTexCoord`.
