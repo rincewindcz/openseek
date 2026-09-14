@@ -46,7 +46,7 @@ local MUSIC_FADE = 1.2   -- seconds of crossfade between tracks
 function Audio.load(path)
     Audio._cats, Audio._files, Audio._sources, Audio._last = {}, {}, {}, nil
     Audio._data, Audio._pool, Audio._next = {}, {}, {}
-    local raw = love.filesystem.read(path)
+    local raw = love.filesystem.getInfo(path) and love.filesystem.read(path)
     if not raw then return end
     local ok, data = pcall(json.decode, raw)
     if not ok or type(data) ~= "table" then return end
@@ -62,7 +62,7 @@ end
 -- field an event omits falls back to defaults, then to the code defaults below.
 function Audio.load_events(path)
     Audio._events, Audio._defaults = {}, {}
-    local raw = love.filesystem.read(path)
+    local raw = love.filesystem.getInfo(path) and love.filesystem.read(path)
     if not raw then return end
     local ok, data = pcall(json.decode, raw)
     if not ok or type(data) ~= "table" then return end
@@ -154,6 +154,7 @@ function Audio.play(name)
     if not file then return end
     local src = Audio._sources[name]
     if not src then
+        if not love.filesystem.getInfo(file) then return end
         local ok, s = pcall(love.audio.newSource, file, "static")
         if not ok then return end
         src = s
@@ -225,7 +226,8 @@ local function sound_data(clip)
     if data ~= nil then return data or nil end
     local file = Audio._files[clip]
     if not file then Audio._data[clip] = false; return nil end
-    local ok, d = pcall(love.sound.newSoundData, file)
+    local ok, d = false, nil
+    if love.filesystem.getInfo(file) then ok, d = pcall(love.sound.newSoundData, file) end
     Audio._data[clip] = ok and d or false
     return ok and d or nil
 end
@@ -354,6 +356,7 @@ function Audio.place(src, pan, behind, lowpass)
     src:setRelative(true)
     src:setRolloff(0)
     src:setPosition(pan, 0, behind and depth or -depth)
+    if not love.audio.isEffectsSupported() then return end
     if lowpass and lowpass < 1 then
         src:setFilter({ type = "lowpass", volume = 1, highgain = math.max(0.05, lowpass) })
     else

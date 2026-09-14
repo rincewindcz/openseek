@@ -324,12 +324,16 @@ local function pointer_released(x, y)
     app.scenes:dispatch("mousereleased", x, y)
 end
 
-function love.mousemoved(x, y, dx, dy)
+-- Mouse events SDL synthesizes from touches (istouch) are dropped: the touch
+-- callbacks below already handle those.
+function love.mousemoved(x, y, dx, dy, istouch)
+    if istouch then return end
     Pointer.moved(x, y, false)
     app.scenes:dispatch("mousemoved", x, y, dx, dy)
 end
 
-function love.mousepressed(x, y, button)
+function love.mousepressed(x, y, button, istouch)
+    if istouch then return end
     app.debug_panel:mousepressed(x, y, button)
     if button == 1 then
         Pointer.moved(x, y, false)
@@ -339,7 +343,8 @@ function love.mousepressed(x, y, button)
     end
 end
 
-function love.mousereleased(x, y, button)
+function love.mousereleased(x, y, button, istouch)
+    if istouch then return end
     if button == 1 then
         Pointer.moved(x, y, false)
         pointer_released(x, y)
@@ -348,19 +353,23 @@ function love.mousereleased(x, y, button)
     end
 end
 
--- Touch mirrors the mouse (each touch acts as the pointer); Pointer is told
--- it's touch so it suppresses the cursor sprite (the finger is the pointer).
-function love.touchmoved(_, x, y)
+-- A touch goes to the top scene's touch hooks first (gameplay's on-screen
+-- controls); otherwise it mirrors the mouse, with Pointer told it is touch so it
+-- suppresses the cursor sprite (the finger is the pointer).
+function love.touchmoved(id, x, y)
     Pointer.moved(x, y, true)
+    if app.scenes:dispatch("touchmoved", id, x, y) then return end
     app.scenes:dispatch("mousemoved", x, y)
 end
 
-function love.touchpressed(_, x, y)
+function love.touchpressed(id, x, y)
     Pointer.moved(x, y, true)
+    if not app.screen:is_active() and app.scenes:dispatch("touchpressed", id, x, y) then return end
     pointer_pressed(x, y)
 end
 
-function love.touchreleased(_, x, y)
+function love.touchreleased(id, x, y)
     Pointer.moved(x, y, true)
+    if app.scenes:dispatch("touchreleased", id, x, y) then return end
     pointer_released(x, y)
 end

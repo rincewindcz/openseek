@@ -13,7 +13,9 @@ end
 
 function Screen:_img(name)
     if self._cache[name] == nil then
-        local ok, img = pcall(love.graphics.newImage, "assets/fullscreen/" .. name .. ".png")
+        local path    = "assets/fullscreen/" .. name .. ".png"
+        local ok, img = false, nil
+        if love.filesystem.getInfo(path) then ok, img = pcall(love.graphics.newImage, path) end
         if ok then
             img:setFilter("nearest", "nearest")
             self._cache[name] = img

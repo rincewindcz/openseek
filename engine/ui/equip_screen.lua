@@ -30,6 +30,7 @@ local KNOB_W       = 3     -- slider knob (EQPTNKF f3) width
 local LAYOUT_PATH = "assets/equip/layout.json"
 
 local function img(path)
+    if not love.filesystem.getInfo(path) then return nil end
     local ok, i = pcall(love.graphics.newImage, path)
     if ok then
         i:setFilter("nearest", "nearest")

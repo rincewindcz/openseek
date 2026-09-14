@@ -108,6 +108,7 @@ local PERSISTED = {
 
 -- Overlay any saved values onto the shipped defaults. Called once at startup.
 function Config.load()
+    if not love.filesystem.getInfo(SAVE_PATH) then return end
     local raw = love.filesystem.read(SAVE_PATH)
     if not raw then return end
     local ok, data = pcall(json.decode, raw)

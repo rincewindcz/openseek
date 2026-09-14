@@ -329,8 +329,9 @@ function GameplayBase:replay_vehicle(slot)
 end
 
 -- Build one input source per player slot: recorded frames on playback, the live
--- keyboard otherwise. bindings is one key-binding table per slot.
-function GameplayBase:begin_input(mode, players, bindings)
+-- keyboard otherwise. bindings is one key-binding table per slot; touch, when
+-- given, also drives slot 1.
+function GameplayBase:begin_input(mode, players, bindings, touch)
     local app = self.app
     self.sources = {}
     for slot, p in ipairs(players) do p.index = slot end
@@ -341,7 +342,7 @@ function GameplayBase:begin_input(mode, players, bindings)
         end
     else
         for slot, binding in ipairs(bindings) do
-            self.sources[slot] = InputSource.Local:new(binding)
+            self.sources[slot] = InputSource.Local:new(binding, slot == 1 and touch or nil)
         end
         -- The sandbox edits vehicle parameters live, outside the input frame, so
         -- its runs cannot be replayed and are not recorded.

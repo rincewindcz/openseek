@@ -58,6 +58,7 @@ local LOCK_ALPHA  = 0.6                    -- dark wash over a not-yet-buyable l
 local CONFIRM_TIME = 0.3
 
 local function img(path)
+    if not love.filesystem.getInfo(path) then return nil end
     local ok, i = pcall(love.graphics.newImage, path)
     if ok then
         i:setFilter("nearest", "nearest")

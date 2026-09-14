@@ -17,7 +17,9 @@ function AnimClip:init(def, image_cache)
     for _, path in ipairs(def.frames or {}) do
         local img = image_cache[path]
         if not img then
-            local ok, loaded = pcall(love.graphics.newImage, Assets.path(path))
+            local full       = Assets.path(path)
+            local ok, loaded = false, nil
+            if love.filesystem.getInfo(full) then ok, loaded = pcall(love.graphics.newImage, full) end
             if ok then
                 loaded:setFilter("nearest", "nearest")
                 image_cache[path] = loaded

@@ -10,16 +10,19 @@ local InputSource = {}
 
 -- Live keyboard. bindings maps an action to a key name or a list of key names
 -- (any held counts), so it takes either the rebindable single-player map
--- (engine/core/input.lua) or a co-op player's fixed key set.
+-- (engine/core/input.lua) or a co-op player's fixed key set. touch, when given,
+-- is anything answering held(action) (engine/ui/touch_controls.lua).
 local LocalSource = Class()
 InputSource.Local = LocalSource
 
-function LocalSource:init(bindings)
+function LocalSource:init(bindings, touch)
     self.bindings = bindings or {}
+    self.touch    = touch
     self.pending  = {}   -- edge actions queued by keypressed, drained next tick
 end
 
 function LocalSource:_down(action)
+    if self.touch and self.touch:held(action) then return true end
     local binding = self.bindings[action]
     if not binding then return false end
     if type(binding) == "table" then

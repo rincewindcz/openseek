@@ -167,7 +167,9 @@ end
 
 function Hud:_img(path)
     if self._cache[path] == nil then
-        local ok, img = pcall(love.graphics.newImage, Assets.path(path))
+        local full    = Assets.path(path)
+        local ok, img = false, nil
+        if love.filesystem.getInfo(full) then ok, img = pcall(love.graphics.newImage, full) end
         if ok then
             img:setFilter("nearest", "nearest")
             self._cache[path] = img

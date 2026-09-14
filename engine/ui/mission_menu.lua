@@ -45,6 +45,7 @@ local BUTTONS = {
 local DEFAULT_CURSOR = 4  -- PLAY
 
 local function img(path)
+    if not love.filesystem.getInfo(path) then return nil end
     local ok, i = pcall(love.graphics.newImage, path)
     if ok then
         i:setFilter("nearest", "nearest")
@@ -100,7 +101,8 @@ function MissionMenu:_icon_slot_edges(path)
     local cached = self._edge_cache[path]
     if cached then return cached end
     local edges = { [0] = -1, [1] = -1, [2] = -1 }
-    local ok, data = pcall(love.image.newImageData, path)
+    local ok, data = false, nil
+    if love.filesystem.getInfo(path) then ok, data = pcall(love.image.newImageData, path) end
     if ok then
         local w, h = data:getWidth(), data:getHeight()
         for slot = 0, 2 do

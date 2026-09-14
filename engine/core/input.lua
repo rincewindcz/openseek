@@ -56,6 +56,7 @@ end
 -- Overlay any saved bindings onto the defaults. Called once at startup.
 function Input.load()
     Input.reset()
+    if not love.filesystem.getInfo(SAVE_PATH) then return end
     local raw = love.filesystem.read(SAVE_PATH)
     if not raw then return end
     local ok, data = pcall(json.decode, raw)

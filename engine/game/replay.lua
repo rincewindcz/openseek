@@ -239,7 +239,7 @@ function Replay:save(path)
 end
 
 function Replay.load(path)
-    local text = love.filesystem.read(path)
+    local text = love.filesystem.getInfo(path) and love.filesystem.read(path)
     if not text then return nil, "cannot read " .. path end
     if not text:match("^OSREPLAY ") then return nil, "not a replay: " .. path end
     local replay = parse(text)

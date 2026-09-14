@@ -1,6 +1,7 @@
 *.pyc
 __pycache__/
 assets/
+build/
 *.png
 !content/**/*.png
 *.exe

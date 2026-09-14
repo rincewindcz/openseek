@@ -2,6 +2,7 @@ local Class      = require "engine.core.class"
 local Scene      = require "engine.core.scene"
 local Font       = require "engine.core.font"
 local InfoScreen = require "engine.ui.info_screen"
+local Pointer    = require "engine.ui.pointer"
 local json       = require "lib.json"
 
 -- High-score scene: the HISCORE backdrop with the flying-in HIGH SCORES title, a
@@ -48,7 +49,7 @@ end
 -- pass fills empty ranks with placeholders.
 function HiScores:_load()
     local list = {}
-    local raw = love.filesystem.read(SAVE_PATH)
+    local raw = love.filesystem.getInfo(SAVE_PATH) and love.filesystem.read(SAVE_PATH)
     if raw then
         local ok, data = pcall(json.decode, raw)
         if ok and type(data) == "table" then
@@ -178,6 +179,13 @@ function HiScores:keypressed(key)
 end
 function HiScores:mousemoved(x, y)    if not self.entry then self.screen:hover(x, y)   end end
 function HiScores:mousepressed(x, y)  if not self.entry then self.screen:press(x, y)   end end
-function HiScores:mousereleased(x, y) if not self.entry then self.screen:release(x, y) end end
+-- There is no keyboard on a touch device, so a tap commits the name as typed.
+function HiScores:mousereleased(x, y)
+    if not self.entry then
+        self.screen:release(x, y)
+    elseif Pointer.touch then
+        self:_commit_entry()
+    end
+end
 
 return HiScores

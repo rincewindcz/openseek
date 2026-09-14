@@ -21,7 +21,8 @@ local OPEN_TIME    = 0.3
 local CONFIRM_TIME = 0.3
 
 local function img(path)
-    local ok, i = pcall(love.graphics.newImage, path)
+    local ok, i = false, nil
+    if love.filesystem.getInfo(path) then ok, i = pcall(love.graphics.newImage, path) end
     if ok then i:setFilter("nearest", "nearest"); return i end
     print("infoscreen: missing " .. path)
     return nil

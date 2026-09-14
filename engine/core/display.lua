@@ -39,7 +39,7 @@ function Display.apply()
     pcall(love.window.setMode, s.w, s.h, {
         fullscreen     = Config.fullscreen and true or false,
         fullscreentype = "desktop",
-        resizable      = true,
+        resizable      = love.system.getOS() ~= "Web",
         vsync          = Config.vsync and 1 or 0,
     })
 end

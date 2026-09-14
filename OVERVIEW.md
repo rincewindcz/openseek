@@ -70,6 +70,10 @@ Style:
 - `require` lines first, then module locals. Literal require paths only.
 - Section headers are a plain `-- name` line.
 - Missing assets degrade (no-op `AnimState`, skipped nil image), never error mid-frame.
+- Check `love.filesystem.getInfo(path)` before `read`, `newImage`, `newImageData`,
+  `newSource` or `newSoundData` on any path that may not exist. In love.js the
+  exception LOVE raises for a missing file aborts the page; `pcall` does not
+  catch it.
 - Files `snake_case.lua`; classes `PascalCase`; functions and fields
   `snake_case`; constants `UPPER_SNAKE`; private members `_prefixed`.
 - Allowed abbreviations: `dt`, `x y w h`, `dx dy`, `hp`, `i j k v`, `g = love.graphics`.
@@ -113,6 +117,9 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
   gameplay scenes.
 - The `Screen` fade overlay is app-level: updated first, drawn last, gates input.
 - `ui_pointer = true` hides the OS cursor and draws the `SELPOINT` sprite.
+- Touch goes to the scene's `touchpressed/touchmoved/touchreleased` first; a hook
+  returning false passes it on to the mouse handlers. Mouse events synthesized
+  from touches (`istouch`) are ignored.
 
 | Scene | Role |
 |-------|------|
@@ -179,6 +186,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/info_screen` | CREDITS / HIGH SCORES shell. |
 | `ui/pointer` | Mouse / touch pointer in 320x240 design space. |
 | `ui/layout` | 320x240 design space, letterbox `fit`. |
+| `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state read by `InputSource.Local`, buttons queue edge events. Drawn while the last input was touch. |
 | `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay. |
 | `dev/selftest` | Scripted phase run three ways, compared per tick. |
 
@@ -437,6 +445,7 @@ Requires Python 3, `pillow`, `numpy`. Game directory via `--game-dir`.
 | `export_equip.py` | `assets/equip/` (needs `assets/fullscreen/EQP*.png`) |
 | `decode_fullscreen_v2.py` | Fullscreen PNG; palette from `--dosbox-ref` screenshot, else embedded block x4 (wrong colours) |
 | `gen_hud_labels.py` | `content/hud/` |
+| `build_web.sh [OUT]` | love.js 11.4.1 compat build with the local `assets/` pack into `build/web` (page `tools/web/index.html` + `seek.js`). Test deployments only. |
 | `decode_level.py` | Stage BIN -> JSON (`--summary`) |
 | `decode_blitter.py` | Exact world-sprite decoder |
 | `decode_planar.py` | Exact planar HUD sprite decoder (`--pal-offset 14` for fullscreen palettes) |
@@ -634,3 +643,8 @@ turret, 6 tank, 7 soldier aggressive, 8 soldier, 9 powerup marker, 10 truck,
 | Overview: C, [ ] | Axis-aligned pickups, `speed_scale` |
 | Overview: S | Save `data/entity_types.json` |
 | Esc | Back (menu in game) |
+| Touch | Stick: drive. Buttons: FIRE, STRAFE (modifier), LAND, WEAPON, MENU. Tap commits a high-score name. |
+
+On the web build (`love.system.getOS() == "Web"`) the window is not resizable;
+the page scales the 1280x720 canvas to the viewport. Lowpass filters are skipped
+when `love.audio.isEffectsSupported()` is false.

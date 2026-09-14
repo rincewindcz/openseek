@@ -58,6 +58,7 @@ local TINT_SPEED   = 3
 local ROW_CAROUSEL, ROW_PHASE, ROW_BUTTON = 0, 1, 2
 
 local function img(path)
+    if not love.filesystem.getInfo(path) then return nil end
     local ok, i = pcall(love.graphics.newImage, path)
     if ok then
         i:setFilter("nearest", "nearest")
@@ -111,7 +112,8 @@ function MissionSelect:init()
         }
     end
 
-    local ok, bg = pcall(love.graphics.newImage, "assets/fullscreen/MAINP.png")
+    local bg = img("assets/fullscreen/MAINP.png")
+    local ok = bg ~= nil
     if ok then bg:setFilter("linear", "linear"); self.bg = bg else self.bg = nil end
 
     self._cache      = {}
@@ -156,8 +158,9 @@ end
 function MissionSelect:_tint_for(m)
     if self._tint_cache[m] then return self._tint_cache[m] end
     local t = { 1, 1, 1 }
-    local ok, data = pcall(love.image.newImageData,
-        string.format("assets/fullscreen/STAGE0%d_MPIC.png", m))
+    local path     = string.format("assets/fullscreen/STAGE0%d_MPIC.png", m)
+    local ok, data = false, nil
+    if love.filesystem.getInfo(path) then ok, data = pcall(love.image.newImageData, path) end
     if ok then
         local w, h = data:getWidth(), data:getHeight()
         local sr, sg, sb, n = 0, 0, 0, 0

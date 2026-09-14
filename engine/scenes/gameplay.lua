@@ -8,6 +8,7 @@ local Vehicles     = require "engine.game.vehicles"
 local Input        = require "engine.core.input"
 local Camera       = require "engine.core.camera"
 local InputFrame   = require "engine.core.input_frame"
+local TouchControls = require "engine.ui.touch_controls"
 
 -- Single-player gameplay scene: player lifecycle, camera follow, the death /
 -- won / takeoff timers, the pause flag, and the in-game keys. Esc pushes the
@@ -27,6 +28,8 @@ function Gameplay:enter()
     self.death_timer     = nil
     self.respawn_tick    = nil
     self.pending_takeoff = false
+    self.touch           = self.touch or TouchControls:new()
+    self.touch:reset()
     app.renderer.in_game = true
     app.camera:set_zoom(Camera.GAME_ZOOM_INDEX)
     self:enter_weather()
@@ -39,6 +42,7 @@ end
 function Gameplay:leave()
     local app = self.app
     self:end_session()
+    self.touch:reset()
     self.paused          = false
     self.death_timer     = nil
     self.respawn_tick    = nil
@@ -128,7 +132,7 @@ function Gameplay:spawn_player(carry)
     end
     player:seed_ammo(combat.weapons, loadout and loadout.counts)
     self:apply_replay_player(player, 1)   -- playback: the recorded loadout wins
-    self:begin_input("single", { player }, { Input.map })
+    self:begin_input("single", { player }, { Input.map }, self.touch)
     self:sync_weapon_icon()
     camera:set_game_focus()
     app.hud.player     = player
@@ -405,6 +409,7 @@ function Gameplay:draw()
     if app.end_stats:is_active() then app.end_stats:draw() end
     self:draw_replay_tag()
     if self.paused then self:draw_overlay_text("PAUSE") end
+    if not self.playback and not app.end_stats:is_active() then self.touch:draw() end
     app.debug_panel:draw()
 end
 
@@ -441,6 +446,30 @@ end
 function Gameplay:keypressed(key)
     if self:debug_keys(key) then return end
     self:game_keys(key)
+end
+
+-- Touch controls take a touch unless the stats screen or a playback owns the
+-- screen, in which case it falls through to the pointer handlers.
+function Gameplay:touchpressed(id, x, y)
+    if self.playback or self.app.end_stats:is_active() then return false end
+    local taken = self.touch:touchpressed(id, x, y, self.source)
+    if taken == "menu" then
+        self.app.scenes:push("main_menu")
+        return true
+    end
+    return taken
+end
+
+function Gameplay:touchmoved(id, x, y)
+    return self.touch:touchmoved(id, x, y)
+end
+
+function Gameplay:touchreleased(id)
+    return self.touch:touchreleased(id)
+end
+
+function Gameplay:suspend()
+    self.touch:reset()
 end
 
 return Gameplay
