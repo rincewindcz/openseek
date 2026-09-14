@@ -136,6 +136,7 @@ function Entity:on_hit(clip)
         ox   = (self.world.rng:random() - 0.5) * 12,
         oy   = (self.world.rng:random() - 0.5) * 12,
     }
+    self.world:wake(self)
 end
 
 function Entity:play_anim(clip_name)
@@ -146,6 +147,7 @@ function Entity:play_anim(clip_name)
     self.anim         = anim
     self.state_before = (self.state ~= "animating") and self.state or self.state_before
     self.state        = "animating"
+    if self.world then self.world:wake(self) end
 end
 
 function Entity:_start_death(dx, dy)
@@ -153,6 +155,7 @@ function Entity:_start_death(dx, dy)
     local explosion = (self.type_data and self.type_data.explosion) or "none"
     self.anim  = Animation.new("explosion_" .. explosion)
     self.state = self.anim:is_done() and "dead" or "exploding"
+    if self.world then self.world:wake(self) end
     if self.world then
         self.world:explosion_light(self.x, self.y, explosion)
         self.world:sound("explosion." .. explosion, self.x, self.y)
@@ -252,12 +255,14 @@ function Entity:update(dt)
     end
 
     -- One-shot hit smokes
-    local live = {}
-    for _, hs in ipairs(self._hit_smokes) do
-        hs.anim:update(dt)
-        if not hs.anim:is_done() then live[#live + 1] = hs end
+    if self._hit_smokes[1] then
+        local live = {}
+        for _, hs in ipairs(self._hit_smokes) do
+            hs.anim:update(dt)
+            if not hs.anim:is_done() then live[#live + 1] = hs end
+        end
+        self._hit_smokes = live
     end
-    self._hit_smokes = live
 end
 
 -- Patrol the assigned waypoint loop, driving like a tank: the hull eases its

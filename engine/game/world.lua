@@ -40,6 +40,40 @@ local NIGHT_PARAMS = {
 
 local World = Class()
 
+-- A stage holds thousands of static props, so per-tick scans go through these
+-- load-time lookups instead of the full entity lists.
+--
+-- Decals and objects are y-sorted once at load and never re-sorted; only tanks
+-- (patrol routes, hangar ride-outs) move afterwards. A y-range query therefore
+-- binary-searches the load-time y of the static entries and checks the few
+-- mobile ones separately. ys[i] is list[i]'s load-time y; movers holds the
+-- ascending list indices of the mobile entries.
+local function build_y_index(list)
+    local ys, movers = {}, {}
+    for i, e in ipairs(list) do
+        ys[i] = e.y
+        e.mobile = (e.route_points or e.hideable) and true or false
+        if e.mobile then movers[#movers + 1] = i end
+    end
+    return { ys = ys, movers = movers }
+end
+
+-- First and last list index whose load-time y lies in [y0, y1] (i0 > i1 if none).
+local function y_span(ys, y0, y1)
+    local lo, hi = 1, #ys + 1
+    while lo < hi do
+        local mid = math.floor((lo + hi) / 2)
+        if ys[mid] < y0 then lo = mid + 1 else hi = mid end
+    end
+    local i0 = lo
+    hi = #ys + 1
+    while lo < hi do
+        local mid = math.floor((lo + hi) / 2)
+        if ys[mid] <= y1 then lo = mid + 1 else hi = mid end
+    end
+    return i0, lo - 1
+end
+
 -- Two-part objects folded at load: a co-located top sprite riding a hull. top is
 -- matched by asset filename; hull by kind or asset; spin (deg/s) makes the top
 -- rotate on its own (radar dish), nil means the AI aims it (tank turret).
@@ -68,7 +102,14 @@ function World:init()
     self.entities    = {}    -- all Entity instances
     self.decals      = {}    -- Entity instances with kind == 15, y-sorted
     self.objects     = {}    -- all other Entity instances, y-sorted
+    self.decal_index  = nil  -- y lookup over decals (see build_y_index)
+    self.object_index = nil  -- y lookup over objects
     self.combatants  = {}    -- entities that can target and fire on the player
+    self.hittable    = {}    -- entities with a hit radius, in entity order
+    self.updaters    = {}    -- entities with hit points, a route or a turret, in entity order
+    self.awake       = {}    -- other entities while an effect plays on them (World:wake)
+    self.droppers    = {}    -- entities that may drop a power-up on death, in entity order
+    self.max_collision_radius = 0   -- largest solid collision radius, bounds World:blocked
     Entity.load_types("data/entity_types.json")
     self.weapon_overrides = {}   -- asset filename -> enemy weapon name
     local raw = love.filesystem.read("data/enemy_overrides.json")
@@ -315,6 +356,26 @@ function World:load(name)
     end
     table.sort(self.decals,  by_y)
     table.sort(self.objects, by_y)
+    self.decal_index  = build_y_index(self.decals)
+    self.object_index = build_y_index(self.objects)
+
+    -- Subsets for the per-tick scans. Entity:_start_death drops a power-up only
+    -- from drop_kind or crater_eligible entities, both fixed at load.
+    self.hittable, self.droppers, self.updaters, self.awake = {}, {}, {}, {}
+    self.max_collision_radius = 0
+    for _, e in ipairs(self.entities) do
+        local td = e.type_data
+        if td and (td.hit_radius or 0) > 0 then self.hittable[#self.hittable + 1] = e end
+        if e.drop_kind or e.crater_eligible then self.droppers[#self.droppers + 1] = e end
+        e.prop = not (e.max_hp > 0 or e.route_points or e.has_turret)
+        if not e.prop then self.updaters[#self.updaters + 1] = e end
+    end
+    for _, e in ipairs(self.objects) do
+        local td = e.type_data
+        if td and td.solid then
+            self.max_collision_radius = math.max(self.max_collision_radius, td.collision_radius or 8)
+        end
+    end
 
     self:_fit_wrap_period()
 end
@@ -481,24 +542,62 @@ function World:home_base()
     return e.x, e.y
 end
 
+local function blocks(world, e, x, y, radius, ignore)
+    if e == ignore or not e:is_alive() then return false end
+    local td = e.type_data
+    if not (td and td.solid) then return false end
+    local dx, dy = world:delta(e.x, e.y, x, y)
+    local rr = radius + (td.collision_radius or 8)
+    return dx * dx + dy * dy < rr * rr
+end
+
 -- True if a circle at (x, y) with the given radius overlaps a solid entity.
 -- Decals (roads, pads, ground specks) are never solid. Used for vehicle
 -- collision and to veto helicopter landings over obstacles.
 function World:blocked(x, y, radius, ignore)
-    for _, e in ipairs(self.objects) do
-        if e ~= ignore and e:is_alive() then
-            local td = e.type_data
-            if td and td.solid then
-                local cr = td.collision_radius or 8
-                local dx, dy = self:delta(e.x, e.y, x, y)
-                local rr = radius + cr
-                if dx * dx + dy * dy < rr * rr then
-                    return true, e
-                end
-            end
+    local objects = self.objects
+    local index   = self.object_index
+    local ys      = index.ys
+    local n       = #ys
+    if n == 0 then return false end
+
+    -- The first blocking object in list order, as a full scan would return. Each
+    -- wrapped copy of the query band maps to a disjoint, ascending index range.
+    local s     = self.stage.world_size
+    local reach = radius + self.max_collision_radius + 1
+    local best
+    for k = math.floor((ys[1] - y - reach) / s), math.ceil((ys[n] - y + reach) / s) do
+        local i0, i1 = y_span(ys, y + k * s - reach, y + k * s + reach)
+        for i = i0, i1 do
+            local e = objects[i]
+            if not e.mobile and blocks(self, e, x, y, radius, ignore) then best = i; break end
         end
+        if best then break end
     end
+    for _, i in ipairs(index.movers) do
+        if best and i > best then break end
+        if blocks(self, objects[i], x, y, radius, ignore) then best = i; break end
+    end
+    if best then return true, objects[best] end
     return false
+end
+
+-- Call fn(ctx, e, a, b) in list order for every entry of list (decals or
+-- objects, with their index) that may lie within y [y0, y1]: the static entries
+-- whose load-time y does, plus every mobile entry. fn does its own exact test.
+function World.each_in_y(list, index, y0, y1, fn, ctx, a, b)
+    local movers = index.movers
+    local m, nm  = 1, #movers
+    local i0, i1 = y_span(index.ys, y0, y1)
+    for i = i0, i1 do
+        while m <= nm and movers[m] < i do
+            fn(ctx, list[movers[m]], a, b)
+            m = m + 1
+        end
+        local e = list[i]
+        if not e.mobile then fn(ctx, e, a, b) end
+    end
+    for k = m, nm do fn(ctx, list[movers[k]], a, b) end
 end
 
 -- EXTRA (explosive_trees): a tank driving into a tree pops it in a small blast
@@ -560,10 +659,35 @@ function World:add_ground_dust(x, y)
     self.ground_fx[#self.ground_fx + 1] = { anim = anim, x = x, y = y }
 end
 
+-- A prop (no hit points, route or turret) has nothing to update until an
+-- explosion, animation, hit smoke or corpse slide starts on it; Entity calls
+-- this then. An
+-- entity update only touches its own state and a prop draws no random numbers,
+-- so updating props after the updaters matches a full pass in entity order.
+function World:wake(e)
+    if e.prop and not e.awake then
+        e.awake = true
+        self.awake[#self.awake + 1] = e
+    end
+end
+
 function World:update(dt)
     self.time = self.time + dt
-    for _, e in ipairs(self.entities) do
+    for _, e in ipairs(self.updaters) do
         e:update(dt)
+    end
+    if self.awake[1] then
+        local still = {}
+        for _, e in ipairs(self.awake) do
+            e:update(dt)
+            if e.state == "exploding" or e.state == "animating" or e._hit_smokes[1]
+            or (e._death_push and e._death_t < 1) then
+                still[#still + 1] = e
+            else
+                e.awake = nil
+            end
+        end
+        self.awake = still
     end
 
     -- Shrapnel flies on, decelerating; when a piece's life ends it kicks up dust.

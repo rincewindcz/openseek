@@ -443,8 +443,8 @@ end
 function CombatSystem:_nearest_enemy(x, y, range)
     local best, best_d2
     local r2 = range and range * range or nil
-    for _, e in ipairs(self.world.entities) do
-        if e:is_alive() and not e.hide_shielded and e.type_data and (e.type_data.hit_radius or 0) > 0 then
+    for _, e in ipairs(self.world.hittable) do
+        if e:is_alive() and not e.hide_shielded then
             local dx, dy = self.world:delta(e.x, e.y, x, y)
             local d2 = dx * dx + dy * dy
             if (not r2 or d2 <= r2) and (not best_d2 or d2 < best_d2) then
@@ -501,8 +501,8 @@ function CombatSystem:player_lock_target(x, y, facing_deg, range, kind)
     if kind == "air" then return self:_lock_air(x, y, facing_deg, range) end
     local best, best_pri, best_d2
     local r2 = range and range * range or nil
-    for _, e in ipairs(self.world.entities) do
-        if e:is_alive() and not e.hide_shielded and e.type_data and (e.type_data.hit_radius or 0) > 0 then
+    for _, e in ipairs(self.world.hittable) do
+        if e:is_alive() and not e.hide_shielded then
             local dx, dy = self.world:delta(e.x, e.y, x, y)
             local d2 = dx * dx + dy * dy
             if not r2 or d2 <= r2 then
@@ -695,8 +695,8 @@ function CombatSystem:_update_effects(dt)
             if effect.damage and not effect.hit then
                 effect.hit = true
                 local r2 = (effect.radius or 0) ^ 2
-                for _, e in ipairs(self.world.entities) do
-                    if e:is_alive() and not e.hide_shielded and (e.type_data and (e.type_data.hit_radius or 0) > 0) then
+                for _, e in ipairs(self.world.hittable) do
+                    if e:is_alive() and not e.hide_shielded then
                         local dx, dy = self.world:delta(e.x, e.y, effect.x, effect.y)
                         if dx * dx + dy * dy < r2 then
                             e:on_hit()
@@ -747,8 +747,8 @@ local CRUSH_RADIUS = 12
 function CombatSystem:crush_units(p)
     if not (p and p.vehicle == "tank") then return end
     if math.abs(p.speed or 0) < 5 then return end
-    for _, e in ipairs(self.world.entities) do
-        if e:is_alive() and e.type_data and e.type_data.sprite == "soldier" then
+    for _, e in ipairs(self.world.hittable) do
+        if e:is_alive() and e.type_data.sprite == "soldier" then
             local dx, dy = self.world:delta(e.x, e.y, p.x, p.y)
             local rr     = CRUSH_RADIUS + (e.type_data.hit_radius or 0)
             if dx * dx + dy * dy < rr * rr then
@@ -777,23 +777,21 @@ function CombatSystem:_check_hit(projectile)
         -- helicopters. Unguided weapons (no target_kind) hit anything.
         local tk = projectile.weapon_def.target_kind
         if tk ~= "air" then
-        for _, e in ipairs(self.world.entities) do
+        for _, e in ipairs(self.world.hittable) do
             if e:is_alive() and not e.hide_shielded then
-                local hit_radius = e.type_data and e.type_data.hit_radius or 0
-                if hit_radius > 0 then
-                    local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
-                    if dx * dx + dy * dy < (projectile.radius + hit_radius) ^ 2 then
-                        e:on_hit(self:_hit_clip(projectile.weapon_def))
-                        local killed = e:take_damage(projectile.damage, projectile.vx, projectile.vy)
-                        -- A round that carries no burst of its own still cracks off
-                        -- the target it did not kill; a kill has its own explosion.
-                        if e:is_alive() and (projectile.weapon_def.explosion or "explosion_none") == "explosion_none" then
-                            self.world:sound("impact.ricochet", projectile.x, projectile.y)
-                        end
-                        if projectile.aoe > 0 then self:_apply_aoe(projectile) end
-                        if killed then self:_credit_kill(projectile.shooter, e, killed) end
-                        return true
+                local hit_radius = e.type_data.hit_radius
+                local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
+                if dx * dx + dy * dy < (projectile.radius + hit_radius) ^ 2 then
+                    e:on_hit(self:_hit_clip(projectile.weapon_def))
+                    local killed = e:take_damage(projectile.damage, projectile.vx, projectile.vy)
+                    -- A round that carries no burst of its own still cracks off
+                    -- the target it did not kill; a kill has its own explosion.
+                    if e:is_alive() and (projectile.weapon_def.explosion or "explosion_none") == "explosion_none" then
+                        self.world:sound("impact.ricochet", projectile.x, projectile.y)
                     end
+                    if projectile.aoe > 0 then self:_apply_aoe(projectile) end
+                    if killed then self:_credit_kill(projectile.shooter, e, killed) end
+                    return true
                 end
             end
         end
@@ -876,8 +874,8 @@ function CombatSystem:_bomb_detonate(projectile)
     self.world:spawn_debris(projectile.x, projectile.y, 5 + self.world.rng:random(0, 3), 1.4)
     local r  = projectile.aoe > 0 and projectile.aoe or 80
     local r2 = r * r
-    for _, e in ipairs(self.world.entities) do
-        if e:is_alive() and not e.hide_shielded and e.type_data and (e.type_data.hit_radius or 0) > 0 then
+    for _, e in ipairs(self.world.hittable) do
+        if e:is_alive() and not e.hide_shielded then
             local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
             if dx * dx + dy * dy < r2 then
                 e:on_hit()

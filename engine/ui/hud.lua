@@ -46,6 +46,8 @@ function Hud:init()
     -- Rolling score readouts, one entry per player seen (weak keys: a player from
     -- a finished phase drops out on its own). Presentation only.
     self._score_roll = setmetatable({}, { __mode = "k" })
+    self._radar_source = nil   -- world entity list the radar list was built from
+    self._radar_list   = {}
 end
 
 -- Ease the score readouts toward their players' real scores. Driven from
@@ -496,6 +498,22 @@ end
 
 -- radar
 
+-- The entities that can show on the radar, rebuilt when a stage load replaces the
+-- world's entity list: most of a stage is scenery that never shows.
+function Hud:_radar_entities()
+    local entities = self.world.entities
+    if self._radar_source ~= entities then
+        local classes = self.world.stage.classes
+        local list = {}
+        for _, e in ipairs(entities) do
+            local kind = classes[e.class_idx + 1].kind_name
+            if e.objective or RADAR_ENEMY[kind] or RADAR_BUILDING[kind] then list[#list + 1] = e end
+        end
+        self._radar_source, self._radar_list = entities, list
+    end
+    return self._radar_list
+end
+
 function Hud:_draw_radar(g, item, x, y, s)
     local p     = self.player
     local r     = (item.radius or 88) * s
@@ -543,16 +561,15 @@ function Hud:_draw_radar(g, item, x, y, s)
         local ry = dx * sin_pa + dy * cos_pa
         if rx * rx + ry * ry <= r * r then bucket[#bucket + 1] = { rx, ry } end
     end
-    for _, e in ipairs(self.world.entities) do
+    for _, e in ipairs(self:_radar_entities()) do
         if e:is_alive() then
-            local cls  = classes[e.class_idx + 1]
-            local kind = cls.kind_name
+            local kind = classes[e.class_idx + 1].kind_name
             local bucket
             if     e.objective          then bucket = objectives
             elseif RADAR_ENEMY[kind]    then bucket = enemies
-            elseif RADAR_BUILDING[kind] then bucket = buildings
+            else                             bucket = buildings
             end
-            if bucket then plot(bucket, e.x, e.y) end
+            plot(bucket, e.x, e.y)
         end
     end
 

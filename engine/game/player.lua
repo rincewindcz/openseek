@@ -415,8 +415,8 @@ local BLAST_DAMAGE = 140   -- damage dealt to nearby entities by that explosion
 function Player:_death_blast()
     if not self.world then return end
     local r2 = BLAST_RADIUS * BLAST_RADIUS
-    for _, e in ipairs(self.world.entities) do
-        if e:is_alive() and e.type_data and (e.type_data.hit_radius or 0) > 0 then
+    for _, e in ipairs(self.world.hittable) do
+        if e:is_alive() then
             local dx, dy = self.world:delta(e.x, e.y, self.x, self.y)
             if dx * dx + dy * dy < r2 then
                 e:take_damage(BLAST_DAMAGE, dx, dy)

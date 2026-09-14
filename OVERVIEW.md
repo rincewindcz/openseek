@@ -190,6 +190,23 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   coordinates, culled by range or ttl.
 - Mission 0 phases 0-2 inset content ~48 px; `World:_fit_wrap_period` shrinks
   `world_size` to the content width.
+- Stages hold 4500-8200 entities, mostly static props. Per-tick scans use
+  subsets built in `World:load` instead of `world.entities`:
+  - `world.hittable`: entities with `hit_radius > 0`. Projectile hits, blasts,
+    lock-on, crush, player death blast.
+  - `world.droppers`: entities with `drop_kind` or `crater_eligible`. Power-up drops.
+  - `world.decal_index` / `world.object_index`: load-time y of the y-sorted
+    `decals` / `objects`. `World.each_in_y` (renderer passes, craters) and
+    `World:blocked` binary-search it and check `mobile` entities (patrol and
+    hangar tanks) separately, in list order.
+  - `world.updaters`: entities with hit points, a route or a turret. Other
+    entities (`prop`) join `world.awake` through `World:wake` when an explosion,
+    animation, hit smoke or corpse slide starts on them, and leave when it ends.
+    `World:update` runs updaters, then awake props. Exact because an entity
+    update touches only its own state and props draw no random numbers.
+  - Adding entities or moving a non-`mobile` entity after load requires
+    rebuilding these.
+- The HUD radar caches its entity subset per entity list.
 - The renderer draws ground (dust, decals, segments, craters), then objects.
   Tank and landed chopper draw between passes; airborne chopper above objects and
   enemy flyers.

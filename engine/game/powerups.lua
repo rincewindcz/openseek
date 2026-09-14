@@ -81,7 +81,7 @@ end
 function Powerups:update(dt)
     -- Spawn from freshly destroyed buildings. drop_powerup is true (random) or a
     -- kind name string (forced drop, e.g. bunker -> medal).
-    for _, e in ipairs(self.world.entities) do
+    for _, e in ipairs(self.world.droppers) do
         if e.drop_powerup then
             local forced = e.drop_powerup
             e.drop_powerup = false

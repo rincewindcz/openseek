@@ -1,5 +1,6 @@
 local Class     = require "engine.core.class"
 local Animation = require "engine.core.animation"
+local World     = require "engine.game.world"
 
 local Renderer = Class()
 
@@ -137,7 +138,7 @@ function Renderer:_draw_ground_layers(vp)
     -- Lowest layer: dust kicked up where shrapnel landed, under decals and trees.
     self:_draw_ground_fx(vp)
 
-    self:_draw_entities(w.decals, vp)
+    self:_draw_entities(w.decals, w.decal_index, vp)
 
     if self.show_segments then
         g.setLineStyle("rough")
@@ -156,7 +157,7 @@ function Renderer:_draw_object_layers(vp, mode)
     local g = love.graphics
     local w = self.world
 
-    self:_draw_entities(w.objects, vp, mode)
+    self:_draw_entities(w.objects, w.object_index, vp, mode)
     if mode == "under" then return end   -- objectives/grid ride with the "over" pass
     self:_draw_objectives(vp)
 
@@ -180,103 +181,102 @@ local function is_occluder(e)
 end
 
 -- mode (optional) filters against the ground-vehicle split: "under" draws only
--- non-occluders, "over" only occluders, nil draws all.
-function Renderer:_draw_entities(list, vp, mode)
-    local g       = love.graphics
-    local images  = self.world.images
-    local classes = self.world.stage.classes
-    local hidden  = self.hidden_kinds
-    g.setColor(1, 1, 1)
-    for _, e in ipairs(list) do
-        local cls = classes[e.class_idx + 1]
-        local in_vp = e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1
-        if mode == "under" and is_occluder(e) then in_vp = false end
-        if mode == "over" and not is_occluder(e) then in_vp = false end
-        -- Cull off-screen entities, kinds the editor hid, and emptied POW building
-        -- markers (rescue_hidden) before drawing.
-        if in_vp and not hidden[cls.kind_name] and not e.rescue_hidden and not e.sabotage_hidden then
-            if e.type_data and e.type_data.sprite then
-                -- Units with explicit alive/dead sprites (soldiers) draw
-                -- axis-aligned and persist as a corpse once dead.
-                self:_draw_unit(e)
-            elseif e:is_alive() then
-                local r = images[e.class_idx + 1]
-                if r then
-                    -- Two-part tanks keep a fixed hull (turret does the aiming) unless they
-                    -- patrol, in which case the hull faces its travel heading; a hangar tank
-                    -- faces its fixed ride axis; everything else rotates its sprite to face.
-                    local rot
-                    if e.hide_angle then
-                        rot = e.hide_angle * math.pi / 180
-                    elseif e.turret_render and not e.route_points then
-                        rot = 0
-                    else
-                        rot = e:draw_angle_rad(cls.angle_steps)
-                    end
-                    g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
-                    if e == self.highlight then
-                        self:_glow(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
-                    end
-                else
-                    g.setColor(1, 0, 1)
-                    g.circle("fill", e.x, e.y, 3)
-                    g.setColor(1, 1, 1)
-                end
+-- non-occluders, "over" only occluders, nil draws all. index is the list's
+-- World y lookup; only entries near the viewport band are visited.
+function Renderer:_draw_entities(list, index, vp, mode)
+    love.graphics.setColor(1, 1, 1)
+    World.each_in_y(list, index, vp.y0, vp.y1, self._draw_entity, self, vp, mode)
+end
 
-                -- Two-part enemy tank: the turret spins on the fixed hull from aim_angle;
-                -- its destruction explosion plays over the hull until the hull itself dies.
-                if e.turret_render then
-                    if e.turret_alive then
-                        local tr  = e.turret_render
-                        local rot = e.aim_angle * math.pi / 180
-                        g.draw(tr.img, e.x, e.y, rot, 1, 1, tr.ax, tr.ay)
-                    end
-                    if e.turret_fx then
-                        local img = e.turret_fx:current_image()
-                        if img then
-                            local iw, ih = img:getDimensions()
-                            g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
-                        end
-                    end
-                end
-                -- overlay animation (non-destructive: hit flash, etc.)
-                if e.state == "animating" and e.anim then
-                    local img = e.anim:current_image()
-                    if img then
-                        local iw, ih = img:getDimensions()
-                        g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
-                    end
-                end
-
-                -- Damage smoke emitters (persistent, threshold-based)
-                for _, se in ipairs(e._damage_smokes) do
-                    local img = se.anim:current_image()
-                    if img then
-                        local iw, ih = img:getDimensions()
-                        g.setColor(1, 1, 1, 0.85)
-                        g.draw(img, e.x + se.ox, e.y + se.oy, 0, 1, 1, iw / 2, ih / 2)
-                        g.setColor(1, 1, 1)
-                    end
-                end
-
-                -- One-shot hit smokes (SMOKE2)
-                for _, hs in ipairs(e._hit_smokes) do
-                    local img = hs.anim:current_image()
-                    if img then
-                        local iw, ih = img:getDimensions()
-                        g.draw(img, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, iw / 2, ih / 2)
-                    end
-                end
+function Renderer:_draw_entity(e, vp, mode)
+    if e.x < vp.x0 or e.x > vp.x1 or e.y < vp.y0 or e.y > vp.y1 then return end
+    if mode == "under" and is_occluder(e) then return end
+    if mode == "over" and not is_occluder(e) then return end
+    local cls = self.world.stage.classes[e.class_idx + 1]
+    -- Skip kinds the editor hid and emptied POW building markers (rescue_hidden).
+    if self.hidden_kinds[cls.kind_name] or e.rescue_hidden or e.sabotage_hidden then return end
+    local g      = love.graphics
+    local images = self.world.images
+    if e.type_data and e.type_data.sprite then
+        -- Units with explicit alive/dead sprites (soldiers) draw
+        -- axis-aligned and persist as a corpse once dead.
+        self:_draw_unit(e)
+    elseif e:is_alive() then
+        local r = images[e.class_idx + 1]
+        if r then
+            -- Two-part tanks keep a fixed hull (turret does the aiming) unless they
+            -- patrol, in which case the hull faces its travel heading; a hangar tank
+            -- faces its fixed ride axis; everything else rotates its sprite to face.
+            local rot
+            if e.hide_angle then
+                rot = e.hide_angle * math.pi / 180
+            elseif e.turret_render and not e.route_points then
+                rot = 0
             else
-                -- Not alive: the persistent crater is drawn earlier (see _draw_craters)
-                -- so it stays at the bottom of the stack, under every entity.
-                if e.state == "exploding" and e.anim then
-                    local img = e.anim:current_image()
-                    if img then
-                        local iw, ih = img:getDimensions()
-                        g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
-                    end
+                rot = e:draw_angle_rad(cls.angle_steps)
+            end
+            g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+            if e == self.highlight then
+                self:_glow(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+            end
+        else
+            g.setColor(1, 0, 1)
+            g.circle("fill", e.x, e.y, 3)
+            g.setColor(1, 1, 1)
+        end
+
+        -- Two-part enemy tank: the turret spins on the fixed hull from aim_angle;
+        -- its destruction explosion plays over the hull until the hull itself dies.
+        if e.turret_render then
+            if e.turret_alive then
+                local tr  = e.turret_render
+                local rot = e.aim_angle * math.pi / 180
+                g.draw(tr.img, e.x, e.y, rot, 1, 1, tr.ax, tr.ay)
+            end
+            if e.turret_fx then
+                local img = e.turret_fx:current_image()
+                if img then
+                    local iw, ih = img:getDimensions()
+                    g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
                 end
+            end
+        end
+        -- overlay animation (non-destructive: hit flash, etc.)
+        if e.state == "animating" and e.anim then
+            local img = e.anim:current_image()
+            if img then
+                local iw, ih = img:getDimensions()
+                g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
+            end
+        end
+
+        -- Damage smoke emitters (persistent, threshold-based)
+        for _, se in ipairs(e._damage_smokes) do
+            local img = se.anim:current_image()
+            if img then
+                local iw, ih = img:getDimensions()
+                g.setColor(1, 1, 1, 0.85)
+                g.draw(img, e.x + se.ox, e.y + se.oy, 0, 1, 1, iw / 2, ih / 2)
+                g.setColor(1, 1, 1)
+            end
+        end
+
+        -- One-shot hit smokes (SMOKE2)
+        for _, hs in ipairs(e._hit_smokes) do
+            local img = hs.anim:current_image()
+            if img then
+                local iw, ih = img:getDimensions()
+                g.draw(img, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, iw / 2, ih / 2)
+            end
+        end
+    else
+        -- Not alive: the persistent crater is drawn earlier (see _draw_craters)
+        -- so it stays at the bottom of the stack, under every entity.
+        if e.state == "exploding" and e.anim then
+            local img = e.anim:current_image()
+            if img then
+                local iw, ih = img:getDimensions()
+                g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
             end
         end
     end
@@ -286,14 +286,16 @@ end
 -- under every object (before the object pass) instead of at the building's own
 -- y-position, keeping tanks and other entities on top of it.
 function Renderer:_draw_craters(vp)
-    local g = love.graphics
-    g.setColor(1, 1, 1)
-    for _, e in ipairs(self.world.objects) do
-        if e.crater_img and not e:is_alive()
-        and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
-            local iw, ih = e.crater_img:getDimensions()
-            g.draw(e.crater_img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
-        end
+    local w = self.world
+    love.graphics.setColor(1, 1, 1)
+    World.each_in_y(w.objects, w.object_index, vp.y0, vp.y1, self._draw_crater, self, vp)
+end
+
+function Renderer:_draw_crater(e, vp)
+    if e.crater_img and not e:is_alive()
+    and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
+        local iw, ih = e.crater_img:getDimensions()
+        love.graphics.draw(e.crater_img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
     end
 end
 
