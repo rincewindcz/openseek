@@ -4,6 +4,9 @@ openSEEK is an open-source recreation of the game Seek & Destroy originally deve
 
 The engine is built using Lua and the Love2D framework and it's not a direct copy of the original game, but rather a reimagined version that captures the essence of Seek & Destroy while introducing new features and improvements. 
 
+> [!IMPORTANT]
+> openSEEK source code is licensed under the MIT License. You are free to use, modify, and distribute it as you wish.
+
 # Notable features of openSEEK include:
 * support for arbitrary screen resolutions and aspect ratios
 * customizable controls and input methods
