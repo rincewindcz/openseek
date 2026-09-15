@@ -10,3 +10,5 @@ build/
 *.EXE
 *.JAL
 *.JAM
+/screenshots/*
+!/screenshots/seek_*.png

@@ -1,8 +1,8 @@
 local json = require "lib.json"
 
--- Central rebindable key map for the single-player gameplay actions. Each action
--- maps to a list of keys; any of them held (or pressed) triggers it, so the stock
--- defaults keep both the WASD and arrow bindings. The advanced options CONTROLS
+-- Central rebindable key map for the single-player gameplay actions and global
+-- shortcuts (screenshot). Each action maps to a list of keys; any of them held (or
+-- pressed) triggers it, so the stock defaults keep both the WASD and arrow bindings. The advanced options CONTROLS
 -- page edits this live; it is persisted to the save directory. Co-op keeps its own
 -- per-player key sets (engine/scenes/coop_gameplay.lua) and does not use this map.
 local Input = {}
@@ -13,28 +13,30 @@ local SAVE_PATH = "data/keybinds.json"
 -- from the player's controls table, which the gameplay scene points here); the
 -- rest are matched against keypressed events in the gameplay scene.
 local DEFAULTS = {
-    up       = { "w", "up" },
-    down     = { "s", "down" },
-    left     = { "a", "left" },
-    right    = { "d", "right" },
-    modifier = { "lshift", "rshift" },
-    fire     = { "lctrl", "rctrl" },
-    takeoff  = { "space", "f" },
-    weapon   = { "q" },
-    pause    = { "p" },
+    up         = { "w", "up" },
+    down       = { "s", "down" },
+    left       = { "a", "left" },
+    right      = { "d", "right" },
+    modifier   = { "lshift", "rshift" },
+    fire       = { "lctrl", "rctrl" },
+    takeoff    = { "space", "f" },
+    weapon     = { "q" },
+    pause      = { "p" },
+    screenshot = { "f12" },
 }
 
 -- Display order and labels for the CONTROLS page.
 Input.ACTIONS = {
-    { key = "up",       label = "MOVE UP" },
-    { key = "down",     label = "MOVE DOWN" },
-    { key = "left",     label = "TURN LEFT" },
-    { key = "right",    label = "TURN RIGHT" },
-    { key = "modifier", label = "STRAFE/TURRET" },
-    { key = "fire",     label = "FIRE" },
-    { key = "takeoff",  label = "TAKEOFF/LAND" },
-    { key = "weapon",   label = "CYCLE WEAPON" },
-    { key = "pause",    label = "PAUSE" },
+    { key = "up",         label = "MOVE UP" },
+    { key = "down",       label = "MOVE DOWN" },
+    { key = "left",       label = "TURN LEFT" },
+    { key = "right",      label = "TURN RIGHT" },
+    { key = "modifier",   label = "STRAFE/TURRET" },
+    { key = "fire",       label = "FIRE" },
+    { key = "takeoff",    label = "TAKEOFF/LAND" },
+    { key = "weapon",     label = "CYCLE WEAPON" },
+    { key = "pause",      label = "PAUSE" },
+    { key = "screenshot", label = "SCREENSHOT" },
 }
 
 Input.map = {}

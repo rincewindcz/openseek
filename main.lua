@@ -14,6 +14,7 @@ local LightFX         = require "engine.game.lightfx"
 local PostFX          = require "engine.game.postfx"
 local Config          = require "engine.core.config"
 local Input           = require "engine.core.input"
+local Screenshot      = require "engine.core.screenshot"
 local Display         = require "engine.core.display"
 local Mission         = require "engine.game.mission"
 local Score           = require "engine.game.score"
@@ -288,6 +289,11 @@ function love.draw()
 end
 
 function love.keypressed(key)
+    local top = app.scenes:top()
+    if Input.pressed("screenshot", key) and not (top and top:captures_keys()) then
+        Screenshot.capture()
+        return
+    end
     -- A fullscreen overlay (title / briefing / crash picture) swallows input.
     -- Esc cancels it (the shower's on_cancel decides where that goes); a
     -- wait_key picture otherwise advances on any key.

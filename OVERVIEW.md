@@ -10,7 +10,7 @@ decoded from the user's own copy of the game and are never distributed.
 |------|----------|
 | `main.lua` | Entry point: game data check, shared `app` context, scene registration, `love.*` callbacks. |
 | `conf.lua` | Window configuration. |
-| `engine/core/` | No game knowledge: class, config, input, rng, display, camera, animation, audio, font, screen, scenes, assets, mathx. |
+| `engine/core/` | No game knowledge: class, config, input, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, mathx. |
 | `engine/game/` | Simulation and gameplay presentation systems. |
 | `engine/ui/` | Screens and widgets. |
 | `engine/scenes/` | One scene per top-level mode. |
@@ -20,6 +20,7 @@ decoded from the user's own copy of the game and are never distributed.
 | `content/` | Original artwork shipped with the engine. |
 | `assets/` | Game data pack decoded from the original files. Not tracked. |
 | `tools/` | Python decoders and exporters for the `assets/` pack. |
+| `screenshots/` | F12 captures (`seek-<timestamp>.png`), ignored except the `seek_*.png` README images. Fused, web and mobile builds write to `screenshots/` in the save directory. |
 
 ## 2. Game data
 
@@ -427,6 +428,7 @@ Requires Python 3, `pillow`, `numpy`. Game directory via `--game-dir`.
 | F6 | Pickup mode fly-over / land-on |
 | F7 | Co-op setup |
 | F8 / F9 / F10 | Animation / font / sound gallery |
+| F12 | Screenshot (rebindable) |
 | Overview: wheel, +/- | Zoom |
 | Overview: Tab, PgUp/PgDn | Stage picker / cycle |
 | Overview: L, G | Segment lines, 256 px grid |

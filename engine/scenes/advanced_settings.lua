@@ -202,6 +202,10 @@ function AdvancedSettings:_activate(dir)
     end
 end
 
+function AdvancedSettings:captures_keys()
+    return self.capturing ~= nil
+end
+
 function AdvancedSettings:keypressed(key)
     if self.capturing then
         if key ~= "escape" then Input.rebind(self.capturing, key) end
