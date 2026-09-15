@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- Window screenshots as PNG. Running from a source directory they go to
 -- <source>/screenshots/; fused, web and mobile builds (or a missing folder) fall
 -- back to screenshots/ in the save directory.

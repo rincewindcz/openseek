@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- Scoring rules, ported from the original. Points arrive in
 -- two streams: every destroyed entity is worth its class hit_points the moment it
 -- dies, and a completed phase credits a weighted tally of what was destroyed and

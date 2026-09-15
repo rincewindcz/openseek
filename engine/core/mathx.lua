@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- Math helpers shared across the engine.
 local Mathx = {}
 

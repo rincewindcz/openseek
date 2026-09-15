@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 local Class = require "engine.core.class"
 
 -- Seeded random number generator for the simulation. Everything the simulation

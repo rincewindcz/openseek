@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 local Replay     = require "engine.game.replay"
 local InputFrame = require "engine.core.input_frame"
 

@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 local Class = require "engine.core.class"
 
 -- Weather overlay: a fixed-density field of pixel particles (snow on the winter

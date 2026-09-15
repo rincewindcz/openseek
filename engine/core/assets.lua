@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- Asset path resolution across the engine's two asset roots.
 --
 --   content/...       engine-owned artwork, tracked in git and shipped with the

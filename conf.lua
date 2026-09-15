@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 function love.conf(t)
     t.identity = "openseek"   -- save directory for persisted high scores
     t.window.title = "openSEEK - Seek & Destroy"

@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 local Class  = require "engine.core.class"
 local Assets = require "engine.core.assets"
 local Config = require "engine.core.config"

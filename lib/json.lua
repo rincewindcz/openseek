@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- Minimal JSON decoder (decode only), sufficient for the stage exports:
 -- objects, arrays, strings without exotic escapes, numbers, booleans, null.
 

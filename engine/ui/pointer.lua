@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- Shared mouse/touch pointer for the non-game screens (main menu, mission menu,
 -- and any other letterboxed UI). Draws the original SELPOINT cursor at the OS
 -- pointer, and converts window pixels into the fixed 320x240 design space so the

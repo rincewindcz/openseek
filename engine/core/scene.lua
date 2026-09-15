@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 local Class = require "engine.core.class"
 
 -- Base class for scenes managed by engine/core/scene_manager.lua. Every hook

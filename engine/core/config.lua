@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- Optional compatibility / gameplay tuning shared across systems. The advanced
 -- settings page edits a subset of these (see PERSISTED); the F2 debug overlay
 -- toggles others live for testing.

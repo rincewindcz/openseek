@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- Vehicle catalogue shared by the scenes: the per-vehicle weapon cycles and
 -- the picker that cycles chopper skin 1 -> 2 -> 3 then tank and back.
 local Vehicles = {}

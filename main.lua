@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 local World           = require "engine.game.world"
 local Camera          = require "engine.core.camera"
 local Renderer        = require "engine.game.renderer"
@@ -90,7 +93,18 @@ local function show_missing_data()
     end
 end
 
+local BANNER = [[
+                                         __                          _
+  ____  ____  ___  ____  ________  ___  / /__      ___  ____  ____ _(_)___  ___
+ / __ \/ __ \/ _ \/ __ \/ ___/ _ \/ _ \/ //_/_____/ _ \/ __ \/ __ `/ / __ \/ _ \
+/ /_/ / /_/ /  __/ / / (__  )  __/  __/ ,< /_____/  __/ / / / /_/ / / / / /  __/
+\____/ .___/\___/_/ /_/____/\___/\___/_/|_|      \___/_/ /_/\__, /_/_/ /_/\___/
+    /_/                                                    /____/
+openSEEK game engine; released under MIT license
+                                              Copyright (c) 2026 Michal Genserek]]
+
 function love.load(args)
+    print(BANNER)
     print(("openSEEK starting (LOVE %s, %s)"):format(love.getVersion and select(4, love.getVersion()) or "?", _VERSION))
     love.graphics.setDefaultFilter("nearest", "nearest")
     Config.load()   -- overlay persisted advanced settings onto the defaults

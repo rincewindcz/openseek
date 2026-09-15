@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 local json = require "lib.json"
 
 -- Central rebindable key map for the single-player gameplay actions and global

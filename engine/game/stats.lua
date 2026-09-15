@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- DESTRUCTION STATS categories and stage-wide destructible tallies, shared by
 -- the end-of-phase screen (main.lua) and kill crediting (combat.lua).
 --

@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- One tick's input for one player: the held-action bitmask, the edge actions
 -- that fired during the tick, and an optional analog turn. This is the only way input reaches the simulation,
 -- and it is the same value a keyboard, a replay file and (later) a network peer

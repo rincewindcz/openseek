@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 -- Shared design space and letterbox transform for the non-game UI screens.
 -- Menus lay out in the original 320x240 screen space and scale to the window.
 local Layout = {}

@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Michal Genserek
+
 local Class      = require "engine.core.class"
 local Animation  = require "engine.core.animation"
 local InputFrame = require "engine.core.input_frame"
