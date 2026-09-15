@@ -5,7 +5,6 @@ local InputFrame = require "engine.core.input_frame"
 -- source per player slot and asks each for the current tick's frame; the
 -- simulation never touches the keyboard itself. Swapping the source is what turns
 -- live play into playback, and is where a network peer will plug in.
--- See DETERMINISM.md.
 local InputSource = {}
 
 -- Live keyboard. bindings maps an action to a key name or a list of key names

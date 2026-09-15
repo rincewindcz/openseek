@@ -5,7 +5,7 @@ local Replay = require "engine.game.replay"
 -- Replay browser (F4 from the overview): the testing interface for recorded runs.
 -- Lists the recordings in the save directory, plays one back at normal speed, or
 -- verifies one at speed by comparing its state checksums and reporting the first
--- tick that disagrees. See DETERMINISM.md.
+-- tick that disagrees.
 local Replays = Class(Scene)
 
 local ROW_H = 18

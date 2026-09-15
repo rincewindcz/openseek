@@ -8,7 +8,7 @@ palette of the STAGE0{M}/ directory.
 
 Rotation-arc frames are pre-rotated copies, one rotation step apart, with
 frame 0 the exact axis-aligned pose (it lives at offset H; the +4 table
-holds frames 1..n, so a container has n+1 frames - see ARTICLE_8.md). An
+holds frames 1..n, so a container has n+1 frames). An
 entity carries no angle, so its canonical pose is simply the class's
 frame_base, drawn as-is with no rotation. Orientation variants of one asset
 (road pieces, rocks) are separate classes pointing at different frame_base

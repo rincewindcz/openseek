@@ -53,7 +53,7 @@ end
 
 -- Ease the score readouts toward their players' real scores. Driven from
 -- love.update on frame time, not on simulation ticks: this is presentation and
--- must never feed back into the run (see DETERMINISM.md).
+-- must never feed back into the run.
 function Hud:update(dt)
     if not Config.score_count_up then return end
     for p, roll in pairs(self._score_roll) do

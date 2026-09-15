@@ -1,7 +1,7 @@
 -- DESTRUCTION STATS categories and stage-wide destructible tallies, shared by
 -- the end-of-phase screen (main.lua) and kill crediting (combat.lua).
 --
--- The categories follow the original's death-handler dispatch (research/SCORE.md):
+-- The categories follow the original's death-handler dispatch:
 -- ground forces are tanks, turrets and infantry; buildings are flagged
 -- structures and trucks. The kind-16 radar is the spinning dish sub-entity and
 -- counts for nothing (the 150-point radar.bin is a kind-1 structure).

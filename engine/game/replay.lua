@@ -4,7 +4,7 @@ local InputFrame = require "engine.core.input_frame"
 -- Recorded run: the header describing the starting conditions, the per-tick input
 -- frames, and periodic state checksums. Input only, no state snapshots, so a file
 -- is small and is exactly what a network peer would have to exchange for lockstep
--- play. See DETERMINISM.md.
+-- play.
 --
 -- File format (text, one record per line):
 --

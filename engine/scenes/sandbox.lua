@@ -7,7 +7,7 @@ local Gameplay = require "engine.scenes.gameplay"
 local Sandbox = Class(Gameplay)
 
 -- Live parameter editing changes the simulation outside the input frame, so a
--- sandbox run is not reproducible and is never recorded (see DETERMINISM.md).
+-- sandbox run is not reproducible and is never recorded.
 Sandbox.no_record = true
 
 local PARAMS = {

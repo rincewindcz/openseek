@@ -84,7 +84,7 @@ local Config = {
     show_fps    = false,
 
     -- EXTRA features: additions absent from the original game, each toggleable so
-    -- the classic behavior can be restored. See EXTRA.md. explosive_trees lets the
+    -- the classic behavior can be restored. See OVERVIEW.md. explosive_trees lets the
     -- tank bulldoze through trees (small blast, tiny armor cost) instead of getting
     -- stuck on them; tree_crush_speed is the fraction of top speed the tank must be
     -- moving at for that to happen (slower than this and the tree still blocks).

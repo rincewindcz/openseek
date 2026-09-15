@@ -214,7 +214,7 @@ local OVERKILL_KILLS  = 3
 local OVERKILL_SHOW   = 1.5
 
 -- The simulation clock (accumulated fixed ticks), never the wall clock: streak
--- timing is player state and has to replay identically. See DETERMINISM.md.
+-- timing is player state and has to replay identically.
 function Player:_now()
     return (self.world and self.world.time) or 0
 end
@@ -639,7 +639,7 @@ end
 -- True if the action is held in this tick's input frame. The frame is set by the
 -- gameplay scene from the player's input source (keyboard, replay, later a
 -- network peer); the player never reads the keyboard itself, so a run driven by
--- recorded frames behaves exactly like the live one. See DETERMINISM.md.
+-- recorded frames behaves exactly like the live one.
 function Player:_held(action)
     return InputFrame.held(self.frame, action)
 end

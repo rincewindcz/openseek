@@ -5,7 +5,7 @@ local Class = require "engine.core.class"
 -- one of these, created per phase from a recorded seed, so a run replays exactly.
 -- Presentation code (draw functions and the weather overlay) keeps the global
 -- math.random: it may draw a different number of times per frame, and must never
--- move the simulation stream. See DETERMINISM.md.
+-- move the simulation stream.
 --
 -- draws counts the numbers taken, which the replay checksum folds in: two runs
 -- that have consumed a different amount of randomness diverge even when the

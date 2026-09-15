@@ -528,7 +528,7 @@ end
 
 -- Restart the simulation randomness from a known seed. Called at the start of
 -- every phase (and by replay playback with the recorded seed), so two runs of the
--- same stage with the same inputs roll the same numbers. See DETERMINISM.md.
+-- same stage with the same inputs roll the same numbers.
 function World:reset_rng(seed)
     self.rng = Rng:new(seed or 0)
     self.time = 0
@@ -767,7 +767,7 @@ end
 -- Same forwarder shape for audio: simulation code names an event and where it
 -- happened, the sound system decides which listener hears it, how loud and from
 -- which side. A no-op until the sound system is attached, and never read back
--- into the simulation (DETERMINISM.md).
+-- into the simulation.
 function World:sound(event, x, y, opts)
     if self.sound_sys then self.sound_sys:emit(event, x, y, opts) end
 end

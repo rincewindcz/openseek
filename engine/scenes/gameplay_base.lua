@@ -117,7 +117,6 @@ end
 -- Take this tick's input frame for p from its source and apply the edge actions
 -- it carries. Everything the player can do that changes the simulation arrives
 -- here, so a recorded frame drives the game exactly like a live key.
--- See DETERMINISM.md.
 function GameplayBase:apply_input(p, source)
     local frame = source:frame(self.app.tick)
     p.frame = frame

@@ -1,4 +1,4 @@
--- Scoring rules, ported from the original (research/SCORE.md). Points arrive in
+-- Scoring rules, ported from the original. Points arrive in
 -- two streams: every destroyed entity is worth its class hit_points the moment it
 -- dies, and a completed phase credits a weighted tally of what was destroyed and
 -- rescued. Every credit runs the bonus-life ladder.
@@ -21,7 +21,7 @@ Score.PHASE_POINTS = {
     buildings = 20,    -- structures and trucks destroyed
     choppers  = 200,   -- enemy helicopters shot down
     rescues   = 120,   -- personnel brought home
-    ok        = 200,   -- OK rating (provisional; see research/SCORE.md)
+    ok        = 200,   -- OK rating (provisional)
 }
 
 -- Cap the life counter wherever lives are handed out.

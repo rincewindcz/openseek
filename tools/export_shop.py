@@ -5,7 +5,7 @@ palette.
 
 The POWUP / POWUPT shop screens set their VGA palette at load time: the shipped
 GOVPAL.BIN is only valid for indices 0-79 and the embedded fullscreen palette is
-green-shifted (see decode_fullscreen_v2 / ARTICLE_2.md), so decoding these
+green-shifted (see decode_fullscreen_v2), so decoding these
 sprites with either gives the wrong colours. The true runtime palette is
 reconstructed from our screenshot-derived assets/fullscreen/POWUP.png +
 POWUPT.png (the same trick export_equip.py uses for the equip screens):

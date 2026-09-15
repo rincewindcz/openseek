@@ -38,7 +38,7 @@ local ROTOR_SPEED  = 15  -- rad/s the rotor disc spins (one blade frame, rotated
 -- the viewport: the simulation may not depend on the view, which used to make
 -- spawn choice differ by window size and between the two co-op halves (the value
 -- is what the old formula yielded at 1280x720 and the gameplay zoom, margin
--- included). See DETERMINISM.md.
+-- included).
 local SPAWN_CLEAR_RADIUS = 235
 -- Fallback score value if the stage carries no badheli class to read it from.
 local DEFAULT_POINTS = 500

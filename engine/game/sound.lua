@@ -24,7 +24,6 @@ local Config = require "engine.core.config"
 --
 -- Simulation code reaches this through World:sound (the same forwarder pattern
 -- as the light emitters); nothing here is ever read back into the simulation.
--- See DETERMINISM.md.
 local Sound = Class()
 
 -- World distance from the listener that spans half the stereo image. Sits near

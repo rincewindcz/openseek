@@ -1,7 +1,7 @@
 -- One tick's input for one player: the held-action bitmask, the edge actions
 -- that fired during the tick, and an optional analog turn. This is the only way input reaches the simulation,
 -- and it is the same value a keyboard, a replay file and (later) a network peer
--- produce, which is what makes a run reproducible. See DETERMINISM.md.
+-- produce, which is what makes a run reproducible.
 local InputFrame = {}
 
 -- Held actions, one bit each. This order is the replay wire format: append new

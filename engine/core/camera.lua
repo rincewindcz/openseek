@@ -5,7 +5,7 @@ local ZOOMS = { 0.125, 0.25, 0.5, 1, 2, 3, 4, 6, 8 }
 
 -- The zoom a gameplay scene opens at. Simulation code that has to convert between
 -- art pixels and world units uses this fixed reference (Camera.game_zoom), never
--- the live zoom the player can change with the wheel. See DETERMINISM.md.
+-- the live zoom the player can change with the wheel.
 local GAME_ZOOM_INDEX = 6
 
 local Camera = Class()
@@ -34,7 +34,7 @@ end
 -- Game-mode framing: drop the focus point below the viewport center so more of
 -- the world ahead of the vehicle is visible. Reading the viewport lives here, in
 -- presentation code, and never in a gameplay scene: the simulation may not depend
--- on the view (DETERMINISM.md).
+-- on the view.
 function Camera:set_game_focus()
     local _, h = self:dims()
     self.view_oy = h * 0.24

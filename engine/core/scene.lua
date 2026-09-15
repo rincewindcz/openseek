@@ -13,7 +13,7 @@ Scene.ui_pointer = false
 
 -- Simulation scenes set this true (see engine/scenes/gameplay_base.lua): main.lua
 -- advances them in whole fixed ticks instead of passing the frame delta, so a run
--- plays out identically at any frame rate. See DETERMINISM.md.
+-- plays out identically at any frame rate.
 Scene.fixed_step = false
 
 function Scene:init(app)

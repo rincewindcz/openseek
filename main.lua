@@ -227,7 +227,7 @@ end
 -- The scene counts the ticks it actually simulates (GameplayBase:begin_tick), not
 -- this loop: a tick the scene skips (paused, stats screen) must not advance the
 -- clock a recording is keyed to, or playback would simulate ticks the recording
--- never covered. See DETERMINISM.md.
+-- never covered.
 local TICK        = 1 / 60
 local MAX_CATCHUP = 5
 local accumulator = 0

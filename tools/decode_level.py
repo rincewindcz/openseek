@@ -3,7 +3,7 @@
 Level decoder for Seek and Destroy (SAFARI Software).
 
 Parses data/STAGE0X.BIN into JSON. The format was recovered from the stage
-loader at 0x1f5860 in SEEK.EXE (see LEVELS.md for the full specification).
+loader at 0x1f5860 in SEEK.EXE.
 All four retail stage files parse to the exact byte boundary.
 
 There is no tilemap: a stage is a flat-colored 4096x4096 px world populated

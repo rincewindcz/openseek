@@ -14,8 +14,6 @@ local InputFrame = require "engine.core.input_frame"
 --
 --   love . --selftest              (600 ticks, about 10 s of play)
 --   love . --selftest 3600 stage12
---
--- See DETERMINISM.md.
 local Selftest = {}
 
 local TICK     = 1 / 60

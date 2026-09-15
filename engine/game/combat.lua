@@ -342,7 +342,7 @@ end
 -- Clear everything that lives for the length of one phase. The swing phase and
 -- the alternate-side toggle are per-run firing state: left over from a previous
 -- phase they would aim the first shots of the next one differently, which a
--- replay of that phase cannot reproduce. See DETERMINISM.md.
+-- replay of that phase cannot reproduce.
 function CombatSystem:reset_phase()
     self.projectiles = {}
     self.effects     = {}
@@ -527,7 +527,7 @@ end
 -- (1.5x the visible screen) produced at the shipped 1280x720 window and the
 -- gameplay zoom. It is deliberately no longer read from the window: the
 -- simulation may not depend on the view (a wider window used to shoot further,
--- and the two co-op halves disagreed with single player). See DETERMINISM.md.
+-- and the two co-op halves disagreed with single player).
 local DEFAULT_PLAYER_RANGE = 640
 
 function CombatSystem:player_range(weapon_def)

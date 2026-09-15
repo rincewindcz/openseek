@@ -3,7 +3,7 @@
 Seek and Destroy - fullscreen image decoder v2
 ===============================================
 
-Handles the palette problem documented in ARTICLE_2.md:
+Handles the embedded palette problem:
 
   The 768-byte block embedded in each .BIN image does NOT decode correctly as a
   standard 6-bit VGA palette.  GOVPAL.BIN is also not the answer (valid colours
@@ -113,7 +113,7 @@ def embedded_palette(raw: bytes) -> np.ndarray:
     Decode the embedded 768-byte block as 6-bit VGA × 4.
 
     NOTE: This does NOT produce correct colours.  The encoding of this block is
-    unresolved as of the current investigation (see ARTICLE_2.md).  The output
+    unresolved as of the current investigation.  The output
     has correct geometry and plausible luminance but is green-shifted.
     """
     arr = np.frombuffer(raw[:PALETTE_SIZE], dtype=np.uint8).reshape(256, 3)
