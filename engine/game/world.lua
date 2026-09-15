@@ -7,6 +7,7 @@ local Entity    = require "engine.game.entity"
 local Animation = require "engine.core.animation"
 local Mathx     = require "engine.core.mathx"
 local Rng       = require "engine.core.rng"
+local Log       = require "engine.core.log"
 
 -- Tumbling iron/metal shrapnel flung out by an explosion (buildings and bombs).
 -- The clips loop, so each piece is bounded by its own lifetime. When a piece lands a
@@ -381,6 +382,7 @@ function World:load(name)
     end
 
     self:_fit_wrap_period()
+    Log.info("world", "loaded %s: %d entities", name, #self.entities)
 end
 
 -- Link each hangar hut to the tank sharing its position: the tank rides out along

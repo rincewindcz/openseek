@@ -1,6 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
+local Log = require "engine.core.log"
+
 -- Scoring rules, ported from the original. Points arrive in
 -- two streams: every destroyed entity is worth its class hit_points the moment it
 -- dies, and a completed phase credits a weighted tally of what was destroyed and
@@ -40,6 +42,7 @@ function Score.award(p, points)
     p.next_bonus_life = p.next_bonus_life or Score.BONUS_LIFE_STEP
     while p.score >= p.next_bonus_life do
         Score.grant_life(p)
+        Log.info("score", "P%d bonus vehicle at %d points, %d lives", p.index or 1, p.next_bonus_life, p.lives)
         p.next_bonus_life = p.next_bonus_life + Score.BONUS_LIFE_STEP
     end
 end

@@ -7,6 +7,7 @@ local Menu    = require "engine.ui.menu"
 local Loadout = require "engine.game.loadout"
 local Score   = require "engine.game.score"
 local Sound   = require "engine.game.sound"
+local Log     = require "engine.core.log"
 
 -- Main menu scene. Switched to after the title card, or pushed over a running
 -- gameplay scene (Esc in game), in which case RESUME pops back to the game.
@@ -45,6 +46,7 @@ function MainMenu:_select(id)
         -- Start a fresh campaign run at the first stage: play through every phase
         -- and mission in order, accumulating one running score across the run.
         local first        = app.world.stages[1]
+        Log.info("game", "new campaign from %s", first)
         app.campaign       = true
         app.run_score      = 0
         app.run_lives      = Score.START_LIVES

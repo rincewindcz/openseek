@@ -4,6 +4,7 @@
 local Class     = require "engine.core.class"
 local json      = require "lib.json"
 local Animation = require "engine.core.animation"
+local Log       = require "engine.core.log"
 
 local Debug = Class()
 
@@ -76,7 +77,7 @@ local function write_json(path, t)
     lines[#lines + 1] = "}"
     local f = io.open(full, "w")
     if f then f:write(table.concat(lines, "\n") .. "\n"); f:close()
-    else print("debug: cannot write " .. full) end
+    else Log.warn("debug", "cannot write %s", full) end
 end
 
 local function draw_section(g, label, bx, y, w)

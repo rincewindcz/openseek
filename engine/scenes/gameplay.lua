@@ -13,6 +13,7 @@ local Config       = require "engine.core.config"
 local Camera       = require "engine.core.camera"
 local InputFrame   = require "engine.core.input_frame"
 local TouchControls = require "engine.ui.touch_controls"
+local Log          = require "engine.core.log"
 
 -- Single-player gameplay scene: player lifecycle, camera follow, the death /
 -- won / takeoff timers, the pause flag, and the in-game keys. Esc pushes the
@@ -160,6 +161,7 @@ end
 -- on the crash end screen).
 function Gameplay:restart(carry)
     local app = self.app
+    Log.info("game", "restart %s", app.world.stage_name)
     self.death_timer = nil
     app.world:load(app.world.stage_name)
     app.after_stage_load()
@@ -180,6 +182,7 @@ function Gameplay:on_vehicle_lost()
     player.lives = math.max(0, (player.lives or 0) - 1)
     local pic    = (player.vehicle == "tank") and "TANKEND" or "DEATHPIC"
     if player.lives > 0 then
+        Log.info("game", "vehicle lost, %d left", player.lives)
         -- Recoverable: the respawn is scheduled on the simulation clock, and the
         -- crash picture only flashes over it (skipped while replaying, which has
         -- no viewer to inform).
@@ -188,6 +191,7 @@ function Gameplay:on_vehicle_lost()
             app.screen:show(pic, { fade_in = 0.1, hold = 0.5, fade_out = 0.1 })
         end
     else
+        Log.info("game", "game over, score %d", player.score or 0)
         if self.playback then self:finish_playback("game over"); return end
         local score = player.score or 0
         app.campaign = false   -- out of lives: the run is over
@@ -237,12 +241,14 @@ function Gameplay:on_stats_done()
     end
     local next_stage = app.world.stages[app.world.stage_index + 1]
     if not next_stage then
+        Log.info("game", "campaign complete, score %d", app.run_score)
         app.campaign = false
         app.scenes:switch("hiscores", app.run_score)
         return
     end
     local cur_m  = tonumber((app.world.stage_name or ""):match("^stage(%d)"))
     local next_m = tonumber(next_stage:match("^stage(%d)"))
+    Log.info("game", "campaign continues to %s, score %d, lives %d", next_stage, app.run_score, app.run_lives)
     app.world:load(next_stage)
     app.after_stage_load()
     app.scenes:switch("mission_briefing", next_stage)

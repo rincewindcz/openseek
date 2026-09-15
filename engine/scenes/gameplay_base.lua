@@ -10,6 +10,7 @@ local InputSource = require "engine.core.input_source"
 local Replay      = require "engine.game.replay"
 local Score       = require "engine.game.score"
 local Sound       = require "engine.game.sound"
+local Log         = require "engine.core.log"
 
 -- Shared base for the gameplay scenes (single player, sandbox, co-op split):
 -- firing, weapon cycling, landing, the mission-won -> DESTRUCTION STATS
@@ -353,6 +354,19 @@ function GameplayBase:begin_input(mode, players, bindings, touch)
         end
     end
     self.source = self.sources[1]
+
+    local desc = {}
+    for slot, p in ipairs(players) do
+        desc[slot] = ("P%d %s lives %d score %d"):format(slot, p.vehicle, p.lives or 0, p.score or 0)
+    end
+    local run = "not recorded"
+    if self.playback then
+        run = (app.replay_verify and "verifying " or "replaying ") .. tostring(self.playback.path)
+    elseif self.recording then
+        run = "recording"
+    end
+    Log.info("game", "%s phase %s, seed %d, %s: %s", mode, app.world.stage_name, self.seed, run,
+        table.concat(desc, ", "))
 end
 
 -- End of a simulated tick: store this tick's input and a periodic checksum, or on
@@ -388,7 +402,12 @@ end
 -- Write the recording out. Called when the phase ends, however it ends.
 function GameplayBase:save_recording()
     if not (self.recording and self.recording.length > 0) then return end
-    self.recording:save()
+    local path = self.recording:save()
+    if path then
+        Log.info("replay", "saved %s, %d ticks", path, self.recording.length)
+    else
+        Log.warn("replay", "failed to save recording")
+    end
     self.recording = nil
 end
 
@@ -405,6 +424,14 @@ function GameplayBase:finish_playback(reason)
         parts   = self.desync_parts,
         name    = self.playback.path,
     }
+    local r = app.replay_result
+    if r.desync then
+        Log.warn("replay", "%s diverged at tick %d: %s", tostring(r.name), r.desync, table.concat(r.parts or {}, ", "))
+    elseif r.ok then
+        Log.info("replay", "%s verified, %d ticks", tostring(r.name), r.length)
+    else
+        Log.info("replay", "%s %s at tick %d of %d", tostring(r.name), r.reason or "ended", r.tick, r.length)
+    end
     self.playback     = nil
     app.replay_play   = nil
     app.replay_verify = false
@@ -432,7 +459,10 @@ end
 function GameplayBase:update_won(dt)
     local mission = self.mission
     if not (mission and mission.state == "won") then return end
-    if self.won_timer == nil then self.won_timer = 1.5 end
+    if self.won_timer == nil then
+        self.won_timer = 1.5
+        Log.info("game", "mission complete: %s", self.app.world.stage_name)
+    end
     if self.won_timer > 0 then
         self.won_timer = self.won_timer - dt
     elseif not self.end_stats_started then

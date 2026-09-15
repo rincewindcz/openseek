@@ -6,6 +6,7 @@ local Scene       = require "engine.core.scene"
 local Loadout     = require "engine.game.loadout"
 local Mission     = require "engine.game.mission"
 local EquipScreen = require "engine.ui.equip_screen"
+local Log         = require "engine.core.log"
 
 -- Vehicle select and equip scene, between the mission briefing's PLAY and the
 -- live game: pick the vehicle (TANK / CHOP button) and load its weapon bays
@@ -53,6 +54,7 @@ function Equip:_select(id)
         local loadout = self.loadout
         local list, counts, levels = loadout:weapon_list(loadout.vehicle)
         app.settings.vehicle = loadout.vehicle
+        Log.info("game", "loadout %s: %s", loadout.vehicle, table.concat(list, ", "))
         app.settings.loadout = { list = list, counts = counts, levels = levels,
             chars = { fuel = loadout:char(loadout.vehicle, "fuel"),
                       armor = loadout:char(loadout.vehicle, "armor") } }

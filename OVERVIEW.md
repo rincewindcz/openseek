@@ -10,7 +10,7 @@ decoded from the user's own copy of the game and are never distributed.
 |------|----------|
 | `main.lua` | Entry point: game data check, shared `app` context, scene registration, `love.*` callbacks. |
 | `conf.lua` | Window configuration. |
-| `engine/core/` | No game knowledge: class, config, input, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, mathx. |
+| `engine/core/` | No game knowledge: class, config, input, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, mathx, log. |
 | `engine/game/` | Simulation and gameplay presentation systems. |
 | `engine/ui/` | Screens and widgets. |
 | `engine/scenes/` | One scene per top-level mode. |
@@ -81,6 +81,9 @@ Style:
 - Allowed abbreviations: `dt`, `x y w h`, `dx dy`, `hp`, `i j k v`, `g = love.graphics`.
 - Classes via `core/class.lua` (`Foo = Class()`, `Foo:init`, `Foo:new`) for
   anything with instances or lifecycle; plain module tables for stateless helpers.
+- Console output through `core/log.lua` (`Log.info(tag, fmt, ...)`,
+  `Log.warn`): scene changes, phase and mission events, saves, missing files.
+  Never per tick or per frame; simulation files must not read the clock for it.
 - JSON through `lib/json.lua` and `love.filesystem.read`. Images load once, via
   `core/animation.lua` caches or the per-stage cache in `game/world.lua`.
 
@@ -151,6 +154,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. |
 | `core/screen` | Fullscreen image fade in / hold / out. |
 | `core/mathx` | `atan2` shim, `heading_deg`. |
+| `core/log` | Timestamped, tagged console lines (`info`, `warn`). |
 | `game/world` | Stage load, entities, ground colour, collision (`blocked`), objectives, shrapnel, dust, `world.time`, `world.rng`, `world.params`. |
 | `game/entity` | HP, state machine, damage smoke, hit effects, crater. |
 | `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. |

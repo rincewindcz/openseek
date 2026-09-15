@@ -5,6 +5,7 @@ local Class   = require "engine.core.class"
 local Font    = require "engine.core.font"
 local Pointer = require "engine.ui.pointer"
 local Layout  = require "engine.ui.layout"
+local Log     = require "engine.core.log"
 
 -- Debug mission-select screen: pick any mission/phase and drop into it. Over the
 -- main-menu MAINP backdrop (breathing zoom, subtly tinted toward the selected
@@ -67,7 +68,7 @@ local function img(path)
         i:setFilter("nearest", "nearest")
         return i
     end
-    print("missionselect: missing " .. path)
+    Log.warn("missionselect", "missing %s", path)
     return nil
 end
 

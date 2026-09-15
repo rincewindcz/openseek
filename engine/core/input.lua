@@ -2,6 +2,7 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local json = require "lib.json"
+local Log  = require "engine.core.log"
 
 -- Central rebindable key map for the single-player gameplay actions and global
 -- shortcuts (screenshot). Each action maps to a list of keys; any of them held (or
@@ -65,7 +66,10 @@ function Input.load()
     local raw = love.filesystem.read(SAVE_PATH)
     if not raw then return end
     local ok, data = pcall(json.decode, raw)
-    if not ok or type(data) ~= "table" then return end
+    if not ok or type(data) ~= "table" then
+        Log.warn("input", "ignoring unreadable %s", SAVE_PATH)
+        return
+    end
     for action in pairs(DEFAULTS) do
         local v = data[action]
         if type(v) == "table" then
@@ -101,7 +105,12 @@ function Input.save()
     local body = "{\n" .. table.concat(parts, ",\n") .. "\n}\n"
     local dir  = SAVE_PATH:match("^(.*)/[^/]+$")
     if dir then love.filesystem.createDirectory(dir) end
-    pcall(love.filesystem.write, SAVE_PATH, body)
+    local ok, written = pcall(love.filesystem.write, SAVE_PATH, body)
+    if ok and written then
+        Log.info("input", "saved %s", SAVE_PATH)
+    else
+        Log.warn("input", "cannot write %s", SAVE_PATH)
+    end
 end
 
 -- True if any key bound to the action is currently held.

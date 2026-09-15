@@ -7,6 +7,7 @@ local Font       = require "engine.core.font"
 local InfoScreen = require "engine.ui.info_screen"
 local Pointer    = require "engine.ui.pointer"
 local json       = require "lib.json"
+local Log        = require "engine.core.log"
 
 -- High-score scene: the HISCORE backdrop with the flying-in HIGH SCORES title, a
 -- table of the top 10 entries (rank / nickname / score) over a dimming panel for
@@ -87,6 +88,7 @@ function HiScores:_commit_entry()
     local row   = self.entries[self.entry.row]
     row.name    = self.entry.text ~= "" and self.entry.text or "PLAYER"
     row.editing = nil
+    Log.info("hiscores", "new entry %s, %d points, rank %d", row.name, row.score, self.entry.row)
     self.entry  = nil
     self:_save()
 end
@@ -122,7 +124,7 @@ function HiScores:_save()
     local dir = SAVE_PATH:match("^(.*)/[^/]+$")
     if dir then love.filesystem.createDirectory(dir) end
     local ok, err = pcall(love.filesystem.write, SAVE_PATH, encoded)
-    if not ok then print("hiscores: save failed: " .. tostring(err)) end
+    if not ok then Log.warn("hiscores", "save failed: %s", tostring(err)) end
 end
 
 function HiScores:_draw_table(g, fade)

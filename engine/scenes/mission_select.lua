@@ -5,6 +5,7 @@ local Class         = require "engine.core.class"
 local Scene         = require "engine.core.scene"
 local MissionSelect = require "engine.ui.mission_select"
 local Loadout       = require "engine.game.loadout"
+local Log           = require "engine.core.log"
 
 -- Debug mission/phase picker scene. PLAY loads the chosen stage and opens its
 -- briefing; EXIT backs out to the main menu. Entered via replace() so a game
@@ -30,6 +31,7 @@ end
 function MissionSelectScene:_select(id, stage_name)
     local app = self.app
     if id == "play" then
+        Log.info("game", "single mission %s", stage_name)
         app.campaign     = false   -- picked a single stage: play it, then back to menu
         app.loadout_free = nil     -- fresh MISSION-mode inventory, re-seeded with START_MEDALS
         Loadout.active(app)

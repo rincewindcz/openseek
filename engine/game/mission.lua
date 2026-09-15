@@ -3,6 +3,7 @@
 
 local Class = require "engine.core.class"
 local json  = require "lib.json"
+local Log   = require "engine.core.log"
 
 local Mission = Class()
 
@@ -10,6 +11,7 @@ local defs = {}   -- stage_name -> mission def, loaded once
 
 function Mission.load(path)
     local raw = love.filesystem.read(path)
+    if not raw then Log.warn("mission", "missing %s", path) end
     defs = raw and json.decode(raw) or {}
 end
 
@@ -104,6 +106,10 @@ function Mission:init(world, players, def)
         if e then self.home_x, self.home_y = e.x, e.y end
     end
     if not self.home_x then self.home_x, self.home_y = world:home_base() end
+
+    local labels = {}
+    for i, o in ipairs(self.objectives) do labels[i] = self:objective_label(o) end
+    Log.info("mission", "%s: %s", world.stage_name, #labels > 0 and table.concat(labels, "; ") or "no objectives")
 end
 
 function Mission:_collect(spec)
@@ -174,7 +180,9 @@ function Mission:update(dt)
     if self:_all_dead() then self.state = "failed"; return end
     -- Losing a saboteur on a "killable" stage fails the mission outright.
     if self.world.saboteur and self.world.saboteur:mission_failed() then
-        self.state = "failed"; return
+        self.state = "failed"
+        Log.info("mission", "failed: saboteur lost")
+        return
     end
 
     -- Optional objectives (e.g. a secondary POW rescue) are tracked but never block
@@ -183,7 +191,10 @@ function Mission:update(dt)
     for _, o in ipairs(self.objectives) do
         if not o.done then
             self:_update_objective(o)
-            if o.done then cleared = true end
+            if o.done then
+                cleared = true
+                Log.info("mission", "objective done: %s", self:objective_label(o))
+            end
             if not o.done and not o.spec.optional then all_done = false end
         end
     end
@@ -195,6 +206,7 @@ function Mission:update(dt)
         if self.state == "active" then
             self.state = "return_to_base"
             self.world:say("voice.return_to_base")
+            Log.info("mission", "objectives done, return to base")
         end
         if self:_at_home_base() then
             self.state = "won"

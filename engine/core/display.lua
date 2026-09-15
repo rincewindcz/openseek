@@ -2,6 +2,7 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local Config = require "engine.core.config"
+local Log    = require "engine.core.log"
 
 -- Window / display settings applied through love.window. The persisted values
 -- live in engine/core/config (fullscreen, vsync, window_size); the advanced
@@ -51,13 +52,20 @@ end
 -- whenever a DISPLAY option changes. A no-op on failure (headless / unsupported).
 function Display.apply()
     local s = size_for(Config.window_size)
-    pcall(love.window.setMode, s.w, s.h, {
+    local ok, err = pcall(love.window.setMode, s.w, s.h, {
         fullscreen     = Config.fullscreen and true or false,
         fullscreentype = "desktop",
         resizable      = love.system.getOS() ~= "Web",
         usedpiscale    = false,
         vsync          = Config.vsync and 1 or 0,
     })
+    if ok then
+        local w, h = love.graphics.getDimensions()
+        Log.info("display", "%dx%d%s, vsync %s", w, h,
+            Config.fullscreen and " fullscreen" or "", Config.vsync and "on" or "off")
+    else
+        Log.warn("display", "setMode failed: %s", tostring(err))
+    end
 end
 
 return Display

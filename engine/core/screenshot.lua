@@ -1,6 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
+local Log = require "engine.core.log"
+
 -- Window screenshots as PNG. Running from a source directory they go to
 -- <source>/screenshots/; fused, web and mobile builds (or a missing folder) fall
 -- back to screenshots/ in the save directory.
@@ -42,7 +44,11 @@ function Screenshot.capture()
         local data = image:encode("png"):getString()
         local name = unique_name()
         local path = write_source(name, data) or write_save(name, data)
-        print(path and ("screenshot: " .. path) or "screenshot: write failed")
+        if path then
+            Log.info("screenshot", "saved %s", path)
+        else
+            Log.warn("screenshot", "write failed")
+        end
     end)
 end
 

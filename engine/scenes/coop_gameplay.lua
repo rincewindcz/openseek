@@ -9,6 +9,7 @@ local Player       = require "engine.game.player"
 local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
 local Vehicles     = require "engine.game.vehicles"
+local Log          = require "engine.core.log"
 
 -- Split-screen two-player co-op (extra mode, not in the original game): two
 -- players, two cameras, one keyboard. Each half renders the full world stack
@@ -204,8 +205,10 @@ function CoopGameplay:_update_down(idx, p, dt)
     p.lives = math.max(0, (p.lives or 0) - 1)
     if p.lives <= 0 then
         self.out[idx] = true
+        Log.info("game", "P%d out of vehicles, score %d", idx, p.score or 0)
         return
     end
+    Log.info("game", "P%d vehicle lost, %d left", idx, p.lives)
     p:respawn(p.home_x or p.x, p.home_y or p.y)
     p:take_off()   -- no-op for the tank
     local cam = self.cameras[idx]
@@ -408,6 +411,7 @@ function CoopGameplay:keypressed(key)
     if key == "r" then
         -- Restart reloads the stage first, like single player, so destroyed
         -- entities and spent objectives come back.
+        Log.info("game", "restart %s", app.world.stage_name)
         app.world:load(app.world.stage_name)
         app.after_stage_load()
         app.scenes:switch("coop_gameplay")

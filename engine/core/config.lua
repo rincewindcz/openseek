@@ -5,6 +5,7 @@
 -- settings page edits a subset of these (see PERSISTED); the F2 debug overlay
 -- toggles others live for testing.
 local json = require "lib.json"
+local Log  = require "engine.core.log"
 
 local Config = {
     -- Render pickups screen-aligned, the way the original engine did (it could not
@@ -119,7 +120,10 @@ function Config.load()
     local raw = love.filesystem.read(SAVE_PATH)
     if not raw then return end
     local ok, data = pcall(json.decode, raw)
-    if not ok or type(data) ~= "table" then return end
+    if not ok or type(data) ~= "table" then
+        Log.warn("config", "ignoring unreadable %s", SAVE_PATH)
+        return
+    end
     for _, k in ipairs(PERSISTED) do
         if data[k] ~= nil then Config[k] = data[k] end
     end
@@ -143,7 +147,12 @@ function Config.save()
     local encoded = "{\n" .. table.concat(parts, ",\n") .. "\n}\n"
     local dir = SAVE_PATH:match("^(.*)/[^/]+$")
     if dir then love.filesystem.createDirectory(dir) end
-    pcall(love.filesystem.write, SAVE_PATH, encoded)
+    local ok, written = pcall(love.filesystem.write, SAVE_PATH, encoded)
+    if ok and written then
+        Log.info("config", "saved %s", SAVE_PATH)
+    else
+        Log.warn("config", "cannot write %s", SAVE_PATH)
+    end
 end
 
 return Config

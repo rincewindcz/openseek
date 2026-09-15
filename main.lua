@@ -28,6 +28,7 @@ local SceneManager    = require "engine.core.scene_manager"
 local Audio           = require "engine.core.audio"
 local Assets          = require "engine.core.assets"
 local Sound           = require "engine.game.sound"
+local Log             = require "engine.core.log"
 local json            = require "lib.json"
 
 local Title           = require "engine.scenes.title"
@@ -105,13 +106,14 @@ openSEEK game engine; released under MIT license
 
 function love.load(args)
     print(BANNER)
-    print(("openSEEK starting (LOVE %s, %s)"):format(love.getVersion and select(4, love.getVersion()) or "?", _VERSION))
+    Log.info("app", "starting (LOVE %s, %s, %s)", love.getVersion and select(4, love.getVersion()) or "?",
+        _VERSION, love.system.getOS())
     love.graphics.setDefaultFilter("nearest", "nearest")
     Config.load()   -- overlay persisted advanced settings onto the defaults
     Input.load()    -- overlay persisted key bindings onto the defaults
     Display.apply() -- restore the saved window mode (size / fullscreen / vsync)
     if not Assets.pack_present() then
-        print("openSEEK: game data not found in assets/")
+        Log.warn("assets", "game data not found in assets/")
         for _, a in ipairs(args or {}) do
             if a == "--selftest" then love.event.quit(1) end
         end
@@ -245,6 +247,10 @@ end
 local TICK        = 1 / 60
 local MAX_CATCHUP = 5
 local accumulator = 0
+
+function love.quit()
+    Log.info("app", "quit")
+end
 
 function love.update(dt)
     app.screen:update(dt)

@@ -7,6 +7,7 @@ local Assets  = require "engine.core.assets"
 local Config  = require "engine.core.config"
 local Display = require "engine.core.display"
 local Font    = require "engine.core.font"
+local Log     = require "engine.core.log"
 
 local Hud = Class()
 
@@ -178,7 +179,7 @@ function Hud:_img(path)
             img:setFilter("nearest", "nearest")
             self._cache[path] = img
         else
-            print("hud: missing asset " .. path)
+            Log.warn("hud", "missing asset %s", path)
             self._cache[path] = false
         end
     end

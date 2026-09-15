@@ -6,6 +6,7 @@ local Font     = require "engine.core.font"
 local Layout   = require "engine.ui.layout"
 local Pointer  = require "engine.ui.pointer"
 local Audio    = require "engine.core.audio"
+local Log      = require "engine.core.log"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
 -- OPTIONS / CREDITS / HIGH SCORES / LOAD / SAVE / ORDER INFO / EXIT over the
@@ -101,7 +102,7 @@ function Menu:init(entries)
         img:setFilter("linear", "linear")
         self.bg = img
     else
-        print("menu: missing assets/fullscreen/MAINP.png")
+        Log.warn("menu", "missing assets/fullscreen/MAINP.png")
         self.bg = nil
     end
 
@@ -110,7 +111,7 @@ function Menu:init(entries)
         arrow:setFilter("nearest", "nearest")
         self.arrow = arrow
     else
-        print("menu: missing assets/mainmen/arrow.png")
+        Log.warn("menu", "missing assets/mainmen/arrow.png")
         self.arrow = nil
     end
 end

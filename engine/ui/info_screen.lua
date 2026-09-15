@@ -5,6 +5,7 @@ local Class     = require "engine.core.class"
 local Layout    = require "engine.ui.layout"
 local Pointer   = require "engine.ui.pointer"
 local Animation = require "engine.core.animation"
+local Log       = require "engine.core.log"
 
 -- Shared animated info screen behind the CREDITS and HIGH SCORES entries: a
 -- fullscreen backdrop, a one-shot title zoom-in animation across the top,
@@ -27,7 +28,7 @@ local function img(path)
     local ok, i = false, nil
     if love.filesystem.getInfo(path) then ok, i = pcall(love.graphics.newImage, path) end
     if ok then i:setFilter("nearest", "nearest"); return i end
-    print("infoscreen: missing " .. path)
+    Log.warn("infoscreen", "missing %s", path)
     return nil
 end
 

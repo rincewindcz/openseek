@@ -3,6 +3,7 @@
 
 local Class = require "engine.core.class"
 local Font  = require "engine.core.font"
+local Log   = require "engine.core.log"
 
 -- Fullscreen image overlay with fade-in / hold / fade-out phases, used for the
 -- title card, the per-mission briefing picture, and the crash end screen.
@@ -23,7 +24,7 @@ function Screen:_img(name)
             img:setFilter("nearest", "nearest")
             self._cache[name] = img
         else
-            print("screen: missing asset " .. name)
+            Log.warn("screen", "missing asset %s", name)
             self._cache[name] = false
         end
     end

@@ -8,6 +8,7 @@
 --
 -- This is a plain singleton module (one pointer for the whole app), not a Class.
 local Layout = require "engine.ui.layout"
+local Log    = require "engine.core.log"
 
 local Pointer = {}
 
@@ -27,7 +28,7 @@ local function load()
         i:setFilter("nearest", "nearest")
         cursor = i
     else
-        print("pointer: missing assets/hud/selpoint_f00.png")
+        Log.warn("pointer", "missing assets/hud/selpoint_f00.png")
         cursor = false
     end
 end

@@ -6,6 +6,7 @@ local Font    = require "engine.core.font"
 local json    = require "lib.json"
 local Pointer = require "engine.ui.pointer"
 local Layout  = require "engine.ui.layout"
+local Log     = require "engine.core.log"
 
 -- Pre-mission menu, styled after the original's MISSION/PHASE screen: the
 -- STAGE0X_MS backdrop (its "MISSION 0X" title is baked in), the overlaid
@@ -54,7 +55,7 @@ local function img(path)
         i:setFilter("nearest", "nearest")
         return i
     end
-    print("missionmenu: missing " .. path)
+    Log.warn("missionmenu", "missing %s", path)
     return nil
 end
 

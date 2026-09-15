@@ -4,6 +4,7 @@
 local Class  = require "engine.core.class"
 local Scene  = require "engine.core.scene"
 local Replay = require "engine.game.replay"
+local Log    = require "engine.core.log"
 
 -- Replay browser (F4 from the overview): the testing interface for recorded runs.
 -- Lists the recordings in the save directory, plays one back at normal speed, or
@@ -63,10 +64,15 @@ function Replays:keypressed(key)
     if key == "down"   then self.index = math.min(#self.entries, self.index + 1); return end
     if key == "return" or key == "kpenter" then self:_play(false); return end
     if key == "v"      then self:_play(true); return end
-    if key == "r"      then app.record_runs = not app.record_runs; return end
+    if key == "r" then
+        app.record_runs = not app.record_runs
+        Log.info("replay", "recording %s", app.record_runs and "on" or "off")
+        return
+    end
     if key == "delete" or key == "x" then
         local entry = self:selected()
         if entry then
+            Log.info("replay", "deleted %s", entry.path)
             entry.replay:delete()
             self:refresh()
         end

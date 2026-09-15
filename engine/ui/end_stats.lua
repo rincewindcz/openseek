@@ -6,6 +6,7 @@ local Assets = require "engine.core.assets"
 local Config = require "engine.core.config"
 local Score  = require "engine.game.score"
 local Layout = require "engine.ui.layout"
+local Log    = require "engine.core.log"
 
 -- End-of-phase DESTRUCTION STATS screen. Drawn over the dimmed game once the
 -- chopper lands home: a header (PHASE n / DESTRUCTION STATS), five tallied
@@ -76,7 +77,7 @@ function EndStats:_asset(path, quiet)
         if img then
             self._img[path] = img
         else
-            if not quiet then print("endstats: missing " .. path) end
+            if not quiet then Log.warn("endstats", "missing %s", path) end
             self._img[path] = false
         end
     end
