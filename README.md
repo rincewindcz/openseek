@@ -9,10 +9,10 @@ The engine is built using Lua and the Love2D framework and it's not a direct cop
 * customizable controls and input methods
 * new visual effects
 * in-game level editor for exploring original levels and creating new ones (in development)
-* multiplayer support for cooperative and competitive gameplay (in development)
+* multiplayer support for cooperative and network gameplay (in development)
 * many little but cute QoL improvements
 * unlocks few new vehicles and weapons that were not present in the original game (in development)
-* playable on Linux, Windows, and macOS. Also supports Android and web platforms.
+* playable on Linux, Windows, and macOS. Also supports Android and web
 
 > [!IMPORTANT]
 > openSEEK does *not* provide any copyrighted assets. You must have your own copy of the original game.
