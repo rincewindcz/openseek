@@ -187,7 +187,7 @@ function Overview:_draw_panel()
     local setup_h = 22 + 6 * ROW_H + 6
     g.setColor(COLORS.bg); g.rectangle("fill", x, y, PANEL_W, setup_h, 4)
     local yy = section(g, "SETUP", x, y + 4)
-    yy = row(g, "[V]", "Vehicle",   Vehicles.label(settings.vehicle, settings.chopper_skin),
+    yy = row(g, "[V]", "Vehicle",   Vehicles.label(settings.vehicle, Config.chopper_skin),
           COLORS.value, x, yy)
     yy = row(g, "[O]", "Game over", settings.death_enabled and "ON" or "OFF",
           settings.death_enabled and COLORS.on or COLORS.off, x, yy)
@@ -309,7 +309,7 @@ function Overview:keypressed(key)
 
     local settings = app.settings
     if key == "v" then
-        settings.vehicle, settings.chopper_skin = Vehicles.cycle(settings.vehicle, settings.chopper_skin)
+        settings.vehicle, Config.chopper_skin = Vehicles.cycle(settings.vehicle, Config.chopper_skin)
     end
     if key == "o" then settings.death_enabled = not settings.death_enabled end
     if key == "c" then Config.axis_aligned_pickups = not Config.axis_aligned_pickups end

@@ -345,6 +345,7 @@ Options:
 | `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs. |
 | `endstats_count_up` | GAMEPLAY | Stats count up instead of down. |
 | `score_count_up` | GAMEPLAY | HUD score rolls to new total (frame time, presentation). |
+| `chopper_skin` | GAMEPLAY | Player chopper variant 1-3 outside co-op; overview `V` cycles it too. Recorded in the replay header. |
 | `master_volume`, `sfx_volume`, `engine_volume`, `voice_volume`, `ui_volume`, `music_volume` | AUDIO | Master and bus volumes. |
 | `audio_positional` | AUDIO | Directional mix; off centres all sounds. |
 | `coop_split_pan` | AUDIO | Split-screen stereo bias. |

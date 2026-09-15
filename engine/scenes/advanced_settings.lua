@@ -1,14 +1,15 @@
-local Class   = require "engine.core.class"
-local Scene   = require "engine.core.scene"
-local Font    = require "engine.core.font"
-local Layout  = require "engine.ui.layout"
-local Config  = require "engine.core.config"
-local Input   = require "engine.core.input"
-local Audio   = require "engine.core.audio"
-local Sound   = require "engine.game.sound"
-local Display = require "engine.core.display"
-local Pointer = require "engine.ui.pointer"
-local PostFX  = require "engine.game.postfx"
+local Class    = require "engine.core.class"
+local Scene    = require "engine.core.scene"
+local Font     = require "engine.core.font"
+local Layout   = require "engine.ui.layout"
+local Config   = require "engine.core.config"
+local Input    = require "engine.core.input"
+local Audio    = require "engine.core.audio"
+local Sound    = require "engine.game.sound"
+local Display  = require "engine.core.display"
+local Pointer  = require "engine.ui.pointer"
+local PostFX   = require "engine.game.postfx"
+local Vehicles = require "engine.game.vehicles"
 
 -- Advanced OpenSeek options: a category sidebar (DISPLAY / VIDEO / EFFECTS /
 -- AUDIO / CONTROLS / GAMEPLAY / EXTRAS / EXIT) with the selected category's option rows on the right,
@@ -92,6 +93,7 @@ local CATEGORIES = {
         { key = "friendly_fire_pows",   label = "FRIENDLY FIRE",   kind = "toggle" },
         { key = "endstats_count_up",    label = "STATS COUNT UP",  kind = "toggle" },
         { key = "score_count_up",       label = "SCORE COUNT UP",  kind = "toggle" },
+        { key = "chopper_skin",         label = "CHOPPER",         kind = "choice", choices = Vehicles.skin_choices() },
     } },
     { title = "EXTRAS", options = {
         { key = "explosive_trees",  label = "EXPLOSIVE TREES", kind = "toggle" },

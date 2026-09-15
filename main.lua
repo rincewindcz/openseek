@@ -159,7 +159,6 @@ function love.load(args)
         run_bonus_life    = Score.BONUS_LIFE_STEP,    -- next bonus-vehicle threshold, carried with the score
         settings = {
             vehicle       = "chopper",
-            chopper_skin  = 1,     -- player chopper variant (1 green, 2 magenta, 3 white)
             death_enabled = false, -- optional game-over (chopper falls, tank burns)
             coop = { vehicle = { "chopper", "tank" }, skin = { 1, 1 }, god = false, ff = false },
         },

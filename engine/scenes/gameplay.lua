@@ -6,6 +6,7 @@ local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
 local Vehicles     = require "engine.game.vehicles"
 local Input        = require "engine.core.input"
+local Config       = require "engine.core.config"
 local Camera       = require "engine.core.camera"
 local InputFrame   = require "engine.core.input_frame"
 local TouchControls = require "engine.ui.touch_controls"
@@ -104,7 +105,7 @@ function Gameplay:spawn_player(carry)
     player.world_size   = world.stage.world_size
     player.home_x, player.home_y = sx, sy
     player.vehicle      = replay_vehicle or settings.vehicle
-    player.chopper_skin = replay_skin or settings.chopper_skin
+    player.chopper_skin = replay_skin or Config.chopper_skin
     player.world        = world
     player.camera       = camera
     player.controls     = Input.map   -- single-player movement reads the rebindable map

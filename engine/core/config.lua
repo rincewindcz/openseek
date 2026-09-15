@@ -27,6 +27,10 @@ local Config = {
     -- a quick count that eases into the final digits. Presentation only.
     score_count_up = true,
 
+    -- Player chopper variant outside co-op (1..Vehicles.CHOPPER_SKINS). Co-op
+    -- picks one per player on its setup screen.
+    chopper_skin = 1,
+
     -- End-of-phase DESTRUCTION STATS tally direction. The original counts each
     -- line's percentage / tally down to zero while the bonus drains into TOTAL
     -- SCORE. true builds the values up from zero instead (icons and percentages
@@ -100,7 +104,7 @@ local PERSISTED = {
     "postfx_enabled", "postfx_preset", "postfx_grade", "postfx_contrast", "postfx_sharpen",
     "postfx_bloom", "postfx_vignette", "postfx_grain", "postfx_soft_shadows",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
-    "endstats_count_up", "score_count_up", "explosive_trees", "tree_crush_speed",
+    "endstats_count_up", "score_count_up", "chopper_skin", "explosive_trees", "tree_crush_speed",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
     "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",
     "fullscreen", "vsync", "window_size", "show_fps",

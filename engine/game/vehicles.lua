@@ -34,6 +34,15 @@ function Vehicles.cycle(vehicle, skin)
     return "tank", skin
 end
 
+-- Options-screen choices for Config.chopper_skin.
+function Vehicles.skin_choices()
+    local out = {}
+    for i = 1, Vehicles.CHOPPER_SKINS do
+        out[i] = { label = tostring(i), value = i }
+    end
+    return out
+end
+
 -- UI label like "CHOPPER 2" / "TANK".
 function Vehicles.label(vehicle, skin)
     if vehicle == "tank" then return "TANK" end
