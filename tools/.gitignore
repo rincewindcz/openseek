@@ -1,5 +1,2 @@
 *.png
 *.BIN
-
-# Reconstructed menu-title palette (see menutitle.py), tracked source-of-truth.
-!MENUTITLE_PAL.BIN
