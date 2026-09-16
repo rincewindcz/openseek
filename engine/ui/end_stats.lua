@@ -89,36 +89,29 @@ end
 -- Build the per-line tally columns from one participant's figures. A single
 -- player yields one (gold) column; co-op yields one tinted column per player.
 -- A participant: { player, color, ground={killed,total}, buildings={killed,total},
--- choppers, rescues }.
--- The first two lines show a percentage of the stage's destructible total, but
--- the bonus they carry is per unit destroyed, as in the original: the percentage
--- is a readout, never a score input.
+-- choppers, rescues, badges }.
+-- Every line is paid on the figure it prints, never on the raw count behind it:
+-- the first two on their truncated percentage, the chopper line on its tiered
+-- readout (see Score.percent / Score.chopper_tier).
 local function participant_cols(p)
-    local function pct(c) return (c and c.total and c.total > 0) and (c.killed / c.total * 100) or 0 end
-    local ground_killed = (p.ground and p.ground.killed) or 0
-    local build_killed  = (p.buildings and p.buildings.killed) or 0
-    local ground   = math.floor(pct(p.ground) + 0.5)
-    local build    = math.floor(pct(p.buildings) + 0.5)
-    local choppers = p.choppers or 0
-    local rescues  = p.rescues  or 0
-    -- Provisional OK rating: one point per fully cleared objective category. The
-    -- original's counter behind this line is not yet understood, only its weight.
-    local ok = 0
-    if p.ground and p.ground.total > 0 and ground >= 100 then ok = ok + 1 end
-    if p.buildings and p.buildings.total > 0 and build >= 100 then ok = ok + 1 end
-    if choppers > 0 then ok = ok + 1 end
-    if rescues > 0 then ok = ok + 1 end
+    local ground = Score.percent((p.ground    and p.ground.killed)    or 0,
+                                 (p.ground    and p.ground.total)     or 0)
+    local build  = Score.percent((p.buildings and p.buildings.killed) or 0,
+                                 (p.buildings and p.buildings.total)  or 0)
+    local choppers, chopper_step = Score.chopper_tier(p.choppers)
+    local rescues = p.rescues or 0
+    local ok      = p.badges  or 0
     return {
-        ground    = { value = ground,   bonus = Score.line_bonus("ground",    ground_killed) },
-        buildings = { value = build,    bonus = Score.line_bonus("buildings", build_killed) },
-        choppers  = { value = choppers, bonus = Score.line_bonus("choppers",  choppers) },
+        ground    = { value = ground,   bonus = Score.line_bonus("ground",    ground) },
+        buildings = { value = build,    bonus = Score.line_bonus("buildings", build) },
+        choppers  = { value = choppers, bonus = choppers * chopper_step },
         rescues   = { value = rescues,  bonus = Score.line_bonus("rescues",   rescues) },
         ok        = { value = ok,       bonus = Score.line_bonus("ok",        ok) },
     }
 end
 
 -- stats: { phase, participants = { {player, color, ground, buildings, choppers,
--- rescues}, ... } } (one participant single player, two in co-op).
+-- rescues, badges}, ... } } (one participant single player, two in co-op).
 function EndStats:start(stats)
     local parts = stats.participants or {}
     self.players_meta = {}
@@ -176,10 +169,12 @@ function EndStats:update(dt)
     if not self.active then return end
     self.badge_t = self.badge_t + dt
     if self.closing then
-        -- Reverse tally on close: wind every line (and the total) back down toward
-        -- zero, the mirror of the count-up, then drop the screen. The score was
-        -- already banked by _apply_final when the tally settled, so this is purely
-        -- cosmetic. A bit quicker than the count-up so the close does not drag.
+        -- Reverse tally on close: wind the line readouts back down toward zero,
+        -- the mirror of the count-up, then drop the screen. The TOTAL SCORE holds
+        -- at its full value instead (_total_score) - it is what was banked, and
+        -- watching it fall back reads as losing the bonus. Purely cosmetic either
+        -- way: _apply_final credited the score when the tally settled. A bit
+        -- quicker than the count-up so the close does not drag.
         self.t = self.t - dt * CLOSE_SPEED
         if self.t <= 0 then
             self.t      = 0
@@ -193,10 +188,13 @@ function EndStats:update(dt)
     end
 end
 
+-- Running TOTAL SCORE: the base plus however much of each line's bonus has
+-- tallied so far, and the whole bonus once the close starts winding the lines
+-- back down.
 function EndStats:_total_score()
     local s = self.base_score
     for i, row in ipairs(self.rows) do
-        local prog = self:_row_prog(i)
+        local prog = self.closing and 1 or self:_row_prog(i)
         for _, col in ipairs(row.cols) do
             s = s + math.floor(col.bonus * prog + 0.5)
         end

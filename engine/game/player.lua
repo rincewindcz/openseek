@@ -55,8 +55,11 @@ function Player:init(x, y)
     self.lives           = Score.START_LIVES      -- spare vehicles
     self.death           = nil     -- death sequence state (set by start_death)
 
-    self._kill_times    = {}    -- recent kill timestamps, for the overkill streak
-    self.overkill_until = 0     -- show the OVERKILL banner while time < this
+    self.badges          = 0    -- OK badges earned this phase (debriefing line 5)
+    self.streak          = 0    -- chained kills so far, see register_kill
+    self.streak_window   = 0    -- ticks left in which the next kill still chains
+    self.streak_cooldown = 0    -- ticks left before another badge can be earned
+    self.banner_t        = nil  -- OVERKILL banner animation clock, nil when idle
 
     self.turret_offset    = 0    -- tank turret heading relative to the hull (deg)
     self.tank_barrel      = 0    -- last-fired barrel, cycles 1->2->3 (triple gun)
@@ -209,29 +212,53 @@ function Player:add_ammo(name, amount)
     self.ammo[name] = math.min(cap, self.ammo[name] + amount)
 end
 
--- overkill streak
--- Several kills inside OVERKILL_WINDOW trigger the blinking OVERKILL banner for
--- OVERKILL_SHOW seconds. Values are placeholders to tune.
-local OVERKILL_WINDOW = 2.0
-local OVERKILL_KILLS  = 3
-local OVERKILL_SHOW   = 1.5
-
--- The simulation clock (accumulated fixed ticks), never the wall clock: streak
--- timing is player state and has to replay identically.
-function Player:_now()
-    return (self.world and self.world.time) or 0
-end
+-- OVERKILL banner / OK badge streak
+-- The original chains kills rather than counting them in a window (0x1febd3):
+-- every kill within STREAK_WINDOW ticks of the last one extends the streak, and
+-- the link past STREAK_LINKS fires the banner, clears the streak and locks the
+-- next badge out for STREAK_COOLDOWN ticks. The banner then runs a clock up by
+-- BANNER_STEP a tick to BANNER_END, and the badge is only banked as that clock
+-- passes BANNER_COUNT, so a phase that ends mid-banner does not score it.
+-- Everything counts ticks, never seconds, so a replay earns the same badges.
+local STREAK_WINDOW   = 60
+local STREAK_COOLDOWN = 420
+local STREAK_LINKS    = 2
+local BANNER_STEP     = 15
+local BANNER_COUNT    = 180
+local BANNER_END      = 630
 
 function Player:register_kill()
-    local now = self:_now()
-    local t = self._kill_times
-    t[#t + 1] = now
-    while t[1] and now - t[1] > OVERKILL_WINDOW do table.remove(t, 1) end
-    if #t >= OVERKILL_KILLS then self.overkill_until = now + OVERKILL_SHOW end
+    if self.streak_window > 0 then
+        if self.streak_cooldown == 0 then
+            self.streak = self.streak + 1
+            if self.streak > STREAK_LINKS then
+                self.streak          = 0
+                self.streak_cooldown = STREAK_COOLDOWN
+                self.banner_t        = 0
+            end
+        end
+    else
+        self.streak = 0
+    end
+    self.streak_window = STREAK_WINDOW
+end
+
+function Player:_update_streak()
+    if self.streak_window   > 0 then self.streak_window   = self.streak_window   - 1 end
+    if self.streak_cooldown > 0 then self.streak_cooldown = self.streak_cooldown - 1 end
+    local t = self.banner_t
+    if t and t < BANNER_END then
+        t = t + BANNER_STEP
+        self.banner_t = t
+        if t == BANNER_COUNT then
+            self.badges = self.badges + 1
+            if self.world then self.world:say("voice.overkill") end
+        end
+    end
 end
 
 function Player:overkill_active()
-    return self:_now() < (self.overkill_until or 0)
+    return (self.banner_t or BANNER_END) < BANNER_END
 end
 
 function Player:_apply_config()
@@ -246,6 +273,7 @@ end
 -- update
 
 function Player:update(dt)
+    self:_update_streak()
     if self.death then return self:_update_death(dt) end
     self:_update_altitude(dt)
     self:_apply_input(dt)
@@ -463,8 +491,6 @@ function Player:respawn(x, y)
     self.fuel        = self.max_fuel
     self.pows        = 0
     self.fire_timer  = 0
-    self.overkill_until = 0
-    self._kill_times    = {}
     self._smoke_puffs   = {}
     self._smoke_timer   = 0
     self._hit_fx        = {}

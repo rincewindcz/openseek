@@ -184,6 +184,7 @@ function CoopGameplay:collect_stats()
             buildings = { killed = k.building or 0, total = building_total },
             choppers  = k.chopper or 0,
             rescues   = p.pows or 0,
+            badges    = p.badges or 0,
         }
     end
     return { phase = Stats.stage_phase(world.stage_name), participants = participants }

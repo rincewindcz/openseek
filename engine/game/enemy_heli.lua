@@ -150,6 +150,7 @@ function HeliSystem:hit(heli, dmg, shooter)
             if shooter.stat_kills then
                 shooter.stat_kills.chopper = (shooter.stat_kills.chopper or 0) + 1
             end
+            if shooter.register_kill then shooter:register_kill() end
         end
     end
 end

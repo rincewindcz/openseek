@@ -271,6 +271,7 @@ function Gameplay:collect_stats()
             buildings = { killed = building_down, total = building_total },
             choppers  = app.helis.kills or 0,
             rescues   = self.player.pows or 0,
+            badges    = self.player.badges or 0,
         } },
     }
 end
