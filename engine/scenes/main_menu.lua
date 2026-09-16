@@ -1,13 +1,14 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class   = require "engine.core.class"
-local Scene   = require "engine.core.scene"
-local Menu    = require "engine.ui.menu"
-local Loadout = require "engine.game.loadout"
-local Score   = require "engine.game.score"
-local Sound   = require "engine.game.sound"
-local Log     = require "engine.core.log"
+local Class    = require "engine.core.class"
+local Scene    = require "engine.core.scene"
+local Menu     = require "engine.ui.menu"
+local Loadout  = require "engine.game.loadout"
+local Savegame = require "engine.game.savegame"
+local Score    = require "engine.game.score"
+local Sound    = require "engine.game.sound"
+local Log      = require "engine.core.log"
 
 -- Main menu scene. Switched to after the title card, or pushed over a running
 -- gameplay scene (Esc in game), in which case RESUME pops back to the game.
@@ -34,6 +35,7 @@ end
 
 function MainMenu:_open()
     self.menu:set_enabled("resume", self.over_game)
+    self.menu:set_enabled("load", Savegame.any())
     self.menu:open()
 end
 
@@ -62,6 +64,8 @@ function MainMenu:_select(id)
         app.scenes:replace("credits")
     elseif id == "hiscores" then
         app.scenes:replace("hiscores")
+    elseif id == "load" then
+        app.scenes:replace("saves", { mode = "load", return_to = "main_menu" })
     elseif id == "options" then
         app.scenes:replace("advanced_settings")
     elseif id == "mission" then

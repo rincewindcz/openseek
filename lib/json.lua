@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
--- Minimal JSON decoder (decode only), sufficient for the stage exports:
+-- Minimal JSON codec, sufficient for the stage exports and the save files:
 -- objects, arrays, strings without exotic escapes, numbers, booleans, null.
 
 local json = {}
@@ -96,6 +96,67 @@ end
 function json.decode(s)
   local v = decode_value(s, skipws(s, 1))
   return v
+end
+
+-- Encoder. Tables with a positive length are arrays, every other table is an
+-- object with its keys sorted, so the same data always encodes byte for byte the
+-- same (save files stay diffable).
+
+local ESCAPES = { ['"'] = '\\"', ["\\"] = "\\\\", ["\b"] = "\\b", ["\f"] = "\\f",
+                  ["\n"] = "\\n", ["\r"] = "\\r", ["\t"] = "\\t" }
+
+local function encode_string(s)
+  return '"' .. s:gsub('[%c"\\]', function(c)
+    return ESCAPES[c] or string.format("\\u%04x", c:byte())
+  end) .. '"'
+end
+
+local function encode_number(n)
+  if n ~= n or n == math.huge or n == -math.huge then
+    error("cannot encode " .. tostring(n))
+  end
+  if n == math.floor(n) then return string.format("%d", n) end
+  return string.format("%.14g", n)
+end
+
+local encode_value
+
+local function encode_array(t, indent)
+  local inner, parts = indent .. "  ", {}
+  for i = 1, #t do
+    parts[i] = inner .. encode_value(t[i], inner)
+  end
+  return "[\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "]"
+end
+
+local function encode_object(t, indent)
+  local keys = {}
+  for k in pairs(t) do
+    if type(k) ~= "string" then error("object key must be a string") end
+    keys[#keys + 1] = k
+  end
+  table.sort(keys)
+  local inner, parts = indent .. "  ", {}
+  for i, k in ipairs(keys) do
+    parts[i] = inner .. encode_string(k) .. ": " .. encode_value(t[k], inner)
+  end
+  return "{\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "}"
+end
+
+encode_value = function(v, indent)
+  local kind = type(v)
+  if kind == "nil" then return "null" end
+  if kind == "boolean" then return tostring(v) end
+  if kind == "number" then return encode_number(v) end
+  if kind == "string" then return encode_string(v) end
+  if kind ~= "table" then error("cannot encode " .. kind) end
+  if next(v) == nil then return "{}" end
+  if #v > 0 then return encode_array(v, indent) end
+  return encode_object(v, indent)
+end
+
+function json.encode(v)
+  return encode_value(v, "")
 end
 
 return json

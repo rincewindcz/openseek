@@ -85,18 +85,20 @@ SCREENS = {
     "chopper": ("EQPCHP", "EQPCHPG", "EQPCHPG2"),
     "tank":    ("EQPTNK", "EQPTNKG", "EQPTNKG2"),
 }
-# Hand-measured CHARACTERISTICS slider tracks (design px): the backdrop bakes a
-# dark track per row at a 10px pitch. Fuel and armor drag; speed is derived.
+# CHARACTERISTICS slider tracks (design px, fullscreen space): the backdrop
+# bakes one 33x8 track per row at a 10px pitch, located by matching the bar
+# frame's bevels against it. Fuel and armor drag; speed is derived.
+TRACK_W, TRACK_H = 33, 8
 CHARACTERISTICS = {
     "chopper": [
-        {"char": "fuel",  "x": 160, "y": 198, "w": 35, "h": 6},
-        {"char": "armor", "x": 160, "y": 208, "w": 35, "h": 6},
-        {"char": "speed", "x": 160, "y": 218, "w": 35, "h": 6, "readonly": True},
+        {"char": "fuel",  "x": 163, "y": 197, "w": TRACK_W, "h": TRACK_H},
+        {"char": "armor", "x": 163, "y": 207, "w": TRACK_W, "h": TRACK_H},
+        {"char": "speed", "x": 163, "y": 217, "w": TRACK_W, "h": TRACK_H, "readonly": True},
     ],
     "tank": [
-        {"char": "fuel",  "x": 160, "y": 188, "w": 35, "h": 6},
-        {"char": "armor", "x": 160, "y": 198, "w": 35, "h": 6},
-        {"char": "speed", "x": 160, "y": 208, "w": 35, "h": 6, "readonly": True},
+        {"char": "fuel",  "x": 162, "y": 181, "w": TRACK_W, "h": TRACK_H},
+        {"char": "armor", "x": 162, "y": 191, "w": TRACK_W, "h": TRACK_H},
+        {"char": "speed", "x": 162, "y": 201, "w": TRACK_W, "h": TRACK_H, "readonly": True},
     ],
 }
 BUTTONS = ["ok", "exit", "switch"]   # G2 frame pairs 0/1, 2/3, 4/5; f06 = plate
@@ -185,6 +187,34 @@ def save_canvas(canvas, pal, path):
             if p >= 0:
                 img.putpixel((x, y), (*(pal[p] or (255, 0, 255)), 255))
     img.save(path)
+
+
+def fit_track(canvas, width):
+    """Squeeze the CHARACTERISTICS bar frame into the baked track slot.
+
+    The EQP*G bar is 35 px wide but the slot baked into the backdrop is only
+    TRACK_W, so drawing the frame as-is spills its right bevel onto the panel
+    frame. The outer column, the right bevel and the shadow are structural and
+    are kept; the surplus comes off the widest colour runs of the interior, one
+    column at a time, so the red / orange / green zones stay even.
+    """
+    f = canvas_arr(canvas)
+    h, w = f.shape
+    if w <= width:
+        return canvas
+    runs, keep = [], list(range(w))
+    start = 1
+    for x in range(2, w - 2):
+        if not np.array_equal(f[:, x], f[:, start]):
+            runs.append([start, x - 1])
+            start = x
+    runs.append([start, w - 3])
+    for _ in range(w - width):
+        widest = max(runs, key=lambda r: r[1] - r[0])
+        keep.remove(widest[1])
+        widest[1] -= 1
+    return {(nx, y): int(f[y, x]) for nx, x in enumerate(keep)
+            for y in range(h) if f[y, x] >= 0}
 
 
 def find_all(frame, arr, tolerance=MATCH_TOLERANCE):
@@ -283,7 +313,9 @@ def export_screen(vehicle, game, pal, maps, out):
             crop_pips(arr, pal, pip_x, bay1["y"], out)
 
     # Group bay rows by column + vertical band, fill unmatched rows / specials
-    # from the 10 px row pitch (the tank backdrop lacks a baked MINE row).
+    # from the 10 px row pitch. A row the backdrop does not bake gets
+    # "baked": false so the engine draws its normal frame too: the tank
+    # backdrop has no MINE row (it bakes a stale SHELL label in its place).
     bay_order  = [w for w in weapons if w != "chaingun" and w not in SPECIALS[vehicle]]
     spec_order = [w for w in weapons if w in SPECIALS[vehicle]]
     groups = {}
@@ -307,12 +339,14 @@ def export_screen(vehicle, game, pal, maps, out):
             x, y = found.get(weapon, (ax, y0 + 10 * i))
             pip_x = find_pips(arr, y, x + row_w[weapon], x + row_w[weapon] + 10)
             bay.append({"weapon": weapon, "x": x, "y": y,
-                        "pips_x": pip_x, "pips_y": y})
+                        "pips_x": pip_x, "pips_y": y,
+                        "baked": weapon in found})
         layout["bays"].append({"rows": bay})
     if spec_anchor:
         sx, sy = spec_anchor
         for i, weapon in enumerate(spec_order):
-            layout["specials"].append({"weapon": weapon, "x": sx, "y": sy + 10 * i})
+            layout["specials"].append({"weapon": weapon, "x": sx, "y": sy + 10 * i,
+                                       "baked": bool(hits[weapon])})
 
     # Buttons: normal / pressed pairs + the blank plate; the normal frame is
     # the baked one, giving the position.
@@ -389,7 +423,7 @@ def main():
         print("  slider_knob.png")
     track = blitter_frames(game / "data" / "EQPTNKG.BIN")
     if len(track) > 21 and track[21]:
-        save_canvas(track[21], pal, out / "slider_track.png")
+        save_canvas(fit_track(track[21], TRACK_W), pal, out / "slider_track.png")
         print("  slider_track.png")
 
     (out / "layout.json").write_text(json.dumps(layout, indent=2) + "\n")

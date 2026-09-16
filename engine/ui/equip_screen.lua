@@ -29,6 +29,8 @@ local PIP_SLOTS    = 3
 local FOCUS_COLOR  = { 1, 0.85, 0.2 }
 local CONFIRM_TIME = 0.3   -- fade-through-black before OK / EXIT fires
 local KNOB_W       = 3     -- slider knob (EQPTNKF f3) width
+local TRACK_L      = 1     -- slider track's left bevel, excluded from knob travel
+local TRACK_R      = 2     -- and its right shadow
 
 local LAYOUT_PATH = "assets/equip/layout.json"
 
@@ -169,9 +171,9 @@ function EquipScreen:special_state(weapon)
     return "normal"
 end
 
--- Knob-travel x bounds (design px) for a slider track.
+-- Knob-travel x bounds (design px) inside a slider track's colored interior.
 function EquipScreen:_slider_bounds(s)
-    return s.x + 1, s.x + s.w - 1 - KNOB_W
+    return s.x + TRACK_L, s.x + s.w - TRACK_R - KNOB_W
 end
 
 -- Set a slider's characteristic from a design-space mouse x.
@@ -312,6 +314,12 @@ function EquipScreen:_fade()
     return 1
 end
 
+function EquipScreen:_draw_row(row, state)
+    if state == "normal" and row.baked ~= false then return end
+    local sprite = self:_row_img(row.weapon, state)
+    if sprite then love.graphics.draw(sprite, row.x, row.y) end
+end
+
 function EquipScreen:_draw_pips(row, level)
     if not (row.pips_x and self.pip_lit and self.pip_empty) then return end
     local g = love.graphics
@@ -339,44 +347,34 @@ function EquipScreen:draw()
 
     if self.backdrop then g.draw(self.backdrop, 0, 0) end
 
-    -- The backdrop bakes every row/special in its normal state, so only the
-    -- darkened (not owned) and gold-selected overlays are drawn on top.
+    -- The backdrop bakes most rows/specials in their normal state, so only the
+    -- darkened (not owned) and gold-selected overlays are drawn on top. A row
+    -- the backdrop does not bake (layout "baked": false, e.g. the tank's MINE,
+    -- whose slot carries a stale SHELL label) draws its normal frame as well.
     for bi, bay in ipairs(L.bays) do
         if bay.fixed then
             self:_draw_pips(bay, self:_level(bay.fixed))
         end
         for _, row in ipairs(bay.rows or {}) do
-            local state = self:row_state(bi, row.weapon)
-            if state ~= "normal" then
-                local sprite = self:_row_img(row.weapon, state)
-                if sprite then g.draw(sprite, row.x, row.y) end
-            end
+            self:_draw_row(row, self:row_state(bi, row.weapon))
             self:_draw_pips(row, self:_level(row.weapon))
         end
     end
 
     for _, sp in ipairs(L.specials) do
-        local state = self:special_state(sp.weapon)
-        if state ~= "normal" then
-            local sprite = self:_row_img(sp.weapon, state)
-            if sprite then g.draw(sprite, sp.x, sp.y) end
-        end
+        self:_draw_row(sp, self:special_state(sp.weapon))
     end
 
-    -- Characteristics sliders: the colored track (EQPTNKG f21) over the baked
-    -- track and its captured knob, then the live knob at fuel/armor/speed.
+    -- Characteristics sliders: the colored track (EQPTNKG f21) exactly over the
+    -- baked track and its captured knob, then the live knob at fuel/armor/speed.
+    -- The knob's top edge lines up with the track's, like the baked art.
     for _, s in ipairs(L.characteristics or {}) do
         local frac = self.loadout:char(self.vehicle, s.char)
-        local cy   = s.y + s.h / 2
-        if self.track then
-            g.setColor(1, 1, 1, fade)
-            g.draw(self.track, s.x, math.floor(cy - self.track:getHeight() / 2 + 0.5))
-        end
+        g.setColor(1, 1, 1, fade)
+        if self.track then g.draw(self.track, s.x, s.y) end
         if self.knob then
             local x_min, x_max = self:_slider_bounds(s)
-            g.setColor(1, 1, 1, fade)
-            g.draw(self.knob, math.floor(x_min + frac * (x_max - x_min) + 0.5),
-                              math.floor(cy - self.knob:getHeight() / 2 + 0.5))
+            g.draw(self.knob, math.floor(x_min + frac * (x_max - x_min) + 0.5), s.y)
         end
     end
 

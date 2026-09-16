@@ -124,6 +124,46 @@ function Loadout:unlock_all(weapons)
     end
 end
 
+-- Plain-table copy of the whole inventory, for the save files
+-- (engine/game/savegame.lua). Restore rebuilds a Loadout from one, keeping the
+-- constructor's defaults for anything an older save is missing.
+function Loadout:snapshot()
+    local vehicles = {}
+    for name, v in pairs(self.vehicles) do
+        local owned = {}
+        for weapon, level in pairs(v.owned) do owned[weapon] = level end
+        local bays = {}
+        for i, weapon in ipairs(v.bays) do bays[i] = weapon end
+        vehicles[name] = { owned = owned, bays = bays, special = v.special,
+                           chars = { fuel = v.chars.fuel, armor = v.chars.armor } }
+    end
+    return { medals = self.medals, vehicle = self.vehicle, vehicles = vehicles }
+end
+
+function Loadout.restore(data)
+    local loadout = Loadout:new()
+    if type(data) ~= "table" then return loadout end
+    loadout.medals  = tonumber(data.medals) or 0
+    loadout.vehicle = loadout.vehicles[data.vehicle] and data.vehicle or loadout.vehicle
+    for name, saved in pairs(data.vehicles or {}) do
+        local v = loadout.vehicles[name]
+        if v and type(saved) == "table" then
+            for weapon, level in pairs(saved.owned or {}) do
+                v.owned[weapon] = tonumber(level) or 0
+            end
+            for i = 1, #v.bays do
+                local weapon = (saved.bays or {})[i]
+                if weapon and (v.owned[weapon] or 0) >= 1 then v.bays[i] = weapon end
+            end
+            if saved.special then v.special = saved.special end
+            local chars = saved.chars or {}
+            v.chars.fuel  = tonumber(chars.fuel)  or v.chars.fuel
+            v.chars.armor = tonumber(chars.armor) or v.chars.armor
+        end
+    end
+    return loadout
+end
+
 -- The gameplay loadout: unique bay weapons in bay order plus the loaded
 -- special, each with its bay count as an ammo multiplier and its owned level.
 function Loadout:weapon_list(vehicle)

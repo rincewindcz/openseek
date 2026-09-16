@@ -125,7 +125,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `main_menu` | Main menu; pushed over a running game on Esc. |
 | `credits`, `hiscores` | Info screens over `ui/info_screen.lua`; top-10 table with name entry. |
 | `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
-| `mission_briefing` | Briefing text, phase selectors, SHOP / PLAY. |
+| `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
 | `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. |
 | `shop` | POWUP / POWUPT weapon shop. |
@@ -134,6 +134,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `sandbox` (F3) | Gameplay plus live vehicle parameter editor. |
 | `coop_setup`, `coop_gameplay` (F7) | Split-screen two-player co-op. |
 | `replays` (F4) | Play back, verify, toggle recording, delete. |
+| `saves` | SAVE / LOAD slots over the green-tinted `MAINP` backdrop: unlimited named slots, scrolling, name entry, two-step delete. Opened from the briefing (both modes) and from the menu LOAD entry. |
 | `anim_gallery`, `font_gallery`, `sound_gallery` (F8/F9/F10) | Asset galleries. |
 
 `scenes/gameplay_base.lua` is shared by the three gameplay scenes: firing,
@@ -175,6 +176,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/score` | Kill values, phase bonus weights, bonus-life ladder, `Score.award`. |
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header, delta input, checksums, `.osr` files. |
+| `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory), one JSON file per slot in `saves/`. |
 | `ui/hud` | Gauges, weapon icon, radar, counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
@@ -379,6 +381,7 @@ galleries, debug mission picker, headless checks.
 | `data/audio.json` | Sound events. |
 | `data/postfx.json` | `look` (100% values) and `presets`. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
+| `saves/save-<timestamp>-<n>.json` | One campaign save slot each, written to the save directory only (`game/savegame.lua`). |
 | `assets/stageMP.json`, `assets/stageMP/*.png` | Stages; one frame-0 PNG per class, `render` offsets, `objectives`, `is_target`. |
 | `assets/sounds.json`, `assets/sounds/*.wav` | Clip catalog (categories of `{name, file, label, rate}`), mono 8-bit WAV. |
 | `assets/mission_text.json` | `stage<M><P>` -> `paragraphs`. |

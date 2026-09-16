@@ -49,6 +49,7 @@ local SoundGallery    = require "engine.scenes.sound_gallery"
 local Credits         = require "engine.scenes.credits"
 local HiScores        = require "engine.scenes.hiscores"
 local Replays         = require "engine.scenes.replays"
+local Saves           = require "engine.scenes.saves"
 local Selftest        = require "engine.dev.selftest"
 
 -- The shared app context handed to every scene: the world and the systems
@@ -225,6 +226,7 @@ function love.load(args)
     scenes:register("credits",          Credits:new(app))
     scenes:register("hiscores",         HiScores:new(app))
     scenes:register("replays",          Replays:new(app))
+    scenes:register("saves",            Saves:new(app))
     scenes:switch("title")
 
     -- Run one scripted phase twice and compare the simulation tick by tick, then
