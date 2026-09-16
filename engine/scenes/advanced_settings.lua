@@ -114,6 +114,9 @@ local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 function AdvancedSettings:init(app)
     Scene.init(self, app)
     self.font      = Font.get("chars")
+    -- The original's small key font: the footer lists several key hints at once,
+    -- which do not fit the panel in the body face.
+    self.hint_font = Font.get("keysfont")
     self.cat       = 1
     self.cursor    = 1
     self.scroll    = 0        -- rows scrolled off the top of the panel
@@ -472,12 +475,12 @@ function AdvancedSettings:draw()
     elseif menu_focus then
         hint = "UP/DOWN SELECT   ENTER OPEN   ESC EXIT"
     elseif row and row.kind == "keybind" then
-        hint = "L/R COLUMN  ENTER BIND  DEL CLEAR"
+        hint = "LEFT/RIGHT COLUMN   ENTER BIND   DEL CLEAR"
     else
         hint = "UP/DOWN MOVE   LEFT/RIGHT CHANGE   ESC BACK"
     end
-    self.font:print(hint, (DESIGN_W - self.font:width(hint)) / 2, FOOTER_Y,
-        { color = { 1, 1, 1, 0.5 * fade } })
+    self.hint_font:print(hint, (DESIGN_W - self.hint_font:width(hint)) / 2, FOOTER_Y,
+        { color = { 1, 1, 1, 0.6 * fade } })
 
     g.pop()
     g.setColor(1, 1, 1, 1)
