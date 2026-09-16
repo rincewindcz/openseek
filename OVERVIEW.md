@@ -124,10 +124,10 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `title` | TITLE card; Enter, Space, Esc skip to `main_menu`. |
 | `main_menu` | Main menu; pushed over a running game on Esc. |
 | `credits`, `hiscores` | Info screens over `ui/info_screen.lua`; top-10 table with name entry. |
-| `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS. |
+| `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
 | `mission_briefing` | Briefing text, phase selectors, SHOP / PLAY. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
-| `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. |
+| `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. |
 | `shop` | POWUP / POWUPT weapon shop. |
 | `overview` | Free camera, stage and kind pickers, entity type editor. |
 | `gameplay` (F1) | Player-locked rotating camera, combat. |
@@ -144,7 +144,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/camera` | Zoom, pan, world rotation, culling, wrap tiles, fixed `game_zoom`. |
 | `core/config` | Tuning and compatibility flags; `PERSISTED` keys saved to `data/settings.json`. |
 | `core/display` | Window size, fullscreen, vsync, mobile `view_scale`. |
-| `core/input` | Rebindable single-player key map (`data/keybinds.json`). |
+| `core/input` | Rebindable single-player key map (`data/keybinds.json`); two key slots per action (`MAX_KEYS`), short column labels via `key_label`. |
 | `core/input_frame` | Per-player tick input: held bitmask + edge events + optional analog turn (`TURN_STEPS` 32). Bit order is replay format. |
 | `core/input_source` | `Local` (keyboard per tick), `Replay`, `Remote` (stub). |
 | `core/rng` | Seeded per-phase RNG with draw counter. |
@@ -171,7 +171,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
 | `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
 | `game/vehicles` | Free-play weapon cycles, equip bay and special lists, skins, labels. |
-| `game/loadout` | Campaign inventory: levels, bays, special, ammo multipliers, `buy`. |
+| `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. |
 | `game/score` | Kill values, phase bonus weights, bonus-life ladder, `Score.award`. |
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header, delta input, checksums, `.osr` files. |

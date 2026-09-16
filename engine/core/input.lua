@@ -29,18 +29,33 @@ local DEFAULTS = {
     screenshot = { "f12" },
 }
 
--- Display order and labels for the CONTROLS page.
+-- Keys bindable per action: a primary and an optional secondary, the two
+-- columns of the CONTROLS page.
+Input.MAX_KEYS = 2
+
+-- Display order and labels for the CONTROLS page. The labels are kept short so
+-- a row fits its label and both key columns across the 320px design width.
 Input.ACTIONS = {
     { key = "up",         label = "MOVE UP" },
     { key = "down",       label = "MOVE DOWN" },
     { key = "left",       label = "TURN LEFT" },
     { key = "right",      label = "TURN RIGHT" },
-    { key = "modifier",   label = "STRAFE/TURRET" },
+    { key = "modifier",   label = "STRAFE" },
     { key = "fire",       label = "FIRE" },
-    { key = "takeoff",    label = "TAKEOFF/LAND" },
-    { key = "weapon",     label = "CYCLE WEAPON" },
+    { key = "takeoff",    label = "TAKEOFF" },
+    { key = "weapon",     label = "WEAPON" },
     { key = "pause",      label = "PAUSE" },
-    { key = "screenshot", label = "SCREENSHOT" },
+    { key = "screenshot", label = "SNAPSHOT" },
+}
+
+-- Short names for the keys whose LOVE name does not fit a key column; anything
+-- else is upper-cased and cut to the column width.
+local KEY_NAMES = {
+    lshift = "LSH",  rshift = "RSH",  lctrl   = "LCTL", rctrl    = "RCTL",
+    lalt   = "LALT", ralt   = "RALT", lgui    = "LGUI", rgui     = "RGUI",
+    space  = "SPC",  ["return"] = "ENT", kpenter = "KENT", escape = "ESC",
+    backspace = "BSP", delete = "DEL", capslock = "CAPS",
+    pageup = "PGUP", pagedown = "PGDN", printscreen = "PRSC",
 }
 
 Input.map = {}
@@ -133,18 +148,38 @@ function Input.pressed(action, key)
     return false
 end
 
--- Replace an action's binding with a single key.
-function Input.rebind(action, key)
-    Input.map[action] = { key }
+-- The key bound in a slot (1 = primary, 2 = secondary), or nil.
+function Input.key_at(action, slot)
+    local keys = Input.map[action]
+    return keys and keys[slot] or nil
 end
 
--- Human-readable binding for the CONTROLS page (e.g. "W / UP").
-function Input.display(action)
+-- Column text for a key, or "---" for an empty slot.
+function Input.key_label(key)
+    if not key then return "---" end
+    return KEY_NAMES[key] or key:upper():sub(1, 5)
+end
+
+-- Bind key into one slot of an action. The key is dropped from the action's
+-- other slot first, so it is never listed twice; binding into the empty second
+-- slot of an unbound action fills the first.
+function Input.rebind(action, key, slot)
+    local keys = Input.map[action] or {}
+    for i = #keys, 1, -1 do
+        if keys[i] == key then table.remove(keys, i) end
+    end
+    slot = math.min(slot or 1, #keys + 1, Input.MAX_KEYS)
+    keys[slot] = key
+    Input.map[action] = keys
+end
+
+-- Clear one slot. The last key of an action stays: an action with no key left
+-- could not be triggered, and the page has no way to get back to it.
+function Input.clear(action, slot)
     local keys = Input.map[action]
-    if not keys or #keys == 0 then return "---" end
-    local out = {}
-    for i, k in ipairs(keys) do out[i] = k:upper() end
-    return table.concat(out, " / ")
+    if not keys or #keys < 2 or not keys[slot] then return false end
+    table.remove(keys, slot)
+    return true
 end
 
 return Input

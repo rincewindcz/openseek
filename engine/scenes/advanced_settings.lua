@@ -40,6 +40,10 @@ local VALUE_RX  = 298   -- option value right edge
 local ROW_Y0    = 56
 local ROW_DY    = 16
 local ROW_H     = 12
+local MAX_ROWS  = 9     -- option rows that fit between the title and the footer
+local KEY1_RX   = 252   -- keybind column right edges (primary / secondary)
+local KEY2_RX   = 298
+local KEY_SPLIT = 253   -- pointer x dividing the two columns
 local ARROW_GAP = 8
 local FADE_IN   = 0.25
 local FOOTER_Y  = 210
@@ -112,8 +116,10 @@ function AdvancedSettings:init(app)
     self.font      = Font.get("chars")
     self.cat       = 1
     self.cursor    = 1
+    self.scroll    = 0        -- rows scrolled off the top of the panel
+    self.key_col   = 1        -- focused keybind column (1 primary, 2 secondary)
     self.focus     = "menu"   -- "menu" (sidebar) or "panel" (option rows)
-    self.capturing = nil      -- input action awaiting a key press, or nil
+    self.capturing = nil      -- { action, slot } awaiting a key press, or nil
     self.t         = 0
 
     -- CONTROLS rows, built once from the rebindable actions plus a reset action.
@@ -131,6 +137,7 @@ end
 
 function AdvancedSettings:enter()
     self.t = 0; self.cat = 1; self.cursor = 1; self.focus = "menu"; self.capturing = nil
+    self.scroll = 0; self.key_col = 1
 end
 
 function AdvancedSettings:_category() return CATEGORIES[self.cat] end
@@ -151,14 +158,36 @@ end
 
 function AdvancedSettings:_move_cat(dir)
     self.cat    = ((self.cat - 1 + dir) % #CATEGORIES) + 1
-    self.cursor = 1
+    self:_set_cursor(1)
     Audio.play_event("ui.move")
+end
+
+-- Move the row cursor, keeping it inside the visible window.
+function AdvancedSettings:_set_cursor(i)
+    self.cursor  = i
+    self.key_col = 1
+    local n = #self:_options()
+    self.scroll = clamp(self.scroll, math.max(0, math.min(i - MAX_ROWS, n - MAX_ROWS)),
+        math.max(0, math.min(i - 1, n - MAX_ROWS)))
 end
 
 function AdvancedSettings:_move(dir)
     local n = #self:_options()
     if n == 0 then return end
-    self.cursor = ((self.cursor - 1 + dir) % n) + 1
+    self:_set_cursor(((self.cursor - 1 + dir) % n) + 1)
+    Audio.play_event("ui.move")
+end
+
+-- Scroll without moving the cursor (mouse wheel).
+function AdvancedSettings:wheelmoved(_dx, dy)
+    local n = #self:_options()
+    if n <= MAX_ROWS then return end
+    self.scroll = clamp(self.scroll - dy, 0, n - MAX_ROWS)
+end
+
+-- Move between the primary and secondary key column of a keybind row.
+function AdvancedSettings:_move_key_col(dir)
+    self.key_col = clamp(self.key_col + dir, 1, Input.MAX_KEYS)
     Audio.play_event("ui.move")
 end
 
@@ -168,7 +197,8 @@ function AdvancedSettings:_enter_category()
     if cat.kind == "exit" then self:_exit(); return end
     if #self:_options() > 0 then
         self.focus  = "panel"
-        self.cursor = 1
+        self.scroll = 0
+        self:_set_cursor(1)
         Audio.play_event("ui.confirm")
     end
 end
@@ -182,7 +212,7 @@ function AdvancedSettings:_activate(dir)
     -- the mixer, so the level the row just set is what the player hears.
     Audio.play_event("ui.confirm")
     if opt.kind == "keybind" then
-        self.capturing = opt.action
+        self.capturing = { action = opt.action, slot = self.key_col }
     elseif opt.kind == "reset" then
         Input.reset()
     elseif opt.kind == "toggle" then
@@ -213,7 +243,7 @@ end
 
 function AdvancedSettings:keypressed(key)
     if self.capturing then
-        if key ~= "escape" then Input.rebind(self.capturing, key) end
+        if key ~= "escape" then Input.rebind(self.capturing.action, key, self.capturing.slot) end
         self.capturing = nil
         return
     end
@@ -223,20 +253,23 @@ function AdvancedSettings:keypressed(key)
         elseif key == "right" or key == "return" or key == "space" or key == "kpenter" then self:_enter_category()
         elseif key == "escape" then self:_exit() end
     else
+        -- A keybind row uses left/right to pick its key column, so only
+        -- enter/space starts the capture; every other row still steps its value.
+        local opt     = self:_options()[self.cursor]
+        local keybind = opt and opt.kind == "keybind"
         if     key == "up"    then self:_move(-1)
         elseif key == "down"  then self:_move(1)
-        elseif key == "left"  then self:_activate(-1)
-        elseif key == "right" then self:_activate(1)
+        elseif key == "left"  then if keybind then self:_move_key_col(-1) else self:_activate(-1) end
+        elseif key == "right" then if keybind then self:_move_key_col(1)  else self:_activate(1)  end
         elseif key == "return" or key == "space" or key == "kpenter" then self:_activate(1)
+        elseif keybind and (key == "delete" or key == "backspace") then
+            if Input.clear(opt.action, self.key_col) then Audio.play_event("ui.confirm") end
         elseif key == "escape" then self.focus = "menu"; Audio.play_event("ui.back") end
     end
 end
 
 function AdvancedSettings:_value_text(opt)
-    if opt.kind == "keybind" then
-        if self.capturing == opt.action then return "PRESS KEY" end
-        return Input.display(opt.action)
-    elseif opt.kind == "reset" then
+    if opt.kind == "reset" then
         return ""
     elseif opt.kind == "toggle" then
         return Config[opt.key] and "ON" or "OFF"
@@ -264,9 +297,10 @@ end
 function AdvancedSettings:_panel_at(x, y)
     local dx, dy = Pointer.to_design(x, y, DESIGN_W, DESIGN_H)
     if dx < PANEL_LX - 4 or dx > VALUE_RX + 4 then return nil end
-    for i = 1, #self:_options() do
+    local n = #self:_options()
+    for i = 1, math.min(MAX_ROWS, n - self.scroll) do
         local ry = ROW_Y0 + (i - 1) * ROW_DY
-        if dy >= ry - 3 and dy <= ry + ROW_H then return i end
+        if dy >= ry - 3 and dy <= ry + ROW_H then return i + self.scroll end
     end
     return nil
 end
@@ -280,7 +314,10 @@ function AdvancedSettings:mousemoved(x, y)
         return
     end
     local pi = self:_panel_at(x, y)
-    if pi then self.focus = "panel"; self.cursor = pi end
+    if pi then
+        self.focus = "panel"
+        if pi ~= self.cursor then self:_set_cursor(pi) end
+    end
 end
 
 -- Click a category to open it, or an option to change it: toggles flip, ranges
@@ -295,11 +332,15 @@ function AdvancedSettings:mousepressed(x, y)
     end
     local pi = self:_panel_at(x, y)
     if not pi then return end
-    self.focus  = "panel"
-    self.cursor = pi
+    self.focus = "panel"
+    if pi ~= self.cursor then self:_set_cursor(pi) end
     local opt = self:_options()[pi]
     if not opt then return end
-    if opt.kind == "range" or opt.kind == "choice" then
+    if opt.kind == "keybind" then
+        local dx = Pointer.to_design(x, y, DESIGN_W, DESIGN_H)
+        self.key_col = (dx >= KEY_SPLIT) and 2 or 1
+        self:_activate(1)
+    elseif opt.kind == "range" or opt.kind == "choice" then
         local dx = Pointer.to_design(x, y, DESIGN_W, DESIGN_H)
         self:_activate(dx >= (PANEL_LX + VALUE_RX) / 2 and 1 or -1)
     else
@@ -308,6 +349,40 @@ function AdvancedSettings:mousepressed(x, y)
 end
 
 function AdvancedSettings:update(dt) self.t = self.t + dt end
+
+-- The two key columns of a CONTROLS row: the primary and the secondary
+-- binding, the focused one underlined while the row is selected.
+function AdvancedSettings:_draw_keybind(opt, y, sel, a, fade)
+    for slot, rx in ipairs({ KEY1_RX, KEY2_RX }) do
+        local capturing = self.capturing
+            and self.capturing.action == opt.action and self.capturing.slot == slot
+        local text = capturing and "PRESS" or Input.key_label(Input.key_at(opt.action, slot))
+        local w    = self.font:width(text)
+        local col  = capturing and { 1, 0.9, 0.4, fade } or { 1, 1, 1, a }
+        self.font:print(text, rx - w, y, { color = col })
+        if sel and slot == self.key_col then
+            love.graphics.setColor(col)
+            love.graphics.rectangle("fill", rx - w, y + self.font.line_height + 1, w, 1)
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+    end
+end
+
+-- Triangles marking rows scrolled out of view above / below the panel window.
+function AdvancedSettings:_draw_scroll_marks(n, fade)
+    if n <= MAX_ROWS then return end
+    local g  = love.graphics
+    local cx = (PANEL_LX + VALUE_RX) / 2
+    g.setColor(1, 1, 1, 0.5 * fade)
+    if self.scroll > 0 then
+        g.polygon("fill", cx - 4, ROW_Y0 - 4, cx + 4, ROW_Y0 - 4, cx, ROW_Y0 - 9)
+    end
+    if self.scroll + MAX_ROWS < n then
+        local by = ROW_Y0 + MAX_ROWS * ROW_DY - 6
+        g.polygon("fill", cx - 4, by, cx + 4, by, cx, by + 5)
+    end
+    g.setColor(1, 1, 1, 1)
+end
 
 -- The blinking selection arrow to the left of a row at (x, y).
 function AdvancedSettings:_arrow(x, y, fade)
@@ -371,25 +446,33 @@ function AdvancedSettings:draw()
     if cat.kind == "exit" then
         self.font:print("PRESS ENTER TO EXIT", PANEL_LX, ROW_Y0, { color = { 1, 1, 1, 0.7 * fade } })
     else
-        for i, opt in ipairs(self:_options()) do
-            local y   = ROW_Y0 + (i - 1) * ROW_DY
+        local options = self:_options()
+        for i = 1 + self.scroll, math.min(#options, self.scroll + MAX_ROWS) do
+            local opt = options[i]
+            local y   = ROW_Y0 + (i - 1 - self.scroll) * ROW_DY
             local sel = (self.focus == "panel" and i == self.cursor)
             local a   = (sel and 1 or 0.6) * fade
             self.font:print(opt.label, PANEL_LX, y, { color = { 1, 1, 1, a } })
-            local vt   = self:_value_text(opt)
-            local vcol = (self.capturing and self.capturing == opt.action)
-                and { 1, 0.9, 0.4, fade } or { 1, 1, 1, a }
-            self.font:print(vt, VALUE_RX - self.font:width(vt), y, { color = vcol })
+            if opt.kind == "keybind" then
+                self:_draw_keybind(opt, y, sel, a, fade)
+            else
+                local vt = self:_value_text(opt)
+                self.font:print(vt, VALUE_RX - self.font:width(vt), y, { color = { 1, 1, 1, a } })
+            end
             if sel then self:_arrow(PANEL_LX, y, fade) end
         end
+        self:_draw_scroll_marks(#options, fade)
     end
 
     -- Footer hint reflecting the current mode.
     local hint
+    local row = not menu_focus and self:_options()[self.cursor] or nil
     if self.capturing then
         hint = "PRESS A KEY   ESC CANCELS"
     elseif menu_focus then
         hint = "UP/DOWN SELECT   ENTER OPEN   ESC EXIT"
+    elseif row and row.kind == "keybind" then
+        hint = "L/R COLUMN  ENTER BIND  DEL CLEAR"
     else
         hint = "UP/DOWN MOVE   LEFT/RIGHT CHANGE   ESC BACK"
     end

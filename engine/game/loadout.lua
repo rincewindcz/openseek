@@ -8,8 +8,9 @@ local Vehicles = require "engine.game.vehicles"
 -- (0 = not owned) and the bay loadout picked on the equip screen. Bay 1
 -- always carries the chain gun. Loading several bays with one weapon gives
 -- that weapon slot multiplied ammo (the original's rule); number keys are
--- assigned to unique weapons in bay order. One built-in special may be
--- loaded at a time; specials are free and have no levels. The shop screen
+-- assigned to unique weapons in bay order. Exactly one built-in special is
+-- loaded at a time (the vehicle's first by default); specials are free and have
+-- no levels. The shop screen
 -- (engine/ui/shop_screen.lua) purchases levels into `owned` with medals.
 local Loadout = Class()
 
@@ -44,7 +45,7 @@ function Loadout:init()
         local v = {
             owned   = { chaingun = 1, [start] = 1 },
             bays    = { "chaingun" },
-            special = nil,
+            special = Vehicles.SPECIAL_WEAPONS[vehicle][1],
             -- Vehicle characteristics, each 0..1 (0.5 = evenly balanced, the
             -- original's default). Fuel and armor are set on the equip screen;
             -- speed is derived from them (more fuel+armor => slower).
@@ -68,10 +69,9 @@ function Loadout:set_bay(vehicle, i, weapon)
     v.bays[i] = weapon
 end
 
--- Toggle the loaded special (picking the loaded one unloads it).
+-- Load a special in place of the current one. There is no way to unload it.
 function Loadout:set_special(vehicle, weapon)
-    local v = self.vehicles[vehicle]
-    v.special = (v.special ~= weapon) and weapon or nil
+    self.vehicles[vehicle].special = weapon
 end
 
 -- A vehicle characteristic (0..1); "speed" is derived from fuel + armor.
