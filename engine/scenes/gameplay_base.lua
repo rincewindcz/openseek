@@ -272,11 +272,18 @@ function GameplayBase:replay_header(mode, players)
         death   = tostring(app.settings.death_enabled and true or false),
         easy_pickups = tostring(app.powerups.easy_mode and true or false),
         friendly_fire = tostring(app.combat.friendly_fire and true or false),
+        coop_lives = self.lives_mode,
     }
     for slot, p in ipairs(players) do
         local key = "player." .. slot .. "."
         header[key .. "vehicle"] = p.vehicle
         header[key .. "skin"]    = p.chopper_skin or 1
+        header[key .. "tank"]    = p.tank_skin or 1
+        header[key .. "number"]  = p.number or slot
+        -- The equip-screen fuel / armor split sets capacities and speed; slider
+        -- values are arbitrary floats, so they are written round-trip exact.
+        header[key .. "fuel"]    = ("%.17g"):format(p.load_fuel)
+        header[key .. "armor"]   = ("%.17g"):format(p.load_armor)
         header[key .. "lives"]   = p.lives or Score.START_LIVES
         -- Score and the bonus-vehicle threshold decide when a spare is handed
         -- out mid-phase, so they are starting conditions, not presentation.
@@ -309,6 +316,11 @@ function GameplayBase:apply_replay_player(p, slot)
     p.score           = tonumber(header[key .. "score"]) or p.score
     p.next_bonus_life = tonumber(header[key .. "bonus"]) or p.next_bonus_life
     p.unlimited       = header[key .. "god"] == "true"
+    local fuel, armor = tonumber(header[key .. "fuel"]), tonumber(header[key .. "armor"])
+    if fuel and armor then
+        p.load_fuel, p.load_armor = fuel, armor
+        p:_apply_config()
+    end
     local weapons = Replay.decode_list(header[key .. "weapons"])
     if #weapons > 0 then
         p.weapon_list = weapons
@@ -323,12 +335,14 @@ function GameplayBase:apply_replay_player(p, slot)
     if next(ammo) then p.ammo = ammo end
 end
 
--- The vehicle and skin a replay recorded for a slot, or nil when not replaying.
+-- The vehicle, chopper skin and tank skin a replay recorded for a slot, or nil
+-- when not replaying.
 function GameplayBase:replay_vehicle(slot)
     if not self.playback then return nil end
     local key = "player." .. slot .. "."
     return self.playback.header[key .. "vehicle"],
-        tonumber(self.playback.header[key .. "skin"]) or 1
+        tonumber(self.playback.header[key .. "skin"]) or 1,
+        tonumber(self.playback.header[key .. "tank"]) or 1
 end
 
 -- Build one input source per player slot: recorded frames on playback, the live

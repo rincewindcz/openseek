@@ -5,6 +5,7 @@ local Class       = require "engine.core.class"
 local Scene       = require "engine.core.scene"
 local MissionMenu = require "engine.ui.mission_menu"
 local EquipScreen = require "engine.ui.equip_screen"
+local Campaign    = require "engine.game.campaign"
 
 -- Pre-mission briefing scene wrapping the MISSION/PHASE menu (the menu itself
 -- is the briefing). PLAY opens the vehicle equip screen (or drops straight
@@ -36,7 +37,9 @@ function MissionBriefing:_select(id)
         -- turns on the lives + game-over flow; the overview toggle can still
         -- disable it. The sandbox is left deathless.
         self.app.settings.death_enabled = true
-        if EquipScreen.available() then
+        -- A co-op run always goes through the equip scene: it builds each
+        -- player's loadout, launching straight through when the art is missing.
+        if EquipScreen.available() or Campaign.coop(self.app) then
             self.app.scenes:switch("equip", self.app.world.stage_name)
         else
             self.app.scenes:switch("gameplay")

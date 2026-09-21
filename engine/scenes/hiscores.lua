@@ -15,7 +15,8 @@ local Log        = require "engine.core.log"
 --   * from the main menu's HIGH SCORES entry (replace, no argument): view only.
 --   * from game over (switch("hiscores", score)): if the final score makes the
 --     top 10, a new row opens for the player to type a name (blinking caret),
---     which is saved to the persisted table on Enter.
+--     which is saved to the persisted table on Enter. A co-op run passes a list
+--     of { score, label } instead; each qualifying player enters a name in turn.
 -- EXIT returns to the menu.
 local HiScores = Class(Scene)
 
@@ -74,14 +75,26 @@ function HiScores:_qualifies(score)
 end
 
 -- Open an editable row at the score's rank and start capturing keystrokes.
-function HiScores:_begin_entry(score)
+-- label names whose entry it is ("PLAYER 2") when several are queued.
+function HiScores:_begin_entry(score, label)
     local rank = #self.entries + 1
     for i, e in ipairs(self.entries) do
         if score > e.score then rank = i; break end
     end
     table.insert(self.entries, rank, { name = "", score = score, editing = true })
     while #self.entries > MAX_ROWS do table.remove(self.entries) end
-    self.entry = { row = rank, text = "" }
+    self.entry = { row = rank, text = "", label = label }
+end
+
+-- Open the next queued score that still makes the table, if any.
+function HiScores:_next_entry()
+    while #self.pending > 0 do
+        local e = table.remove(self.pending, 1)
+        if e.score > 0 and self:_qualifies(e.score) then
+            self:_begin_entry(e.score, e.label)
+            return
+        end
+    end
 end
 
 function HiScores:_commit_entry()
@@ -91,6 +104,7 @@ function HiScores:_commit_entry()
     Log.info("hiscores", "new entry %s, %d points, rank %d", row.name, row.score, self.entry.row)
     self.entry  = nil
     self:_save()
+    self:_next_entry()
 end
 
 function HiScores:_entry_key(key)
@@ -154,19 +168,24 @@ function HiScores:_draw_table(g, fade)
     end
 
     if self.entry then
-        local hint = "ENTER YOUR NAME - PRESS ENTER"
+        local hint = self.entry.label and (self.entry.label .. " - ENTER YOUR NAME")
+            or "ENTER YOUR NAME - PRESS ENTER"
         self.font:print(hint, (320 - self.font:width(hint)) / 2, LIST_TOP + panel_h + 4,
             { color = { LIVE[1], LIVE[2], LIVE[3], fade } })
     end
 end
 
-function HiScores:enter(new_score)
+function HiScores:enter(new_scores)
     self.entries = self:_load()
     self.entry   = nil
     self.caret_t = 0
-    if new_score and new_score > 0 and self:_qualifies(new_score) then
-        self:_begin_entry(new_score)
+    self.pending = {}
+    if type(new_scores) == "number" then
+        self.pending[1] = { score = new_scores }
+    elseif type(new_scores) == "table" then
+        for i, e in ipairs(new_scores) do self.pending[i] = { score = e.score or 0, label = e.label } end
     end
+    self:_next_entry()
     self.screen:open()
 end
 

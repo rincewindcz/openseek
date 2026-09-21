@@ -4,11 +4,8 @@
 local Class    = require "engine.core.class"
 local Scene    = require "engine.core.scene"
 local Menu     = require "engine.ui.menu"
-local Loadout  = require "engine.game.loadout"
 local Savegame = require "engine.game.savegame"
-local Score    = require "engine.game.score"
 local Sound    = require "engine.game.sound"
-local Log      = require "engine.core.log"
 
 -- Main menu scene. Switched to after the title card, or pushed over a running
 -- gameplay scene (Esc in game), in which case RESUME pops back to the game.
@@ -45,19 +42,8 @@ end
 function MainMenu:_select(id)
     local app = self.app
     if id == "new_game" then
-        -- Start a fresh campaign run at the first stage: play through every phase
-        -- and mission in order, accumulating one running score across the run.
-        local first        = app.world.stages[1]
-        Log.info("game", "new campaign from %s", first)
-        app.campaign       = true
-        app.run_score      = 0
-        app.run_lives      = Score.START_LIVES
-        app.run_bonus_life = Score.BONUS_LIFE_STEP
-        app.loadout        = Loadout:new()   -- fresh weapon inventory for the run
-        app.world:load(first)
-        app.after_stage_load()
-        app.scenes:switch("mission_briefing", first)
-        app.screen:show_mission(tonumber(first:match("^stage(%d)")))
+        -- Solo or co-op, then the vehicle select screen, which starts the run.
+        app.scenes:replace("new_game")
     elseif id == "resume" then
         if self.over_game then app.scenes:pop() end
     elseif id == "credits" then

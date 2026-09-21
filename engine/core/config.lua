@@ -31,9 +31,16 @@ local Config = {
     -- a quick count that eases into the final digits. Presentation only.
     score_count_up = true,
 
-    -- Player chopper variant outside co-op (1..Vehicles.CHOPPER_SKINS). Co-op
-    -- picks one per player on its setup screen.
+    -- Single-player vehicle variants (engine/game/vehicles.lua): the chopper
+    -- skin and the tank camo set. The vehicle select screen writes them; co-op
+    -- keeps one pair per player in app.settings.coop instead.
     chopper_skin = 1,
+    tank_skin    = 1,
+
+    -- Co-op campaign lives: "separate" gives each player their own spare
+    -- vehicles, "shared" draws both from one pool. Either way a player with no
+    -- vehicle left sits out the rest of the run. Read when a run starts.
+    coop_lives = "separate",
 
     -- End-of-phase DESTRUCTION STATS tally direction. The original counts each
     -- line's percentage / tally down to zero while the bonus drains into TOTAL
@@ -108,7 +115,8 @@ local PERSISTED = {
     "postfx_enabled", "postfx_preset", "postfx_grade", "postfx_contrast", "postfx_sharpen",
     "postfx_bloom", "postfx_vignette", "postfx_grain", "postfx_soft_shadows",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
-    "endstats_count_up", "score_count_up", "chopper_skin", "explosive_trees", "tree_crush_speed",
+    "endstats_count_up", "score_count_up", "chopper_skin", "tank_skin", "coop_lives",
+    "explosive_trees", "tree_crush_speed",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
     "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",
     "fullscreen", "vsync", "window_size", "show_fps",

@@ -122,17 +122,19 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | Scene | Role |
 |-------|------|
 | `title` | TITLE card; Enter, Space, Esc skip to `main_menu`. |
-| `main_menu` | Main menu; pushed over a running game on Esc. |
-| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`; top-10 table with name entry. |
+| `main_menu` | Main menu; pushed over a running game on Esc. NEW GAME replaces it with `new_game`. |
+| `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL (`mainmen` has no B J K Q Y Z). |
+| `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
+| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`; top-10 table with name entry, one per qualifying player after a co-op run. |
 | `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
 | `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
-| `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. |
-| `shop` | POWUP / POWUPT weapon shop. |
+| `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. Co-op: once per player (tagged), EXIT steps back a player. |
+| `shop` | POWUP / POWUPT weapon shop. Co-op: once per player, each with their own purse. |
 | `overview` | Free camera, stage and kind pickers, entity type editor. |
 | `gameplay` (F1) | Player-locked rotating camera, combat. |
 | `sandbox` (F3) | Gameplay plus live vehicle parameter editor. |
-| `coop_setup`, `coop_gameplay` (F7) | Split-screen two-player co-op. |
+| `coop_gameplay` (F7, LOCAL COOP) | Split-screen two-player co-op; full screen when one player is left in a campaign. |
 | `replays` (F4) | Play back, verify, toggle recording, delete. |
 | `saves` | SAVE / LOAD slots over the green-tinted `MAINP` backdrop: unlimited named slots, scrolling, name entry, two-step delete. Opened from the briefing (both modes) and from the menu LOAD entry. |
 | `anim_gallery`, `font_gallery`, `sound_gallery` (F8/F9/F10) | Asset galleries. |
@@ -158,7 +160,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/log` | Timestamped, tagged console lines (`info`, `warn`). |
 | `game/world` | Stage load, entities, ground colour, collision (`blocked`), objectives, shrapnel, dust, `world.time`, `world.rng`, `world.params`. |
 | `game/entity` | HP, state machine, damage smoke, hit effects, crater. |
-| `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. |
+| `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. `Player.draw_tank_variant` is shared with the select screen. |
 | `game/enemy_heli` | Enemy helicopter spawn, flight AI, fire, death (`world.air_units`). |
 | `game/combat` | Weapons, projectiles, firing geometry, hits, AoE, effects, ground enemy AI. |
 | `game/mission` | Objectives, progress, return to base. `Mission.for_stage(world, players, stage)`. |
@@ -171,17 +173,19 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/sound` | Listeners, panning, attenuation, engine loops, radio queue. |
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
 | `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
-| `game/vehicles` | Free-play weapon cycles, equip bay and special lists, skins, labels. |
-| `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. |
+| `game/vehicles` | Free-play weapon cycles, equip bay and special lists, variants (`data/vehicle_variants.json`, loaded on first use), labels. |
+| `game/campaign` | NEW GAME run state: solo run fields or `app.coop_run` (per-player score, lives, threshold, out flag, `Loadout`; lives rule and pool), active players, `advance`, `finish`. |
+| `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. `Loadout.active(app, player)` picks a co-op player's own. |
 | `game/score` | Kill values, phase bonus weights, bonus-life ladder, `Score.award`. |
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header, delta input, checksums, `.osr` files. |
-| `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory), one JSON file per slot in `saves/`. |
+| `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory; co-op adds a `coop` table per player), one JSON file per slot in `saves/`. |
 | `ui/hud` | Gauges, weapon icon, radar, counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Three level buttons per weapon category, medal purchase. |
 | `ui/menu` | Main menu over `MAINP`, `mainmen` font. |
+| `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
 | `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. |
 | `ui/mission_select` | `STAGE0X_MPIC` carousel, phase buttons. |
 | `ui/info_screen` | CREDITS / HIGH SCORES shell. |
@@ -301,14 +305,53 @@ machine_gun burst 4). Approaches beyond `ORBIT_R * 1.25`, otherwise orbits withi
 
 ## 9. Co-op
 
-- F7 setup: per-player vehicle, god mode, friendly fire. Vertical split, camera
-  and HUD per half, shared systems drawn per viewport.
-- Same rules as single player via `Mission.for_stage`. Either player completes any
-  objective or the landing. Per-player lives, respawn on base pad; failure when
-  both are out.
-- Free-play weapon lists, no briefing, shop or progression. Per-player score,
-  bonus threshold and stats column, credited by `proj.shooter`.
+- NEW GAME > LOCAL COOP: a campaign for two. Vehicle select (a chopper and a
+  tank variant per player), then the solo flow: briefing, SHOP and equip once
+  per player, each with their own medals, owned weapons and bays. Score, lives,
+  bonus threshold and medals carry per player; SAVE / LOAD store both players.
+- Lives (`coop_lives`, read when the run starts): `separate` spare vehicles per
+  player, or one `shared` pool (6 at start, bonus vehicles join it, capped at
+  `Score.MAX_LIVES`) that every player's lives mirror. A crashed player respawns
+  only if a vehicle is left beyond those the teammates still fly. Without one
+  they are out for the rest of the run; the next phase spawns only the rest,
+  full screen when one is left. All out: crash picture, then a high-score
+  entry per qualifying player.
+- F7 free play: vehicle select in free mode (the focused card is the vehicle, G
+  god mode, F friendly fire), full weapon lists, no briefing, shop or
+  progression, back to the menu after the stats.
+- Vertical split, camera and HUD per half, shared systems drawn per viewport.
+  Same rules as single player via `Mission.for_stage`; either player completes
+  any objective. The landing is the whole team's: once the objectives are done,
+  every player still flying has to be parked on the home pad
+  (`Mission:player_home`), and a half already parked blinks WAIT FOR TEAMMATE. A
+  wrecked or out player is not waited for; going down on the way home only wins
+  the phase when nobody is left to fly it home. Respawn on the base pad; failure
+  when both are down. Per-player score, bonus threshold and stats column, credited by
+  `proj.shooter`.
+- Slots (input, replay) follow spawn order; `p.number` is the player (colour,
+  keys, HUD label). The replay header stores it, and the lives rule.
 - P1: WASD, L-Shift, L-Ctrl, Q, E. P2: arrows, R-Shift, R-Ctrl, Num0, NumEnter.
+  Select screen: P1 W/S card, A/D variant; P2 arrows; Enter start, Esc back.
+
+## 9a. Vehicle variants
+
+`data/vehicle_variants.json`, index = skin number (config, co-op settings,
+replay header `player.N.skin` / `player.N.tank`).
+
+| Vehicle | Variants | Art |
+|---------|----------|-----|
+| Chopper | GREEN, ARCTIC, DESERT | `CHOP*1..3` player sets (2 and 3 unused in the original). |
+| Tank | GREEN, DESERT, ARCTIC, STEEL, RUST | Player `TANKBGRN` / `TANKTOP`; enemy hull + turret pairs from stage01 (`tank` / `tanktop`), stage11 (`stank`), stage21 (`jtank`), stage31 (`tank` / `tankt2`, night palette). |
+
+- Tank fields: `hull` / `turret` clips (`vtank_*` in `data/animations.json`),
+  `hull_anchor` / `turret_anchor` pivots from the stage `render` offsets
+  (enemy turrets sit on the hull pivot), `barrels` as `{ lateral, forward }`
+  art px from the turret pivot. Shells cycle through the variant's barrels
+  (1 to 3), so they are simulation input.
+- Enemy hulls have one frame: no tread animation. No night sets for enemy
+  variants; they draw the day art at night.
+- `camo` (1-4) is the VSELECT strip the select screen draws; `camo_tint`
+  recolours it.
 
 ## 10. Audio
 
@@ -351,7 +394,8 @@ Options:
 | `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs. |
 | `endstats_count_up` | GAMEPLAY | Stats count up instead of down. |
 | `score_count_up` | GAMEPLAY | HUD score rolls to new total (frame time, presentation). |
-| `chopper_skin` | GAMEPLAY | Player chopper variant 1-3 outside co-op; overview `V` cycles it too. Recorded in the replay header. |
+| `chopper_skin`, `tank_skin` | GAMEPLAY | Solo chopper and tank variants (section 9a); also set by the vehicle select screen and the overview `V` cycle. Recorded in the replay header. |
+| `coop_lives` | GAMEPLAY | Co-op campaign lives: `separate` or `shared` pool (section 9). |
 | `master_volume`, `sfx_volume`, `engine_volume`, `voice_volume`, `ui_volume`, `music_volume` | AUDIO | Master and bus volumes. |
 | `audio_positional` | AUDIO | Directional mix; off centres all sounds. |
 | `coop_split_pan` | AUDIO | Split-screen stereo bias. |
@@ -359,8 +403,10 @@ Options:
 | `fullscreen`, `vsync`, `window_size`, `show_fps` | DISPLAY | Window mode, letterboxing. |
 | `data/keybinds.json` | CONTROLS | Rebindable gameplay actions. |
 
-Modes and tools: split-screen co-op, replays, chopper skins 2 and 3 (`CHOP*2`,
-`CHOP*3`, unused in the original), runtime sprite rotation, weather, runtime
+Modes and tools: split-screen co-op (free play and campaign), vehicle select
+screen (unused `VSELECT` art), replays, chopper skins 2 and 3 (`CHOP*2`,
+`CHOP*3`, unused in the original), tank variants from the enemy tanks, runtime
+sprite rotation, weather, runtime
 shadows, shrapnel / dust / craters, overview type editor, vehicle sandbox, asset
 galleries, debug mission picker, headless checks.
 
@@ -376,6 +422,7 @@ galleries, debug mission picker, headless checks.
 | `data/building_drops.json` | Asset filename -> forced pickup kind. |
 | `data/missions.json` | Section 9. |
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable). |
+| `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
 | `data/animations.json` | Named animation clips. |
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
 | `data/audio.json` | Sound events. |
@@ -434,7 +481,7 @@ Requires Python 3, `pillow`, `numpy`. Game directory via `--game-dir`.
 | F4 | Replays |
 | F5 | God mode |
 | F6 | Pickup mode fly-over / land-on |
-| F7 | Co-op setup |
+| F7 | Co-op free play (vehicle select) |
 | F8 / F9 / F10 | Animation / font / sound gallery |
 | F12 | Screenshot (rebindable) |
 | Overview: wheel, +/- | Zoom |

@@ -1,0 +1,38 @@
+{
+  "chopper": [
+    { "name": "GREEN",  "camo": 2 },
+    { "name": "ARCTIC", "camo": 3 },
+    { "name": "DESERT", "camo": 1 }
+  ],
+  "tank": [
+    {
+      "name": "GREEN", "camo": 2,
+      "hull": "tankbgrn", "turret": "tanktop",
+      "barrels": [[-4.5, 15], [-0.5, 15], [3.5, 15]]
+    },
+    {
+      "name": "DESERT", "camo": 1,
+      "hull": "vtank_desert", "turret": "vtank_desert_top",
+      "hull_anchor": [10, 16], "turret_anchor": [8, 24],
+      "barrels": [[0.5, 24]]
+    },
+    {
+      "name": "ARCTIC", "camo": 3,
+      "hull": "vtank_arctic", "turret": "vtank_arctic_top",
+      "hull_anchor": [11, 17], "turret_anchor": [9, 17],
+      "barrels": [[-4.5, 17], [3.5, 17]]
+    },
+    {
+      "name": "STEEL", "camo": 4,
+      "hull": "vtank_steel", "turret": "vtank_steel_top",
+      "hull_anchor": [11, 15], "turret_anchor": [9, 23],
+      "barrels": [[-4.5, 23], [-0.5, 23], [3.5, 23]]
+    },
+    {
+      "name": "RUST", "camo": 1, "camo_tint": [0.85, 0.5, 0.4],
+      "hull": "vtank_rust", "turret": "vtank_rust_top",
+      "hull_anchor": [10, 16], "turret_anchor": [9, 16],
+      "barrels": [[-2.5, 16], [2.5, 16]]
+    }
+  ]
+}

@@ -307,6 +307,7 @@ function Saves:_draw_row(i, y, fade)
 
     if row.kind == "slot" then
         local phase = Savegame.stage_short(row.data.stage)
+        if type(row.data.coop) == "table" then phase = "2P " .. phase end
         self.font:print(phase, PHASE_RX - self.font:width(phase), y + 2, { color = col })
     end
     if sel and not self.entry then self:_draw_arrow(NAME_X, y, fade) end
@@ -321,6 +322,13 @@ function Saves:_draw_detail(fade)
     local text
     if self.entry then
         text = "TYPE A NAME FOR THIS SLOT"
+    elseif slot and type(slot.coop) == "table" then
+        local parts = { "COOP" }
+        for i, p in ipairs(slot.coop.players or {}) do
+            parts[#parts + 1] = string.format("P%d %d%s", i, math.floor(tonumber(p.score) or 0),
+                p.out and " OUT" or "")
+        end
+        text = table.concat(parts, "   ")
     elseif slot then
         text = string.format("SCORE %d   MEDALS %d   SPARE %d",
             math.floor(tonumber(slot.score) or 0),

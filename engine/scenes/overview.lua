@@ -190,7 +190,8 @@ function Overview:_draw_panel()
     local setup_h = 22 + 6 * ROW_H + 6
     g.setColor(COLORS.bg); g.rectangle("fill", x, y, PANEL_W, setup_h, 4)
     local yy = section(g, "SETUP", x, y + 4)
-    yy = row(g, "[V]", "Vehicle",   Vehicles.label(settings.vehicle, Config.chopper_skin),
+    local skin = (settings.vehicle == "tank") and Config.tank_skin or Config.chopper_skin
+    yy = row(g, "[V]", "Vehicle",   Vehicles.label(settings.vehicle, skin),
           COLORS.value, x, yy)
     yy = row(g, "[O]", "Game over", settings.death_enabled and "ON" or "OFF",
           settings.death_enabled and COLORS.on or COLORS.off, x, yy)
@@ -283,7 +284,10 @@ function Overview:keypressed(key)
     if key == "f8"  then app.scenes:switch("anim_gallery");  return end
     if key == "f9"  then app.scenes:switch("font_gallery");  return end
     if key == "f10" then app.scenes:switch("sound_gallery"); return end
-    if key == "f7"  then app.scenes:switch("coop_setup");    return end
+    if key == "f7"  then
+        app.scenes:switch("vehicle_select", { players = 2, free = true, return_to = "overview" })
+        return
+    end
     if key == "f4"  then app.scenes:switch("replays");       return end
     if key == "f2"  then return end   -- editor is always on here; F2 is a no-op
     if app.debug_panel.enabled and app.debug_panel:keypressed(key) then return end
@@ -312,7 +316,11 @@ function Overview:keypressed(key)
 
     local settings = app.settings
     if key == "v" then
-        settings.vehicle, Config.chopper_skin = Vehicles.cycle(settings.vehicle, Config.chopper_skin)
+        local skin = (settings.vehicle == "tank") and Config.tank_skin or Config.chopper_skin
+        local vehicle
+        vehicle, skin = Vehicles.cycle(settings.vehicle, skin)
+        settings.vehicle = vehicle
+        if vehicle == "tank" then Config.tank_skin = skin else Config.chopper_skin = skin end
     end
     if key == "o" then settings.death_enabled = not settings.death_enabled end
     if key == "c" then Config.axis_aligned_pickups = not Config.axis_aligned_pickups end

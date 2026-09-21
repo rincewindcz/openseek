@@ -8,6 +8,7 @@ local Player       = require "engine.game.player"
 local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
 local Vehicles     = require "engine.game.vehicles"
+local Campaign     = require "engine.game.campaign"
 local Input        = require "engine.core.input"
 local Config       = require "engine.core.config"
 local Camera       = require "engine.core.camera"
@@ -89,7 +90,7 @@ function Gameplay:spawn_player(carry)
     self:apply_replay_settings()   -- playback: the recorded mode flags
     local world, camera, combat = app.world, app.camera, app.combat
     local settings = app.settings
-    local replay_vehicle, replay_skin = self:replay_vehicle(1)
+    local replay_vehicle, replay_skin, replay_tank = self:replay_vehicle(1)
     local sx, sy = world:player_start()
     local prev   = self.player
     local player = Player:new(sx, sy)
@@ -109,7 +110,8 @@ function Gameplay:spawn_player(carry)
     player.world_size   = world.stage.world_size
     player.home_x, player.home_y = sx, sy
     player.vehicle      = replay_vehicle or settings.vehicle
-    player.chopper_skin = replay_skin or Config.chopper_skin
+    player.chopper_skin = replay_skin or Vehicles.clamp_skin("chopper", Config.chopper_skin)
+    player.tank_skin    = replay_tank or Vehicles.clamp_skin("tank", Config.tank_skin)
     player.world        = world
     player.camera       = camera
     player.controls     = Input.map   -- single-player movement reads the rebindable map
@@ -194,13 +196,12 @@ function Gameplay:on_vehicle_lost()
         Log.info("game", "game over, score %d", player.score or 0)
         if self.playback then self:finish_playback("game over"); return end
         local score = player.score or 0
-        app.campaign = false   -- out of lives: the run is over
-        app.screen:show(pic, {
-            fade_in   = 0.6,
-            wait_key  = true,
-            on_done   = function() app.scenes:switch("hiscores", score) end,
-            on_cancel = function() app.scenes:switch("hiscores", score) end,
-        })
+        if app.campaign then app.run_score = score end
+        -- Out of lives: the run is over.
+        local function finish()
+            if app.campaign then Campaign.finish(app) else app.scenes:switch("hiscores", score) end
+        end
+        app.screen:show(pic, { fade_in = 0.6, wait_key = true, on_done = finish, on_cancel = finish })
     end
 end
 
@@ -239,23 +240,8 @@ function Gameplay:on_stats_done()
     if app.loadout then
         app.loadout.medals = app.loadout.medals + (self.player.medals or 0)
     end
-    local next_stage = app.world.stages[app.world.stage_index + 1]
-    if not next_stage then
-        Log.info("game", "campaign complete, score %d", app.run_score)
-        app.campaign = false
-        app.scenes:switch("hiscores", app.run_score)
-        return
-    end
-    local cur_m  = tonumber((app.world.stage_name or ""):match("^stage(%d)"))
-    local next_m = tonumber(next_stage:match("^stage(%d)"))
-    Log.info("game", "campaign continues to %s, score %d, lives %d", next_stage, app.run_score, app.run_lives)
-    app.world:load(next_stage)
-    app.after_stage_load()
-    app.scenes:switch("mission_briefing", next_stage)
-    -- Crossing into a new mission: show that mission's picture over the briefing.
-    if next_m and next_m ~= cur_m then
-        app.screen:show_mission(next_m)
-    end
+    Log.info("game", "phase cleared, score %d, lives %d", app.run_score, app.run_lives)
+    Campaign.advance(app)
 end
 
 -- Single player: the whole stage's destruction is credited to the lone player

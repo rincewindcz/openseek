@@ -100,7 +100,10 @@ local CATEGORIES = {
         { key = "friendly_fire_pows",   label = "FRIENDLY FIRE",   kind = "toggle" },
         { key = "endstats_count_up",    label = "STATS COUNT UP",  kind = "toggle" },
         { key = "score_count_up",       label = "SCORE COUNT UP",  kind = "toggle" },
-        { key = "chopper_skin",         label = "CHOPPER",         kind = "choice", choices = Vehicles.skin_choices() },
+        { key = "chopper_skin",         label = "CHOPPER",         kind = "choice", choices = Vehicles.skin_choices("chopper") },
+        { key = "tank_skin",            label = "TANK",            kind = "choice", choices = Vehicles.skin_choices("tank") },
+        { key = "coop_lives",           label = "COOP LIVES",      kind = "choice", choices = {
+            { label = "SEPARATE", value = "separate" }, { label = "SHARED", value = "shared" } } },
     } },
     { title = "EXTRAS", options = {
         { key = "explosive_trees",  label = "EXPLOSIVE TREES", kind = "toggle" },

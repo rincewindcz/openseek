@@ -232,7 +232,7 @@ function ShopScreen:update(dt)
     end
 end
 
-function ShopScreen:_fade()
+function ShopScreen:fade()
     if self.confirming then
         return math.max(0, 1 - self.confirm_t / CONFIRM_TIME)
     end
@@ -258,7 +258,7 @@ function ShopScreen:draw()
     local g                  = love.graphics
     local screen_w, screen_h = g.getDimensions()
     local scale, ox, oy      = Layout.fit(screen_w, screen_h)
-    local fade               = self:_fade()
+    local fade               = self:fade()
 
     g.setColor(0, 0, 0, 1)
     g.rectangle("fill", 0, 0, screen_w, screen_h)

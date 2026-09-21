@@ -24,7 +24,12 @@ Loadout.START_MEDALS = 16
 -- The loadout for the current run: the persistent campaign inventory (NEW GAME,
 -- earned from pickups) or the single-mission inventory (MISSION mode, seeded
 -- with START_MEDALS). Created on first use; the shop and equip screens share it.
-function Loadout.active(app)
+-- A co-op campaign keeps one per player (engine/game/campaign.lua); player
+-- picks it (default 1).
+function Loadout.active(app, player)
+    if app.campaign and app.coop_run then
+        return app.coop_run.players[player or 1].loadout
+    end
     if app.campaign then
         if not app.loadout then app.loadout = Loadout:new() end
         return app.loadout

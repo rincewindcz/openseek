@@ -295,15 +295,28 @@ function Mission:_update_sabotage(o)
     if s:all_cleared() then o.done = true end
 end
 
+-- A player parked on the home pad: landed (a tank, stopped) and inside its
+-- radius. A stage without a pad counts everyone home.
+function Mission:player_home(p)
+    if not self.home_x then return true end
+    if not p:is_stationary() then return false end
+    local dx, dy = self.world:delta(p.x, p.y, self.home_x, self.home_y)
+    return dx * dx + dy * dy <= self.home_radius * self.home_radius
+end
+
+-- Every player still in the phase has to be parked on the home pad, so a co-op
+-- phase ends when the whole team is home rather than when the first one lands.
+-- A wrecked player (waiting to respawn, or out of vehicles) is not waited for.
 function Mission:_at_home_base()
     if not self.home_x then return true end   -- no pad on this stage: win on objectives
+    local home = 0
     for _, p in ipairs(self.players) do
-        if p:is_stationary() then
-            local dx, dy = self.world:delta(p.x, p.y, self.home_x, self.home_y)
-            if dx * dx + dy * dy <= self.home_radius * self.home_radius then return true end
+        if not p.death then
+            if not self:player_home(p) then return false end
+            home = home + 1
         end
     end
-    return false
+    return home > 0
 end
 
 -- presentation

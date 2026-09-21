@@ -831,6 +831,62 @@
     "fps": 1,
     "loop": false
   },
+  "vtank_desert": {
+    "frames": [
+      "stage01/tank_f0.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "vtank_desert_top": {
+    "frames": [
+      "stage01/tanktop_f0.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "vtank_arctic": {
+    "frames": [
+      "stage11/stank_f0.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "vtank_arctic_top": {
+    "frames": [
+      "stage11/stanktop_f0.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "vtank_steel": {
+    "frames": [
+      "stage21/jtank_f0.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "vtank_steel_top": {
+    "frames": [
+      "stage21/jtanktop_f0.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "vtank_rust": {
+    "frames": [
+      "stage31/tank_f0.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
+  "vtank_rust_top": {
+    "frames": [
+      "stage31/tankt2_f0.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
   "ironsz": {
     "frames": [
       "effects/ironsz_f00.png",

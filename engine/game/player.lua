@@ -8,6 +8,7 @@ local Config     = require "engine.core.config"
 local Camera     = require "engine.core.camera"
 local Shadow     = require "engine.game.shadow"
 local Score      = require "engine.game.score"
+local Vehicles   = require "engine.game.vehicles"
 
 local Player = Class()
 
@@ -38,7 +39,8 @@ function Player:init(x, y)
     self.weapon_idx   = 0       -- HUD sprite index (0-based)
     self.weapon_icon  = 0       -- WEAPONS.BIN frame for the current weapon
     self.vehicle      = "chopper"
-    self.chopper_skin = 1       -- player chopper variant (1 green, 2 magenta, 3 white)
+    self.chopper_skin = 1       -- chopper variant (Vehicles.variant("chopper", i))
+    self.tank_skin    = 1       -- tank variant (hull, turret and barrel layout)
     self.weapon_name  = "chaingun"
     self.weapon_level = 1
     self.fire_timer   = 0
@@ -62,7 +64,7 @@ function Player:init(x, y)
     self.banner_t        = nil  -- OVERKILL banner animation clock, nil when idle
 
     self.turret_offset    = 0    -- tank turret heading relative to the hull (deg)
-    self.tank_barrel      = 0    -- last-fired barrel, cycles 1->2->3 (triple gun)
+    self.tank_barrel      = 0    -- last-fired barrel, cycles through the variant's barrels
     self.turret_rate      = 140
     self.collision_radius = 8
     self.world            = nil  -- set in game mode for collision queries
@@ -150,24 +152,28 @@ function Player:fire_angle()
     return self.angle
 end
 
--- The tank's turret carries three barrels. In tanktop art space (barrels point
--- north) the muzzle tips sit ~15px ahead of the turret pivot, spread laterally at
--- these offsets (left, center, right).
-local TANK_BARREL_FWD = 15
-local TANK_BARREL_LAT = { -4.5, -0.5, 3.5 }
+-- The tank variant's hull / turret clips, pivots and barrel tips (see
+-- engine/game/vehicles.lua).
+function Player:tank_variant()
+    return Vehicles.variant("tank", self.tank_skin)
+end
 
--- World position of the next barrel's muzzle, advancing the 1->2->3 cycle. The
+-- World position of the next barrel's muzzle, advancing the barrel cycle. Barrel
+-- tips come from the variant, in turret art space (barrels point north) as
+-- { lateral, forward } from the turret pivot. The
 -- turret sprite is drawn screen-fixed (sprite_scale px per art px), so an art
 -- offset spans (sprite_scale / zoom) world units. The zoom here is the fixed
 -- gameplay reference, not the live camera: where a shell leaves the barrel is
 -- simulation, and must not change when the player zooms. Only meaningful for the
 -- tank.
 function Player:tank_muzzle()
-    self.tank_barrel = (self.tank_barrel % 3) + 1
+    local barrels    = self:tank_variant().barrels
+    self.tank_barrel = (self.tank_barrel % #barrels) + 1
+    local tip  = barrels[self.tank_barrel]
     local base = Camera.game_zoom()
     local k    = self.sprite_scale / base
-    local fwd  = TANK_BARREL_FWD * k
-    local lat  = TANK_BARREL_LAT[self.tank_barrel] * k
+    local fwd  = tip[2] * k
+    local lat  = tip[1] * k
     local rad  = (self:fire_angle() - 90) * math.pi / 180
     local fx, fy = math.cos(rad), math.sin(rad)
     return self.x + fx * fwd - fy * lat, self.y + fy * fwd + fx * lat
@@ -609,7 +615,7 @@ function Player:_tank_blow(d)
         self.world:sound("explosion.bomb", self.x, self.y)
     end
 
-    local turret = self:_frames("tanktop")[1]
+    local turret = self:_frames(self:tank_variant().turret)[1]
     if turret then
         local dir = (self.world.rng:random() < 0.5) and -1 or 1
         d.fx[#d.fx + 1] = {
@@ -1081,18 +1087,8 @@ function Player:draw_remote(g, cam, color)
 
     g.setColor(1, 1, 1)
     if self.vehicle == "tank" then
-        local body_frames = self:_frames("tankbgrn")
-        local body_img    = body_frames[self._tank_anim.frame] or body_frames[1]
-        if body_img then
-            local w, h = body_img:getDimensions()
-            g.draw(body_img, sx, sy, base, s, s, w / 2, h / 2)
-        end
-        local turret = self:_frames("tanktop")[1]
-        if turret then
-            local ax, ay = Animation.frame_anchor(self:_clip("tanktop"), 1)
-            local trot   = (self.angle + self.turret_offset) * math.pi / 180 + (cam.angle or 0)
-            g.draw(turret, sx, sy, trot, s, s, ax, ay)
-        end
+        local trot = (self.angle + self.turret_offset) * math.pi / 180 + (cam.angle or 0)
+        self:_draw_tank_parts(g, sx, sy, s, base, trot, true)
     else
         local body = self:_chopper_body_frame()
         if body then
@@ -1151,17 +1147,49 @@ function Player:draw_remote_shadow(g, cam, soft)
 end
 
 function Player:_draw_tank(g, cx, cy, s)
-    local body_frames = self:_frames("tankbgrn")
-    local body_img    = body_frames[self._tank_anim.frame] or body_frames[1]
-    self:_draw_centered(g, body_img, cx, cy, s)
-    if self.death and self.death.turret_exploded then return end
-    -- Turret: axis-aligned frame 0 (barrel north), runtime-rotated to the turret
-    -- heading relative to the hull. Anchored on its art center to spin in place.
-    local img = self:_frames("tanktop")[1]  -- frame 0
+    local turret = not (self.death and self.death.turret_exploded)
+    self:_draw_tank_parts(g, cx, cy, s, 0, self.turret_offset * math.pi / 180, turret)
+end
+
+function Player:_draw_tank_parts(g, x, y, s, hull_rot, turret_rot, with_turret)
+    Player.draw_tank_variant(g, self:tank_variant(), x, y, s, hull_rot, turret_rot, {
+        frame  = self._tank_anim.frame,
+        night  = self.world and self.world:is_night(),
+        turret = with_turret,
+    })
+end
+
+-- Hull and turret of tank variant v at (x, y), each turned to its own rotation;
+-- shared with the vehicle select preview. The hull pivots on the variant's hull
+-- anchor (else its image center) and shows tread frame opts.frame when the clip
+-- has one; the turret is axis-aligned frame 0 (barrels north), runtime-rotated
+-- about its anchor (else its art center) so it spins in place. opts.night picks
+-- the "n" night clips where they exist; opts.turret false leaves the turret off.
+function Player.draw_tank_variant(g, v, x, y, s, hull_rot, turret_rot, opts)
+    opts = opts or {}
+    local function clip_name(name)
+        if opts.night and Animation.clip(name .. "n") then return name .. "n" end
+        return name
+    end
+    local hull = Animation.clip(clip_name(v.hull))
+    local body = hull and (hull.frames[opts.frame or 1] or hull.frames[1])
+    if body then
+        local w, h = body:getDimensions()
+        local ha   = v.hull_anchor
+        g.draw(body, x, y, hull_rot, s, s, ha and ha[1] or w / 2, ha and ha[2] or h / 2)
+    end
+    if opts.turret == false then return end
+    local turret_clip = clip_name(v.turret)
+    local top = Animation.clip(turret_clip)
+    local img = top and top.frames[1]
     if img then
-        local ax, ay = Animation.frame_anchor(self:_clip("tanktop"), 1)
-        local rot    = self.turret_offset * math.pi / 180
-        g.draw(img, cx, cy, rot, s, s, ax, ay)
+        local ax, ay
+        if v.turret_anchor then
+            ax, ay = v.turret_anchor[1], v.turret_anchor[2]
+        else
+            ax, ay = Animation.frame_anchor(turret_clip, 1)
+        end
+        g.draw(img, x, y, turret_rot, s, s, ax, ay)
     end
 end
 

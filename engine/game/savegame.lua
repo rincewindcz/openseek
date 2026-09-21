@@ -15,11 +15,53 @@ local Log     = require "engine.core.log"
 --
 -- A save is taken on the mission briefing, which is the one point where the run
 -- is between phases and its state is final, so loading one restores the run and
--- reopens that briefing.
+-- reopens that briefing. A co-op run adds a `coop` table: the lives rule and
+-- pool, each player's score, lives, threshold, out flag, inventory and
+-- vehicle variants (engine/game/campaign.lua).
 local Savegame = {}
 
 Savegame.DIR     = "saves"
 Savegame.VERSION = 1
+
+local function capture_coop(app)
+    local run = app.campaign and app.coop_run
+    if not run then return nil end
+    local coop    = app.settings.coop or {}
+    local players = {}
+    for i, p in ipairs(run.players) do
+        players[i] = {
+            score        = p.score,
+            lives        = p.lives,
+            bonus_life   = p.bonus_life,
+            out          = p.out,
+            loadout      = p.loadout:snapshot(),
+            chopper_skin = (coop.chopper_skin or {})[i] or 1,
+            tank_skin    = (coop.tank_skin or {})[i] or 1,
+        }
+    end
+    return { lives_mode = run.lives_mode, pool = run.pool, players = players }
+end
+
+local function apply_coop(app, data)
+    local run = { lives_mode = data.lives_mode == "shared" and "shared" or "separate",
+                  pool = tonumber(data.pool), players = {} }
+    local coop = app.settings.coop
+    for i, p in ipairs(data.players or {}) do
+        run.players[i] = {
+            score      = tonumber(p.score) or 0,
+            lives      = tonumber(p.lives) or Score.START_LIVES,
+            bonus_life = tonumber(p.bonus_life) or Score.BONUS_LIFE_STEP,
+            out        = p.out == true,
+            loadout    = Loadout.restore(p.loadout),
+        }
+        if coop then
+            coop.chopper_skin[i] = tonumber(p.chopper_skin) or 1
+            coop.tank_skin[i]    = tonumber(p.tank_skin) or 1
+        end
+    end
+    if run.lives_mode == "shared" and not run.pool then run.pool = Score.START_LIVES end
+    return run
+end
 
 -- The state a run carries, as a plain table. `name` is the player's slot label.
 function Savegame.capture(app, name)
@@ -34,6 +76,7 @@ function Savegame.capture(app, name)
         bonus_life = app.run_bonus_life or Score.BONUS_LIFE_STEP,
         vehicle    = loadout.vehicle,
         loadout    = loadout:snapshot(),
+        coop       = capture_coop(app),
         time       = os.time(),
         saved_at   = os.date("%Y-%m-%d %H:%M"),
     }
@@ -47,6 +90,8 @@ function Savegame.apply(app, data)
     app.run_score      = tonumber(data.score) or 0
     app.run_lives      = tonumber(data.lives) or Score.START_LIVES
     app.run_bonus_life = tonumber(data.bonus_life) or Score.BONUS_LIFE_STEP
+    app.coop_run       = nil
+    if app.campaign and type(data.coop) == "table" then app.coop_run = apply_coop(app, data.coop) end
     local loadout      = Loadout.restore(data.loadout)
     if app.campaign then
         app.loadout = loadout

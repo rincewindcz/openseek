@@ -9,14 +9,22 @@ local Player       = require "engine.game.player"
 local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
 local Vehicles     = require "engine.game.vehicles"
+local Campaign     = require "engine.game.campaign"
+local Score        = require "engine.game.score"
+local PlayerTag    = require "engine.ui.player_tag"
 local Log          = require "engine.core.log"
 
 -- Split-screen two-player co-op (extra mode, not in the original game): two
 -- players, two cameras, one keyboard. Each half renders the full world stack
 -- through its own camera with the teammate projected in.
+--
+-- Free play (F7) uses the full weapon lists and the setup screen's god / friendly
+-- fire toggles. A co-op campaign (NEW GAME > LOCAL COOP) plays each player's
+-- equip loadout and carries score, lives and medals through the run
+-- (engine/game/campaign.lua); a player out of the run is not spawned, and a
+-- lone survivor gets the whole screen. Slots (input, replay) are numbered in
+-- play order; p.number is the player (colours, keys, HUD label).
 local CoopGameplay = Class(GameplayBase)
-
-CoopGameplay.COLORS = { { 0.30, 0.65, 1.0 }, { 1.0, 0.55, 0.15 } }  -- P1 blue, P2 orange
 
 -- Distinct key sets so both players share one keyboard. fire / weapon /
 -- action are read by the scenes; the movement keys feed Player.controls.
@@ -28,8 +36,6 @@ CoopGameplay.P2_CONTROLS = {
     up = "up", down = "down", left = "left", right = "right",
     modifier = "rshift", fire = "rctrl", weapon = "kp0", action = "kpenter",
 }
-
-local COLORS = CoopGameplay.COLORS
 
 -- Stereo side each half owns, fed to the sound system's listeners.
 local SPLIT_BIAS = { -1, 1 }
@@ -58,24 +64,100 @@ end
 -- player holds its crash picture for the same time before respawning.
 local RESPAWN_DELAY = 0.8
 
-function CoopGameplay:make_player(idx, sx, sy)
+function CoopGameplay:make_player(slot, number, sx, sy)
     local app  = self.app
     local coop = app.settings.coop
+    local run  = self.run
     local p = Player:new(sx, sy)
-    local replay_vehicle, replay_skin = self:replay_vehicle(idx)
+    local replay_vehicle, replay_skin, replay_tank = self:replay_vehicle(slot)
+    p.number       = number
     p.world_size   = app.world.stage.world_size
-    p.vehicle      = replay_vehicle or coop.vehicle[idx]
-    p.chopper_skin = replay_skin or coop.skin[idx]
+    p.vehicle      = replay_vehicle or coop.vehicle[number]
+    p.chopper_skin = replay_skin or Vehicles.clamp_skin("chopper", coop.chopper_skin[number])
+    p.tank_skin    = replay_tank or Vehicles.clamp_skin("tank", coop.tank_skin[number])
     p.world        = app.world
-    p.controls     = (idx == 1) and CoopGameplay.P1_CONTROLS or CoopGameplay.P2_CONTROLS
+    p.controls     = (number == 1) and CoopGameplay.P1_CONTROLS or CoopGameplay.P2_CONTROLS
     local def = app.vehicle_defs[p.vehicle]
     if def then p:load_vehicle_def(def) end
-    local weapon_list = Vehicles.WEAPONS[p.vehicle]
-    if weapon_list then p.weapon_name = weapon_list[1] end
-    p:seed_ammo(app.combat.weapons)
-    p.unlimited = coop.god
-    self:apply_replay_player(p, idx)   -- playback: the recorded loadout wins
+    -- A campaign plays the equip-screen snapshot, as single player does.
+    local loadout = run and coop.loadout[number]
+    if loadout then
+        p.weapon_list   = loadout.list
+        p.weapon_levels = loadout.levels
+        p.weapon_name   = loadout.list[1]
+        p.weapon_level  = loadout.levels[p.weapon_name] or 1
+        p.load_fuel     = loadout.chars.fuel  * 100
+        p.load_armor    = loadout.chars.armor * 100
+        p:_apply_config()
+    else
+        local weapon_list = Vehicles.WEAPONS[p.vehicle]
+        if weapon_list then p.weapon_name = weapon_list[1] end
+    end
+    local weapon_def = app.combat.weapons[p.weapon_name]
+    p.weapon_icon = weapon_def and weapon_def.icon or 0
+    p:seed_ammo(app.combat.weapons, loadout and loadout.counts)
+    if run then
+        local state = run.players[number]
+        p.score, p.lives, p.next_bonus_life = state.score, state.lives, state.bonus_life
+    end
+    p.unlimited = (not run) and coop.god or false
+    self:apply_replay_player(p, slot)   -- playback: the recorded loadout wins
     return p
+end
+
+-- The players this phase spawns, as player numbers in slot order: the recorded
+-- ones on playback, the run's remaining players in a campaign, else both.
+function CoopGameplay:_numbers()
+    if self.playback then
+        local out = {}
+        for slot = 1, self.playback:number("players", 2) do
+            out[slot] = self.playback:number("player." .. slot .. ".number", slot)
+        end
+        return out
+    end
+    if self.run then return Campaign.active_players(self.app) end
+    return { 1, 2 }
+end
+
+-- Shared lives: every player's lives field mirrors one pool. Whatever changed a
+-- player's count since the last sync (a spent vehicle, a bonus one) is applied
+-- to the pool, and the pool is copied back to all of them.
+function CoopGameplay:_sync_lives()
+    if self.lives_mode ~= "shared" then return end
+    local pool = self.pool
+    for i, p in ipairs(self.players) do pool = pool + (p.lives - self.lives_seen[i]) end
+    pool = math.max(0, math.min(Score.MAX_LIVES, pool))
+    self.pool = pool
+    for i, p in ipairs(self.players) do
+        p.lives            = pool
+        self.lives_seen[i] = pool
+    end
+end
+
+-- Vehicles player idx still has after spending one: their own count, or on a
+-- shared pool what is left once every teammate still in play keeps theirs.
+function CoopGameplay:_vehicles_left(idx, p)
+    if self.lives_mode ~= "shared" then return p.lives end
+    local in_play = 0
+    for j = 1, #self.players do
+        if j ~= idx and not self.out[j] then in_play = in_play + 1 end
+    end
+    return p.lives - in_play
+end
+
+-- True when no other player is still flying: everyone else is wrecked or out.
+function CoopGameplay:_last_in_play(idx)
+    for i, p in ipairs(self.players) do
+        if i ~= idx and not p.death and not self.out[i] then return false end
+    end
+    return true
+end
+
+function CoopGameplay:_all_out()
+    for i = 1, #self.players do
+        if not self.out[i] then return false end
+    end
+    return true
 end
 
 function CoopGameplay:enter()
@@ -84,6 +166,10 @@ function CoopGameplay:enter()
     local world, combat = app.world, app.combat
     self:seed_phase()              -- randomness and clock, before anything rolls
     self:apply_replay_settings()   -- playback: the recorded mode flags
+    self.run        = (not self.playback) and Campaign.coop(app) or nil
+    self.lives_mode = self.playback and self.playback.header.coop_lives
+        or (self.run and self.run.lives_mode) or nil
+    self.game_over  = false
     app.viewer_zoom_index = app.camera.zoom_index
     self.paused = false
     self:reset_end_stats()
@@ -95,13 +181,20 @@ function CoopGameplay:enter()
     self.death_timers = {}
     self.out          = {}   -- players who spent their last vehicle
 
-    local sx, sy = world:player_start()
-    self.players = {
-        self:make_player(1, sx - 40, sy),
-        self:make_player(2, sx + 40, sy),
-    }
-    for _, p in ipairs(self.players) do p.home_x, p.home_y = sx, sy end
-    self.cameras = { Camera:new(world.stage.world_size), Camera:new(world.stage.world_size) }
+    local sx, sy    = world:player_start()
+    local numbers   = self:_numbers()
+    local spread    = (#numbers > 1) and 40 or 0
+    self.players    = {}
+    self.cameras    = {}
+    self.lives_seen = {}
+    for slot, number in ipairs(numbers) do
+        local p = self:make_player(slot, number, sx + (slot * 2 - 3) * spread, sy)
+        p.home_x, p.home_y    = sx, sy
+        self.players[slot]    = p
+        self.cameras[slot]    = Camera:new(world.stage.world_size)
+        self.lives_seen[slot] = p.lives
+    end
+    self.pool = self.players[1] and self.players[1].lives or 0
     for i, p in ipairs(self.players) do
         local c = self.cameras[i]
         c:set_zoom(Camera.GAME_ZOOM_INDEX)
@@ -111,17 +204,19 @@ function CoopGameplay:enter()
         p.camera  = c
     end
     -- Listeners before the lift-off, or the takeoff sound has nobody to reach.
-    self:update_audio(self.players, self.cameras, SPLIT_BIAS)
+    self:update_audio(self.players, self.cameras, self:_biases())
     for _, p in ipairs(self.players) do
         p:take_off()   -- choppers lift off; no-op for the tank
     end
 
     local coop = app.settings.coop
-    self:begin_input("coop", self.players,
-        { CoopGameplay.P1_CONTROLS, CoopGameplay.P2_CONTROLS })
+    local bindings = {}
+    for slot, p in ipairs(self.players) do bindings[slot] = p.controls end
+    self:begin_input("coop", self.players, bindings)
+    for _, p in ipairs(self.players) do p.index = p.number end   -- HUD label follows the player
     combat.players       = self.players
     combat.player        = self.players[1]
-    if not self.playback then combat.friendly_fire = coop.ff end
+    if not self.playback then combat.friendly_fire = (not self.run) and coop.ff or false end
     combat:reset_phase()
     app.helis:reset()
     app.powerups:set_players(self.players)
@@ -164,6 +259,8 @@ function CoopGameplay:leave()
     self.death_timers = {}
     self.out          = {}
     self.mission      = nil
+    self.run          = nil
+    self.lives_mode   = nil
     app.camera.angle   = nil
     app.camera.view_oy = 0
     app.camera:set_zoom(app.viewer_zoom_index)
@@ -179,7 +276,7 @@ function CoopGameplay:collect_stats()
         local k = p.stat_kills or {}
         participants[i] = {
             player    = p,
-            color     = COLORS[i],
+            color     = PlayerTag.color(p.number),
             ground    = { killed = k.ground or 0,   total = ground_total },
             buildings = { killed = k.building or 0, total = building_total },
             choppers  = k.chopper or 0,
@@ -204,12 +301,13 @@ function CoopGameplay:_update_down(idx, p, dt)
     if t > 0 then return end
     self.death_timers[idx] = nil
     p.lives = math.max(0, (p.lives or 0) - 1)
-    if p.lives <= 0 then
+    self:_sync_lives()
+    if self:_vehicles_left(idx, p) <= 0 then
         self.out[idx] = true
-        Log.info("game", "P%d out of vehicles, score %d", idx, p.score or 0)
+        Log.info("game", "P%d out of vehicles, score %d", p.number, p.score or 0)
         return
     end
-    Log.info("game", "P%d vehicle lost, %d left", idx, p.lives)
+    Log.info("game", "P%d vehicle lost, %d left", p.number, p.lives)
     p:respawn(p.home_x or p.x, p.home_y or p.y)
     p:take_off()   -- no-op for the tank
     local cam = self.cameras[idx]
@@ -247,7 +345,12 @@ function CoopGameplay:_draw_half_status(idx, p, vw, vh)
         self:_half_text(vw, vh, { p.vehicle == "tank" and "TANK DOWN" or "MAYDAY MAYDAY" }, 0)
     elseif self.mission and self.mission.state == "return_to_base"
         and math.floor(love.timer.getTime() * 1.5) % 2 == 0 then
-        self:_half_text(vw, vh, { "MISSION COMPLETE", "RETURN TO BASE" }, 0)
+        -- Parked already: the phase is waiting for the rest of the team.
+        if self.mission:player_home(p) then
+            self:_half_text(vw, vh, { "MISSION COMPLETE", "WAIT FOR TEAMMATE" }, 0)
+        else
+            self:_half_text(vw, vh, { "MISSION COMPLETE", "RETURN TO BASE" }, 0)
+        end
     end
 end
 
@@ -277,8 +380,10 @@ function CoopGameplay:update(dt)
         if not p.death and p:_held("fire") then self:fire_for(p) end
         if app.settings.death_enabled and not p.death and p:is_dead() then
             -- Going down on the way home with every objective already met still
-            -- completes the phase, as in single player.
-            if self.mission and self.mission.state == "return_to_base" then
+            -- completes the phase, as in single player, but only once this was
+            -- the last vehicle that could have flown home: while a teammate is
+            -- still up, the phase waits for them.
+            if self.mission and self.mission.state == "return_to_base" and self:_last_in_play(i) then
                 self.mission.state = "won"
             end
             p:start_death()
@@ -297,33 +402,85 @@ function CoopGameplay:update(dt)
     app.saboteur:update(dt)
     if self.mission then self.mission:update(dt) end
     self:update_won(dt)
+    self:_sync_lives()   -- bonus vehicles earned this tick join a shared pool
+    if self.run and not self.game_over and self:_all_out() then self:_game_over() end
     app.world:update(dt)
     -- One listener per half, each biased toward its own side of the stereo image
     -- so a blast on the right half is heard on the right (engine/game/sound.lua).
-    self:update_audio(self.players, self.cameras, SPLIT_BIAS)
+    self:update_audio(self.players, self.cameras, self:_biases())
     app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
     app.lightfx:update(dt)
     self:tick_replay(self.players)
 end
 
--- One vehicle in half i: the half's own player is drawn centered by its camera,
--- the teammate is projected into this half and tinted with its colour.
-function CoopGameplay:_draw_vehicle(pl, local_p, i, cam)
+-- Stereo side per listener: split halves pull to their own side, a lone
+-- survivor's full screen stays centred.
+function CoopGameplay:_biases()
+    return (#self.players > 1) and SPLIT_BIAS or nil
+end
+
+-- Fold the phase into the run: scores, lives and thresholds, the medals picked
+-- up into each purse, and who is out for the rest of it.
+function CoopGameplay:_carry_run()
+    local run = self.run
+    self:_sync_lives()   -- the stats screen's phase bonus may have earned vehicles
+    for slot, p in ipairs(self.players) do
+        local state      = run.players[p.number]
+        state.score      = p.score or 0
+        state.lives      = p.lives or 0
+        state.bonus_life = p.next_bonus_life or Score.BONUS_LIFE_STEP
+        state.out        = self.out[slot] or false
+        state.loadout.medals = state.loadout.medals + (p.medals or 0)
+    end
+    if self.lives_mode == "shared" then
+        run.pool = self.pool
+        for _, state in ipairs(run.players) do state.lives = self.pool end
+    end
+end
+
+-- Every player of a campaign run is out of vehicles: the crash picture, then
+-- the high-score screen with each player's total.
+function CoopGameplay:_game_over()
+    local app = self.app
+    self.game_over = true
+    self:_carry_run()
+    Log.info("game", "co-op game over")
+    local last = self.players[#self.players]
+    local pic  = (last and last.vehicle == "tank") and "TANKEND" or "DEATHPIC"
+    local function finish() Campaign.finish(app) end
+    app.screen:show(pic, { fade_in = 0.6, wait_key = true, on_done = finish, on_cancel = finish })
+end
+
+-- Stats dismissed: a campaign carries the phase into the run and moves on; free
+-- play goes back to the menu.
+function CoopGameplay:on_stats_done()
+    if not self.run then
+        GameplayBase.on_stats_done(self)
+        return
+    end
+    self:_carry_run()
+    Campaign.advance(self.app)
+end
+
+-- One vehicle in a view: the view's own player is drawn centered by its camera,
+-- the teammate is projected into it and ringed with its colour.
+function CoopGameplay:_draw_vehicle(pl, local_p, cam)
     if pl == local_p then
         pl:draw()
     else
-        pl:draw_remote(love.graphics, cam, COLORS[3 - i])
+        pl:draw_remote(love.graphics, cam, PlayerTag.color(pl.number))
     end
 end
 
 function CoopGameplay:draw()
     local app = self.app
     local g    = love.graphics
-    local W, H = g.getDimensions()
-    local half_w = math.floor(W / 2)
+    local W, H   = g.getDimensions()
+    local n      = #self.players
+    local half_w = math.floor(W / math.max(1, n))
     for i, p in ipairs(self.players) do
         local vx    = (i - 1) * half_w
-        local vw    = (i == 2) and (W - half_w) or half_w
+        local vw    = (i == n) and (W - vx) or half_w
         local cam   = self.cameras[i]
         local other = self.players[3 - i]
         cam.vw, cam.vh      = vw, H
@@ -340,7 +497,7 @@ function CoopGameplay:draw()
             app.renderer:draw_objects("under")   -- flat clutter the vehicles sit on
             for _, pl in ipairs(ground) do
                 if pl == p then p:draw_world() end   -- smoke behind the local vehicle
-                self:_draw_vehicle(pl, p, i, cam)
+                self:_draw_vehicle(pl, p, cam)
                 if pl == p then p:draw_world_front() end
             end
             app.renderer:draw_objects("over")    -- trees/buildings + objective markers
@@ -364,7 +521,7 @@ function CoopGameplay:draw()
         app.combat:draw()
         app.renderer:draw_debris()   -- shrapnel above the explosion effects
         app.helis:draw()             -- airborne enemy helicopters
-        for _, pl in ipairs(air) do self:_draw_vehicle(pl, p, i, cam) end
+        for _, pl in ipairs(air) do self:_draw_vehicle(pl, p, cam) end
         if p:is_airborne() then p:draw_world_front() end
         -- Night light map and flash layer per half, from this half's camera; the
         -- headlight follows the player it belongs to and cuts on destruction.
@@ -374,7 +531,7 @@ function CoopGameplay:draw()
         app.postfx:end_world(vx, 0, vw, H)
         app.hud.player         = p
         app.hud.coplayer       = other
-        app.hud.coplayer_color = other and COLORS[3 - i] or nil
+        app.hud.coplayer_color = other and PlayerTag.color(other.number) or nil
         app.hud.view_w, app.hud.view_h = vw, H
         app.hud:draw()
         self:_draw_half_status(i, p, vw, H)
@@ -382,10 +539,11 @@ function CoopGameplay:draw()
         g.pop()
     end
     app.weather:draw()   -- full-window overlay across both halves
-    -- Center divider
-    g.setColor(0, 0, 0, 1)
-    g.rectangle("fill", half_w - 1, 0, 2, H)
-    g.setColor(1, 1, 1)
+    if n > 1 then
+        g.setColor(0, 0, 0, 1)
+        g.rectangle("fill", half_w - 1, 0, 2, H)
+        g.setColor(1, 1, 1)
+    end
 
     if app.end_stats:is_active() then
         app.end_stats:draw()

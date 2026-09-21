@@ -33,6 +33,8 @@ local json            = require "lib.json"
 
 local Title           = require "engine.scenes.title"
 local MainMenu        = require "engine.scenes.main_menu"
+local NewGame         = require "engine.scenes.new_game"
+local VehicleSelect   = require "engine.scenes.vehicle_select"
 local MissionBriefing = require "engine.scenes.mission_briefing"
 local MissionSelect   = require "engine.scenes.mission_select"
 local Equip           = require "engine.scenes.equip"
@@ -41,7 +43,6 @@ local AdvancedSettings = require "engine.scenes.advanced_settings"
 local Overview        = require "engine.scenes.overview"
 local Gameplay        = require "engine.scenes.gameplay"
 local Sandbox         = require "engine.scenes.sandbox"
-local CoopSetup       = require "engine.scenes.coop_setup"
 local CoopGameplay    = require "engine.scenes.coop_gameplay"
 local AnimGallery     = require "engine.scenes.anim_gallery"
 local FontGallery     = require "engine.scenes.font_gallery"
@@ -177,7 +178,10 @@ function love.load(args)
         settings = {
             vehicle       = "chopper",
             death_enabled = false, -- optional game-over (chopper falls, tank burns)
-            coop = { vehicle = { "chopper", "tank" }, skin = { 1, 1 }, god = false, ff = false },
+            -- Per player: the vehicle (free play; a campaign takes it from the
+            -- equip screen), the variants, and the equip-screen loadout snapshot.
+            coop = { vehicle = { "chopper", "tank" }, chopper_skin = { 1, 2 }, tank_skin = { 1, 2 },
+                     loadout = {}, god = false, ff = false },
         },
     }
     app.hud:load("data/hud.json")
@@ -210,6 +214,8 @@ function love.load(args)
     local scenes = app.scenes
     scenes:register("title",            Title:new(app))
     scenes:register("main_menu",        MainMenu:new(app))
+    scenes:register("new_game",         NewGame:new(app))
+    scenes:register("vehicle_select",   VehicleSelect:new(app))
     scenes:register("mission_briefing", MissionBriefing:new(app))
     scenes:register("mission_select",   MissionSelect:new(app))
     scenes:register("equip",            Equip:new(app))
@@ -218,7 +224,6 @@ function love.load(args)
     scenes:register("overview",         Overview:new(app))
     scenes:register("gameplay",         Gameplay:new(app))
     scenes:register("sandbox",          Sandbox:new(app))
-    scenes:register("coop_setup",       CoopSetup:new(app))
     scenes:register("coop_gameplay",    CoopGameplay:new(app))
     scenes:register("anim_gallery",     AnimGallery:new(app))
     scenes:register("font_gallery",     FontGallery:new(app))

@@ -6,6 +6,9 @@ local Scene       = require "engine.core.scene"
 local Loadout     = require "engine.game.loadout"
 local Mission     = require "engine.game.mission"
 local EquipScreen = require "engine.ui.equip_screen"
+local PlayerTag   = require "engine.ui.player_tag"
+local Campaign    = require "engine.game.campaign"
+local Layout      = require "engine.ui.layout"
 local Log         = require "engine.core.log"
 
 -- Vehicle select and equip scene, between the mission briefing's PLAY and the
@@ -14,7 +17,9 @@ local Log         = require "engine.core.log"
 -- starts the phase with the picked vehicle and loadout; EXIT returns to the
 -- briefing. Weapons are bought on the shop screen and equipped here. Stages
 -- with a forced vehicle (missions.json "vehicle") lock the screen to it.
--- Without exported equip art the briefing skips this scene.
+-- Without exported equip art the briefing skips this scene. A co-op run
+-- equips each player in turn (enter's player number, tagged on screen), then
+-- starts the split-screen phase.
 local Equip = Class(Scene)
 
 Equip.ui_pointer = true
@@ -25,13 +30,14 @@ function Equip:init(app)
     self.screen.on_select = function(id) self:_select(id) end
 end
 
-function Equip:enter(stage_name)
+function Equip:enter(stage_name, player)
     local app = self.app
     self.stage_name = stage_name or app.world.stage_name
+    self.player     = Campaign.coop(app) and (player or Campaign.next_player(app)) or nil
     -- A campaign run equips its own inventory, grown by the shop from medal
     -- pickups; a single mission (MISSION mode) equips the START_MEDALS-seeded
     -- inventory bought in the shop. Both share the run's Loadout.
-    self.loadout = Loadout.active(app)
+    self.loadout = Loadout.active(app, self.player)
     local required = Mission.required_vehicle(self.stage_name)
     if required then self.loadout.vehicle = required end
     if not self.screen:open(self.loadout, app.combat.weapons,
@@ -53,19 +59,53 @@ function Equip:_select(id)
     if id == "ok" then
         local loadout = self.loadout
         local list, counts, levels = loadout:weapon_list(loadout.vehicle)
-        app.settings.vehicle = loadout.vehicle
-        Log.info("game", "loadout %s: %s", loadout.vehicle, table.concat(list, ", "))
-        app.settings.loadout = { list = list, counts = counts, levels = levels,
+        local snapshot = { list = list, counts = counts, levels = levels,
             chars = { fuel = loadout:char(loadout.vehicle, "fuel"),
                       armor = loadout:char(loadout.vehicle, "armor") } }
-        app.scenes:switch("gameplay")
+        Log.info("game", "%sloadout %s: %s", self.player and ("P" .. self.player .. " ") or "",
+            loadout.vehicle, table.concat(list, ", "))
+        if not self.player then
+            app.settings.vehicle = loadout.vehicle
+            app.settings.loadout = snapshot
+            app.scenes:switch("gameplay")
+            return
+        end
+        local coop = app.settings.coop
+        coop.vehicle[self.player] = loadout.vehicle
+        coop.loadout[self.player] = snapshot
+        local next_player = Campaign.next_player(app, self.player)
+        if next_player then
+            app.scenes:switch("equip", self.stage_name, next_player)
+        else
+            app.scenes:switch("coop_gameplay")
+        end
     else
-        app.scenes:switch("mission_briefing", self.stage_name)
+        local prev = self.player and Campaign.prev_player(app, self.player)
+        if prev then
+            app.scenes:switch("equip", self.stage_name, prev)
+        else
+            app.scenes:switch("mission_briefing", self.stage_name)
+        end
     end
 end
 
 function Equip:update(dt)          self.screen:update(dt)      end
-function Equip:draw()              self.screen:draw()          end
+function Equip:draw()
+    self.screen:draw()
+    if self.player then self:_draw_tag() end
+end
+
+-- The player tag sits in the empty top-left corner of the EQP backdrops.
+function Equip:_draw_tag()
+    local g                  = love.graphics
+    local screen_w, screen_h = g.getDimensions()
+    local scale, ox, oy      = Layout.fit(screen_w, screen_h)
+    g.push()
+    g.translate(ox, oy)
+    g.scale(scale, scale)
+    PlayerTag.draw(self.player, 4, 4, self.screen:fade())
+    g.pop()
+end
 function Equip:keypressed(key)     self.screen:keypressed(key) end
 function Equip:mousemoved(x, y)    self.screen:hover(x, y)     end
 function Equip:mousepressed(x, y)  self.screen:press(x, y)     end
