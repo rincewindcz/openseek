@@ -77,23 +77,55 @@ local function after_stage_load()
 end
 
 -- Without the decoded pack nothing past this point can load, so the app is
--- reduced to one static message until the user quits.
+-- reduced to the engine intro card, which then dims behind a MISSING GAME DATA
+-- label (in the shipped TTF, as the game's bitmap fonts are part of the pack)
+-- until the user quits. Any other key or a click skips to the dimmed state.
+local MISSING_FADE_IN  = 0.25
+local MISSING_HOLD     = 0.8
+local MISSING_DIM_TIME = 0.5
+local MISSING_DIM      = 0.3
+
 local function show_missing_data()
-    local font = love.graphics.newFont(24)
-    local text = "MISSING GAME DATA"
-    love.update, love.wheelmoved, love.mousemoved, love.mousepressed = nil, nil, nil, nil
-    love.mousereleased, love.touchmoved, love.touchpressed, love.touchreleased = nil, nil, nil, nil
+    local text  = "MISSING GAME DATA"
+    local intro = love.graphics.newImage(Title.ENGINE_INTRO)
+    intro:setFilter("linear", "linear")
+    local dim_start = MISSING_FADE_IN + MISSING_HOLD
+    local elapsed   = 0
+    local font, font_size
+    love.wheelmoved, love.mousemoved, love.mousepressed = nil, nil, nil
+    love.touchmoved, love.touchpressed, love.touchreleased = nil, nil, nil
+    love.update = function(dt)
+        elapsed = elapsed + dt
+    end
     love.draw = function()
         local g = love.graphics
         local screen_w, screen_h = g.getDimensions()
+        local dim = math.min(1, math.max(0, (elapsed - dim_start) / MISSING_DIM_TIME))
+        local brightness = math.min(1, elapsed / MISSING_FADE_IN) * (1 - dim * (1 - MISSING_DIM))
         g.clear(0, 0, 0, 1)
+        local img_w, img_h = intro:getDimensions()
+        local scale = math.min(screen_w / img_w, screen_h / img_h)
+        g.setColor(brightness, brightness, brightness, 1)
+        g.draw(intro, (screen_w - img_w * scale) / 2, (screen_h - img_h * scale) / 2, 0, scale, scale)
+        local size = math.max(12, math.floor(screen_h / 18))
+        if size ~= font_size then
+            font, font_size = love.graphics.newFont("content/fonts/loaded/loaded.ttf", size), size
+        end
         g.setFont(font)
-        g.setColor(1, 1, 1, 1)
+        g.setColor(1, 1, 1, dim)
         g.print(text, math.floor((screen_w - font:getWidth(text)) / 2),
-            math.floor((screen_h - font:getHeight()) / 2))
+            math.floor(screen_h * 0.75 - font:getHeight() / 2))
+        g.setColor(1, 1, 1, 1)
     end
     love.keypressed = function(key)
-        if key == "escape" then love.event.quit() end
+        if key == "escape" then
+            love.event.quit()
+        else
+            elapsed = math.max(elapsed, dim_start + MISSING_DIM_TIME)
+        end
+    end
+    love.mousereleased = function()
+        elapsed = math.max(elapsed, dim_start + MISSING_DIM_TIME)
     end
 end
 

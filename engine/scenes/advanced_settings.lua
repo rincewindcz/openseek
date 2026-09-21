@@ -125,6 +125,7 @@ local CATEGORIES = {
         { key = "camera_shake_amount", label = "SHAKE AMOUNT",    kind = "range", min = 0.25, max = 3.0, step = 0.25 },
         { key = "radar_zoom_grow",     label = "RADAR ZOOM GROW", kind = "toggle" },
         { key = "radar_backdrop",      label = "RADAR BACKDROP",  kind = "range", min = 0, max = 1.0, step = 0.1 },
+        { key = "engine_intro",        label = "ENGINE INTRO",    kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }

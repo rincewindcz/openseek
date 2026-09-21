@@ -141,6 +141,11 @@ local Config = {
     -- terrain: 0 is the classic look, higher fades in a dark backdrop disc and
     -- blends the ring and blips toward brighter colors. Presentation only.
     radar_backdrop = 0.2,
+
+    -- Play the short openSEEK engine card before the TITLE card
+    -- (engine/scenes/title.lua). On for the first launch; the title scene
+    -- switches it off once shown. Always shown when the game data is missing.
+    engine_intro = true,
 }
 
 -- Player-editable keys persisted to the save directory, so the advanced settings
@@ -153,7 +158,7 @@ local PERSISTED = {
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
     "endstats_count_up", "score_count_up", "shop_fx", "chopper_skin", "tank_skin", "coop_lives",
     "explosive_trees", "tree_crush_speed", "hit_flash", "camera_shake", "camera_shake_amount",
-    "radar_zoom_grow", "radar_backdrop",
+    "radar_zoom_grow", "radar_backdrop", "engine_intro",
     "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",

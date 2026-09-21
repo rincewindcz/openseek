@@ -1,9 +1,10 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class = require "engine.core.class"
-local Font  = require "engine.core.font"
-local Log   = require "engine.core.log"
+local Class  = require "engine.core.class"
+local Font   = require "engine.core.font"
+local Log    = require "engine.core.log"
+local Assets = require "engine.core.assets"
 
 -- Fullscreen image overlay with fade-in / hold / fade-out phases, used for the
 -- title card, the per-mission briefing picture, and the crash end screen.
@@ -15,13 +16,18 @@ function Screen:init()
     self.active = nil
 end
 
+-- name is a decoded fullscreen picture ("TITLE") or a full content path
+-- ("content/intro/openseek_intro.png"). Content pictures are high resolution
+-- art, so they are filtered when scaled instead of kept pixel sharp.
 function Screen:_img(name)
     if self._cache[name] == nil then
-        local path    = "assets/fullscreen/" .. name .. ".png"
+        local content = name:match("%.png$") ~= nil
+        local path    = content and name or Assets.path("fullscreen/" .. name .. ".png")
         local ok, img = false, nil
         if love.filesystem.getInfo(path) then ok, img = pcall(love.graphics.newImage, path) end
         if ok then
-            img:setFilter("nearest", "nearest")
+            local filter = content and "linear" or "nearest"
+            img:setFilter(filter, filter)
             self._cache[name] = img
         else
             Log.warn("screen", "missing asset %s", name)

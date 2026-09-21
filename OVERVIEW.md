@@ -34,8 +34,10 @@ decoded from the user's own copy of the game and are never distributed.
   used as is, any other path is prefixed with `assets/`.
 - `Assets.pack_present()` checks the files the boot path needs
   (`stage00.json`, `fonts/chars.json`, `fullscreen/TITLE.png`, `sounds.json`,
-  `mission_text.json`). If any is missing, `love.load` shows `MISSING GAME DATA`
-  and loads nothing else; `Esc` quits; `--selftest` exits with code 1.
+  `mission_text.json`). If any is missing, `love.load` loads nothing else and
+  plays the engine intro card, which then dims behind a `MISSING GAME DATA`
+  label drawn in `content/fonts/loaded/loaded.ttf`; any key or a click skips to
+  the dimmed state, `Esc` quits; `--selftest` exits with code 1.
 - Files in `content/` must not contain pixels copied from the game or from
   `assets/`. Palette-bound sprites are white-on-alpha masks tinted at draw time.
 
@@ -43,6 +45,8 @@ decoded from the user's own copy of the game and are never distributed.
 |-----------------|-------|
 | `hud/player_f00..f03.png` | Co-op score labels P1-P4, 8x6 masks, 3x5 glyphs. |
 | `fonts/main_synth/{B,J,K,Q,Y,Z}.png` | Menu word-art letters absent from `MAINMEN.BIN`. |
+| `intro/openseek_intro.png` | openSEEK engine card, 1920x1080, shown before TITLE (`engine_intro`) and behind `MISSING GAME DATA`. |
+| `fonts/loaded/loaded.ttf` | "Loaded" TTF (Andrew Wilson, SIL OFL 1.1, `OFL.txt`). Text fallback when the pack's bitmap fonts are missing. |
 
 ## 3. Code conventions
 
@@ -121,7 +125,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 
 | Scene | Role |
 |-------|------|
-| `title` | TITLE card; Enter, Space, Esc skip to `main_menu`. |
+| `title` | Engine intro card while `engine_intro` is on (Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`. |
 | `main_menu` | Main menu; pushed over a running game on Esc. NEW GAME replaces it with `new_game`. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL (`mainmen` has no B J K Q Y Z). |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
