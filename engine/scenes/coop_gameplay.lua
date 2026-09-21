@@ -27,14 +27,15 @@ local Log          = require "engine.core.log"
 local CoopGameplay = Class(GameplayBase)
 
 -- Distinct key sets so both players share one keyboard. fire / weapon /
--- action are read by the scenes; the movement keys feed Player.controls.
+-- action / radar_zoom are read by the scenes; the movement keys feed
+-- Player.controls.
 CoopGameplay.P1_CONTROLS = {
     up = "w", down = "s", left = "a", right = "d",
-    modifier = "lshift", fire = "lctrl", weapon = "q", action = "e",
+    modifier = "lshift", fire = "lctrl", weapon = "q", action = "e", radar_zoom = "tab",
 }
 CoopGameplay.P2_CONTROLS = {
     up = "up", down = "down", left = "left", right = "right",
-    modifier = "rshift", fire = "rctrl", weapon = "kp0", action = "kpenter",
+    modifier = "rshift", fire = "rctrl", weapon = "kp0", action = "kpenter", radar_zoom = "kp.",
 }
 
 -- Stereo side each half owns, fed to the sound system's listeners.
@@ -570,6 +571,9 @@ function CoopGameplay:keypressed(key)
         return
     end
     if key == "p" then self.paused = not self.paused; return end
+    for _, p in ipairs(self.players) do
+        if key == p.controls.radar_zoom then app.hud:toggle_radar_zoom(p) end
+    end
     if self.playback then return end
     if key == "r" then
         -- Restart reloads the stage first, like single player, so destroyed

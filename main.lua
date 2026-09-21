@@ -197,6 +197,7 @@ function love.load(args)
     app.combat.heli_sys = app.helis
     Mission.load("data/missions.json")
     app.powerups = Powerups:new(world, camera, app.combat.weapons)
+    app.hud.powerups = app.powerups   -- pickup blips on the radar
     app.rescue   = RescueSystem:new(world, app.combat)
     app.saboteur = SaboteurSystem:new(world, app.combat)
     app.weather  = Weather:new()

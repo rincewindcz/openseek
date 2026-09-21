@@ -241,7 +241,8 @@ function Overview:_draw_panel()
 end
 
 -- Stage / kind picker keys, shared with the gameplay scenes (Tab/K/PageUp/
--- PageDown work mid-game too). Returns true when the key was consumed.
+-- PageDown work mid-game too, outside a campaign). Returns true when the key
+-- was consumed.
 function Overview.picker_keys(app, key)
     local renderer, world = app.renderer, app.world
     if renderer.kind_picker then

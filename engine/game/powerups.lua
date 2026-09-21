@@ -118,6 +118,11 @@ function Powerups:update(dt)
     self.list = live
 end
 
+-- True once a pickup is in its blinking last seconds.
+function Powerups:expiring(pu)
+    return pu.age > BLINK_AT
+end
+
 function Powerups:_needs_landing(def)
     if def.kind == "medal" then return Config.land_for_medals end
     if def.kind == "fuel" or def.kind == "armor" then return Config.land_for_supplies end
@@ -154,7 +159,7 @@ function Powerups:draw()
         g.push()
         g.translate(t.ox, t.oy)
         for _, pu in ipairs(self.list) do
-            local visible = (pu.age <= BLINK_AT) or (math.floor(pu.age * 8) % 2 == 0)
+            local visible = not self:expiring(pu) or (math.floor(pu.age * 8) % 2 == 0)
             if visible then
                 local fi = pu.def.frame
                 if pu.def.kind == "medal" then

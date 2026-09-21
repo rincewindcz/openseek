@@ -182,7 +182,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header, delta input, checksums, `.osr` files. |
 | `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory; co-op adds a `coop` table per player), one JSON file per slot in `saves/`. |
-| `ui/hud` | Gauges, weapon icon, radar, counters, OVERKILL banner, rolling score. |
+| `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom and pickup blips), counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse. |
@@ -492,10 +492,11 @@ Requires Python 3, `pillow`, `numpy`. Game directory via `--game-dir`.
 | F5 | God mode |
 | F6 | Fly-over pickup override (ignores the difficulty landing rules) |
 | F7 | Co-op free play (vehicle select) |
-| F8 / F9 / F10 | Animation / font / sound gallery |
+| F8 / F9 / F10 | Animation / font / sound gallery (overview) |
+| F9 | Radar auto zoom (in game, rebindable). Co-op: P1 Tab, P2 keypad `.` |
 | F12 | Screenshot (rebindable) |
 | Overview: wheel, +/- | Zoom |
-| Overview: Tab, PgUp/PgDn | Stage picker / cycle |
+| Overview: Tab, PgUp/PgDn | Stage picker / cycle (also in free play, never in a campaign) |
 | Overview: L, G | Segment lines, 256 px grid |
 | Overview: V, O | Vehicle, optional game over |
 | Overview: C, [ ] | Axis-aligned pickups, `speed_scale` |

@@ -26,6 +26,7 @@ local DEFAULTS = {
     takeoff    = { "space", "f" },
     weapon     = { "q" },
     pause      = { "p" },
+    radar_zoom = { "f9" },
     screenshot = { "f12" },
 }
 
@@ -45,6 +46,7 @@ Input.ACTIONS = {
     { key = "takeoff",    label = "TAKEOFF" },
     { key = "weapon",     label = "WEAPON" },
     { key = "pause",      label = "PAUSE" },
+    { key = "radar_zoom", label = "RADAR ZOOM" },
     { key = "screenshot", label = "SNAPSHOT" },
 }
 

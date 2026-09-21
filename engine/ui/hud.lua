@@ -33,10 +33,26 @@ local RADAR_BUILDING = {
     structure = true,
     radar     = true,
 }
-local RADAR_COLOR_ENEMY     = { 1.0, 0.15, 0.15 }
-local RADAR_COLOR_BUILDING  = { 0.33, 0.18, 0.07 }
-local RADAR_COLOR_OBJECTIVE = { 1.0, 1.0, 1.0 }
-local RADAR_COLOR_AIR       = { 1.0, 0.4, 0.8 }   -- enemy helicopters (pinkish)
+-- Blip colors: the classic set for the see-through radar, and a brighter set
+-- the EXTRA (radar_backdrop) blends toward as its dark backdrop fades in.
+local RADAR_COLORS = {
+    building  = { classic = { 0.33, 0.18, 0.07 }, bright = { 0.5, 0.32, 0.16 } },
+    enemy     = { classic = { 1.0, 0.15, 0.15 },  bright = { 1.0, 0.2, 0.15 } },
+    air       = { classic = { 1.0, 0.4, 0.8 },    bright = { 1.0, 0.45, 0.9 } },   -- enemy helicopters
+    pickup    = { classic = { 1.0, 0.9, 0.1 },    bright = { 1.0, 0.95, 0.15 } },
+    objective = { classic = { 1.0, 1.0, 1.0 },    bright = { 1.0, 1.0, 1.0 } },
+}
+
+-- Flat-color redraw of a sprite's opaque pixels (the recolored radar ring).
+local TINT_SRC = [[
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen)
+{
+    return vec4(color.rgb, Texel(tex, uv).a * color.a);
+}
+]]
+
+-- Blink rate (on/off cycles per second) of a pickup blip about to expire.
+local RADAR_PICKUP_BLINK = 8
 
 -- Score count-up: exponential approach rate (per second) and the floor speed
 -- (points per second) that keeps the last few digits from crawling.
@@ -53,12 +69,28 @@ function Hud:init()
     self._score_roll = setmetatable({}, { __mode = "k" })
     self._radar_source = nil   -- world entity list the radar list was built from
     self._radar_list   = {}
+    -- Radar auto zoom per player (weak keys, like the score roll): the toggle and
+    -- its 0..1 animation progress. A new phase's players start zoomed out.
+    self._radar_zoom = setmetatable({}, { __mode = "k" })
 end
 
--- Ease the score readouts toward their players' real scores. Driven from
--- love.update on frame time, not on simulation ticks: this is presentation and
--- must never feed back into the run.
+-- Flip a player's radar auto zoom (the original's Autozoom key). Presentation
+-- only: the state lives here, never in the simulation or the input frame.
+function Hud:toggle_radar_zoom(p)
+    if not p then return end
+    local zoom = self._radar_zoom[p]
+    if not zoom then
+        zoom = { on = false, t = 0 }
+        self._radar_zoom[p] = zoom
+    end
+    zoom.on = not zoom.on
+end
+
+-- Animate the radar zoom and ease the score readouts toward their players' real
+-- scores. Driven from love.update on frame time, not on simulation ticks: this
+-- is presentation and must never feed back into the run.
 function Hud:update(dt)
+    self:_update_radar_zoom(dt)
     if not Config.score_count_up then return end
     for p, roll in pairs(self._score_roll) do
         local target = p.score or 0
@@ -72,6 +104,28 @@ function Hud:update(dt)
             roll.shown = math.min(target, roll.shown + step)
         end
     end
+end
+
+-- Move each player's radar zoom progress toward its toggle at a constant rate,
+-- so a toggle mid-animation reverses smoothly from where it is.
+function Hud:_update_radar_zoom(dt)
+    local item = self._by_id and self._by_id.radar
+    local step = dt / math.max(0.01, item and item.zoom_time or 0.3)
+    for _, zoom in pairs(self._radar_zoom) do
+        if zoom.on then
+            zoom.t = math.min(1, zoom.t + step)
+        else
+            zoom.t = math.max(0, zoom.t - step)
+        end
+    end
+end
+
+-- The eased 0..1 radar zoom of the HUD's current player.
+function Hud:_radar_zoom_amount()
+    local zoom = self._radar_zoom[self.player]
+    if not zoom then return 0 end
+    local t = zoom.t
+    return t * t * (3 - 2 * t)
 end
 
 -- The score to draw for a player: the rolling readout when the count-up is on,
@@ -524,10 +578,56 @@ function Hud:_radar_entities()
     return self._radar_list
 end
 
+-- The scanner ring, over the EXTRA (radar_backdrop) dark glass disc. The
+-- original radar is see-through, its dark ring and blips made for the bright
+-- DOS terrain; under night lighting and post-processing that terrain turns
+-- dark too, so the backdrop fades in a disc of its own and recolors the ring
+-- toward a light tone, both scaled by Config.radar_backdrop (0 = classic).
+function Hud:_draw_radar_backdrop(g, item, x, y, s, cx, cy, radius)
+    local amount = Config.radar_backdrop or 0
+    if amount <= 0 then
+        g.setColor(1, 1, 1)
+        g.draw(item._bg, x, y, 0, s, s)
+        return
+    end
+    local back = item.backdrop_color or { 0.02, 0.05, 0.04 }
+    g.setColor(back[1], back[2], back[3], (item.backdrop_alpha or 0.85) * amount)
+    g.circle("fill", cx, cy, radius - s, 48)
+
+    local ring    = item.ring_color or { 0.72, 0.76, 0.84 }
+    local classic = item.ring_classic or { 0.235, 0.235, 0.298 }
+    self._tint_shader = self._tint_shader or g.newShader(TINT_SRC)
+    g.setShader(self._tint_shader)
+    g.setColor(classic[1] + (ring[1] - classic[1]) * amount,
+        classic[2] + (ring[2] - classic[2]) * amount,
+        classic[3] + (ring[3] - classic[3]) * amount)
+    g.draw(item._bg, x, y, 0, s, s)
+    g.setShader()
+end
+
 function Hud:_draw_radar(g, item, x, y, s)
-    local p     = self.player
-    local r     = (item.radius or 88) * s
-    local range = item.world_range or 900
+    local p    = self.player
+    local zoom = self:_radar_zoom_amount()
+
+    -- Auto zoom narrows the range geometrically, so the zoom feels even across
+    -- the whole animation.
+    local base_range = item.world_range or 900
+    local zoom_range = item.zoom_range or base_range
+    local range      = base_range * (zoom_range / base_range) ^ zoom
+
+    -- EXTRA (radar_zoom_grow): the radar also grows while zoomed, about a pivot
+    -- given as a fraction of its box (the bottom edge by default, so it grows up
+    -- off the screen edge rather than past it).
+    if Config.radar_zoom_grow and zoom > 0 then
+        local grow  = 1 + ((item.zoom_scale or 1) - 1) * zoom
+        local pivot = item.zoom_pivot or { 0.5, 1 }
+        local box_w = item._bg and item._bg:getWidth()  * s or (item.radius or 88) * s * 2
+        local box_h = item._bg and item._bg:getHeight() * s or (item.radius or 88) * s * 2
+        x = x + pivot[1] * box_w * (1 - grow)
+        y = y + pivot[2] * box_h * (1 - grow)
+        s = s * grow
+    end
+    local r = (item.radius or 88) * s
 
     -- center: middle of the (scaled) background image
     local cx, cy
@@ -536,8 +636,7 @@ function Hud:_draw_radar(g, item, x, y, s)
         local bh = item._bg:getHeight() * s
         cx = x + bw / 2
         cy = y + bh / 2
-        g.setColor(1, 1, 1)
-        g.draw(item._bg, x, y, 0, s, s)
+        self:_draw_radar_backdrop(g, item, x, y, s, cx, cy, bw / 2)
     else
         cx = x + r
         cy = y + r
@@ -561,7 +660,7 @@ function Hud:_draw_radar(g, item, x, y, s)
     -- Bucket blips by priority and draw low-to-high so the mission goal is never
     -- hidden under a building/enemy dot: buildings (brown) first, enemies (red)
     -- next, objectives (white) last on top.
-    local buildings, enemies, objectives, air = {}, {}, {}, {}
+    local buildings, enemies, objectives, air, pickups = {}, {}, {}, {}, {}
 
     local function plot(bucket, ex, ey)
         local wdx, wdy = self.world:delta(ex, ey, p.x, p.y)
@@ -588,16 +687,30 @@ function Hud:_draw_radar(g, item, x, y, s)
         if h.state == "alive" then plot(air, h.x, h.y) end
     end
 
-    local function draw_blips(blips, c)
-        g.setColor(c[1], c[2], c[3], 0.95)
+    -- Power-ups, blinking fast once they are about to expire.
+    local powerups = self.powerups
+    if powerups then
+        for _, pu in ipairs(powerups.list) do
+            if not powerups:expiring(pu) or math.floor(pu.age * RADAR_PICKUP_BLINK * 2) % 2 == 0 then
+                plot(pickups, pu.x, pu.y)
+            end
+        end
+    end
+
+    local backdrop = Config.radar_backdrop or 0
+    local function draw_blips(blips, colors)
+        local dim, lit = colors.classic, colors.bright
+        g.setColor(dim[1] + (lit[1] - dim[1]) * backdrop, dim[2] + (lit[2] - dim[2]) * backdrop,
+            dim[3] + (lit[3] - dim[3]) * backdrop, 0.95)
         for _, b in ipairs(blips) do
             g.rectangle("fill", cx + b[1] - dot_r, cy + b[2] - dot_r, dot_r * 2, dot_r * 2)
         end
     end
-    draw_blips(buildings,  RADAR_COLOR_BUILDING)
-    draw_blips(enemies,    RADAR_COLOR_ENEMY)
-    draw_blips(air,        RADAR_COLOR_AIR)
-    draw_blips(objectives, RADAR_COLOR_OBJECTIVE)
+    draw_blips(buildings,  RADAR_COLORS.building)
+    draw_blips(enemies,    RADAR_COLORS.enemy)
+    draw_blips(air,        RADAR_COLORS.air)
+    draw_blips(pickups,    RADAR_COLORS.pickup)
+    draw_blips(objectives, RADAR_COLORS.objective)
 
     -- Co-op teammate (split screen): a larger dot in the teammate's color.
     local mate = self.coplayer

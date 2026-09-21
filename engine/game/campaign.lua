@@ -98,10 +98,15 @@ end
 
 -- A phase was cleared and its state carried into the run: open the next
 -- phase's briefing (with the mission picture when a new mission begins), or
--- finish the run after the last stage.
+-- finish the run after the last stage. The next stage follows the loaded
+-- stage's name, not world.stage_index, which the overview's stage picker moves
+-- without loading anything.
 function Campaign.advance(app)
-    local world      = app.world
-    local next_stage = world.stages[world.stage_index + 1]
+    local world = app.world
+    local next_stage
+    for i, name in ipairs(world.stages) do
+        if name == world.stage_name then next_stage = world.stages[i + 1] end
+    end
     if not next_stage then
         Log.info("game", "campaign complete")
         Campaign.finish(app)

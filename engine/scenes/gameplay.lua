@@ -429,6 +429,7 @@ function Gameplay:game_keys(key)
     local app = self.app
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
     if Input.pressed("pause", key)   then self.paused = not self.paused; return end
+    if Input.pressed("radar_zoom", key) then app.hud:toggle_radar_zoom(self.player); return end
     if self.playback then
         if key == "escape" then self:finish_playback("stopped") end
         return
@@ -439,7 +440,7 @@ function Gameplay:game_keys(key)
     if Input.pressed("takeoff", key) then self.source:queue("takeoff"); return end
     if Input.pressed("weapon", key)  then self.source:queue("weapon"); return end
     if key == "e" then self.source:queue("level"); return end
-    if Overview.picker_keys(app, key) then return end
+    if not app.campaign and Overview.picker_keys(app, key) then return end
     local slot = key:match("^(%d)$")
     if slot then self.source:queue("slot:" .. slot); return end
     if key == "escape" then app.scenes:push("main_menu") end

@@ -118,11 +118,13 @@ local CATEGORIES = {
         { key = "land_for_supplies", label = "LAND: SUPPLY",  kind = "toggle", on_change = match_difficulty },
     } },
     { title = "EXTRAS", options = {
-        { key = "explosive_trees",  label = "EXPLOSIVE TREES", kind = "toggle" },
-        { key = "tree_crush_speed", label = "CRUSH SPEED",     kind = "range", min = 0.3, max = 1.0, step = 0.1 },
-        { key = "hit_flash",        label = "HIT FLASH",       kind = "toggle" },
+        { key = "explosive_trees",     label = "EXPLOSIVE TREES", kind = "toggle" },
+        { key = "tree_crush_speed",    label = "CRUSH SPEED",     kind = "range", min = 0.3, max = 1.0, step = 0.1 },
+        { key = "hit_flash",           label = "HIT FLASH",       kind = "toggle" },
         { key = "camera_shake",        label = "CAMERA SHAKE",    kind = "toggle" },
         { key = "camera_shake_amount", label = "SHAKE AMOUNT",    kind = "range", min = 0.25, max = 3.0, step = 0.25 },
+        { key = "radar_zoom_grow",     label = "RADAR ZOOM GROW", kind = "toggle" },
+        { key = "radar_backdrop",      label = "RADAR BACKDROP",  kind = "range", min = 0, max = 1.0, step = 0.1 },
     } },
     { title = "EXIT", kind = "exit" },
 }
