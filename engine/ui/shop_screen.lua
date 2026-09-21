@@ -35,10 +35,11 @@ local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
 local LAYOUT_PATH  = "data/shop.json"
 local CONFIRM_TIME = 0.3
 
--- POWGADS frame per button state.
+-- POWGADS frame per button state; ring is the gold rim the original draws over
+-- a pressed button.
 local BUTTON_FRAMES = {
-    purchase = { normal = 0,  disabled = 1, pressed = 2 },
-    done     = { normal = 4,  disabled = 5, pressed = 6 },
+    purchase = { normal = 0,  disabled = 1, ring = 3 },
+    done     = { normal = 4,  disabled = 5, ring = 7 },
     chop     = { normal = 8,  disabled = 9 },
     tank     = { normal = 10, disabled = 11 },
 }
@@ -281,7 +282,7 @@ function ShopScreen:_navigate(key)
 end
 
 -- Mouse/touch, window coords. A box selects on press; buttons show their
--- pressed frame while held and fire on release over the same button.
+-- gold ring while held and fire on release over the same button.
 function ShopScreen:press(x, y)
     if not self.active or self.confirming then return end
     local z = self:_zone_at(Pointer.to_design(x, y, DW, DH))
@@ -392,13 +393,11 @@ end
 
 function ShopScreen:_draw_button(g, z)
     local frames = (z.id == "toggle") and self:_toggle_frames() or BUTTON_FRAMES[z.id]
-    local frame  = frames.normal
-    if not self:_enabled(z.id) then
-        frame = frames.disabled
-    elseif frames.pressed and self:_pressed(z.id) then
-        frame = frames.pressed
-    end
+    local frame  = self:_enabled(z.id) and frames.normal or frames.disabled
     self:_draw_at(g, self:_gads(frame), z.x, z.y)
+    if frames.ring and self:_pressed(z.id) then
+        self:_draw_at(g, self:_gads(frames.ring), z.x, z.y)
+    end
 end
 
 -- Moves the shown medal count one medal per count_step toward the purse, faster

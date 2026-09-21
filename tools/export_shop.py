@@ -18,8 +18,8 @@ POWUPT.png (the same trick export_equip.py uses for the equip screens):
   - MEASURED indices override all of the above: the backdrops map them to other
     colours than the live shop shows (button face, text shadow, button border,
     the medal), so they are read off original-game shop screenshots instead;
-  - GREY_RAMP (168-191) likewise, interpolated between measured points: the
-    darkened level tiles (POWWGADS / POWGADST) draw only in this ramp.
+  - GREY_RAMPS (17-28 and 168-191) likewise, interpolated between measured
+    points: the darkened level tiles (POWWGADS / POWGADST) draw in these.
 
 Frames keep their in-container origin (a frame whose pixels start at x=3 is
 exported with 3 transparent columns), so the digit "1" and the small medal line
@@ -34,8 +34,8 @@ Outputs (assets/pow/):
                 (0-based, categories in WINF order), full 40x40 boxes
   powgadst_f*   the tank's darkened level tiles
   pownums_f*    digits 0-9 (COST and the medal count)
-  powgads_f*    PURCHASE / DONE / CHOP / TANK buttons, 4 frames each:
-                normal, disabled, pressed, blank
+  powgads_f*    PURCHASE / DONE: normal, disabled, grey, gold press ring;
+                CHOP / TANK: normal, disabled
   weapon_info.json
                 per vehicle / weapon / level: medal cost and description lines,
                 parsed from data/WINF.BIN (chopper) and data/WINFT.BIN (tank)
@@ -79,15 +79,13 @@ SPRITES = ["POWMEDAL", "POWNAMES", "POWARMED", "POWFOCUS", "POWWGADS", "POWGADST
 # Shop palette entries read off original-game screenshots (POWUP/POWUPT, 2x
 # DOSBox captures): 16 button text, 31 the shadow under every glyph / digit /
 # LOADED, 61 the digits' outer gold, 215 button border, 224 disabled button
-# text; the rest is the medal (ribbon blue / white / red, gold face, grey hook).
+# text; the rest is the medal (ribbon blue / white / red, gold face).
 MEASURED = {
     3:   (0, 150, 223),
     5:   (0, 89, 182),
     14:  (251, 251, 81),
     15:  (251, 251, 251),
     16:  (235, 235, 235),
-    18:  (203, 203, 203),
-    21:  (154, 154, 154),
     31:  (0, 0, 0),
     34:  (251, 44, 65),
     36:  (235, 0, 0),
@@ -103,13 +101,15 @@ MEASURED = {
     224: (44, 44, 44),
 }
 
-# Darkened-tile grey ramp: index -> grey level, measured from the chopper shop's
-# darkened chain gun, rockets, air-to-ground and napalm tiles. Indices between
-# the points are interpolated.
-GREY_RAMP = {
-    168: 186, 173: 142, 175: 125, 177: 109, 178: 101, 179: 93, 181: 81,
-    182: 69, 183: 60, 185: 44, 186: 40, 188: 20, 189: 12, 190: 4, 191: 0,
-}
+# Grey ramps: index -> grey level, measured from darkened level tiles (17-28
+# the tank's shells tiles and the medal hook, 168-191 every other tile).
+# Indices between the points of a ramp are interpolated.
+GREY_RAMPS = [
+    {17: 223, 18: 203, 19: 186, 21: 154, 22: 142, 23: 125, 24: 109, 25: 93,
+     26: 81, 27: 60, 28: 44},
+    {168: 186, 173: 142, 175: 125, 177: 109, 178: 101, 179: 93, 181: 81,
+     182: 69, 183: 60, 185: 44, 186: 40, 188: 20, 189: 12, 190: 4, 191: 0},
+]
 # A disabled POWGADS button (the frames drawing their text in 224) shows its
 # border grey rather than green.
 DISABLED_TEXT   = 224
@@ -162,14 +162,15 @@ def backdrop_colors(bin_path, png_path):
     return out
 
 
-def grey_ramp():
-    """index -> RGB over the GREY_RAMP span, linear between measured points."""
-    points = sorted(GREY_RAMP.items())
+def grey_ramps():
+    """index -> RGB over each GREY_RAMPS span, linear between measured points."""
     out = {}
-    for (i0, v0), (i1, v1) in zip(points, points[1:]):
-        for i in range(i0, i1 + 1):
-            v = round(v0 + (v1 - v0) * (i - i0) / (i1 - i0))
-            out[i] = (v, v, v)
+    for ramp in GREY_RAMPS:
+        points = sorted(ramp.items())
+        for (i0, v0), (i1, v1) in zip(points, points[1:]):
+            for i in range(i0, i1 + 1):
+                v = round(v0 + (v1 - v0) * (i - i0) / (i1 - i0))
+                out[i] = (v, v, v)
     return out
 
 
@@ -187,7 +188,7 @@ def build_palette(game_dir):
         elif i < 80:
             pal[i] = (min(gov[i * 3] * 4, 255), min(gov[i * 3 + 1] * 4, 255),
                       min(gov[i * 3 + 2] * 4, 255))
-    for i, rgb in list(MEASURED.items()) + list(grey_ramp().items()):
+    for i, rgb in list(MEASURED.items()) + list(grey_ramps().items()):
         pal[i] = rgb
     return pal
 
