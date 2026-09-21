@@ -34,7 +34,9 @@ function Powerups:init(world, camera, weapons)
     self.player    = nil
     self.players   = {}   -- all players that can collect (1 normally, 2 in split)
     self.list      = {}
-    self.easy_mode = true   -- fly-over pickup; false = must land the chopper on it
+    -- F6 override: collect everything by flying over it, whatever the difficulty
+    -- landing rules (Config.land_for_medals / land_for_supplies) say.
+    self.easy_mode = false
     self._frames   = nil
 end
 
@@ -100,10 +102,11 @@ function Powerups:update(dt)
             local dx, dy = self.world:delta(p.x, p.y, pu.x, pu.y)
             local rr = PICK_RANGE + (p.collision_radius or 8)
             if dx * dx + dy * dy <= rr * rr then
-                -- Easy: fly over. Hard: the chopper must be landed on it (a tank is
-                -- always grounded, so it collects either way).
+                -- A pickup the difficulty says to land on needs the chopper landed on
+                -- it (a tank is always grounded, so it collects either way); the rest
+                -- are collected by flying over.
                 local grounded = (not p.is_flyer) or (not p:is_flyer()) or p.land_state == "grounded"
-                if self.easy_mode or grounded then
+                if self.easy_mode or grounded or not self:_needs_landing(pu.def) then
                     self:_apply(pu.def, p)
                     taken = true
                     break
@@ -113,6 +116,12 @@ function Powerups:update(dt)
         if not taken and pu.age < TTL then live[#live + 1] = pu end
     end
     self.list = live
+end
+
+function Powerups:_needs_landing(def)
+    if def.kind == "medal" then return Config.land_for_medals end
+    if def.kind == "fuel" or def.kind == "armor" then return Config.land_for_supplies end
+    return false
 end
 
 function Powerups:_apply(def, p)

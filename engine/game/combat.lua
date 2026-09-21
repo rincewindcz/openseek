@@ -396,7 +396,7 @@ function CombatSystem:_update_hangar(e, p, dt)
     if p then
         local dx, dy = self.world:delta(e.x, e.y, p.x, p.y)   -- from player toward tank
         local d2  = dx * dx + dy * dy
-        local det = td.detection_radius or 0
+        local det = (td.detection_radius or 0) * Config.enemy_aggression
         if det > 0 and d2 <= det * det then
             local to_tank = Mathx.heading_deg(dx, dy)
             local diff    = ((to_tank - (p.angle or 0) + 180) % 360) - 180
@@ -467,8 +467,7 @@ local LOCK_ARC_DEG = 45
 local function ground_lock_priority(e)
     local k = e.kind_name
     if k == "soldier" or k == "soldier_aggressive" then return 1 end
-    local td = e.type_data
-    if td and td.weapon and (td.detection_radius or 0) > 0 then return 3 end
+    if e:is_combatant() then return 3 end
     if k == "structure" or k == "radar" then return 2 end
     return 1
 end
@@ -574,7 +573,7 @@ function CombatSystem:_update_ai(dt)
             local td  = e.type_data
             local dx, dy = self.world:delta(p.x, p.y, e.x, e.y)
             local d2  = dx * dx + dy * dy
-            local detection = td.detection_radius or 0
+            local detection = (td.detection_radius or 0) * Config.enemy_aggression
             e.engaging = false
             if detection > 0 and d2 <= detection * detection then
                 acquired = true
@@ -583,7 +582,7 @@ function CombatSystem:_update_ai(dt)
                 -- for reaction_delay seconds, giving the player a window to break off.
                 -- The timer resets whenever the player leaves detection.
                 e.alert_t = (e.alert_t or 0) + dt
-                local ready = e.alert_t >= (td.reaction_delay or 0)
+                local ready = e.alert_t >= (td.reaction_delay or 0) / Config.enemy_aggression
                 local target = Mathx.heading_deg(dx, dy)
                 local diff   = ((target - e.aim_angle + 180) % 360) - 180
                 local step   = (td.turn_speed or 90) * dt * Config.speed_scale
@@ -597,7 +596,8 @@ function CombatSystem:_update_ai(dt)
                 -- which the renderer draws from aim_angle.
                 if not e.has_turret then e.angle = e.aim_angle end
 
-                local attack_range = td.attack_range or detection
+                local attack_range = td.attack_range and td.attack_range * Config.enemy_aggression
+                    or detection
                 local weapon       = e.weapon or td.weapon
                 -- Patrol only pauses for the brief window around each shot (slow to a
                 -- stop as the reload comes up, fire, then resume), not the whole time
@@ -622,7 +622,7 @@ function CombatSystem:_update_ai(dt)
                         self:fire(sx, sy, e.aim_angle, weapon, e, 1, attack_range * 1.3)
                         local w = self.weapons[weapon]
                         -- Per-stage fire-rate override (e.fire_rate) wins over the weapon's.
-                        e.reload = 1 / (e.fire_rate or (w and w.fire_rate) or 1)
+                        e.reload = 1 / ((e.fire_rate or (w and w.fire_rate) or 1) * Config.enemy_fire_rate)
                     end
                 end
             end
@@ -839,7 +839,9 @@ function CombatSystem:_check_hit(projectile)
                 local dx, dy = self.world:delta(p.x, p.y, projectile.x, projectile.y)
                 local hit_range = (p.collision_radius or 12) + projectile.radius
                 if dx * dx + dy * dy < hit_range * hit_range then
-                    if not p.unlimited then p.armor = math.max(0, p.armor - projectile.damage) end
+                    if not p.unlimited then
+                        p.armor = math.max(0, p.armor - projectile.damage * Config.enemy_damage)
+                    end
                     self:_player_hit_fx(p)
                     return true
                 end
@@ -860,6 +862,7 @@ end
 -- Attached to the player so it draws on top of the vehicle, not under it.
 function CombatSystem:_player_hit_fx(p)
     self.world:sound("impact.player", p.x, p.y)
+    self.world:player_hit(p.x, p.y)
     local clip = PLAYER_HIT_FX[self.world.rng:random(#PLAYER_HIT_FX)]
     if p.add_hit_fx then
         p:add_hit_fx(clip, clip == "fire" and 0.6 or nil)

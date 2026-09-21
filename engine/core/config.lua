@@ -109,6 +109,29 @@ local Config = {
     -- moving at for that to happen (slower than this and the tree still blocks).
     explosive_trees  = true,
     tree_crush_speed = 0.7,
+
+    -- Difficulty (engine/game/difficulty.lua, presets in data/difficulty.json),
+    -- after the original's EASY / MEDIUM / HARD option. difficulty is the preset
+    -- the values below were set from ("custom" once one is edited). The
+    -- multipliers scale enemy damage to the player, enemy fire rate, and enemy
+    -- aggression (detection and attack range up, reaction delay down); 1.0 is
+    -- the engine's own tuning, which is HARD. land_for_medals / land_for_supplies
+    -- make the chopper land on a medal / on fuel and armor to collect it.
+    -- Replay parameters, frozen at phase start.
+    difficulty        = "medium",
+    enemy_damage      = 0.7,
+    enemy_fire_rate   = 0.8,
+    enemy_aggression  = 0.9,
+    land_for_medals   = true,
+    land_for_supplies = false,
+
+    -- Presentation EXTRAs, off by default to keep the original's look
+    -- (engine/game/impact_fx.lua, timings in data/impact_fx.json): hit_flash
+    -- flashes a damaged enemy white; camera_shake shakes the view on explosions
+    -- and hits near it, camera_shake_amount scaling its strength.
+    hit_flash           = false,
+    camera_shake        = false,
+    camera_shake_amount = 1.0,
 }
 
 -- Player-editable keys persisted to the save directory, so the advanced settings
@@ -120,7 +143,9 @@ local PERSISTED = {
     "postfx_bloom", "postfx_vignette", "postfx_grain", "postfx_soft_shadows",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
     "endstats_count_up", "score_count_up", "shop_fx", "chopper_skin", "tank_skin", "coop_lives",
-    "explosive_trees", "tree_crush_speed",
+    "explosive_trees", "tree_crush_speed", "hit_flash", "camera_shake", "camera_shake_amount",
+    "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
+    "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
     "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",
     "fullscreen", "vsync", "window_size", "show_fps",

@@ -29,7 +29,18 @@ Replay.DIR    = "replays"
 -- Config keys that change the simulation. They are stored in the header and
 -- re-applied during playback, and held to the recorded values while a run is
 -- being recorded, so a mid-run options edit cannot desync a replay.
-Replay.PARAMS = { "speed_scale", "explosive_trees", "tree_crush_speed", "friendly_fire_pows" }
+Replay.PARAMS = {
+    "speed_scale", "explosive_trees", "tree_crush_speed", "friendly_fire_pows",
+    "enemy_damage", "enemy_fire_rate", "enemy_aggression", "land_for_medals", "land_for_supplies",
+}
+
+-- The value a parameter had before it existed, for replays recorded without it:
+-- the difficulty keys arrived later, and older runs played at full strength
+-- with no landing rules.
+Replay.LEGACY_PARAMS = {
+    enemy_damage = 1, enemy_fire_rate = 1, enemy_aggression = 1,
+    land_for_medals = false, land_for_supplies = false,
+}
 
 -- A replay is only valid for the build that produced it: platform libm
 -- differences can change the last bit of a sine, which compounds over a run.
@@ -294,6 +305,7 @@ function Replay.apply_params(params)
     local Config = require "engine.core.config"
     for _, key in ipairs(Replay.PARAMS) do
         local v = params[key]
+        if v == nil then v = Replay.LEGACY_PARAMS[key] end
         if v ~= nil then
             if type(Config[key]) == "boolean" then
                 Config[key] = (v == true or v == "true")

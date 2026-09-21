@@ -132,6 +132,7 @@ end
 function HeliSystem:hit(heli, dmg, shooter)
     if heli.state ~= "alive" then return end
     heli.hp = heli.hp - dmg
+    self.world:hit_flash(heli)
     -- A scorch burst on the hull at each hit, like the original (fire loops, so it
     -- needs a lifetime; smoke2 plays once and culls itself).
     local clip = self.world.rng:random() < 0.5 and "fire" or "smoke2"
@@ -235,25 +236,26 @@ function HeliSystem:_update_heli(heli, dt)
     -- the heli has been in attack range for REACTION_DELAY seconds, so a heli that
     -- just closed in (often from off-screen behind the player) gives an evasion
     -- window instead of firing on arrival. Resets when it falls out of range.
-    if dist <= ATTACK_R then heli.alert_t = heli.alert_t + dt else heli.alert_t = 0 end
-    local ready  = heli.alert_t >= REACTION_DELAY
+    local attack_r = ATTACK_R * Config.enemy_aggression
+    if dist <= attack_r then heli.alert_t = heli.alert_t + dt else heli.alert_t = 0 end
+    local ready  = heli.alert_t >= REACTION_DELAY / Config.enemy_aggression
     local face   = math.abs(((toplayer - heli.heading + 180) % 360) - 180)
     local mid    = heli.burst_left < heli.burst                  -- already firing this volley
     local in_view   = math.abs(front_pos) <= FIRE_FRONT
-    local can_start = ready and in_view and dist <= ATTACK_R and face <= FIRE_CONE
+    local can_start = ready and in_view and dist <= attack_r and face <= FIRE_CONE
     -- A volley only starts when the nose is on the player and in range; once it has,
     -- it commits to all `burst` rounds (the burst is brief, so the nose barely
     -- drifts) and then waits out the long cooldown. That makes a clear shoot/pause
     -- rhythm instead of a constant stream.
     if heli.reload <= 0 and (mid or can_start) then
         self.combat:tick_swing(heli, heli.weapon)
-        self.combat:fire(heli.x, heli.y, heli.heading, heli.weapon, heli, heli.level, ATTACK_R * 1.2)
+        self.combat:fire(heli.x, heli.y, heli.heading, heli.weapon, heli, heli.level, attack_r * 1.2)
         heli.burst_left = heli.burst_left - 1
         if heli.burst_left > 0 then
-            heli.reload = heli.intra
+            heli.reload = heli.intra / Config.enemy_fire_rate
         else
             heli.burst_left = heli.burst
-            heli.reload = heli.cooldown
+            heli.reload = heli.cooldown / Config.enemy_fire_rate
         end
     end
 end
@@ -288,7 +290,7 @@ function HeliSystem:_blast(heli)
         if p and (p.armor or 0) > 0 and not p.death and not p.unlimited then
             local dx, dy = self.world:delta(p.x, p.y, heli.x, heli.y)
             if dx * dx + dy * dy < BLAST_RADIUS * BLAST_RADIUS then
-                p.armor = math.max(0, p.armor - BLAST_DAMAGE)
+                p.armor = math.max(0, p.armor - BLAST_DAMAGE * Config.enemy_damage)
             end
         end
     end
@@ -417,6 +419,10 @@ function HeliSystem:draw()
                 local fall_scale = 1 - 0.5 * (heli.fall or 0)
                 g.setColor(1, 1, 1)
                 g.draw(self.sprite, heli.x, heli.y, rot, fall_scale, fall_scale, iw / 2, ih / 2)
+                if self.world.impactfx then   -- EXTRA (hit_flash)
+                    self.world.impactfx:draw_flash(heli, self.sprite, heli.x, heli.y, rot,
+                        fall_scale, fall_scale, iw / 2, ih / 2)
+                end
                 -- Spinning rotor disc on top: one blade frame rotated, not the blur arc.
                 if self.rotor_img then
                     g.draw(self.rotor_img, heli.x, heli.y, heli.rotor_spin, fall_scale, fall_scale,

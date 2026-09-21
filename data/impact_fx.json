@@ -1,0 +1,14 @@
+{
+  "hit_flash": { "time": 0.08, "strength": 0.85 },
+  "shake": {
+    "hz": 24,
+    "max": 16,
+    "explosion": {
+      "large":  { "amount": 8.0, "time": 0.45, "radius": 480 },
+      "medium": { "amount": 4.0, "time": 0.30, "radius": 340 },
+      "flak":   { "amount": 2.0, "time": 0.18, "radius": 220 }
+    },
+    "player_hit":   { "amount": 3.0, "time": 0.22, "radius": 80 },
+    "player_death": { "amount": 14.0, "time": 0.80, "radius": 650 }
+  }
+}

@@ -164,6 +164,9 @@ end
 -- Switch HUD art to mission m's overrides (assets/hud/stage{m}/) where present,
 -- per item, falling back to the shared set. Called on each stage load.
 function Hud:set_mission(m)
+    local overkill = "overkill" .. tostring(m)
+    self.overkill_font = love.filesystem.getInfo("assets/fonts/" .. overkill .. ".json")
+        and overkill or "overkill0"
     local prefix = "hud/stage" .. tostring(m) .. "/"
     for _, item in ipairs(self.items) do
         self:_preload_item(item, prefix)
@@ -299,7 +302,7 @@ function Hud:_draw_overkill(_g, screen_w, screen_h, hud_scale)
     local p = self.player
     if not (p.overkill_active and p:overkill_active()) then return end
     if math.floor(love.timer.getTime() * 12) % 2 ~= 0 then return end
-    local font = Font.get("overkill")
+    local font = Font.get(self.overkill_font or "overkill0")
     local s    = 4 * hud_scale
     local w    = font:word_width(s)
     font:print_word((screen_w - w) / 2, screen_h * 0.28, { scale = s })

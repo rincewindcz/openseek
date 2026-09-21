@@ -166,10 +166,12 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/mission` | Objectives, progress, return to base. `Mission.for_stage(world, players, stage)`. |
 | `game/rescue` | POW rescue from `powhere.bin` buildings. |
 | `game/saboteur` | Sabotage objective. |
-| `game/powerups` | Drops from large buildings: ttl, blink, fly-over or land-on pickup. |
+| `game/powerups` | Drops from large buildings: ttl, blink, fly-over pickup unless the difficulty says to land on it (medals, fuel / armor); `F6` forces fly-over for everything. |
+| `game/difficulty` | Difficulty presets over the difficulty Config keys (`data/difficulty.json`): choices, apply, match. |
 | `game/renderer` | Ground pass, object pass (y-sorted, culled), player layer by `is_airborne()`, shrapnel overlay. |
 | `game/lightfx` | Night light map, additive flashes. |
 | `game/postfx` | World-view post-processing and soft shadows (`data/postfx.json`). |
+| `game/impact_fx` | EXTRA hit flash and camera shake (`data/impact_fx.json`), fed by the `World:hit_flash` / `:player_hit` / `:explosion_light` / `:player_death_light` forwarders; the shake is a per-camera offset applied in `Camera:apply`. |
 | `game/sound` | Listeners, panning, attenuation, engine loops, radio queue. |
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
 | `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
@@ -380,6 +382,8 @@ Toggleable extras (EXTRAS page):
 |-----|---------|--------|
 | `explosive_trees` | on | Tank at speed destroys trees for a small armor cost. |
 | `tree_crush_speed` | 0.7 | Fraction of top speed required. |
+| `hit_flash` | off | Damaged armed enemies flash white (`game/impact_fx`). |
+| `camera_shake`, `camera_shake_amount` | off, 1.0 | Explosions and hits near the camera shake the view, scaled by the amount (`game/impact_fx`). |
 
 Options:
 
@@ -394,6 +398,8 @@ Options:
 | `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs. |
 | `endstats_count_up` | GAMEPLAY | Stats count up instead of down. |
 | `score_count_up` | GAMEPLAY | HUD score rolls to new total (frame time, presentation). |
+| `shop_fx` | GAMEPLAY | Animated shop medal purse (presentation). |
+| `difficulty`, `enemy_damage`, `enemy_fire_rate`, `enemy_aggression`, `land_for_medals`, `land_for_supplies` | DIFFICULTY | The original's EASY / MEDIUM / HARD (`game/difficulty`, `data/difficulty.json`), each value also editable (preset then reads CUSTOM). Multipliers on enemy damage to the player, enemy fire rate, and aggression (detection and attack range up, reaction delay down); HARD is 1.0 on all, the engine's own tuning. MEDIUM needs a landing to collect medals, HARD also fuel and armor. Replay parameters; replays from before them apply HARD multipliers with no landing rules (`Replay.LEGACY_PARAMS`). |
 | `chopper_skin`, `tank_skin` | GAMEPLAY | Solo chopper and tank variants (section 9a); also set by the vehicle select screen and the overview `V` cycle. Recorded in the replay header. |
 | `coop_lives` | GAMEPLAY | Co-op campaign lives: `separate` or `shared` pool (section 9). |
 | `master_volume`, `sfx_volume`, `engine_volume`, `voice_volume`, `ui_volume`, `music_volume` | AUDIO | Master and bus volumes. |
@@ -427,6 +433,8 @@ galleries, debug mission picker, headless checks.
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
 | `data/audio.json` | Sound events. |
 | `data/postfx.json` | `look` (100% values) and `presets`. |
+| `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
+| `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, player hit and player death (amount in world units, time, radius). |
 | `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets, darkened level tile per weapon level (`powwgads` chopper, `powgadst` tank); `fx` timings for `shop_fx`. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
 | `saves/save-<timestamp>-<n>.json` | One campaign save slot each, written to the save directory only (`game/savegame.lua`). |
@@ -449,7 +457,7 @@ Requires Python 3, `pillow`, `numpy`. Game directory via `--game-dir`.
 | `export_player.py` | `assets/player/` |
 | `export_hud.py` | `assets/hud/` |
 | `export_animations.py` | `assets/effects/` |
-| `export_fonts.py` | `assets/fonts/` |
+| `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its stage palette) |
 | `export_mainmen.py` | `assets/mainmen/`, `assets/mainmen/font/`, `assets/fonts/mainmen.*` (palette from `MAINMEN.BMP`) |
 | `menutitle.py` | `tools/MENUTITLE_PAL.BIN` (needs a CREDITS screenshot) |
 | `export_screens.py` | CREDANIM / HIANIM, POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards |
@@ -482,7 +490,7 @@ Requires Python 3, `pillow`, `numpy`. Game directory via `--game-dir`.
 | F3 | Sandbox |
 | F4 | Replays |
 | F5 | God mode |
-| F6 | Pickup mode fly-over / land-on |
+| F6 | Fly-over pickup override (ignores the difficulty landing rules) |
 | F7 | Co-op free play (vehicle select) |
 | F8 / F9 / F10 | Animation / font / sound gallery |
 | F12 | Screenshot (rebindable) |

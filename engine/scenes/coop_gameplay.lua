@@ -176,6 +176,7 @@ function CoopGameplay:enter()
     app.renderer.in_game = true
     self:enter_weather()
     app.lightfx:enter(world)
+    app.impactfx:enter(world)
     self:begin_audio()
     self:enter_music()
     self.death_timers = {}
@@ -236,6 +237,7 @@ function CoopGameplay:leave()
     self:reset_end_stats()
     app.weather:set(nil)
     app.lightfx:reset()
+    app.impactfx:reset()
     self:end_audio()
     app.renderer.in_game = false
     -- Restore the shared overview camera on every system that was pointed at
@@ -410,6 +412,7 @@ function CoopGameplay:update(dt)
     self:update_audio(self.players, self.cameras, self:_biases())
     app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
     app.lightfx:update(dt)
+    app.impactfx:update(dt)
     self:tick_replay(self.players)
 end
 
@@ -484,6 +487,7 @@ function CoopGameplay:draw()
         local cam   = self.cameras[i]
         local other = self.players[3 - i]
         cam.vw, cam.vh      = vw, H
+        cam.shake_x, cam.shake_y = app.impactfx:shake_offset(cam.x, cam.y)
         app.renderer.camera = cam
         app.combat.camera   = cam
         app.powerups.camera = cam

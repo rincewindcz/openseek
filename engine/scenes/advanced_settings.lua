@@ -1,21 +1,22 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class    = require "engine.core.class"
-local Scene    = require "engine.core.scene"
-local Font     = require "engine.core.font"
-local Layout   = require "engine.ui.layout"
-local Config   = require "engine.core.config"
-local Input    = require "engine.core.input"
-local Audio    = require "engine.core.audio"
-local Sound    = require "engine.game.sound"
-local Display  = require "engine.core.display"
-local Pointer  = require "engine.ui.pointer"
-local PostFX   = require "engine.game.postfx"
-local Vehicles = require "engine.game.vehicles"
+local Class      = require "engine.core.class"
+local Scene      = require "engine.core.scene"
+local Font       = require "engine.core.font"
+local Layout     = require "engine.ui.layout"
+local Config     = require "engine.core.config"
+local Input      = require "engine.core.input"
+local Audio      = require "engine.core.audio"
+local Sound      = require "engine.game.sound"
+local Display    = require "engine.core.display"
+local Pointer    = require "engine.ui.pointer"
+local PostFX     = require "engine.game.postfx"
+local Vehicles   = require "engine.game.vehicles"
+local Difficulty = require "engine.game.difficulty"
 
 -- Advanced OpenSeek options: a category sidebar (DISPLAY / VIDEO / EFFECTS /
--- AUDIO / CONTROLS / GAMEPLAY / EXTRAS / EXIT) with the selected category's option rows on the right,
+-- AUDIO / CONTROLS / GAMEPLAY / DIFFICULTY / EXTRAS / EXIT) with the selected category's option rows on the right,
 -- over the pulsating main-menu backdrop. Reached from the main menu's OPTIONS
 -- entry. Toggles/ranges edit engine/core/config live; CONTROLS rebinds the central
 -- key map (engine/core/input). Config and bindings are written to the save
@@ -48,10 +49,12 @@ local ARROW_GAP = 8
 local FADE_IN   = 0.25
 local FOOTER_Y  = 210
 
-local function apply_volume()  Sound.apply_config() end
-local function apply_display() Display.apply() end
-local function apply_preset()  PostFX.apply_preset(Config.postfx_preset) end
-local function match_preset()  Config.postfx_preset = PostFX.match_preset() end
+local function apply_volume()     Sound.apply_config() end
+local function apply_display()    Display.apply() end
+local function apply_preset()     PostFX.apply_preset(Config.postfx_preset) end
+local function match_preset()     Config.postfx_preset = PostFX.match_preset() end
+local function apply_difficulty() Difficulty.apply_preset(Config.difficulty) end
+local function match_difficulty() Config.difficulty = Difficulty.match_preset() end
 
 -- Categories listed in the sidebar. A category with `options` shows a rows panel;
 -- `kind = "controls"` builds its rows from the rebindable input actions; `kind =
@@ -106,9 +109,20 @@ local CATEGORIES = {
         { key = "coop_lives",           label = "COOP LIVES",      kind = "choice", choices = {
             { label = "SEPARATE", value = "separate" }, { label = "SHARED", value = "shared" } } },
     } },
+    { title = "DIFFICULTY", options = {
+        { key = "difficulty",        label = "PRESET",        kind = "choice", choices = Difficulty.preset_choices(), on_change = apply_difficulty },
+        { key = "enemy_damage",      label = "ENEMY DAMAGE",  kind = "range",  min = 0.2, max = 1.5, step = 0.05, on_change = match_difficulty },
+        { key = "enemy_fire_rate",   label = "ENEMY FIRE",    kind = "range",  min = 0.3, max = 1.5, step = 0.05, on_change = match_difficulty },
+        { key = "enemy_aggression",  label = "AGGRESSION",    kind = "range",  min = 0.5, max = 1.5, step = 0.05, on_change = match_difficulty },
+        { key = "land_for_medals",   label = "LAND: MEDALS",  kind = "toggle", on_change = match_difficulty },
+        { key = "land_for_supplies", label = "LAND: SUPPLY",  kind = "toggle", on_change = match_difficulty },
+    } },
     { title = "EXTRAS", options = {
         { key = "explosive_trees",  label = "EXPLOSIVE TREES", kind = "toggle" },
         { key = "tree_crush_speed", label = "CRUSH SPEED",     kind = "range", min = 0.3, max = 1.0, step = 0.1 },
+        { key = "hit_flash",        label = "HIT FLASH",       kind = "toggle" },
+        { key = "camera_shake",        label = "CAMERA SHAKE",    kind = "toggle" },
+        { key = "camera_shake_amount", label = "SHAKE AMOUNT",    kind = "range", min = 0.25, max = 3.0, step = 0.25 },
     } },
     { title = "EXIT", kind = "exit" },
 }

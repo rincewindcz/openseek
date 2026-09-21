@@ -135,11 +135,14 @@ function Camera:on_wheel(dy)
 end
 
 -- Apply the camera transform.  When self.angle is set, the world is rotated
--- around screen center so the player always faces up.
+-- around screen center so the player always faces up. shake_x / shake_y are the
+-- EXTRA (camera_shake) offset in world units, set per frame by the scene; the
+-- focus itself (x, y) never moves, so the simulation never sees the shake.
 function Camera:apply()
     local cx, cy = self:screen_center()
     love.graphics.translate(cx, cy)
     love.graphics.scale(self:zoom())
+    love.graphics.translate(self.shake_x or 0, self.shake_y or 0)
     if self.angle then
         love.graphics.rotate(self.angle)
     end
@@ -160,8 +163,8 @@ function Camera:project(wx, wy)
         dy = dy % s; if dy > s * 0.5 then dy = dy - s end
     end
     local a = self.angle or 0
-    local rx = dx * math.cos(a) - dy * math.sin(a)
-    local ry = dx * math.sin(a) + dy * math.cos(a)
+    local rx = dx * math.cos(a) - dy * math.sin(a) + (self.shake_x or 0)
+    local ry = dx * math.sin(a) + dy * math.cos(a) + (self.shake_y or 0)
     return cx + rx * z, cy + ry * z
 end
 

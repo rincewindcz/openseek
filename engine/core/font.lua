@@ -23,7 +23,7 @@ local cache = {}
 
 -- Fonts shipped by the exporter, in a stable order for the gallery.
 Font.NAMES = {
-    "phasenum", "gov", "gov2", "overkill",
+    "phasenum", "gov", "gov2", "overkill0", "overkill1", "overkill2", "overkill3", "overkill4",
     "chars", "charspow", "charstit", "hichars", "hichars2", "savechar", "endchars", "keysfont",
     "mainmen", "main",
 }

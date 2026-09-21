@@ -219,6 +219,9 @@ function Renderer:_draw_entity(e, vp, mode)
                 rot = e:draw_angle_rad(cls.angle_steps)
             end
             g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+            -- EXTRA (hit_flash)
+            local impactfx = self.world.impactfx
+            if impactfx then impactfx:draw_flash(e, r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy) end
             if e == self.highlight then
                 self:_glow(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
             end
@@ -235,6 +238,8 @@ function Renderer:_draw_entity(e, vp, mode)
                 local tr  = e.turret_render
                 local rot = e.aim_angle * math.pi / 180
                 g.draw(tr.img, e.x, e.y, rot, 1, 1, tr.ax, tr.ay)
+                local impactfx = self.world.impactfx
+                if impactfx then impactfx:draw_flash(e, tr.img, e.x, e.y, rot, 1, 1, tr.ax, tr.ay) end
             end
             if e.turret_fx then
                 local img = e.turret_fx:current_image()

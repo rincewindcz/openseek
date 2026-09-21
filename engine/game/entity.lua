@@ -71,6 +71,12 @@ function Entity:is_alive()
     return self.state ~= "dead" and self.state ~= "exploding"
 end
 
+-- An armed enemy that engages the player: it has a weapon and a detection radius.
+function Entity:is_combatant()
+    local td = self.type_data
+    return td ~= nil and td.weapon ~= nil and (td.detection_radius or 0) > 0
+end
+
 -- Returns what this hit destroyed ("turret" or "hull"), else nil. Scoring counts
 -- the two separately: a folded turret is its own entity in the original, worth
 -- its own points and its own line in the destruction stats.
@@ -78,6 +84,7 @@ function Entity:take_damage(amount, dx, dy)
     if not self:is_alive() then return end
     -- A POW building stays indestructible while it still holds prisoners.
     if self.protected then return end
+    if self.world and self:is_combatant() then self.world:hit_flash(self) end
     -- While the turret stands it absorbs all incoming damage; the hull is only
     -- vulnerable once the turret is gone.
     if self.turret_alive then

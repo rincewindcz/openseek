@@ -341,8 +341,7 @@ function World:load(name)
             if pad_class[raw.class] then
                 self.saboteur_pads[#self.saboteur_pads + 1] = { ent = entity }
             end
-            local td = entity.type_data
-            if td and td.weapon and (td.detection_radius or 0) > 0 then
+            if entity:is_combatant() then
                 self.combatants[#self.combatants + 1] = entity
             end
         end
@@ -754,11 +753,12 @@ function World:night_params()
     return NIGHT_PARAMS[m]
 end
 
--- Forwarders so combat / entity code can drive LightFX (set at wiring time)
--- through the world they already hold, without depending on the app or the
--- effect system directly. No-ops until LightFX is attached and enabled.
+-- Forwarders so combat / entity code can drive LightFX and ImpactFX (set at
+-- wiring time) through the world they already hold, without depending on the
+-- app or the effect systems directly. No-ops until they are attached.
 function World:explosion_light(x, y, size)
     if self.lightfx then self.lightfx:explosion(x, y, size) end
+    if self.impactfx then self.impactfx:explosion(x, y, size) end
 end
 
 function World:muzzle_light(x, y)
@@ -767,6 +767,16 @@ end
 
 function World:player_death_light(x, y)
     if self.lightfx then self.lightfx:player_death(x, y) end
+    if self.impactfx then self.impactfx:player_death(x, y) end
+end
+
+-- A damaged enemy (entity or helicopter) and a hit on a player vehicle.
+function World:hit_flash(target)
+    if self.impactfx then self.impactfx:hit(target) end
+end
+
+function World:player_hit(x, y)
+    if self.impactfx then self.impactfx:player_hit(x, y) end
 end
 
 -- Same forwarder shape for audio: simulation code names an event and where it

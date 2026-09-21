@@ -40,6 +40,7 @@ function Gameplay:enter()
     app.camera:set_zoom(Camera.GAME_ZOOM_INDEX)
     self:enter_weather()
     app.lightfx:enter(app.world)
+    app.impactfx:enter(app.world)
     self:begin_audio()
     self:enter_music()
     self:spawn_player()
@@ -56,6 +57,8 @@ function Gameplay:leave()
     self:reset_end_stats()
     app.weather:set(nil)
     app.lightfx:reset()
+    app.impactfx:reset()
+    app.camera.shake_x, app.camera.shake_y = nil, nil
     self:end_audio()
     app.renderer.in_game   = false
     self.player            = nil
@@ -339,6 +342,7 @@ function Gameplay:update(dt)
     app.weather:update(dt, app.camera)
     app.lightfx.headlight_on = not player.death   -- vehicle lights cut on destruction
     app.lightfx:update(dt)
+    app.impactfx:update(dt)
     app.debug_panel:update()
     self:tick_replay({ player })
 end
@@ -347,6 +351,7 @@ function Gameplay:draw()
     local app     = self.app
     local mission = self.mission
     app.renderer.highlight = app.debug_panel:highlight_entity()
+    app.camera.shake_x, app.camera.shake_y = app.impactfx:shake_offset(app.camera.x, app.camera.y)
     app.postfx:begin_world()     -- world view only; the HUD and overlays stay unfiltered
     app.renderer:draw_ground()   -- terrain, decals, craters
     -- A vehicle on the ground draws (with its smoke) over flat clutter (stones,

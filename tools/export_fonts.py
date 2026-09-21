@@ -12,7 +12,8 @@ Most glyph pixels are palette indices forming a brightness ramp the engine
 tints at runtime, so we export those as a white-on-alpha intensity MASK
 (rank-normalized over the index ramp, lower index = brighter) and let the
 engine tint each font to any color (engine/font.lua). Fonts that carry their
-real in-file colors are exported truecolor instead: OVERKILL (per stage), and
+real in-file colors are exported truecolor instead: OVERKILL (one per mission,
+overkill0..overkill4, each in its mission's stage palette), and
 the in-game body fonts CHARS/CHARSPOW, whose glyphs hold a fixed gold-on-black
 ramp (idx 16 black outline, 23-26 gold) under GOVPAL.BIN that the original HUD
 draws untinted. A flat tint loses the baked outline and gradient. CHARSPOW is
@@ -29,7 +30,7 @@ letter) is added after visual inspection in the F-key gallery and stored as
 
 Usage:
   export_fonts.py            # all fonts
-  export_fonts.py phasenum gov overkill
+  export_fonts.py phasenum gov overkill0
   export_fonts.py --game-dir ~/dos/seek
 """
 
@@ -64,6 +65,7 @@ BLIT_ORIGIN_Y = 100  # decode_frame anchors the blit at y0 = 100
 # name -> { src: path under the game dir, mode: "mask"|"truecolor", pal,
 #           charmap: per-frame char string (frame i -> charmap[i]),
 #           word: True for sequence-only fonts }
+# pal may be a list of candidates; the first that exists is used.
 FONTS = {
     "chars":    {"src": "data/CHARS.BIN",     "mode": "truecolor",
                  "pal": "data/GOVPAL.BIN"},
@@ -80,9 +82,15 @@ FONTS = {
     "hichars2": {"src": "data/HICHARS2.BIN",  "mode": "mask"},
     "keysfont": {"src": "data/KEYSFONT.BIN",  "mode": "mask"},
     "savechar": {"src": "data/SAVECHAR.BIN",  "mode": "mask"},
-    "overkill": {"src": "STAGE00/OVERKILL.BIN", "mode": "truecolor",
-                 "pal": "STAGE00/PAL.BIN", "word": True},
 }
+# Each mission ships its own OVERKILL banner, drawn in that mission's stage
+# palette: PAL.BIN, else PAL1.BIN (the same choice export_love2d.py makes for
+# the stage sprites).
+for _m in range(5):
+    FONTS[f"overkill{_m}"] = {
+        "src": f"STAGE0{_m}/OVERKILL.BIN", "mode": "truecolor", "word": True,
+        "pal": [f"STAGE0{_m}/PAL.BIN", f"STAGE0{_m}/PAL1.BIN"],
+    }
 
 # darkest ramp index still renders at this intensity, so shaded edges stay visible
 MIN_INTENSITY = 0.45
@@ -195,7 +203,9 @@ def export_font(name, cfg, game_dir, palette=None):
     data = src.read_bytes()
     glyphs = decode_glyphs(data)
     if palette is None and cfg.get("pal"):
-        palette = load_palette(game_dir / cfg["pal"])
+        candidates = cfg["pal"] if isinstance(cfg["pal"], list) else [cfg["pal"]]
+        pal_path   = next((game_dir / c for c in candidates if (game_dir / c).exists()), None)
+        palette    = load_palette(pal_path) if pal_path else None
     if cfg["mode"] == "truecolor":
         ramp, keyset = {}, set()
     else:
