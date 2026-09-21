@@ -2,6 +2,7 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local Class    = require "engine.core.class"
+local json     = require "lib.json"
 local Vehicles = require "engine.game.vehicles"
 
 -- Campaign weapon inventory: per vehicle the owned level of every weapon
@@ -14,8 +15,25 @@ local Vehicles = require "engine.game.vehicles"
 -- (engine/ui/shop_screen.lua) purchases levels into `owned` with medals.
 local Loadout = Class()
 
--- Medal cost to reach weapon level 1 / 2 / 3 (medals are the pickup currency).
-Loadout.PRICES = { 2, 4, 6 }
+-- Per vehicle / weapon / level medal cost and description, exported from the
+-- original's WINF.BIN / WINFT.BIN (tools/export_shop.py); the trade-in share
+-- of the owned level's cost comes from data/shop.json.
+local WEAPON_INFO_PATH = "assets/pow/weapon_info.json"
+local SHOP_DATA_PATH   = "data/shop.json"
+
+local function read_json(path)
+    local raw = love.filesystem.getInfo(path) and love.filesystem.read(path)
+    return raw and json.decode(raw) or {}
+end
+
+local weapon_info, trade_in
+local function catalogue()
+    if not weapon_info then
+        weapon_info = read_json(WEAPON_INFO_PATH)
+        trade_in    = read_json(SHOP_DATA_PATH).trade_in or 0
+    end
+    return weapon_info
+end
 
 -- Medals a single-mission (MISSION mode) run starts with; a NEW GAME campaign
 -- starts at 0 and earns medals from pickups across its phases.
@@ -97,13 +115,32 @@ function Loadout:grant(vehicle, weapon, level)
     v.owned[weapon] = math.max(v.owned[weapon] or 0, level or 1)
 end
 
--- Buy a weapon at `level` (higher than currently owned) for PRICES[level] if
--- the purse can afford it. Any level can be bought directly without owning the
--- lower ones first; owning a level implies the lower ones. Spends the medals
--- and returns true on a purchase, false otherwise.
+-- Shop entry of a weapon level: { cost, lines } (the list price and the
+-- description), or nil when the vehicle's shop does not sell it.
+function Loadout.info(vehicle, weapon, level)
+    local levels = (catalogue()[vehicle] or {})[weapon]
+    return levels and levels[level]
+end
+
+-- Medal cost to buy `level` now: its list price less the trade-in share of the
+-- owned level's price (the original's rule). nil when the level is owned,
+-- below the owned one, or not sold.
+function Loadout:price(vehicle, weapon, level)
+    local entry = Loadout.info(vehicle, weapon, level)
+    local owned = self:level(vehicle, weapon)
+    if not entry or level <= owned then return nil end
+    local current = Loadout.info(vehicle, weapon, owned)
+    local credit  = current and math.floor(current.cost * trade_in) or 0
+    return math.max(0, entry.cost - credit)
+end
+
+-- Buy a weapon at `level` (higher than currently owned) if the purse can
+-- afford its price. Any level can be bought directly without owning the lower
+-- ones first; owning a level implies the lower ones. Spends the medals and
+-- returns true on a purchase, false otherwise.
 function Loadout:buy(vehicle, weapon, level)
-    local price = self.PRICES[level]
-    if not price or level <= self:level(vehicle, weapon) or self.medals < price then
+    local price = self:price(vehicle, weapon, level)
+    if not price or self.medals < price then
         return false
     end
     self.medals = self.medals - price

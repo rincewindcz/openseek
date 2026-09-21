@@ -55,7 +55,7 @@ function Shop:draw()
     if self.player then self:_draw_tag() end
 end
 
--- The player tag sits on the grass strip left of the DONE button.
+-- The player tag sits on the grass strip right of the medal purse.
 function Shop:_draw_tag()
     local g                  = love.graphics
     local screen_w, screen_h = g.getDimensions()
@@ -63,11 +63,11 @@ function Shop:_draw_tag()
     g.push()
     g.translate(ox, oy)
     g.scale(scale, scale)
-    PlayerTag.draw(self.player, 8, 224, self.screen:fade())
+    local pos = self.screen.layout.player_tag
+    PlayerTag.draw(self.player, pos[1], pos[2], self.screen:fade())
     g.pop()
 end
 function Shop:keypressed(key)     self.screen:keypressed(key) end
-function Shop:mousemoved(x, y)    self.screen:hover(x, y)     end
 function Shop:mousepressed(x, y)  self.screen:press(x, y)     end
 function Shop:mousereleased(x, y) self.screen:release(x, y)   end
 

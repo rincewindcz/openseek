@@ -154,7 +154,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/animation` | `AnimClip` from `data/animations.json`, per-instance `AnimState`. |
 | `core/assets` | Path resolution and pack check (section 2). |
 | `core/audio` | Clip catalog, event table, voice pools, buses, ducking, music. |
-| `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. |
+| `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. `print` `cell` option draws fixed-pitch at each glyph's in-frame x offset. |
 | `core/screen` | Fullscreen image fade in / hold / out. |
 | `core/mathx` | `atan2` shim, `heading_deg`. |
 | `core/log` | Timestamped, tagged console lines (`info`, `warn`). |
@@ -175,7 +175,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
 | `game/vehicles` | Free-play weapon cycles, equip bay and special lists, variants (`data/vehicle_variants.json`, loaded on first use), labels. |
 | `game/campaign` | NEW GAME run state: solo run fields or `app.coop_run` (per-player score, lives, threshold, out flag, `Loadout`; lives rule and pool), active players, `advance`, `finish`. |
-| `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. `Loadout.active(app, player)` picks a co-op player's own. |
+| `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. `Loadout.info` (cost, description lines) from `assets/pow/weapon_info.json`; `price` = list cost minus `trade_in` (`data/shop.json`) of the owned level's cost. `Loadout.active(app, player)` picks a co-op player's own. |
 | `game/score` | Kill values, phase bonus weights, bonus-life ladder, `Score.award`. |
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header, delta input, checksums, `.osr` files. |
@@ -183,7 +183,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/hud` | Gauges, weapon icon, radar, counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
-| `ui/shop_screen` | Three level buttons per weapon category, medal purchase. |
+| `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. |
 | `ui/menu` | Main menu over `MAINP`, `mainmen` font. |
 | `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
 | `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. |
@@ -427,6 +427,7 @@ galleries, debug mission picker, headless checks.
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
 | `data/audio.json` | Sound events. |
 | `data/postfx.json` | `look` (100% values) and `presets`. |
+| `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
 | `saves/save-<timestamp>-<n>.json` | One campaign save slot each, written to the save directory only (`game/savegame.lua`). |
 | `assets/stageMP.json`, `assets/stageMP/*.png` | Stages; one frame-0 PNG per class, `render` offsets, `objectives`, `is_target`. |
@@ -434,6 +435,7 @@ galleries, debug mission picker, headless checks.
 | `assets/mission_text.json` | `stage<M><P>` -> `paragraphs`. |
 | `assets/fonts/<name>.{png,json}` | Atlas + glyph metrics, `charmap` or `word`, `mode` `mask` / `truecolor`. |
 | `assets/equip/`, `assets/phend/` | Screen art + `layout.json` rects. |
+| `assets/pow/weapon_info.json` | Shop catalogue: vehicle -> weapon -> per level `{cost, lines}` (upper-cased description), from `WINF.BIN` / `WINFT.BIN`. |
 | `assets/{credits,hiscore,pow,phase,mission,mainmen,hud,effects,player,fullscreen}/` | Per-screen sprites. |
 
 ## 13. Tools
@@ -450,12 +452,12 @@ Requires Python 3, `pillow`, `numpy`. Game directory via `--game-dir`.
 | `export_fonts.py` | `assets/fonts/` |
 | `export_mainmen.py` | `assets/mainmen/`, `assets/mainmen/font/`, `assets/fonts/mainmen.*` (palette from `MAINMEN.BMP`) |
 | `menutitle.py` | `tools/MENUTITLE_PAL.BIN` (needs a CREDITS screenshot) |
-| `export_screens.py` | CREDANIM / HIANIM, POW widgets, OKBADGE, KILLICON, BURN, PHASE cards |
+| `export_screens.py` | CREDANIM / HIANIM, POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards |
 | `export_mission.py` | `assets/mission/` |
 | `export_mission_text.py` | `assets/mission_text.json` |
 | `export_sounds.py [SFX dir]` | `assets/sounds/`, `assets/sounds.json` |
 | `export_phend.py` | `assets/phend/` |
-| `export_shop.py` | `assets/pow/` (palette from `assets/fullscreen/POWUP*.png`) |
+| `export_shop.py` | `assets/pow/` sprites, `assets/pow/weapon_info.json` (WINF / WINFT prices and descriptions), `assets/fonts/charspow.*` in the shop palette (palette from `assets/fullscreen/POWUP*.png` plus screenshot-measured indices; run after `export_fonts.py`) |
 | `export_equip.py` | `assets/equip/` (needs `assets/fullscreen/EQP*.png`) |
 | `decode_fullscreen_v2.py` | Fullscreen PNG; palette from `--dosbox-ref` screenshot, else embedded block x4 (wrong colours) |
 | `decode_level.py` | Stage BIN -> JSON (`--summary`) |

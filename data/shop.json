@@ -1,0 +1,40 @@
+{
+  "trade_in": 0.5,
+  "backdrop": {
+    "chopper": "assets/fullscreen/POWUP.png",
+    "tank": "assets/fullscreen/POWUPT.png"
+  },
+  "box": { "w": 40, "h": 40 },
+  "columns": {
+    "left": [8, 53, 98],
+    "right": [181, 226, 271]
+  },
+  "rows": [65, 119, 173],
+  "categories": {
+    "chopper": [
+      { "weapon": "chaingun",      "column": "left",  "row": 1 },
+      { "weapon": "rockets",       "column": "left",  "row": 2 },
+      { "weapon": "air_to_ground", "column": "left",  "row": 3 },
+      { "weapon": "air_to_air",    "column": "right", "row": 1 },
+      { "weapon": "napalm",        "column": "right", "row": 2 },
+      { "weapon": "air_strike",    "column": "right", "row": 3 }
+    ],
+    "tank": [
+      { "weapon": "chaingun",   "column": "left",  "row": 1 },
+      { "weapon": "napalm",     "column": "left",  "row": 2 },
+      { "weapon": "shells",     "column": "right", "row": 1 },
+      { "weapon": "air_strike", "column": "right", "row": 2 }
+    ]
+  },
+  "loaded_offset": [3, 14],
+  "focus_offset": [3, 3],
+  "darken_offset": [2, 2],
+  "purchase": [9, 4],
+  "done": [9, 20],
+  "toggle": [45, 20],
+  "description": { "x": 116, "y": 8, "cell": 6, "line_pitch": 7 },
+  "cost": { "x": 48, "y": 40, "pitch": 10, "digits": 2 },
+  "count": { "x": 8, "y": 225, "pitch": 10, "digits": 2 },
+  "medals": { "x": 32, "y": 218, "per_large": 10, "large_pitch": 11, "small_pitch": 7 },
+  "player_tag": [250, 224]
+}

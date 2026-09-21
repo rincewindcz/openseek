@@ -15,7 +15,9 @@ engine tint each font to any color (engine/font.lua). Fonts that carry their
 real in-file colors are exported truecolor instead: OVERKILL (per stage), and
 the in-game body fonts CHARS/CHARSPOW, whose glyphs hold a fixed gold-on-black
 ramp (idx 16 black outline, 23-26 gold) under GOVPAL.BIN that the original HUD
-draws untinted. A flat tint loses the baked outline and gradient.
+draws untinted. A flat tint loses the baked outline and gradient. CHARSPOW is
+the shop's description font; export_shop.py re-exports it with the shop's
+runtime palette (yellow on a black shadow), so run it after this script.
 
 Output per font:
   assets/fonts/<name>.png    one packed atlas of all glyphs
@@ -183,14 +185,17 @@ def pack(images):
     return atlas, meta
 
 
-def export_font(name, cfg, game_dir):
+def export_font(name, cfg, game_dir, palette=None):
+    """palette overrides cfg["pal"] (export_shop.py passes the shop's runtime
+    palette for CHARSPOW)."""
     src = game_dir / cfg["src"]
     if not src.exists():
         print(f"  SKIP {name}: missing {src}")
         return
     data = src.read_bytes()
     glyphs = decode_glyphs(data)
-    palette = load_palette(game_dir / cfg["pal"]) if cfg.get("pal") else None
+    if palette is None and cfg.get("pal"):
+        palette = load_palette(game_dir / cfg["pal"])
     if cfg["mode"] == "truecolor":
         ramp, keyset = {}, set()
     else:

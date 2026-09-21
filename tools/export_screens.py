@@ -12,8 +12,6 @@ palette:
 
   credanim   menu CREDITS option    recovered DAC palette         -> assets/credits/
   hianim     menu HIGH SCORES opt.   recovered DAC palette         -> assets/hiscore/
-  pownums    POW count digit font    GOVPAL.BIN (menu gold ramp)   -> assets/pow/
-  powgads    POW screen buttons      GOVPAL.BIN                    -> assets/pow/
   powcount   POW figure + label      GOVPAL.BIN                    -> assets/pow/
   killicon   kill tank icon          PHASEPAL.BIN                  -> assets/hud/
   okbadge    OVERKILL badge          PHASEPAL.BIN                  -> assets/hud/
@@ -24,9 +22,9 @@ CREDANIM ("CREDITS") and HIANIM ("HIGH SCORES") are the animated main-menu
 options. Their gold-face / grey-bevel title colors match no shipped BIN (the
 game assembles the palette in the DAC at load time), so they use the palette
 recovered from an original-game screenshot and are column de-wrapped; see
-menutitle.py. The POWNUMS / POWGADS / POWCOUNT widgets use only the gold ramp
-and draw in GOVPAL like the other in-game fonts; the shop sprites that need the
-POWUP/POWUPT runtime palette (POWNAMES, POWMEDAL, POWARMED, POWFOCUS, POWWGADS)
+menutitle.py. POWCOUNT uses only the gold ramp and draws in GOVPAL like the
+other in-game fonts; the shop sprites that need the POWUP/POWUPT runtime
+palette (POWNAMES, POWMEDAL, POWARMED, POWFOCUS, POWWGADS, POWNUMS, POWGADS)
 are exported by tools/export_shop.py instead. A palette source is either a raw
 768-byte VGA palette BIN (first 768 bytes) or a fullscreen image whose palette
 is embedded after a 14-byte header (MAINP). PEOPLE.BIN and HATCH.BIN are
@@ -91,12 +89,11 @@ def export_sprite(src_path, prefix, out_dir, palette, transform=None):
 # CREDANIM/HIANIM are handled separately (see export_titles): they need the
 # recovered DAC palette and column de-wrap, not a shipped palette BIN.
 # The shop sprites drawn in the POWUP/POWUPT runtime palette (POWNAMES,
-# POWMEDAL, POWARMED, POWFOCUS, POWWGADS) are exported by tools/export_shop.py,
-# not here: GOVPAL only covers indices 0-79 and mis-colours their icon bodies /
-# medal. POWNUMS/POWGADS/POWCOUNT use only the gold ramp and stay on GOVPAL.
+# POWMEDAL, POWARMED, POWFOCUS, POWWGADS, POWNUMS, POWGADS) are exported by
+# tools/export_shop.py, not here: GOVPAL only covers indices 0-79 and
+# mis-colours their icon bodies, medal, button faces and shadows. POWCOUNT uses
+# only the gold ramp and stays on GOVPAL.
 JOBS = [
-    ("data/POWNUMS",  "pownums",  "pow",     "data/GOVPAL.BIN",   False),
-    ("data/POWGADS",  "powgads",  "pow",     "data/GOVPAL.BIN",   False),
     ("data/POWCOUNT", "powcount", "pow",     "data/GOVPAL.BIN",   False),
     ("data/KILLICON", "killicon", "hud",     "data/PHASEPAL.BIN", False),
     ("data/OKBADGE",  "okbadge",  "hud",     "data/PHASEPAL.BIN", False),

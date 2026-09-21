@@ -55,6 +55,7 @@ function Font:init(name)
             quad    = love.graphics.newQuad(gm.x, gm.y, gm.w, gm.h, iw, ih),
             w       = gm.w,
             h       = gm.h,
+            ox      = gm.ox or 0,
             oy      = gm.oy,
             advance = gm.advance,
         }
@@ -99,25 +100,31 @@ local function set_tint(color, truecolor)
 end
 
 -- Draws addressable text (full sets / charmap fonts). opts: { scale, color,
--- tracking }. Returns the pixel width drawn. Truecolor fonts ignore color.
+-- tracking, cell }. cell draws fixed-pitch: every character advances cell
+-- pixels and a glyph sits at its in-frame x offset, the way the original lays
+-- out its cell fonts (the shop descriptions). Returns the pixel width drawn.
+-- Truecolor fonts ignore color.
 function Font:print(text, x, y, opts)
     opts = opts or {}
     local scale    = opts.scale or 1
     local tracking = opts.tracking or 0
+    local cell     = opts.cell
     set_tint(opts.color, self.truecolor)
     local pen = x
     for i = 1, #text do
         local ch = text:sub(i, i)
-        if ch == " " then
-            pen = pen + (self.space_advance + tracking) * scale
-        else
-            local gl = self:_glyph_for(ch)
+        local gl = ch ~= " " and self:_glyph_for(ch)
+        if cell then
             if gl then
-                love.graphics.draw(self.image, gl.quad, pen, y + gl.oy * scale, 0, scale, scale)
-                pen = pen + (gl.advance + tracking) * scale
-            else
-                pen = pen + (self.space_advance + tracking) * scale
+                love.graphics.draw(self.image, gl.quad, pen + gl.ox * scale, y + gl.oy * scale,
+                    0, scale, scale)
             end
+            pen = pen + cell * scale
+        elseif gl then
+            love.graphics.draw(self.image, gl.quad, pen, y + gl.oy * scale, 0, scale, scale)
+            pen = pen + (gl.advance + tracking) * scale
+        else
+            pen = pen + (self.space_advance + tracking) * scale
         end
     end
     love.graphics.setColor(1, 1, 1, 1)

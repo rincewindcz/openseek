@@ -18,20 +18,38 @@ POWUPT.png (the same trick export_equip.py uses for the equip screens):
     colour under each index;
   - an index < 80 not otherwise found -> GOVPAL x4 (the validated menu ramp);
   - any leftover index a sprite still uses -> filled from its in-frame spatial
-    neighbours so no hole shows.
+    neighbours so no hole shows;
+  - MEASURED indices override all of the above: the backdrops map them to other
+    colours than the live shop shows (button face, text shadow, button border),
+    so they are read off original-game shop screenshots instead.
 
-Outputs (assets/pow/, overwriting the GOVPAL-decoded ones):
-  powmedal_f*   awarded medal (the icon shown in the shop purse)
+Frames keep their in-container origin (a frame whose pixels start at x=3 is
+exported with 3 transparent columns), so the digit "1" and the small medal line
+up with their siblings when drawn at a common position.
+
+Outputs (assets/pow/):
+  powmedal_f*   awarded medal: f00 large (10 medals), f01 small (1 medal)
   pownames_f*   weapon-category labels
   powarmed_f*   LOADED label (+ the shareware notice frame)
-  powfocus_f*   selection focus ring
+  powfocus_f*   selection focus corners (f00) and the darkening checker (f03)
   powwgads_f*   weapon level icons
+  pownums_f*    digits 0-9 (COST and the medal count)
+  powgads_f*    PURCHASE / DONE / CHOP / TANK buttons, 4 frames each:
+                normal, disabled, pressed, blank
+  weapon_info.json
+                per vehicle / weapon / level: medal cost and description lines,
+                parsed from data/WINF.BIN (chopper) and data/WINFT.BIN (tank)
+
+It also re-exports the CHARSPOW font (assets/fonts/charspow.*) in the shop
+palette, the shop's description font; run it after tools/export_fonts.py.
 
 Run from the repo root (needs assets/fullscreen/POWUP.png + POWUPT.png):
   python3 tools/export_shop.py
 """
 
 import argparse
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -48,6 +66,7 @@ sys.path.insert(0, str(THIS_DIR))
 
 import decode_blitter as db
 import decode_planar as dp
+import export_fonts
 from decode_fullscreen import deinterleave_modex
 
 FS_HEADER, PAL_SIZE = 14, 768
@@ -57,7 +76,37 @@ FS_HEADER, PAL_SIZE = 14, 768
 COLS = [8, 53, 98, 181, 226, 271]
 ROWS = {"POWUP.png": [65, 119, 173], "POWUPT.png": [65, 119]}
 
-SPRITES = ["POWMEDAL", "POWNAMES", "POWARMED", "POWFOCUS", "POWWGADS"]
+SPRITES = ["POWMEDAL", "POWNAMES", "POWARMED", "POWFOCUS", "POWWGADS", "POWNUMS", "POWGADS"]
+
+# Shop palette entries read off original-game screenshots (POWUP/POWUPT, 2x
+# DOSBox captures): 16 button text, 31 the shadow under every glyph / digit /
+# LOADED, 61 the digits' outer gold, 215 button border, 224 disabled button text.
+MEASURED = {
+    16:  (235, 235, 235),
+    31:  (0, 0, 0),
+    61:  (252, 176, 40),
+    215: (73, 113, 52),
+    224: (44, 44, 44),
+}
+# A disabled POWGADS button (the frames drawing their text in 224) shows its
+# border grey rather than green.
+DISABLED_TEXT   = 224
+DISABLED_BORDER = {215: (60, 60, 60)}
+
+# WINF.BIN / WINFT.BIN: "** <CATEGORY> <level> <cost>" headers, each followed
+# by the description lines. The level field is unreliable (the air strike
+# entries read 1, 1, 2), so levels are numbered by entry order per category.
+WEAPON_INFO = {
+    "chopper": ("WINF.BIN", {
+        "CHAIN_GUN": "chaingun", "ROCKETS": "rockets", "AGM": "air_to_ground",
+        "AIM": "air_to_air", "NAP": "napalm", "STR": "air_strike",
+    }),
+    "tank": ("WINFT.BIN", {
+        "CHAIN_GUN": "chaingun", "FLAME_THROWER": "napalm", "SHELLS": "shells",
+        "STR": "air_strike",
+    }),
+}
+HEADER = re.compile(r"^\*\*\s+(\S+)\s+\d+\s+(\d+)\s*$")
 
 
 def find_game_dir(hint):
@@ -161,6 +210,8 @@ def build_palette(game_dir):
         elif i < 80:
             pal[i] = (min(gov[i * 3] * 4, 255), min(gov[i * 3 + 1] * 4, 255),
                       min(gov[i * 3 + 2] * 4, 255))
+    for i, rgb in MEASURED.items():
+        pal[i] = rgb
     return pal
 
 
@@ -183,9 +234,13 @@ def fill_holes(rgba):
 
 
 def render(canvas, pal):
+    if DISABLED_TEXT in canvas.values():
+        pal = list(pal)
+        for i, rgb in DISABLED_BORDER.items():
+            pal[i] = rgb
     xs = [c[0] for c in canvas]
     ys = [c[1] for c in canvas]
-    x0, y0 = min(xs), min(ys)
+    x0, y0 = min(0, min(xs)), min(0, min(ys))
     w, h = max(xs) - x0 + 1, max(ys) - y0 + 1
     arr = np.zeros((h, w, 4), np.uint8)
     for (x, y), i in canvas.items():
@@ -194,6 +249,36 @@ def render(canvas, pal):
         c = pal[i]
         arr[y - y0, x - x0] = (c[0], c[1], c[2], 255) if c else (0, 0, 0, 1)  # alpha 1 = hole
     return fill_holes(Image.fromarray(arr, "RGBA"))
+
+
+def parse_weapon_info(path, categories):
+    """weapon -> [{cost, lines}] in level order. Lines are upper-cased: the
+    shop prints them in capitals."""
+    out, current = {}, None
+    for raw in path.read_bytes().decode("latin-1").splitlines():
+        line = raw.rstrip()
+        m = HEADER.match(line)
+        if m:
+            weapon  = categories.get(m.group(1))
+            current = None
+            if weapon:
+                current = {"cost": int(m.group(2)), "lines": []}
+                out.setdefault(weapon, []).append(current)
+        elif current is not None and line:
+            current["lines"].append(line.upper())
+    return out
+
+
+def export_weapon_info(game_dir, out_dir):
+    info = {}
+    for vehicle, (name, categories) in WEAPON_INFO.items():
+        src = game_dir / "data" / name
+        if not src.exists():
+            print(f"  skip {name}: not found")
+            continue
+        info[vehicle] = parse_weapon_info(src, categories)
+    (out_dir / "weapon_info.json").write_text(json.dumps(info, indent=2))
+    print("  WINF/WINFT -> assets/pow/weapon_info.json")
 
 
 def main():
@@ -221,6 +306,9 @@ def main():
             render(canvas, pal).save(out_dir / f"{stem.lower()}_f{i:02d}.png")
             n += 1
         print(f"  {stem}: {n} frames -> assets/pow/{stem.lower()}_f*.png")
+
+    export_weapon_info(game_dir, out_dir)
+    export_fonts.export_font("charspow", export_fonts.FONTS["charspow"], game_dir, palette=pal)
 
 
 if __name__ == "__main__":
