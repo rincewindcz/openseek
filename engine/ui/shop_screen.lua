@@ -3,6 +3,7 @@
 
 local Class   = require "engine.core.class"
 local json    = require "lib.json"
+local Config  = require "engine.core.config"
 local Font    = require "engine.core.font"
 local Pointer = require "engine.ui.pointer"
 local Layout  = require "engine.ui.layout"
@@ -20,6 +21,13 @@ local Loadout = require "engine.game.loadout"
 --
 -- Layout (design-space pixels measured from the original) is data/shop.json;
 -- prices and descriptions come from Loadout.info.
+--
+-- EXTRA (shop_fx): the purse animates. Medals fly into place on open while the
+-- count rolls up, the medals a selected level would cost pulse (the row dims
+-- when it is unaffordable), a purchase shakes and shrinks the spent medals
+-- away (a broken ten pops back in as singles), the count rolls down and LOADED
+-- stamps onto the bought icon; a refused purchase shakes the purse. Timings
+-- are data/shop.json "fx".
 local ShopScreen = Class()
 
 local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
@@ -37,9 +45,25 @@ local BUTTON_FRAMES = {
 
 local LOADED_IMG  = "assets/pow/powarmed_f00.png"
 local FOCUS_IMG   = "assets/pow/powfocus_f00.png"
-local DARKEN_IMG  = "assets/pow/powfocus_f03.png"
 local MEDAL_LARGE = "assets/pow/powmedal_f00.png"
 local MEDAL_SMALL = "assets/pow/powmedal_f01.png"
+
+local function clamp01(v) return math.max(0, math.min(1, v)) end
+
+local function ease_out(p) return 1 - (1 - p) * (1 - p) end
+
+-- Overshoots past 1 before settling, for things landing in place.
+local function ease_out_back(p)
+    local c = 1.70158
+    return 1 + (c + 1) * (p - 1) ^ 3 + c * (p - 1) ^ 2
+end
+
+-- Number of leading purse medals two rows share (drawn unchanged by both).
+local function common_prefix(a, b)
+    local n = 0
+    while n < #a and n < #b and a[n + 1].large == b[n + 1].large do n = n + 1 end
+    return n
+end
 
 local NAV_STEP = {
     left  = { 0, -1 },
@@ -88,17 +112,27 @@ end
 -- (unused, kept for parity with the equip screen); opts.lock_vehicle pins the
 -- screen to the current vehicle (a forced-vehicle phase hides the toggle).
 function ShopScreen:open(loadout, weapons, opts)
-    opts            = opts or {}
-    self.loadout    = loadout
-    self.weapons    = weapons or {}
-    self.lock       = opts.lock_vehicle or false
-    self.vehicle    = loadout.vehicle
-    self.pressed    = nil
-    self.confirming = nil
-    self.confirm_t  = 0
+    opts             = opts or {}
+    self.loadout     = loadout
+    self.weapons     = weapons or {}
+    self.lock        = opts.lock_vehicle or false
+    self.vehicle     = loadout.vehicle
+    self.pressed     = nil
+    self.confirming  = nil
+    self.confirm_t   = 0
+    self.clock       = 0
+    self.spend       = nil
+    self.stamp       = nil
+    self.deny_t0     = nil
+    self.count_shown = self:_fx() and 0 or loadout.medals
     self:_build()
     self.active = true
     return true
+end
+
+-- The fx timings when EXTRA (shop_fx) is on, else nil.
+function ShopScreen:_fx()
+    return Config.shop_fx and self.layout.fx or nil
 end
 
 -- Zones for the current vehicle: one per level box (also indexed by grid row /
@@ -116,7 +150,7 @@ function ShopScreen:_build()
         for level = 1, #xs do
             local z = {
                 kind = "box", weapon = cat.weapon, level = level,
-                row = cat.row, col = offset + level,
+                row = cat.row, col = offset + level, darkened = cat.darkened[level],
                 x = xs[level], y = L.rows[cat.row], w = L.box.w, h = L.box.h,
             }
             self.zones[#self.zones + 1] = z
@@ -198,9 +232,16 @@ end
 
 function ShopScreen:_purchase()
     local z = self.selected
-    if z and self:can_purchase() then
-        self.loadout:buy(self.vehicle, z.weapon, z.level)
+    if not z then return end
+    if not self:can_purchase() then
+        if self.loadout:price(self.vehicle, z.weapon, z.level) then self.deny_t0 = self.clock end
+        return
     end
+    local before = self:_medal_tokens(self.loadout.medals)
+    self.loadout:buy(self.vehicle, z.weapon, z.level)
+    local keep = common_prefix(before, self:_medal_tokens(self.loadout.medals))
+    self.spend = { t0 = self.clock, old = before, keep = keep }
+    self.stamp = { zone = z, t0 = self.clock }
 end
 
 function ShopScreen:_toggle_vehicle()
@@ -249,6 +290,8 @@ function ShopScreen:press(x, y)
         if self:selectable(z.weapon, z.level) then self.selected = z end
     elseif self:_enabled(z.id) then
         self.pressed = z
+    elseif z.id == "purchase" then
+        self:_purchase()
     end
 end
 
@@ -276,6 +319,9 @@ function ShopScreen:keypressed(key)
 end
 
 function ShopScreen:update(dt)
+    self.clock = self.clock + dt
+    self:_roll_count(dt)
+    self:_expire_fx()
     if not self.confirming then return end
     self.confirm_t = self.confirm_t + dt
     if self.confirm_t >= CONFIRM_TIME then
@@ -307,13 +353,41 @@ function ShopScreen:_draw_box(g, z)
     local L     = self.layout
     local state = self:box_state(z.weapon, z.level)
     if state == "loaded" then
-        self:_draw_at(g, self:_img(LOADED_IMG), z.x, z.y, L.loaded_offset)
+        if not self:_draw_stamp(g, z) then
+            self:_draw_at(g, self:_img(LOADED_IMG), z.x, z.y, L.loaded_offset)
+        end
     elseif state == "below" then
-        self:_draw_at(g, self:_img(DARKEN_IMG), z.x, z.y, L.darken_offset)
+        local tile = string.format(L.darkened_tiles[self.vehicle], z.darkened)
+        self:_draw_at(g, self:_img(tile), z.x, z.y)
     end
     if z == self.selected then
         self:_draw_at(g, self:_img(FOCUS_IMG), z.x, z.y, L.focus_offset)
     end
+end
+
+-- EXTRA (shop_fx): LOADED dropping onto a just-bought icon from stamp_scale
+-- over a fading white flash. Returns false when no stamp is playing on z.
+function ShopScreen:_draw_stamp(g, z)
+    local fx    = self:_fx()
+    local stamp = self.stamp
+    if not fx or not stamp or stamp.zone ~= z then return false end
+    local age   = self.clock - stamp.t0
+    local alpha = select(4, g.getColor())
+    local flash = (1 - clamp01(age / fx.flash_time)) * fx.flash_alpha
+    g.setBlendMode("add")
+    g.setColor(flash, flash, flash, alpha)
+    g.rectangle("fill", z.x + 1, z.y + 1, z.w - 2, z.h - 2)
+    g.setBlendMode("alpha")
+    g.setColor(1, 1, 1, alpha)
+
+    local image = self:_img(LOADED_IMG)
+    if image then
+        local offset = self.layout.loaded_offset
+        local w, h   = image:getWidth(), image:getHeight()
+        local scale  = 1 + (fx.stamp_scale - 1) * (1 - ease_out(clamp01(age / fx.stamp_time)))
+        g.draw(image, z.x + offset[1] + w / 2, z.y + offset[2] + h / 2, 0, scale, scale, w / 2, h / 2)
+    end
+    return true
 end
 
 function ShopScreen:_draw_button(g, z)
@@ -327,28 +401,137 @@ function ShopScreen:_draw_button(g, z)
     self:_draw_at(g, self:_gads(frame), z.x, z.y)
 end
 
--- Zero-padded to spec.digits (more when the value needs them), in POWNUMS.
-function ShopScreen:_draw_number(g, value, spec)
-    local text = string.format("%0" .. spec.digits .. "d", value)
-    for i = 1, #text do
-        local image = self:_digit(tonumber(text:sub(i, i)))
-        self:_draw_at(g, image, spec.x + (i - 1) * spec.pitch, spec.y)
+-- Moves the shown medal count one medal per count_step toward the purse, faster
+-- when the gap would take longer than count_max_time.
+function ShopScreen:_roll_count(dt)
+    local fx     = self:_fx()
+    local target = self.loadout and self.loadout.medals or 0
+    if not fx then
+        self.count_shown = target
+        return
+    end
+    local gap  = target - self.count_shown
+    local rate = math.max(1 / fx.count_step, math.abs(gap) / fx.count_max_time)
+    local step = rate * dt
+    if math.abs(gap) <= step then
+        self.count_shown = target
+    else
+        self.count_shown = self.count_shown + (gap > 0 and step or -step)
     end
 end
 
-function ShopScreen:_draw_medals(g)
+-- Drops the purchase animations once they have played out.
+function ShopScreen:_expire_fx()
+    local fx = self:_fx()
+    if not fx then return end
+    if self.spend and self.clock - self.spend.t0 >= fx.vanish_time + fx.appear_time then
+        self.spend = nil
+    end
+    if self.stamp and self.clock - self.stamp.t0 >= math.max(fx.stamp_time, fx.flash_time) then
+        self.stamp = nil
+    end
+    if self.deny_t0 and self.clock - self.deny_t0 >= fx.deny_time then
+        self.deny_t0 = nil
+    end
+end
+
+-- Horizontal offset of the refused-purchase shake (0 when idle).
+function ShopScreen:_deny_offset()
+    local fx = self:_fx()
+    if not fx or not self.deny_t0 then return 0 end
+    local age   = self.clock - self.deny_t0
+    local decay = 1 - clamp01(age / fx.deny_time)
+    return math.floor(math.sin(age * fx.deny_hz * 2 * math.pi) * fx.deny_px * decay + 0.5)
+end
+
+-- Zero-padded to spec.digits (more when the value needs them), in POWNUMS.
+function ShopScreen:_draw_number(g, value, spec, dx)
+    local text = string.format("%0" .. spec.digits .. "d", value)
+    for i = 1, #text do
+        local image = self:_digit(tonumber(text:sub(i, i)))
+        self:_draw_at(g, image, spec.x + (i - 1) * spec.pitch + (dx or 0), spec.y)
+    end
+end
+
+-- The purse row for a medal count: a large medal per ten, then the singles.
+function ShopScreen:_medal_tokens(medals)
     local spec   = self.layout.medals
-    local medals = self.loadout.medals
-    local large  = self:_img(MEDAL_LARGE)
-    local small  = self:_img(MEDAL_SMALL)
+    local tokens = {}
     local x      = spec.x
     for _ = 1, math.floor(medals / spec.per_large) do
-        self:_draw_at(g, large, x, spec.y)
+        tokens[#tokens + 1] = { large = true, x = x }
         x = x + spec.large_pitch
     end
     for _ = 1, medals % spec.per_large do
-        self:_draw_at(g, small, x, spec.y)
+        tokens[#tokens + 1] = { large = false, x = x }
         x = x + spec.small_pitch
+    end
+    return tokens
+end
+
+-- Draws one purse medal scaled about its centre; glow adds a white pulse.
+function ShopScreen:_draw_token(g, token, dx, dy, scale, tint, glow)
+    local image = self:_img(token.large and MEDAL_LARGE or MEDAL_SMALL)
+    if not image or scale <= 0 then return end
+    local w, h = image:getWidth(), image:getHeight()
+    local x, y = token.x + w / 2 + dx, self.layout.medals.y + h / 2 + dy
+    local alpha = select(4, g.getColor())
+    g.setColor(tint, tint, tint, alpha)
+    g.draw(image, x, y, 0, scale, scale, w / 2, h / 2)
+    if glow and glow > 0 then
+        g.setBlendMode("add")
+        g.setColor(glow, glow, glow, alpha)
+        g.draw(image, x, y, 0, scale, scale, w / 2, h / 2)
+        g.setBlendMode("alpha")
+    end
+    g.setColor(1, 1, 1, alpha)
+end
+
+-- EXTRA (shop_fx): the preview of the selected level on the purse. Returns the
+-- index from which medals would be spent (nil when there is no price) and the
+-- row tint (dimmed when the price is out of reach).
+function ShopScreen:_preview(tokens)
+    local z     = self.selected
+    local price = z and self.loadout:price(self.vehicle, z.weapon, z.level)
+    if not price or price == 0 then return nil, 1 end
+    if price > self.loadout.medals then return nil, self.layout.fx.dim end
+    return common_prefix(tokens, self:_medal_tokens(self.loadout.medals - price)) + 1, 1
+end
+
+function ShopScreen:_draw_medals(g)
+    local fx     = self:_fx()
+    local tokens = self:_medal_tokens(self.loadout.medals)
+    if not fx then
+        for _, token in ipairs(tokens) do self:_draw_token(g, token, 0, 0, 1, 1) end
+        return
+    end
+
+    local dx    = self:_deny_offset()
+    local spend = self.spend
+    if spend then
+        local age = self.clock - spend.t0
+        for i = spend.keep + 1, #spend.old do
+            local p     = clamp01(age / fx.vanish_time)
+            local shake = math.sin(age * fx.shake_hz * 2 * math.pi) * fx.shake_px
+            self:_draw_token(g, spend.old[i], dx + shake, 0, 1 - ease_out(clamp01(p * 2 - 1)), 1)
+        end
+        for i, token in ipairs(tokens) do
+            local scale = 1
+            if i > spend.keep then
+                scale = ease_out_back(clamp01((age - fx.vanish_time) / fx.appear_time))
+            end
+            self:_draw_token(g, token, dx, 0, scale, 1)
+        end
+        return
+    end
+
+    local first, tint = self:_preview(tokens)
+    local glow = (0.5 - 0.5 * math.cos(self.clock * fx.pulse_hz * 2 * math.pi)) * fx.pulse_alpha
+    for i, token in ipairs(tokens) do
+        local p    = clamp01((self.clock - (i - 1) * fx.fly_stagger) / fx.fly_time)
+        local land = 1 - ease_out_back(p)
+        self:_draw_token(g, token, dx + fx.fly_from[1] * land, fx.fly_from[2] * land, 1, tint,
+            (first and i >= first) and glow or nil)
     end
 end
 
@@ -383,7 +566,7 @@ function ShopScreen:draw()
         if z.kind == "box" then self:_draw_box(g, z) else self:_draw_button(g, z) end
     end
     self:_draw_number(g, self:cost(), self.layout.cost)
-    self:_draw_number(g, self.loadout.medals, self.layout.count)
+    self:_draw_number(g, math.floor(self.count_shown + 0.5), self.layout.count, self:_deny_offset())
     self:_draw_medals(g)
     self:_draw_description(fade)
 

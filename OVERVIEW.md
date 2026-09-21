@@ -183,7 +183,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/hud` | Gauges, weapon icon, radar, counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
-| `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. |
+| `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse. |
 | `ui/menu` | Main menu over `MAINP`, `mainmen` font. |
 | `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
 | `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. |
@@ -427,7 +427,7 @@ galleries, debug mission picker, headless checks.
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
 | `data/audio.json` | Sound events. |
 | `data/postfx.json` | `look` (100% values) and `presets`. |
-| `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets. |
+| `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets, darkened level tile per weapon level (`powwgads` chopper, `powgadst` tank); `fx` timings for `shop_fx`. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
 | `saves/save-<timestamp>-<n>.json` | One campaign save slot each, written to the save directory only (`game/savegame.lua`). |
 | `assets/stageMP.json`, `assets/stageMP/*.png` | Stages; one frame-0 PNG per class, `render` offsets, `objectives`, `is_target`. |
@@ -457,7 +457,7 @@ Requires Python 3, `pillow`, `numpy`. Game directory via `--game-dir`.
 | `export_mission_text.py` | `assets/mission_text.json` |
 | `export_sounds.py [SFX dir]` | `assets/sounds/`, `assets/sounds.json` |
 | `export_phend.py` | `assets/phend/` |
-| `export_shop.py` | `assets/pow/` sprites, `assets/pow/weapon_info.json` (WINF / WINFT prices and descriptions), `assets/fonts/charspow.*` in the shop palette (palette from `assets/fullscreen/POWUP*.png` plus screenshot-measured indices; run after `export_fonts.py`) |
+| `export_shop.py` | `assets/pow/` sprites, `assets/pow/weapon_info.json` (WINF / WINFT prices and descriptions), `assets/fonts/charspow.*` in the shop palette (palette from `assets/fullscreen/POWUP*.png` plus screenshot-measured indices and the darkened-tile grey ramp; run after `export_fonts.py`) |
 | `export_equip.py` | `assets/equip/` (needs `assets/fullscreen/EQP*.png`) |
 | `decode_fullscreen_v2.py` | Fullscreen PNG; palette from `--dosbox-ref` screenshot, else embedded block x4 (wrong colours) |
 | `decode_level.py` | Stage BIN -> JSON (`--summary`) |

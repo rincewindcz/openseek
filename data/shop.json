@@ -10,31 +10,55 @@
     "right": [181, 226, 271]
   },
   "rows": [65, 119, 173],
+  "darkened_tiles": {
+    "chopper": "assets/pow/powwgads_f%02d.png",
+    "tank": "assets/pow/powgadst_f%02d.png"
+  },
   "categories": {
     "chopper": [
-      { "weapon": "chaingun",      "column": "left",  "row": 1 },
-      { "weapon": "rockets",       "column": "left",  "row": 2 },
-      { "weapon": "air_to_ground", "column": "left",  "row": 3 },
-      { "weapon": "air_to_air",    "column": "right", "row": 1 },
-      { "weapon": "napalm",        "column": "right", "row": 2 },
-      { "weapon": "air_strike",    "column": "right", "row": 3 }
+      { "weapon": "chaingun",      "column": "left",  "row": 1, "darkened": [2, 5, 8] },
+      { "weapon": "rockets",       "column": "left",  "row": 2, "darkened": [11, 14, 17] },
+      { "weapon": "air_to_ground", "column": "left",  "row": 3, "darkened": [20, 23, 26] },
+      { "weapon": "air_to_air",    "column": "right", "row": 1, "darkened": [29, 32, 35] },
+      { "weapon": "napalm",        "column": "right", "row": 2, "darkened": [38, 41, 44] },
+      { "weapon": "air_strike",    "column": "right", "row": 3, "darkened": [47, 50, 53] }
     ],
     "tank": [
-      { "weapon": "chaingun",   "column": "left",  "row": 1 },
-      { "weapon": "napalm",     "column": "left",  "row": 2 },
-      { "weapon": "shells",     "column": "right", "row": 1 },
-      { "weapon": "air_strike", "column": "right", "row": 2 }
+      { "weapon": "chaingun",   "column": "left",  "row": 1, "darkened": [2, 5, 8] },
+      { "weapon": "napalm",     "column": "left",  "row": 2, "darkened": [11, 14, 17] },
+      { "weapon": "shells",     "column": "right", "row": 1, "darkened": [29, 32, 35] },
+      { "weapon": "air_strike", "column": "right", "row": 2, "darkened": [38, 41, 44] }
     ]
   },
   "loaded_offset": [3, 14],
   "focus_offset": [3, 3],
-  "darken_offset": [2, 2],
   "purchase": [9, 4],
   "done": [9, 20],
   "toggle": [45, 20],
   "description": { "x": 116, "y": 8, "cell": 6, "line_pitch": 7 },
   "cost": { "x": 48, "y": 40, "pitch": 10, "digits": 2 },
   "count": { "x": 8, "y": 225, "pitch": 10, "digits": 2 },
-  "medals": { "x": 32, "y": 218, "per_large": 10, "large_pitch": 11, "small_pitch": 7 },
-  "player_tag": [250, 224]
+  "medals": { "x": 38, "y": 220, "per_large": 10, "large_pitch": 14, "small_pitch": 14 },
+  "player_tag": [250, 224],
+  "fx": {
+    "fly_time": 0.22,
+    "fly_stagger": 0.025,
+    "fly_from": [0, 36],
+    "vanish_time": 0.32,
+    "shake_px": 1.5,
+    "shake_hz": 28,
+    "appear_time": 0.16,
+    "pulse_hz": 2.5,
+    "pulse_alpha": 0.55,
+    "dim": 0.45,
+    "count_step": 0.035,
+    "count_max_time": 0.6,
+    "stamp_time": 0.16,
+    "stamp_scale": 2.2,
+    "flash_time": 0.25,
+    "flash_alpha": 0.6,
+    "deny_time": 0.3,
+    "deny_px": 3,
+    "deny_hz": 22
+  }
 }

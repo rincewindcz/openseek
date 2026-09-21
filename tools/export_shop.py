@@ -12,16 +12,14 @@ POWUPT.png (the same trick export_equip.py uses for the equip screens):
 
   - an index present in a backdrop -> the mode colour of that index's pixels in
     the exported PNG (accurate screenshot colours);
-  - the POWWGADS icon-body indices (168-191) are absent from the backdrops (the
-    backdrops bake the icons at other indices), so they are recovered by aligning
-    each 40x40 POWWGADS icon tile onto its matching backdrop box and reading the
-    colour under each index;
   - an index < 80 not otherwise found -> GOVPAL x4 (the validated menu ramp);
   - any leftover index a sprite still uses -> filled from its in-frame spatial
     neighbours so no hole shows;
   - MEASURED indices override all of the above: the backdrops map them to other
-    colours than the live shop shows (button face, text shadow, button border),
-    so they are read off original-game shop screenshots instead.
+    colours than the live shop shows (button face, text shadow, button border,
+    the medal), so they are read off original-game shop screenshots instead;
+  - GREY_RAMP (168-191) likewise, interpolated between measured points: the
+    darkened level tiles (POWWGADS / POWGADST) draw only in this ramp.
 
 Frames keep their in-container origin (a frame whose pixels start at x=3 is
 exported with 3 transparent columns), so the digit "1" and the small medal line
@@ -31,8 +29,10 @@ Outputs (assets/pow/):
   powmedal_f*   awarded medal: f00 large (10 medals), f01 small (1 medal)
   pownames_f*   weapon-category labels
   powarmed_f*   LOADED label (+ the shareware notice frame)
-  powfocus_f*   selection focus corners (f00) and the darkening checker (f03)
-  powwgads_f*   weapon level icons
+  powfocus_f*   selection focus corners (f00)
+  powwgads_f*   chopper darkened level tiles: 2 + 3 * (category * 3 + level)
+                (0-based, categories in WINF order), full 40x40 boxes
+  powgadst_f*   the tank's darkened level tiles
   pownums_f*    digits 0-9 (COST and the medal count)
   powgads_f*    PURCHASE / DONE / CHOP / TANK buttons, 4 frames each:
                 normal, disabled, pressed, blank
@@ -71,22 +71,44 @@ from decode_fullscreen import deinterleave_modex
 
 FS_HEADER, PAL_SIZE = 14, 768
 
-# Shop box grid (design px), shared by both backdrops: box 40x40, three columns
-# per side, three rows (the tank screen uses only the first two rows).
-COLS = [8, 53, 98, 181, 226, 271]
-ROWS = {"POWUP.png": [65, 119, 173], "POWUPT.png": [65, 119]}
+BACKDROPS = ["POWUP", "POWUPT"]
 
-SPRITES = ["POWMEDAL", "POWNAMES", "POWARMED", "POWFOCUS", "POWWGADS", "POWNUMS", "POWGADS"]
+SPRITES = ["POWMEDAL", "POWNAMES", "POWARMED", "POWFOCUS", "POWWGADS", "POWGADST",
+           "POWNUMS", "POWGADS"]
 
 # Shop palette entries read off original-game screenshots (POWUP/POWUPT, 2x
 # DOSBox captures): 16 button text, 31 the shadow under every glyph / digit /
-# LOADED, 61 the digits' outer gold, 215 button border, 224 disabled button text.
+# LOADED, 61 the digits' outer gold, 215 button border, 224 disabled button
+# text; the rest is the medal (ribbon blue / white / red, gold face, grey hook).
 MEASURED = {
+    3:   (0, 150, 223),
+    5:   (0, 89, 182),
+    14:  (251, 251, 81),
+    15:  (251, 251, 251),
     16:  (235, 235, 235),
+    18:  (203, 203, 203),
+    21:  (154, 154, 154),
     31:  (0, 0, 0),
+    34:  (251, 44, 65),
+    36:  (235, 0, 0),
+    38:  (203, 0, 0),
+    49:  (231, 121, 44),
+    51:  (186, 89, 20),
+    56:  (251, 235, 0),
+    58:  (251, 203, 12),
+    60:  (251, 182, 32),
     61:  (252, 176, 40),
+    172: (150, 150, 150),
     215: (73, 113, 52),
     224: (44, 44, 44),
+}
+
+# Darkened-tile grey ramp: index -> grey level, measured from the chopper shop's
+# darkened chain gun, rockets, air-to-ground and napalm tiles. Indices between
+# the points are interpolated.
+GREY_RAMP = {
+    168: 186, 173: 142, 175: 125, 177: 109, 178: 101, 179: 93, 181: 81,
+    182: 69, 183: 60, 185: 44, 186: 40, 188: 20, 189: 12, 190: 4, 191: 0,
 }
 # A disabled POWGADS button (the frames drawing their text in 224) shows its
 # border grey rather than green.
@@ -140,77 +162,32 @@ def backdrop_colors(bin_path, png_path):
     return out
 
 
-def tile_of(canvas):
-    """Normalise a blit canvas to a 40x40 index array (-1 = unwritten)."""
-    xs = [c[0] for c in canvas]
-    ys = [c[1] for c in canvas]
-    x0, y0 = min(xs), min(ys)
-    arr = np.full((40, 40), -1, int)
-    for (x, y), i in canvas.items():
-        yy, xx = y - y0, x - x0
-        if 0 <= yy < 40 and 0 <= xx < 40 and i is not None:
-            arr[yy, xx] = i
-    return arr
-
-
-def recover_icon_colors(game_dir):
-    """POWWGADS icon-body indices: align each 40x40 icon tile to the best
-    backdrop box (with a small offset search) and read the colour under each
-    index. Returns index -> most-voted RGB."""
-    boxes = []
-    for png, rows in ROWS.items():
-        ref = np.asarray(Image.open(REPO_ROOT / "assets" / "fullscreen" / png).convert("RGB"))
-        for y in rows:
-            for x in COLS:
-                boxes.append(ref[y - 4:y + 44, x - 4:x + 44].copy())  # 4px pad for the offset search
-    from collections import defaultdict
-    votes = defaultdict(lambda: defaultdict(int))
-    for canvas in frames_of((game_dir / "data" / "POWWGADS.BIN").read_bytes()):
-        if len(canvas) < 1000:      # only the full 40x40 icon tiles align to a box
-            continue
-        arr = tile_of(canvas)
-        best = None
-        for tile in boxes:
-            for dy in range(9):
-                for dx in range(9):
-                    sub = tile[dy:dy + 40, dx:dx + 40]
-                    score = 0
-                    for i in np.unique(arr):
-                        if i < 0:
-                            continue
-                        cols = sub[arr == i].reshape(-1, 3)
-                        _, cnt = np.unique(cols, axis=0, return_counts=True)
-                        score += int(cnt.sum() - cnt.max())
-                    if best is None or score < best[0]:
-                        best = (score, sub.copy())
-        sub = best[1]
-        for i in np.unique(arr):
-            if i < 0:
-                continue
-            cols = sub[arr == i].reshape(-1, 3)
-            uniq, cnt = np.unique(cols, axis=0, return_counts=True)
-            votes[int(i)][tuple(int(v) for v in uniq[cnt.argmax()])] += int(cnt.max())
-    return {i: max(v.items(), key=lambda kv: kv[1])[0] for i, v in votes.items()}
+def grey_ramp():
+    """index -> RGB over the GREY_RAMP span, linear between measured points."""
+    points = sorted(GREY_RAMP.items())
+    out = {}
+    for (i0, v0), (i1, v1) in zip(points, points[1:]):
+        for i in range(i0, i1 + 1):
+            v = round(v0 + (v1 - v0) * (i - i0) / (i1 - i0))
+            out[i] = (v, v, v)
+    return out
 
 
 def build_palette(game_dir):
     pal = [None] * 256
-    merged = backdrop_colors(game_dir / "data" / "POWUP.BIN",
-                             REPO_ROOT / "assets" / "fullscreen" / "POWUP.png")
-    for k, v in backdrop_colors(game_dir / "data" / "POWUPT.BIN",
-                                REPO_ROOT / "assets" / "fullscreen" / "POWUPT.png").items():
-        merged.setdefault(k, v)
-    icons = recover_icon_colors(game_dir)
-    gov   = (game_dir / "data" / "GOVPAL.BIN").read_bytes()
+    merged = {}
+    for stem in BACKDROPS:
+        for k, v in backdrop_colors(game_dir / "data" / (stem + ".BIN"),
+                                    REPO_ROOT / "assets" / "fullscreen" / (stem + ".png")).items():
+            merged.setdefault(k, v)
+    gov = (game_dir / "data" / "GOVPAL.BIN").read_bytes()
     for i in range(256):
         if i in merged:
             pal[i] = merged[i]
-        elif i in icons:
-            pal[i] = icons[i]
         elif i < 80:
             pal[i] = (min(gov[i * 3] * 4, 255), min(gov[i * 3 + 1] * 4, 255),
                       min(gov[i * 3 + 2] * 4, 255))
-    for i, rgb in MEASURED.items():
+    for i, rgb in list(MEASURED.items()) + list(grey_ramp().items()):
         pal[i] = rgb
     return pal
 
@@ -288,9 +265,9 @@ def main():
     game_dir = find_game_dir(args.game_dir)
     print(f"Game dir: {game_dir}")
 
-    for png in ROWS:
-        if not (REPO_ROOT / "assets" / "fullscreen" / png).exists():
-            sys.exit(f"missing assets/fullscreen/{png} (run the fullscreen export first)")
+    for stem in BACKDROPS:
+        if not (REPO_ROOT / "assets" / "fullscreen" / (stem + ".png")).exists():
+            sys.exit(f"missing assets/fullscreen/{stem}.png (run the fullscreen export first)")
 
     pal = build_palette(game_dir)
     out_dir = REPO_ROOT / "assets" / "pow"

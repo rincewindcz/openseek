@@ -31,6 +31,10 @@ local Config = {
     -- a quick count that eases into the final digits. Presentation only.
     score_count_up = true,
 
+    -- Animate the shop's medal purse: fly-in on open, cost preview, spend and
+    -- LOADED stamp on purchase (engine/ui/shop_screen.lua). Presentation only.
+    shop_fx = true,
+
     -- Single-player vehicle variants (engine/game/vehicles.lua): the chopper
     -- skin and the tank camo set. The vehicle select screen writes them; co-op
     -- keeps one pair per player in app.settings.coop instead.
@@ -115,7 +119,7 @@ local PERSISTED = {
     "postfx_enabled", "postfx_preset", "postfx_grade", "postfx_contrast", "postfx_sharpen",
     "postfx_bloom", "postfx_vignette", "postfx_grain", "postfx_soft_shadows",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
-    "endstats_count_up", "score_count_up", "chopper_skin", "tank_skin", "coop_lives",
+    "endstats_count_up", "score_count_up", "shop_fx", "chopper_skin", "tank_skin", "coop_lives",
     "explosive_trees", "tree_crush_speed",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
     "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",
