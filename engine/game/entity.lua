@@ -12,7 +12,7 @@ local Entity = Class()
 
 local DEATH_PUSH  = 5     -- px a unit corpse slides in the shot direction
 local DEATH_SLIDE = 0.12  -- seconds for the corpse slide to settle
-local DROP_CHANCE = 0.9   -- chance a destroyed large building drops a power-up
+local DROP_CHANCE = 0.875 -- chance a destroyed building drops a power-up (7 in 8, 0x1fea26)
 
 function Entity.load_types(path)
     local data = love.filesystem.read(path)
@@ -164,7 +164,7 @@ end
 
 function Entity:_start_death(dx, dy)
     local Animation = require "engine.core.animation"
-    local explosion = (self.type_data and self.type_data.explosion) or "none"
+    local explosion = self.explosion or (self.type_data and self.type_data.explosion) or "none"
     self.anim  = Animation.new("explosion_" .. explosion)
     self.state = self.anim:is_done() and "dead" or "exploding"
     if self.world then self.world:wake(self) end
@@ -186,14 +186,16 @@ function Entity:_start_death(dx, dy)
         self.crater_img = self.crater_src
         if self.world then self.world:spawn_debris(self.x, self.y) end
     end
-    -- Power-up drop: a forced kind always drops (e.g. bunker -> medal); otherwise
-    -- large buildings drop a random pickup most of the time. The player's own
-    -- base never drops anything.
+    -- Power-up drop: a forced kind always drops (e.g. bunker -> medal); a class
+    -- with a drop entry drops a random pickup most of the time; without class
+    -- data, large buildings do. The player's own base never drops anything.
+    local random_drop = self.drop_random
+    if random_drop == nil then random_drop = self.crater_eligible end
     if self.base_building then
         self.drop_powerup = false
     elseif self.drop_kind then
         self.drop_powerup = self.drop_kind
-    elseif self.crater_eligible and self.world.rng:random() < DROP_CHANCE then
+    elseif random_drop and self.world.rng:random() < DROP_CHANCE then
         self.drop_powerup = true
     end
     -- Clear smoke effects when dying

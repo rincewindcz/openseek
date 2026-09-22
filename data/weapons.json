@@ -102,9 +102,14 @@
     "side_offset": 6,
     "aim_laser": {
       "start": 12,
-      "length": 40,
-      "color": [1, 0.15, 0.1],
-      "alpha": 0.8
+      "length": 64,
+      "flicker": 0.45,
+      "colors": {
+        "red": [1, 0.15, 0.1],
+        "green": [0.2, 1, 0.25],
+        "blue": [0.25, 0.55, 1],
+        "violet": [0.8, 0.3, 1]
+      }
     },
     "trail": "smoke2",
     "shadow": true,

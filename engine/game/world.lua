@@ -120,19 +120,41 @@ function World:init()
     self.droppers    = {}    -- entities that may drop a power-up on death, in entity order
     self.max_collision_radius = 0   -- largest solid collision radius, bounds World:blocked
     Entity.load_types("data/entity_types.json")
-    self.weapon_overrides = {}   -- asset filename -> enemy weapon name
-    local raw = love.filesystem.read("data/enemy_overrides.json")
-    if raw then self.weapon_overrides = json.decode(raw) end
-    self.building_drops = {}     -- asset filename -> forced pickup kind
-    local braw = love.filesystem.read("data/building_drops.json")
-    if braw then self.building_drops = json.decode(braw) end
-    self.fire_rate_overrides = {}  -- stage name -> { asset filename -> shots/sec }
-    local fraw = love.filesystem.read("data/enemy_fire_rates.json")
-    if fraw then self.fire_rate_overrides = json.decode(fraw) end
-    self.muzzle_overrides = {}     -- asset filename -> forward muzzle offset (px)
-    local mraw = love.filesystem.read("data/enemy_muzzle.json")
-    if mraw then self.muzzle_overrides = json.decode(mraw) end
+    -- Hand fixes over the original stage data (see World:_override).
+    local raw = love.filesystem.read("data/overrides.json")
+    self.overrides = raw and json.decode(raw) or {}
+    self.overrides.assets = self.overrides.assets or {}
+    self.overrides.stages = self.overrides.stages or {}
     self:_discover()
+end
+
+-- A hand fix from data/overrides.json for one entity field: the current stage's
+-- entry for the sprite file wins, then the entry for the sprite file in every
+-- stage; nil when neither sets the field. Fields: weapon, fire_rate, muzzle,
+-- explosion, drop (a pickup kind, true for a random pickup, false for none).
+function World:_override(asset_file, field)
+    local stage = self.overrides.stages[self.stage_name]
+    local entry = stage and stage[asset_file]
+    if entry and entry[field] ~= nil then return entry[field] end
+    entry = self.overrides.assets[asset_file]
+    if entry then return entry[field] end
+end
+
+-- The original's power-up drop for a structure class (death handler 0x1fea2f,
+-- research/LEVELS.md): "medal" for the forced drop (behaviour 1), false when
+-- the class has no drop entry, else true (a random pickup). nil for other kinds
+-- and for stage exports that predate the class fields.
+function World:_class_drop(cls)
+    if cls.kind_name ~= "structure" or cls.drop == nil then return nil end
+    if cls.behaviour == 1 then return "medal" end
+    return cls.drop >= 0
+end
+
+-- The original gives destroy targets and forced-drop structures the large blast
+-- and sizes the rest by the class explosion size. nil keeps the kind's default.
+function World:_class_explosion(cls)
+    if cls.kind_name ~= "structure" or cls.explosion_size == nil then return nil end
+    if cls.is_target or cls.behaviour == 1 or cls.explosion_size >= 2 then return "large" end
 end
 
 function World:_discover()
@@ -277,14 +299,19 @@ function World:load(name)
         local af = cls.asset and self.stage.assets[cls.asset + 1]
         if af and af.file then
             local fn = af.file:lower()
-            entity.asset_file = fn
-            entity.weapon    = self.weapon_overrides[fn]
-            entity.drop_kind = self.building_drops[fn]
-            -- Per-stage fire-rate override (e.g. GUN1 fires faster in later phases).
-            local fr = self.fire_rate_overrides[self.stage_name]
-            entity.fire_rate = fr and fr[fn] or nil
+            entity.asset_file    = fn
+            entity.weapon        = self:_override(fn, "weapon")
+            entity.fire_rate     = self:_override(fn, "fire_rate")
             -- Forward muzzle offset so shots leave the barrel, not the hull center.
-            entity.muzzle_offset = self.muzzle_overrides[fn]
+            entity.muzzle_offset = self:_override(fn, "muzzle")
+            entity.explosion     = self:_override(fn, "explosion") or self:_class_explosion(cls)
+            local drop = self:_override(fn, "drop")
+            if drop == nil then drop = self:_class_drop(cls) end
+            if type(drop) == "string" then
+                entity.drop_kind = drop
+            else
+                entity.drop_random = drop   -- nil: no class data, the size rule decides
+            end
             -- Friendly base / spawn pad. Every stage marks it with basecirc.bin at a
             -- fixed spot (~2180,2171); the home one is the first basecirc (later ones
             -- sit under landhere/lh objective zones). Missions 0 and 3 also stamp an
@@ -376,13 +403,13 @@ function World:load(name)
     self.object_index = build_y_index(self.objects)
 
     -- Subsets for the per-tick scans. Entity:_start_death drops a power-up only
-    -- from drop_kind or crater_eligible entities, both fixed at load.
+    -- from drop_kind, drop_random or crater_eligible entities, all fixed at load.
     self.hittable, self.droppers, self.updaters, self.awake = {}, {}, {}, {}
     self.max_collision_radius = 0
     for _, e in ipairs(self.entities) do
         local td = e.type_data
         if td and (td.hit_radius or 0) > 0 then self.hittable[#self.hittable + 1] = e end
-        if e.drop_kind or e.crater_eligible then self.droppers[#self.droppers + 1] = e end
+        if e.drop_kind or e.drop_random or e.crater_eligible then self.droppers[#self.droppers + 1] = e end
         e.prop = not (e.max_hp > 0 or e.route_points or e.has_turret)
         if not e.prop then self.updaters[#self.updaters + 1] = e end
     end

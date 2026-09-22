@@ -953,9 +953,10 @@ function CombatSystem:draw_shadows()
     g.pop()
 end
 
--- EXTRA (aim_laser): a short line fading out ahead of the pod p's next
--- alternate-side round leaves (the weapon's aim_laser block). Presentation only,
--- drawn by the gameplay scenes over the night pass.
+-- EXTRA (aim_laser): a short flickering line fading out ahead of the pod p's
+-- next alternate-side round leaves (the weapon's aim_laser block, colored by
+-- Config.aim_laser_color). Presentation only, drawn by the gameplay scenes over
+-- the night pass.
 function CombatSystem:draw_aim_laser(p)
     if not Config.aim_laser or p.death then return end
     local weapon_def = self.weapons[p.weapon_name]
@@ -970,8 +971,11 @@ function CombatSystem:draw_aim_laser(p)
     local length = laser.length or 40
     local x0     = p.x - fwd_y * side + fwd_x * start
     local y0     = p.y + fwd_x * side + fwd_y * start
-    local color  = laser.color or { 1, 0, 0 }
-    local alpha  = laser.alpha or 1
+    local color  = laser.colors and laser.colors[Config.aim_laser_color] or { 1, 0, 0 }
+    -- Flicker: the whole beam dims by a random amount each frame, each step a
+    -- little more, so it shimmers rather than blinks.
+    local flicker = laser.flicker or 0
+    local alpha   = (Config.aim_laser_alpha or 0.3) * (1 - flicker * math.random())
     local g = love.graphics
     g.push()
     self.camera:apply()
@@ -982,7 +986,8 @@ function CombatSystem:draw_aim_laser(p)
         for i = 0, AIM_LASER_SEGMENTS - 1 do
             local near = length * i / AIM_LASER_SEGMENTS
             local far  = length * (i + 1) / AIM_LASER_SEGMENTS
-            g.setColor(color[1], color[2], color[3], alpha * (1 - i / AIM_LASER_SEGMENTS))
+            local shimmer = 1 - flicker * 0.5 * math.random()
+            g.setColor(color[1], color[2], color[3], alpha * shimmer * (1 - i / AIM_LASER_SEGMENTS))
             g.line(x0 + fwd_x * near, y0 + fwd_y * near, x0 + fwd_x * far, y0 + fwd_y * far)
         end
         g.pop()

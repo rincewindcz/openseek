@@ -252,9 +252,20 @@ Ground combatants: any type with `weapon` and `detection_radius > 0`.
 
 - Targets nearest live player in `detection_radius`, turns at `turn_speed`, waits
   `reaction_delay` (reset on leaving), fires within `LOCK_DEG` 8 and
-  `attack_range`. Cadence from weapon or `data/enemy_fire_rates.json`.
-- `muzzle_offset` per kind or `data/enemy_muzzle.json`. Per-sprite weapon from
-  `data/enemy_overrides.json`.
+  `attack_range`. Cadence from weapon or a `fire_rate` override.
+- `muzzle_offset` per kind or a `muzzle` override. Per-sprite weapon from a
+  `weapon` override.
+- Structures take their power-up drop and explosion from the exported class
+  fields (`drop`, `behaviour`, `explosion_size`), as the original: no drop
+  entry never drops, behaviour 1 always drops a medal, the rest drop a random
+  pickup 7 times in 8. Destroy targets, forced-drop classes and explosion size
+  2 get the large blast. Stage exports without the fields fall back to the
+  size rule (large buildings drop 7 in 8).
+- `data/overrides.json` fixes single sprites where the data is wrong or
+  missing: `assets` (sprite file -> fields, every stage) and `stages` (stage
+  -> sprite file -> fields); a stage entry wins field by field. Fields:
+  `weapon`, `fire_rate`, `muzzle`, `explosion`, `drop` (pickup kind, `true`
+  random, `false` none).
 - Two-part units (tank + `*tanktop`, radar + dish) fold at load (`TURRET_DEFS`).
   Turret absorbs damage and dies first.
 - Patrol tanks ease between waypoints and stop before each shot.
@@ -436,10 +447,7 @@ galleries, debug mission picker, headless checks.
 |------|----------|
 | `data/weapons.json` | Player and enemy weapons: levels, `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`. |
 | `data/entity_types.json` | Per kind: hit radius, explosion, weapon, detection / attack / turn, `solid`, `collision_radius`, `muzzle_offset`, sprite fallbacks, `dead_frame_offset`, `turret_hp`, `turret_explosion`, `ride_linger`. |
-| `data/enemy_overrides.json` | Asset filename -> weapon. |
-| `data/enemy_fire_rates.json` | Stage -> asset filename -> shots/s. |
-| `data/enemy_muzzle.json` | Asset filename -> muzzle px. |
-| `data/building_drops.json` | Asset filename -> forced pickup kind. |
+| `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `weapon`, `fire_rate`, `muzzle`, `explosion`, `drop`. |
 | `data/missions.json` | Section 9. |
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
@@ -452,7 +460,7 @@ galleries, debug mission picker, headless checks.
 | `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets, darkened level tile per weapon level (`powwgads` chopper, `powgadst` tank); `fx` timings for `shop_fx`. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
 | `saves/save-<timestamp>-<n>.json` | One campaign save slot each, written to the save directory only (`game/savegame.lua`). |
-| `assets/stageMP.json`, `assets/stageMP/*.png` | Stages; one frame-0 PNG per class, `render` offsets, `objectives`, `is_target`. |
+| `assets/stageMP.json`, `assets/stageMP/*.png` | Stages; one frame-0 PNG per class, `render` offsets, `objectives`, `is_target`, class fields (`toughness`, `explosion_size`, `behaviour`, `drop`, `pows`, ...). |
 | `assets/sounds.json`, `assets/sounds/*.wav` | Clip catalog (categories of `{name, file, label, rate}`), mono 8-bit WAV. |
 | `assets/mission_text.json` | `stage<M><P>` -> `paragraphs`. |
 | `assets/fonts/<name>.{png,json}` | Atlas + glyph metrics, `charmap` or `word`, `mode` `mask` / `truecolor`. |

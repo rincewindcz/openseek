@@ -69,7 +69,7 @@ class Reader:
 
 
 def parse_class(rec: bytes, index: int) -> dict:
-    f = struct.unpack_from("<16h", rec)
+    f = struct.unpack_from("<30h", rec)
     # Sprite frame composition (frame select code at 0x1ffd90):
     #   rot = ((entity_angle + camera_angle) >> (frame_shift+2)) & (angle_steps-1)
     #   if rot >= angle_steps/2: draw mirrored with rot -= angle_steps/2
@@ -93,6 +93,25 @@ def parse_class(rec: bytes, index: int) -> dict:
         "kind": f[11],            # +0x16 entity behaviour class (init switch)
         "frame_shift": struct.unpack_from("<h", rec, 0x1c)[0],  # angle >> shift
         "parent_class": struct.unpack_from("<h", rec, 0x30)[0], # entity linking
+        # Fields the spawn code (0x1f5d5a..0x1f5dfe) copies into the entity;
+        # see research/LEVELS.md "Class fields copied at spawn".
+        "pows": f[6],             # +0x0c POWs held inside (entity +0x30)
+        "toughness": f[16],       # +0x20 damage capacity (entity +0x66/+0x68)
+        "explosion_size": f[18],  # +0x24 size passed to the explosion spawner (entity +0x70)
+        "armed": f[19],           # +0x26 4 on armed units (entity +0xa4), meaning unconfirmed
+        "field_28": f[20],        # +0x28 4 on POW markers / civilians (entity +0xa5)
+        "field_2a": f[21],        # +0x2a always 0 in retail stages (entity +0xa6)
+        "field_2c": f[22],        # +0x2c helicopter 50..1800, trucks -1 (entity +0xa0)
+        "field_2e": f[23],        # +0x2e helicopter 300..5000 (entity +0xa2)
+        # +0x32 behaviour sub-type (entity +0x71): the per-tick routine for
+        # units (0x2244e0, the enemy weapon), 1 = forced drop / 2 = commander
+        # building for structures.
+        "behaviour": struct.unpack_from("<b", rec, 0x32)[0],
+        # +0x34 power-up drop entry, -1 = never drops (structure death 0x1fea2f)
+        "drop": struct.unpack_from("<h", rec, 0x34)[0],
+        "field_36": struct.unpack_from("<h", rec, 0x36)[0],  # small signed offset
+        "field_38": struct.unpack_from("<h", rec, 0x38)[0],  # small signed offset
+        "field_3a": struct.unpack_from("<h", rec, 0x3a)[0],  # 0..30, scales with size
         "raw": rec.hex(),
     }
     cls["kind_name"] = KIND_NAMES.get(cls["kind"], f"unknown_{cls['kind']}")

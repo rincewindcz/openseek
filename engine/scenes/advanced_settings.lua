@@ -127,6 +127,10 @@ local CATEGORIES = {
         { key = "radar_backdrop",      label = "RADAR BACKDROP",  kind = "range", min = 0, max = 1.0, step = 0.1 },
         { key = "engine_intro",        label = "ENGINE INTRO",    kind = "toggle" },
         { key = "aim_laser",           label = "AIM LASER",       kind = "toggle" },
+        { key = "aim_laser_color",     label = "LASER COLOR",     kind = "choice", choices = {
+            { label = "RED", value = "red" }, { label = "GREEN", value = "green" },
+            { label = "BLUE", value = "blue" }, { label = "VIOLET", value = "violet" } } },
+        { key = "aim_laser_alpha",     label = "LASER OPACITY",   kind = "range", min = 0.1, max = 1.0, step = 0.1 },
     } },
     { title = "EXIT", kind = "exit" },
 }

@@ -146,7 +146,9 @@ local Config = {
     -- Short laser ahead of the pod the next alternate-side round (mega missile)
     -- leaves, hinting where it will fly (engine/game/combat.lua, shaped by the
     -- weapon's aim_laser block in data/weapons.json). Presentation only.
-    aim_laser = true,
+    aim_laser       = true,
+    aim_laser_color = "red",   -- key into aim_laser.colors: red / green / blue / violet
+    aim_laser_alpha = 0.3,     -- beam opacity at the pod, before the flicker and fade
 
     -- Play the short openSEEK engine card before the TITLE card on every launch
     -- (engine/scenes/title.lua). Independent of this key, the card plays once on
@@ -158,7 +160,7 @@ local Config = {
 }
 
 -- Player-editable keys persisted to the save directory, so the advanced settings
--- survive restarts. Every value is a scalar (boolean / number).
+-- survive restarts. Every value is a scalar (boolean / number / string).
 local SAVE_PATH = "data/settings.json"
 local PERSISTED = {
     "effects_flashes", "flash_intensity", "night_lighting", "night_brightness",
@@ -168,6 +170,7 @@ local PERSISTED = {
     "endstats_count_up", "score_count_up", "shop_fx", "chopper_skin", "tank_skin", "coop_lives",
     "explosive_trees", "tree_crush_speed", "hit_flash", "camera_shake", "camera_shake_amount",
     "radar_zoom_grow", "radar_backdrop", "engine_intro", "aim_laser",
+    "aim_laser_color", "aim_laser_alpha",
     "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
