@@ -900,9 +900,11 @@ function CombatSystem:_bomb_detonate(projectile)
     end
 end
 
+-- Splash damage around a hit. Only hittable entities take it, like a direct hit:
+-- markers (the POWHERE flag), decals, trees and scenery have nothing to destroy.
 function CombatSystem:_apply_aoe(projectile)
     local r2 = projectile.aoe ^ 2
-    for _, e in ipairs(self.world.entities) do
+    for _, e in ipairs(self.world.hittable) do
         if e:is_alive() and not e.hide_shielded then
             local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
             if dx * dx + dy * dy < r2 then
