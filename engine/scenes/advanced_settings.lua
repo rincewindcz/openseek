@@ -131,6 +131,7 @@ local CATEGORIES = {
             { label = "RED", value = "red" }, { label = "GREEN", value = "green" },
             { label = "BLUE", value = "blue" }, { label = "VIOLET", value = "violet" } } },
         { key = "aim_laser_alpha",     label = "LASER OPACITY",   kind = "range", min = 0.1, max = 1.0, step = 0.1 },
+        { key = "tank_tracks",         label = "TANK TRACKS",     kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }

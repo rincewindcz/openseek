@@ -142,6 +142,7 @@ function Renderer:_draw_ground_layers(vp)
     self:_draw_ground_fx(vp)
 
     self:_draw_entities(w.decals, w.decal_index, vp)
+    if self.tracks then self.tracks:draw() end   -- EXTRA (tank_tracks)
 
     if self.show_segments then
         g.setLineStyle("rough")

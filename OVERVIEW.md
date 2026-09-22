@@ -176,6 +176,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/lightfx` | Night light map, additive flashes. |
 | `game/postfx` | World-view post-processing and soft shadows (`data/postfx.json`). |
 | `game/impact_fx` | EXTRA hit flash and camera shake (`data/impact_fx.json`), fed by the `World:hit_flash` / `:player_hit` / `:explosion_light` / `:player_death_light` forwarders; the shake is a per-camera offset applied in `Camera:apply`. |
+| `game/tracks` | EXTRA tank tread marks (`data/tracks.json`): laid from the players after each tick, faded out by age, drawn by the renderer's ground pass as one sprite batch. |
 | `game/sound` | Listeners, panning, attenuation, engine loops, radio queue. |
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
 | `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
@@ -409,6 +410,7 @@ Toggleable extras (EXTRAS page):
 | `tree_crush_speed` | 0.7 | Fraction of top speed required. |
 | `hit_flash` | off | Damaged armed enemies flash white (`game/impact_fx`). |
 | `camera_shake`, `camera_shake_amount` | off, 1.0 | Explosions and hits near the camera shake the view, scaled by the amount (`game/impact_fx`). |
+| `tank_tracks` | on | A driving tank leaves faint tread marks that fade out (`game/tracks`). |
 
 Options:
 
@@ -457,6 +459,7 @@ galleries, debug mission picker, headless checks.
 | `data/postfx.json` | `look` (100% values) and `presets`. |
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, player hit and player death (amount in world units, time, radius). |
+| `data/tracks.json` | Tank tread marks: lifetime and fade (s), alpha, color, spacing and mark length (world units), gauge and tread width (fractions of hull width), mark cap. |
 | `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets, darkened level tile per weapon level (`powwgads` chopper, `powgadst` tank); `fx` timings for `shop_fx`. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
 | `saves/save-<timestamp>-<n>.json` | One campaign save slot each, written to the save directory only (`game/savegame.lua`). |

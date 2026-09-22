@@ -15,6 +15,7 @@ local SaboteurSystem  = require "engine.game.saboteur"
 local Weather         = require "engine.game.weather"
 local LightFX         = require "engine.game.lightfx"
 local ImpactFX        = require "engine.game.impact_fx"
+local Tracks          = require "engine.game.tracks"
 local PostFX          = require "engine.game.postfx"
 local Config          = require "engine.core.config"
 local Input           = require "engine.core.input"
@@ -237,6 +238,8 @@ function love.load(args)
     world.lightfx = app.lightfx   -- lets combat / entity emitters reach it via the world
     app.impactfx  = ImpactFX:new()
     world.impactfx = app.impactfx
+    app.tracks    = Tracks:new()
+    app.renderer.tracks = app.tracks   -- EXTRA (tank_tracks), drawn in the ground pass
     app.postfx   = PostFX:new()
     app.sound    = Sound:new(world)
     world.sound_sys = app.sound   -- same route for the audio emitters (World:sound / :say)

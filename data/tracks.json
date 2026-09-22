@@ -1,0 +1,11 @@
+{
+  "lifetime": 12,
+  "fade": 5,
+  "alpha": 0.09,
+  "color": [0.1, 0.08, 0.06],
+  "spacing": 3,
+  "mark_length": 1.8,
+  "gauge": 0.76,
+  "tread": 0.2,
+  "max_marks": 1500
+}

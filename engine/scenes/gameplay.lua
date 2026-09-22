@@ -41,6 +41,7 @@ function Gameplay:enter()
     self:enter_weather()
     app.lightfx:enter(app.world)
     app.impactfx:enter(app.world)
+    app.tracks:enter(app.world)
     self:begin_audio()
     self:enter_music()
     self:spawn_player()
@@ -58,6 +59,7 @@ function Gameplay:leave()
     app.weather:set(nil)
     app.lightfx:reset()
     app.impactfx:reset()
+    app.tracks:reset()
     app.camera.shake_x, app.camera.shake_y = nil, nil
     self:end_audio()
     app.renderer.in_game   = false
@@ -170,6 +172,7 @@ function Gameplay:restart(carry)
     self.death_timer = nil
     app.world:load(app.world.stage_name)
     app.after_stage_load()
+    app.tracks:reset()
     self:spawn_player(carry)
 end
 
@@ -343,6 +346,7 @@ function Gameplay:update(dt)
     app.lightfx.headlight_on = not player.death   -- vehicle lights cut on destruction
     app.lightfx:update(dt)
     app.impactfx:update(dt)
+    app.tracks:update(dt, { player })
     app.debug_panel:update()
     self:tick_replay({ player })
 end
@@ -362,15 +366,18 @@ function Gameplay:draw()
     local grounded = not self.player:is_airborne()
     if grounded then
         app.renderer:draw_objects("under")   -- flat clutter the vehicle sits on
+        app.rescue:draw()                    -- land pads + walking POWs
+        app.saboteur:draw_ground()           -- saboteur pads + walking saboteurs
         self.player:draw_world()
         self.player:draw()
         self.player:draw_world_front()
         app.renderer:draw_objects("over")    -- trees/buildings + objective markers
     else
         app.renderer:draw_objects()          -- everything, airborne player drawn later
+        app.rescue:draw()
+        app.saboteur:draw_ground()
     end
-    app.rescue:draw()            -- land pads + walking POWs, on the ground under everything
-    app.saboteur:draw()          -- saboteur pads + walking saboteurs + target reticles
+    app.saboteur:draw_markers()  -- target reticles
     app.powerups:draw()
     local soft = app.postfx:soft_shadows_active()
     app.postfx:begin_shadows()

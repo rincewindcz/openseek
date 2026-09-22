@@ -178,6 +178,7 @@ function CoopGameplay:enter()
     self:enter_weather()
     app.lightfx:enter(world)
     app.impactfx:enter(world)
+    app.tracks:enter(world)
     self:begin_audio()
     self:enter_music()
     self.death_timers = {}
@@ -239,6 +240,7 @@ function CoopGameplay:leave()
     app.weather:set(nil)
     app.lightfx:reset()
     app.impactfx:reset()
+    app.tracks:reset()
     self:end_audio()
     app.renderer.in_game = false
     -- Restore the shared overview camera on every system that was pointed at
@@ -414,6 +416,7 @@ function CoopGameplay:update(dt)
     app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
     app.lightfx:update(dt)
     app.impactfx:update(dt)
+    app.tracks:update(dt, self.players)
     self:tick_replay(self.players)
 end
 
@@ -500,6 +503,8 @@ function CoopGameplay:draw()
         app.renderer:draw_ground()   -- terrain, decals, craters
         if #ground > 0 then
             app.renderer:draw_objects("under")   -- flat clutter the vehicles sit on
+            app.rescue:draw()                    -- land pads + walking POWs
+            app.saboteur:draw_ground()           -- saboteur pads + walking saboteurs
             for _, pl in ipairs(ground) do
                 if pl == p then p:draw_world() end   -- smoke behind the local vehicle
                 self:_draw_vehicle(pl, p, cam)
@@ -508,9 +513,10 @@ function CoopGameplay:draw()
             app.renderer:draw_objects("over")    -- trees/buildings + objective markers
         else
             app.renderer:draw_objects()          -- nothing on the ground to split around
+            app.rescue:draw()
+            app.saboteur:draw_ground()
         end
-        app.rescue:draw()            -- land pads + walking POWs, on the ground under everything
-        app.saboteur:draw()          -- saboteur pads + walking saboteurs + target reticles
+        app.saboteur:draw_markers()  -- target reticles
         app.powerups:draw()
         local soft = app.postfx:soft_shadows_active()
         app.postfx:begin_shadows()

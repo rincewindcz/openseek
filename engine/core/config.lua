@@ -150,6 +150,10 @@ local Config = {
     aim_laser_color = "red",   -- key into aim_laser.colors: red / green / blue / violet
     aim_laser_alpha = 0.3,     -- beam opacity at the pod, before the flicker and fade
 
+    -- Faint tread marks behind a tank that fade out after a while
+    -- (engine/game/tracks.lua, data/tracks.json). Presentation only.
+    tank_tracks = true,
+
     -- Play the short openSEEK engine card before the TITLE card on every launch
     -- (engine/scenes/title.lua). Independent of this key, the card plays once on
     -- the first launch (no saved settings yet) and whenever the game data is missing.
@@ -170,7 +174,7 @@ local PERSISTED = {
     "endstats_count_up", "score_count_up", "shop_fx", "chopper_skin", "tank_skin", "coop_lives",
     "explosive_trees", "tree_crush_speed", "hit_flash", "camera_shake", "camera_shake_amount",
     "radar_zoom_grow", "radar_backdrop", "engine_intro", "aim_laser",
-    "aim_laser_color", "aim_laser_alpha",
+    "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",

@@ -330,6 +330,8 @@ end
 
 -- draw
 
+-- Everything here lies on the ground (corpses, pads, walking POWs), so the
+-- scenes draw it under a vehicle on the ground.
 function RescueSystem:draw()
     if not self.active then return end
     local g    = love.graphics

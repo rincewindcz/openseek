@@ -322,64 +322,82 @@ function SaboteurSystem:_corner_box(cx, cy, hw, hh)
     g.line(x1, y1, x1 - l, y1); g.line(x1, y1, x1, y1 - l)
 end
 
-function SaboteurSystem:draw()
-    if not self.active then return end
+-- Run fn(self) once per wrapped tile inside the camera transform.
+function SaboteurSystem:_draw_tiles(fn)
     local g   = love.graphics
     local cam = self.combat.camera
-    -- Pads follow the pickups option: screen-upright (original) or world-rotated.
-    local mrot = Config.axis_aligned_pickups and -(cam.angle or 0) or 0
     g.push()
     cam:apply()
     for _, t in ipairs(cam:tiles()) do
         g.push()
         g.translate(t.ox, t.oy)
-
-        for _, site in ipairs(self.sites) do
-            if site.lh_alpha > 0.01 then
-                local r = self.world.images[site.pad.ent.class_idx + 1]
-                if r and r.img then
-                    local iw, ih = r.img:getDimensions()
-                    g.setColor(1, 1, 1, site.lh_alpha)
-                    g.draw(r.img, site.pad.ent.x + r.ox + iw / 2, site.pad.ent.y + r.oy + ih / 2,
-                        mrot, 1, 1, iw / 2, ih / 2)
-                end
-            end
-        end
-
-        -- Reticle every live target building so the player can find them.
-        g.setLineWidth(2 / cam:zoom())
-        g.setColor(1, 0.5, 0.2, 0.7 + 0.3 * math.sin(love.timer.getTime() * 5))
-        for _, site in ipairs(self.sites) do
-            local b = site.building
-            if not site.detonated and b:is_alive() then
-                local hw, hh, cx, cy = 9, 9, b.x, b.y
-                local r = self.world.images[b.class_idx + 1]
-                if r and r.img then
-                    local iw, ih = r.img:getDimensions()
-                    hw, hh = iw / 2 + 4, ih / 2 + 4
-                    cx, cy = b.x + r.ox + iw / 2, b.y + r.oy + ih / 2
-                end
-                self:_corner_box(cx, cy, hw, hh)
-            end
-        end
-        g.setLineWidth(1)
-
-        for _, site in ipairs(self.sites) do
-            local sab = site.saboteur
-            if sab and sab.phase ~= "inside" then
-                local img = sab.anim:current_image()
-                if img then
-                    local iw, ih = img:getDimensions()
-                    local rot = ((sab.heading or 0) + POW_ROT) * math.pi / 180
-                    g.setColor(1, 1, 1)
-                    g.draw(img, sab.x, sab.y, rot, 1, 1, iw / 2, ih / 2)
-                end
-            end
-        end
+        fn(self, cam)
         g.pop()
     end
     g.setColor(1, 1, 1)
     g.pop()
+end
+
+-- Ground layer: drop pads and walking saboteurs, under a vehicle on the ground.
+function SaboteurSystem:draw_ground()
+    if not self.active then return end
+    self:_draw_tiles(self._draw_ground_tile)
+end
+
+-- Target reticles, over everything in the world.
+function SaboteurSystem:draw_markers()
+    if not self.active then return end
+    self:_draw_tiles(self._draw_markers_tile)
+end
+
+function SaboteurSystem:_draw_ground_tile(cam)
+    local g = love.graphics
+    -- Pads follow the pickups option: screen-upright (original) or world-rotated.
+    local mrot = Config.axis_aligned_pickups and -(cam.angle or 0) or 0
+    for _, site in ipairs(self.sites) do
+        if site.lh_alpha > 0.01 then
+            local r = self.world.images[site.pad.ent.class_idx + 1]
+            if r and r.img then
+                local iw, ih = r.img:getDimensions()
+                g.setColor(1, 1, 1, site.lh_alpha)
+                g.draw(r.img, site.pad.ent.x + r.ox + iw / 2, site.pad.ent.y + r.oy + ih / 2,
+                    mrot, 1, 1, iw / 2, ih / 2)
+            end
+        end
+    end
+    for _, site in ipairs(self.sites) do
+        local sab = site.saboteur
+        if sab and sab.phase ~= "inside" then
+            local img = sab.anim:current_image()
+            if img then
+                local iw, ih = img:getDimensions()
+                local rot = ((sab.heading or 0) + POW_ROT) * math.pi / 180
+                g.setColor(1, 1, 1)
+                g.draw(img, sab.x, sab.y, rot, 1, 1, iw / 2, ih / 2)
+            end
+        end
+    end
+end
+
+-- Reticle every live target building so the player can find them.
+function SaboteurSystem:_draw_markers_tile(cam)
+    local g = love.graphics
+    g.setLineWidth(2 / cam:zoom())
+    g.setColor(1, 0.5, 0.2, 0.7 + 0.3 * math.sin(love.timer.getTime() * 5))
+    for _, site in ipairs(self.sites) do
+        local b = site.building
+        if not site.detonated and b:is_alive() then
+            local hw, hh, cx, cy = 9, 9, b.x, b.y
+            local r = self.world.images[b.class_idx + 1]
+            if r and r.img then
+                local iw, ih = r.img:getDimensions()
+                hw, hh = iw / 2 + 4, ih / 2 + 4
+                cx, cy = b.x + r.ox + iw / 2, b.y + r.oy + ih / 2
+            end
+            self:_corner_box(cx, cy, hw, hh)
+        end
+    end
+    g.setLineWidth(1)
 end
 
 return SaboteurSystem
