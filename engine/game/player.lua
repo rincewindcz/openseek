@@ -158,6 +158,16 @@ function Player:tank_variant()
     return Vehicles.variant("tank", self.tank_skin)
 end
 
+-- Hull width and length in world units: art pixels at the fixed gameplay zoom.
+function Player:tank_hull_size()
+    local clip = Animation.clip(self:tank_variant().hull)
+    local img  = clip and clip.frames[1]
+    local w, h = 21, 34
+    if img then w, h = img:getDimensions() end
+    local k = self.sprite_scale / Camera.game_zoom()
+    return w * k, h * k
+end
+
 -- World position of the next barrel's muzzle, advancing the barrel cycle. Barrel
 -- tips come from the variant, in turret art space (barrels point north) as
 -- { lateral, forward } from the turret pivot. The
@@ -1152,10 +1162,15 @@ function Player:_draw_tank(g, cx, cy, s)
 end
 
 function Player:_draw_tank_parts(g, x, y, s, hull_rot, turret_rot, with_turret)
+    -- EXTRA (tank_recoil): the turret sits back along its barrel after a shot.
+    local detailfx = self.world and self.world.detailfx
+    local kick     = detailfx and detailfx:recoil_kick(self) or 0
     Player.draw_tank_variant(g, self:tank_variant(), x, y, s, hull_rot, turret_rot, {
-        frame  = self._tank_anim.frame,
-        night  = self.world and self.world:is_night(),
-        turret = with_turret,
+        frame     = self._tank_anim.frame,
+        night     = self.world and self.world:is_night(),
+        turret    = with_turret,
+        turret_dx = -math.sin(turret_rot) * kick * s,
+        turret_dy =  math.cos(turret_rot) * kick * s,
     })
 end
 
@@ -1189,7 +1204,7 @@ function Player.draw_tank_variant(g, v, x, y, s, hull_rot, turret_rot, opts)
         else
             ax, ay = Animation.frame_anchor(turret_clip, 1)
         end
-        g.draw(img, x, y, turret_rot, s, s, ax, ay)
+        g.draw(img, x + (opts.turret_dx or 0), y + (opts.turret_dy or 0), turret_rot, s, s, ax, ay)
     end
 end
 

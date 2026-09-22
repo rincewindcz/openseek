@@ -805,8 +805,14 @@ function World:muzzle_light(x, y)
     if self.lightfx then self.lightfx:muzzle(x, y) end
 end
 
-function World:weapon_fired(x, y, weapon_name)
+function World:weapon_fired(x, y, weapon_name, shooter)
     if self.impactfx then self.impactfx:fire(x, y, weapon_name) end
+    if self.detailfx then self.detailfx:fire(x, y, weapon_name, shooter) end
+end
+
+-- An entity died with the given explosion size (a smoking wreck, DetailFX).
+function World:wreck(x, y, explosion)
+    if self.detailfx then self.detailfx:wreck(x, y, explosion) end
 end
 
 function World:player_death_light(x, y)

@@ -43,6 +43,7 @@ function Gameplay:enter()
     app.impactfx:enter(app.world)
     app.postfx:enter(app.world)
     app.tracks:enter(app.world)
+    app.detailfx:enter(app.world)
     self:begin_audio()
     self:enter_music()
     self:spawn_player()
@@ -61,6 +62,7 @@ function Gameplay:leave()
     app.lightfx:reset()
     app.impactfx:reset()
     app.tracks:reset()
+    app.detailfx:reset()
     app.postfx:reset()
     app.camera.shake_x, app.camera.shake_y = nil, nil
     self:end_audio()
@@ -175,6 +177,7 @@ function Gameplay:restart(carry)
     app.world:load(app.world.stage_name)
     app.after_stage_load()
     app.tracks:reset()
+    app.detailfx:reset()
     self:spawn_player(carry)
 end
 
@@ -349,6 +352,7 @@ function Gameplay:update(dt)
     app.lightfx:update(dt)
     app.impactfx:update(dt)
     app.tracks:update(dt, { player })
+    app.detailfx:update(dt, { player })
     app.debug_panel:update()
     self:tick_replay({ player })
 end
@@ -392,6 +396,7 @@ function Gameplay:draw()
     app.postfx:end_shadows()
     if not grounded then self.player:draw_world() end
     app.combat:draw()
+    app.renderer:draw_detail_air()   -- muzzle and wreck smoke
     app.renderer:draw_debris()   -- shrapnel above the explosion effects
     app.helis:draw()             -- airborne enemy helicopters
     if not grounded then

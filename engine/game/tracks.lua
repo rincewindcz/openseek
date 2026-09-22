@@ -4,9 +4,6 @@
 local Class     = require "engine.core.class"
 local json      = require "lib.json"
 local Config    = require "engine.core.config"
-local Camera    = require "engine.core.camera"
-local Animation = require "engine.core.animation"
-local Vehicles  = require "engine.game.vehicles"
 
 -- EXTRA (tank_tracks): faint tread marks a tank leaves on the ground, fading out
 -- after a while. Presentation only: it reads the players after each tick and
@@ -31,8 +28,6 @@ local DEFAULTS = {
     tread       = 0.2,
     max_marks   = 1500,
 }
-
-local FALLBACK_HULL_WIDTH = 21
 
 function Tracks:init()
     local raw  = love.filesystem.getInfo(DATA_PATH) and love.filesystem.read(DATA_PATH)
@@ -70,17 +65,9 @@ function Tracks:_offset(ax, ay, bx, by)
     return dx, dy
 end
 
--- Hull width in world units: art pixels at the fixed gameplay zoom.
-function Tracks._hull_width(player)
-    local clip = Animation.clip(Vehicles.variant("tank", player.tank_skin).hull)
-    local img  = clip and clip.frames[1]
-    local w    = img and img:getWidth() or FALLBACK_HULL_WIDTH
-    return w * player.sprite_scale / Camera.game_zoom()
-end
-
 function Tracks:_emit(player, x, y)
     local d     = self.data
-    local width = Tracks._hull_width(player)
+    local width = player:tank_hull_size()
     self.marks[#self.marks + 1] = {
         x = x, y = y, rot = player.angle * math.pi / 180,
         half_gauge = width * d.gauge * 0.5, tread = width * d.tread, age = 0,

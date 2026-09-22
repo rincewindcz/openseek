@@ -180,6 +180,7 @@ function CoopGameplay:enter()
     app.impactfx:enter(world)
     app.postfx:enter(world)
     app.tracks:enter(world)
+    app.detailfx:enter(world)
     self:begin_audio()
     self:enter_music()
     self.death_timers = {}
@@ -242,6 +243,7 @@ function CoopGameplay:leave()
     app.lightfx:reset()
     app.impactfx:reset()
     app.tracks:reset()
+    app.detailfx:reset()
     app.postfx:reset()
     self:end_audio()
     app.renderer.in_game = false
@@ -419,6 +421,7 @@ function CoopGameplay:update(dt)
     app.lightfx:update(dt)
     app.impactfx:update(dt)
     app.tracks:update(dt, self.players)
+    app.detailfx:update(dt, self.players)
     self:tick_replay(self.players)
 end
 
@@ -532,7 +535,8 @@ function CoopGameplay:draw()
         app.postfx:end_shadows()
         if p:is_airborne() then p:draw_world() end
         app.combat:draw()
-        app.renderer:draw_debris()   -- shrapnel above the explosion effects
+        app.renderer:draw_detail_air()   -- muzzle and wreck smoke
+    app.renderer:draw_debris()   -- shrapnel above the explosion effects
         app.helis:draw()             -- airborne enemy helicopters
         for _, pl in ipairs(air) do self:_draw_vehicle(pl, p, cam) end
         if p:is_airborne() then p:draw_world_front() end

@@ -132,6 +132,10 @@ local CATEGORIES = {
             { label = "BLUE", value = "blue" }, { label = "VIOLET", value = "violet" } } },
         { key = "aim_laser_alpha",     label = "LASER OPACITY",   kind = "range", min = 0.1, max = 1.0, step = 0.1 },
         { key = "tank_tracks",         label = "TANK TRACKS",     kind = "toggle" },
+        { key = "tank_recoil",         label = "TANK RECOIL",     kind = "toggle" },
+        { key = "shell_casings",       label = "SHELL CASINGS",   kind = "toggle" },
+        { key = "tread_dust",          label = "TREAD DUST",      kind = "toggle" },
+        { key = "wreck_smoke",         label = "WRECK SMOKE",     kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }

@@ -171,6 +171,7 @@ function Entity:_start_death(dx, dy)
     if self.world then
         self.world:explosion_light(self.x, self.y, explosion)
         self.world:sound("explosion." .. explosion, self.x, self.y)
+        self.world:wreck(self.x, self.y, explosion)
     end
     -- Unit corpses (soldiers) get nudged in the direction of the killing shot.
     if dx and dy and self.type_data and self.type_data.sprite then

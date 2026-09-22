@@ -177,6 +177,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/postfx` | World-view post-processing and soft shadows (`data/postfx.json`); `enter(world)` picks the stage's mission look. |
 | `game/impact_fx` | EXTRA hit flash and camera shake (`data/impact_fx.json`), fed by the `World:hit_flash` / `:player_hit` / `:explosion_light` / `:player_death_light` / `:weapon_fired` forwarders; the shake is a per-camera offset applied in `Camera:apply`. |
 | `game/tracks` | EXTRA tank tread marks (`data/tracks.json`): laid from the players after each tick, faded out by age, drawn by the renderer's ground pass as one sprite batch. |
+| `game/detail_fx` | EXTRA details (`data/detail_fx.json`): tank recoil and muzzle smoke, chaingun casings, tread dust, wreck smoke. Fed by the `World:weapon_fired` / `:wreck` forwarders and the players after each tick; ground layer drawn in the renderer's ground pass, smoke by `Renderer:draw_detail_air`. |
 | `game/sound` | Listeners, panning, attenuation, engine loops, radio queue. |
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
 | `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
@@ -411,6 +412,7 @@ Toggleable extras (EXTRAS page):
 | `hit_flash` | off | Damaged armed enemies flash white (`game/impact_fx`). |
 | `camera_shake`, `camera_shake_amount` | off, 1.0 | Explosions and hits near the camera shake the view, scaled by the amount (`game/impact_fx`). |
 | `tank_tracks` | on | A driving tank leaves faint tread marks that fade out (`game/tracks`). |
+| `tank_recoil`, `shell_casings`, `tread_dust`, `wreck_smoke` | on | Turret kick and muzzle smoke on a shell shot, chaingun casings, dust behind a fast tank, smoking wrecks (`game/detail_fx`). |
 
 Options:
 
@@ -459,6 +461,7 @@ galleries, debug mission picker, headless checks.
 | `data/postfx.json` | `look` (100% values), `missions` (per mission digit, look fields that differ, e.g. the cold grade of mission 1) and `presets`. |
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius). |
+| `data/detail_fx.json` | `recoil` (weapons, kick, time, muzzle smoke), `casings` (weapons, color, size, speed, drag, lifetime), `tread_dust` (speed threshold, interval, puff size and lifetime, color per mission digit), `wreck_smoke` (time and interval per explosion size, wind, tint, thinning). |
 | `data/tracks.json` | Tank tread marks: lifetime and fade (s), alpha, color, spacing and mark length (world units), gauge and tread width (fractions of hull width), mark cap. |
 | `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets, darkened level tile per weapon level (`powwgads` chopper, `powgadst` tank); `fx` timings for `shop_fx`. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |

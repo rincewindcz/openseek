@@ -1,0 +1,57 @@
+{
+  "recoil": {
+    "weapons": ["shells"],
+    "kick": 2.5,
+    "time": 0.3,
+    "smoke_clip": "smoke",
+    "smoke_count": 3,
+    "smoke_scale": 0.9,
+    "smoke_alpha": 0.7,
+    "smoke_speed": 18,
+    "smoke_jitter": 3
+  },
+  "casings": {
+    "weapons": ["chaingun"],
+    "color": [0.86, 0.66, 0.26],
+    "width": 0.7,
+    "length": 1.6,
+    "speed": 45,
+    "spread_deg": 35,
+    "carry": 0.6,
+    "drag": 5,
+    "spin": 20,
+    "lifetime": 3,
+    "fade": 1,
+    "max": 300
+  },
+  "tread_dust": {
+    "min_speed": 0.5,
+    "interval": 0.05,
+    "colors": { "default": [0.72, 0.65, 0.52], "1": [0.97, 0.99, 1.0] },
+    "alpha": 0.55,
+    "lifetime": 1.4,
+    "size_from": 7,
+    "size_to": 24,
+    "rear": 0.6,
+    "gauge": 0.76,
+    "drift": -0.1,
+    "jitter": 2,
+    "max": 200
+  },
+  "wreck_smoke": {
+    "explosions": {
+      "large":  { "time": 25, "interval": 0.35 },
+      "fire":   { "time": 18, "interval": 0.45 },
+      "medium": { "time": 12, "interval": 0.5 }
+    },
+    "clip": "smoke",
+    "tint": [0.6, 0.6, 0.62],
+    "alpha": 0.5,
+    "scale_from": 0.9,
+    "scale_to": 2.0,
+    "wind": [6, -4],
+    "jitter": 6,
+    "thin": 0.3,
+    "max": 400
+  }
+}

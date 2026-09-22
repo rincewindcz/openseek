@@ -117,6 +117,14 @@ function AnimState:current_image()
     return self.clip.frames[self.frame]
 end
 
+-- Playback position through a one-shot clip, 0 at the first frame to 1 at the end.
+function AnimState:progress()
+    local n = self.clip:frame_count()
+    if self.done or n <= 1 then return 1 end
+    local spf = 1 / math.max(1, self.clip.fps)
+    return math.min(1, ((self.frame - 1) * spf + self.timer) / (n * spf))
+end
+
 function AnimState:is_done()
     return self.done or self.clip:is_empty()
 end

@@ -134,6 +134,13 @@ function Renderer:draw_objects(mode)
     self:_world_pass(function(_, vp) self:_draw_object_layers(vp, mode) end)
 end
 
+-- Smoke over the objects: muzzle smoke and smoking wrecks (EXTRA tank_recoil,
+-- wreck_smoke).
+function Renderer:draw_detail_air()
+    if not self.detailfx then return end
+    self:_world_pass(function() self.detailfx:draw_air() end)
+end
+
 function Renderer:_draw_ground_layers(vp)
     local g = love.graphics
     local w = self.world
@@ -143,6 +150,7 @@ function Renderer:_draw_ground_layers(vp)
 
     self:_draw_entities(w.decals, w.decal_index, vp)
     if self.tracks then self.tracks:draw() end   -- EXTRA (tank_tracks)
+    if self.detailfx then self.detailfx:draw_ground() end   -- EXTRA (shell_casings, tread_dust)
 
     if self.show_segments then
         g.setLineStyle("rough")

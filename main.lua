@@ -16,6 +16,7 @@ local Weather         = require "engine.game.weather"
 local LightFX         = require "engine.game.lightfx"
 local ImpactFX        = require "engine.game.impact_fx"
 local Tracks          = require "engine.game.tracks"
+local DetailFX        = require "engine.game.detail_fx"
 local PostFX          = require "engine.game.postfx"
 local Config          = require "engine.core.config"
 local Input           = require "engine.core.input"
@@ -240,6 +241,9 @@ function love.load(args)
     world.impactfx = app.impactfx
     app.tracks    = Tracks:new()
     app.renderer.tracks = app.tracks   -- EXTRA (tank_tracks), drawn in the ground pass
+    app.detailfx  = DetailFX:new()
+    world.detailfx = app.detailfx
+    app.renderer.detailfx = app.detailfx
     app.postfx   = PostFX:new()
     app.sound    = Sound:new(world)
     world.sound_sys = app.sound   -- same route for the audio emitters (World:sound / :say)
