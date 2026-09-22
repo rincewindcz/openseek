@@ -46,7 +46,16 @@ local function load_data()
     for k, v in pairs(DEFAULT_LOOK) do
         look[k] = (decoded.look and decoded.look[k] ~= nil) and decoded.look[k] or v
     end
-    data = { look = look, presets = decoded.presets or {} }
+    -- Per-mission looks: only the listed fields differ from the base look.
+    local missions = {}
+    for m, fields in pairs(decoded.missions or {}) do
+        local merged = {}
+        for k, v in pairs(look) do
+            if fields[k] ~= nil then merged[k] = fields[k] else merged[k] = v end
+        end
+        missions[m] = merged
+    end
+    data = { look = look, missions = missions, presets = decoded.presets or {} }
     return data
 end
 
@@ -213,6 +222,19 @@ function PostFX:init()
     self.w, self.h        = 0, 0
     self.world_on         = false
     self.shadows_on       = false
+    self.look             = nil   -- the active stage's look, set by enter
+end
+
+-- Pick the look for a stage: its mission's entry in data/postfx.json
+-- missions, else the base look.
+function PostFX:enter(world)
+    local d = load_data()
+    local m = world and world.stage_name and world.stage_name:match("^stage(%d)")
+    self.look = (m and d.missions[m]) or d.look
+end
+
+function PostFX:reset()
+    self.look = nil
 end
 
 local function new_canvas(w, h)
@@ -277,7 +299,7 @@ function PostFX:end_world(vx, vy, vw, vh)
     if not self.world_on then return end
     self.world_on = false
     local g    = love.graphics
-    local look = load_data().look
+    local look = self.look or load_data().look
     local sx, sy, sw, sh = g.getScissor()
     g.setCanvas(self.world_prev)
     g.push("all")
@@ -352,7 +374,7 @@ function PostFX:end_shadows()
     if not self.shadows_on then return end
     self.shadows_on = false
     local g    = love.graphics
-    local look = load_data().look
+    local look = self.look or load_data().look
     local k    = Config.postfx_soft_shadows
     g.setBlendMode(self.shadow_blend, self.shadow_alpha_mode)
     local sx, sy, sw, sh = g.getScissor()

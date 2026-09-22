@@ -805,6 +805,10 @@ function World:muzzle_light(x, y)
     if self.lightfx then self.lightfx:muzzle(x, y) end
 end
 
+function World:weapon_fired(x, y, weapon_name)
+    if self.impactfx then self.impactfx:fire(x, y, weapon_name) end
+end
+
 function World:player_death_light(x, y)
     if self.lightfx then self.lightfx:player_death(x, y) end
     if self.impactfx then self.impactfx:player_death(x, y) end

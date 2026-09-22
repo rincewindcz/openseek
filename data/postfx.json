@@ -16,6 +16,14 @@
     "shadow_passes": 3,
     "shadow_gain": 1.5
   },
+  "missions": {
+    "1": {
+      "exposure": 1.0,
+      "warmth": [0.86, 0.94, 1.04],
+      "saturation": 0.05,
+      "bloom_tint": [0.8, 0.9, 1.0]
+    }
+  },
   "presets": [
     {
       "name": "none", "label": "NONE",

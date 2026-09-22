@@ -9,6 +9,13 @@
       1,
       1
     ],
+    "proj_color_missions": {
+      "1": [
+        1,
+        0.1,
+        0.05
+      ]
+    },
     "proj_size": 1,
     "speed": 600,
     "proj_radius": 3,

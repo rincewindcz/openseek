@@ -203,6 +203,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     -- helis). The event is named after the weapon; data/audio.json decides which
     -- clip that is, and an unmapped weapon simply fires silently.
     self.world:muzzle_light(x, y)
+    self.world:weapon_fired(x, y, weapon_name)
     self.world:sound("weapon." .. weapon_name, x, y)
     level_idx = level_idx or 1
     local level = (weapon_def.levels and weapon_def.levels[level_idx]) or weapon_def
@@ -1000,7 +1001,8 @@ end
 
 function CombatSystem:draw()
     if #self.projectiles == 0 and #self.effects == 0 then return end
-    local g = love.graphics
+    local g       = love.graphics
+    local mission = self.world and self.world.stage_name and self.world.stage_name:match("^stage(%d)")
     g.push()
     self.camera:apply()
 
@@ -1023,7 +1025,9 @@ function CombatSystem:draw()
         for _, projectile in ipairs(self.projectiles) do
             local weapon_def = projectile.weapon_def
             if weapon_def.proj_type == "bullet" then
-                local c  = weapon_def.proj_color or {1, 1, 1}
+                -- A per-mission color keeps the bullet readable on that mission's terrain.
+                local by_mission = weapon_def.proj_color_missions
+                local c  = (by_mission and by_mission[mission]) or weapon_def.proj_color or {1, 1, 1}
                 local sz = weapon_def.proj_size  or 2
                 g.setColor(c[1], c[2], c[3], 1)
                 g.rectangle("fill", projectile.x - sz / 2, projectile.y - sz / 2, sz, sz)

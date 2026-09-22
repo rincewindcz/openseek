@@ -8,7 +8,7 @@ local Config = require "engine.core.config"
 -- Impact feedback, presentation only: the hit flash on armed enemies (EXTRA
 -- hit_flash; buildings and props do not flash) and the camera shake (EXTRA
 -- camera_shake). The simulation reaches it one way through the World forwarders (World:hit_flash, :explosion_light, :player_hit,
--- :player_death_light) and never reads it back, like LightFX and audio
+-- :player_death_light, :weapon_fired) and never reads it back, like LightFX and audio
 -- (DETERMINISM.md D2). Timings and strengths are data/impact_fx.json.
 --
 -- A hit flash redraws the damaged sprite as a white silhouette that fades over
@@ -67,6 +67,12 @@ end
 function ImpactFX:explosion(x, y, size)
     local shake = self.data.shake
     self:_shake(x, y, shake and shake.explosion and shake.explosion[size])
+end
+
+-- A weapon fired at (x, y); only weapons listed under shake.fire shake.
+function ImpactFX:fire(x, y, weapon_name)
+    local fire = self.data.shake and self.data.shake.fire
+    self:_shake(x, y, fire and fire[weapon_name])
 end
 
 function ImpactFX:player_hit(x, y)

@@ -174,8 +174,8 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/difficulty` | Difficulty presets over the difficulty Config keys (`data/difficulty.json`): choices, apply, match. |
 | `game/renderer` | Ground pass, object pass (y-sorted, culled), player layer by `is_airborne()`, shrapnel overlay. |
 | `game/lightfx` | Night light map, additive flashes. |
-| `game/postfx` | World-view post-processing and soft shadows (`data/postfx.json`). |
-| `game/impact_fx` | EXTRA hit flash and camera shake (`data/impact_fx.json`), fed by the `World:hit_flash` / `:player_hit` / `:explosion_light` / `:player_death_light` forwarders; the shake is a per-camera offset applied in `Camera:apply`. |
+| `game/postfx` | World-view post-processing and soft shadows (`data/postfx.json`); `enter(world)` picks the stage's mission look. |
+| `game/impact_fx` | EXTRA hit flash and camera shake (`data/impact_fx.json`), fed by the `World:hit_flash` / `:player_hit` / `:explosion_light` / `:player_death_light` / `:weapon_fired` forwarders; the shake is a per-camera offset applied in `Camera:apply`. |
 | `game/tracks` | EXTRA tank tread marks (`data/tracks.json`): laid from the players after each tick, faded out by age, drawn by the renderer's ground pass as one sprite batch. |
 | `game/sound` | Listeners, panning, attenuation, engine loops, radio queue. |
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
@@ -447,7 +447,7 @@ galleries, debug mission picker, headless checks.
 
 | File | Contents |
 |------|----------|
-| `data/weapons.json` | Player and enemy weapons: levels, `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`. |
+| `data/weapons.json` | Player and enemy weapons: levels, `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit). |
 | `data/entity_types.json` | Per kind: hit radius, explosion, weapon, detection / attack / turn, `solid`, `collision_radius`, `muzzle_offset`, sprite fallbacks, `dead_frame_offset`, `turret_hp`, `turret_explosion`, `ride_linger`. |
 | `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `weapon`, `fire_rate`, `muzzle`, `explosion`, `drop`. |
 | `data/missions.json` | Section 9. |
@@ -456,9 +456,9 @@ galleries, debug mission picker, headless checks.
 | `data/animations.json` | Named animation clips. |
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
 | `data/audio.json` | Sound events. |
-| `data/postfx.json` | `look` (100% values) and `presets`. |
+| `data/postfx.json` | `look` (100% values), `missions` (per mission digit, look fields that differ, e.g. the cold grade of mission 1) and `presets`. |
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
-| `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, player hit and player death (amount in world units, time, radius). |
+| `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius). |
 | `data/tracks.json` | Tank tread marks: lifetime and fade (s), alpha, color, spacing and mark length (world units), gauge and tread width (fractions of hull width), mark cap. |
 | `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets, darkened level tile per weapon level (`powwgads` chopper, `powgadst` tank); `fx` timings for `shop_fx`. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
