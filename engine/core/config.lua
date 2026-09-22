@@ -12,8 +12,9 @@ local Config = {
     -- rotate sprites), instead of rotating them with the world.
     axis_aligned_pickups = false,
 
-    -- Let the player's own fire kill walking POWs during a rescue. Off by default
-    -- (only enemy fire harms them); on makes friendly fire a real hazard.
+    -- Let the player's own fire kill walking POWs and saboteurs and destroy the
+    -- player's base buildings (for no score or pickups). Off by default, as the
+    -- original: only enemy fire harms POWs and the base cannot be damaged.
     friendly_fire_pows = false,
 
     -- Global multiplier on the on-screen HUD (gauges, weapon icon, accel box,
@@ -142,10 +143,18 @@ local Config = {
     -- blends the ring and blips toward brighter colors. Presentation only.
     radar_backdrop = 0.2,
 
-    -- Play the short openSEEK engine card before the TITLE card
-    -- (engine/scenes/title.lua). On for the first launch; the title scene
-    -- switches it off once shown. Always shown when the game data is missing.
-    engine_intro = true,
+    -- Short laser ahead of the pod the next alternate-side round (mega missile)
+    -- leaves, hinting where it will fly (engine/game/combat.lua, shaped by the
+    -- weapon's aim_laser block in data/weapons.json). Presentation only.
+    aim_laser = true,
+
+    -- Play the short openSEEK engine card before the TITLE card on every launch
+    -- (engine/scenes/title.lua). Independent of this key, the card plays once on
+    -- the first launch (no saved settings yet) and whenever the game data is missing.
+    engine_intro = false,
+
+    -- Set by Config.load when no saved settings exist yet. Not persisted.
+    first_launch = false,
 }
 
 -- Player-editable keys persisted to the save directory, so the advanced settings
@@ -158,7 +167,7 @@ local PERSISTED = {
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
     "endstats_count_up", "score_count_up", "shop_fx", "chopper_skin", "tank_skin", "coop_lives",
     "explosive_trees", "tree_crush_speed", "hit_flash", "camera_shake", "camera_shake_amount",
-    "radar_zoom_grow", "radar_backdrop", "engine_intro",
+    "radar_zoom_grow", "radar_backdrop", "engine_intro", "aim_laser",
     "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
@@ -168,7 +177,10 @@ local PERSISTED = {
 
 -- Overlay any saved values onto the shipped defaults. Called once at startup.
 function Config.load()
-    if not love.filesystem.getInfo(SAVE_PATH) then return end
+    if not love.filesystem.getInfo(SAVE_PATH) then
+        Config.first_launch = true
+        return
+    end
     local raw = love.filesystem.read(SAVE_PATH)
     if not raw then return end
     local ok, data = pcall(json.decode, raw)

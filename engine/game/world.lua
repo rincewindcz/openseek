@@ -12,6 +12,11 @@ local Log       = require "engine.core.log"
 -- Tumbling iron/metal shrapnel flung out by an explosion (buildings and bombs).
 -- The clips loop, so each piece is bounded by its own lifetime. When a piece lands a
 -- dust puff is left on the ground.
+-- Class flag bit of the player's own base buildings (tested at spawn by the
+-- original, 0x1f64e4). The player's fire cannot harm them (see Entity:take_damage).
+local BASE_FLAG       = 0x40
+local BASE_HIT_POINTS = 1000
+
 local DEBRIS_CLIPS = { "ironsz", "iron2sz", "metal8", "metalrt", "metalsz" }
 local DUST_CLIPS   = { "dust0", "dust1", "dust2" }
 
@@ -248,8 +253,15 @@ function World:load(name)
     for id, raw in ipairs(self.stage.entities) do
         local cls    = self.stage.classes[raw.class + 1]
         local entity = Entity:new(id, raw, cls)
-        entity.world     = self   -- backref so a dying building can spawn world shrapnel
-        entity.kind_name = cls.kind_name
+        entity.world         = self   -- backref so a dying building can spawn world shrapnel
+        entity.kind_name     = cls.kind_name
+        entity.base_building = math.floor((cls.flags or 0) / BASE_FLAG) % 2 == 1
+        -- The main base building ships with no hit points (it could never be
+        -- hit); friendly fire makes it a sturdy target instead of a one-hit kill.
+        if entity.base_building and entity.max_hp <= 0 then
+            local hp = entity.type_data.base_hit_points or BASE_HIT_POINTS
+            entity.hp, entity.max_hp = hp, hp
+        end
         -- Craters are for large static buildings only. Keying on kind "structure"
         -- excludes vehicles/turrets (tank, truck, flak), and the size gate excludes
         -- small machinery filed under "structure" (jeeps, ammo packs).
@@ -328,7 +340,8 @@ function World:load(name)
             end
             if rescue_zone_class[raw.class] then
                 self.rescue_zones[#self.rescue_zones + 1] = entity
-                entity.objective = true
+                entity.objective   = true
+                entity.rescue_zone = true   -- the flag stands over its building (Renderer)
             end
             if rescue_people_class[raw.class] then
                 self.rescue_people[#self.rescue_people + 1] = entity

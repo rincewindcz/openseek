@@ -82,8 +82,10 @@ end
 -- its own points and its own line in the destruction stats.
 function Entity:take_damage(amount, dx, dy)
     if not self:is_alive() then return end
-    -- A POW building stays indestructible while it still holds prisoners.
+    -- A POW building stays indestructible while it still holds prisoners, and the
+    -- player's own base only falls to friendly fire.
     if self.protected then return end
+    if self.base_building and not Config.friendly_fire_pows then return end
     if self.world and self:is_combatant() then self.world:hit_flash(self) end
     -- While the turret stands it absorbs all incoming damage; the hull is only
     -- vulnerable once the turret is gone.
@@ -185,8 +187,11 @@ function Entity:_start_death(dx, dy)
         if self.world then self.world:spawn_debris(self.x, self.y) end
     end
     -- Power-up drop: a forced kind always drops (e.g. bunker -> medal); otherwise
-    -- large buildings drop a random pickup most of the time.
-    if self.drop_kind then
+    -- large buildings drop a random pickup most of the time. The player's own
+    -- base never drops anything.
+    if self.base_building then
+        self.drop_powerup = false
+    elseif self.drop_kind then
         self.drop_powerup = self.drop_kind
     elseif self.crater_eligible and self.world.rng:random() < DROP_CHANCE then
         self.drop_powerup = true

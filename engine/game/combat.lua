@@ -121,6 +121,9 @@ local TRACER_SPRITE = { [0] = "trace", [1] = "strace", [2] = "jtrace", [4] = "rt
 -- One of these bursts on the player's vehicle each time an enemy round connects.
 local PLAYER_HIT_FX = { "fire", "missile_smoke", "smoke2" }
 
+-- Fading steps of the EXTRA (aim_laser) line.
+local AIM_LASER_SEGMENTS = 6
+
 local CombatSystem = Class()
 
 function CombatSystem:init(world, camera)
@@ -188,6 +191,11 @@ function CombatSystem:_resolve_sprite(weapon_def)
     return sprite
 end
 
+-- The pod (1 right, -1 left) the next round of an alternate-side weapon leaves.
+function CombatSystem:next_side(owner, weapon_name)
+    return (self._alt[tostring(owner) .. weapon_name] == 1) and -1 or 1
+end
+
 function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range_override, shooter)
     local weapon_def = self.weapons[weapon_name]
     if not weapon_def then return end
@@ -239,9 +247,8 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     -- between the left and right pod each trigger.
     local alt_sign = 0
     if weapon_def.alternate_side then
-        local key = tostring(owner) .. weapon_name
-        alt_sign = (self._alt[key] == 1) and -1 or 1
-        self._alt[key] = alt_sign
+        alt_sign = self:next_side(owner, weapon_name)
+        self._alt[tostring(owner) .. weapon_name] = alt_sign
     end
 
     -- Lock-on: locking missile levels (player) and homing enemy weapons steer
@@ -727,9 +734,10 @@ end
 
 -- Bank a kill on the player who landed the killing hit: points (with the
 -- bonus-life ladder), the DESTRUCTION STATS column (co-op keeps a column per
--- player), and the kill-streak clock. what is "turret" or "hull".
+-- player), and the kill-streak clock. what is "turret" or "hull". The player's
+-- own base buildings (friendly fire) earn nothing.
 function CombatSystem:_credit_kill(shooter, e, what)
-    if not (shooter and shooter.stat_kills) then return end
+    if not (shooter and shooter.stat_kills) or e.base_building then return end
     Score.award(shooter, self:_kill_points(e, what))
     local cat
     if what == "turret" then
@@ -938,6 +946,44 @@ function CombatSystem:draw_shadows()
                 Shadow.draw(img, projectile.x + dx, projectile.y + dy, projectile.angle_rad + extra,
                     scale, scale, ax, ay, Shadow.ALPHA)
             end
+        end
+        g.pop()
+    end
+    g.setColor(1, 1, 1)
+    g.pop()
+end
+
+-- EXTRA (aim_laser): a short line fading out ahead of the pod p's next
+-- alternate-side round leaves (the weapon's aim_laser block). Presentation only,
+-- drawn by the gameplay scenes over the night pass.
+function CombatSystem:draw_aim_laser(p)
+    if not Config.aim_laser or p.death then return end
+    local weapon_def = self.weapons[p.weapon_name]
+    local laser      = weapon_def and weapon_def.alternate_side and weapon_def.aim_laser
+    if not laser or not p:has_ammo(p.weapon_name) then return end
+    local level  = weapon_def.levels and weapon_def.levels[p.weapon_level] or weapon_def
+    local side   = (level.side_offset or 0) * self:next_side("player", p.weapon_name)
+    local rad    = (p:fire_angle() - 90) * math.pi / 180
+    local fwd_x  = math.cos(rad)
+    local fwd_y  = math.sin(rad)
+    local start  = laser.start  or 0
+    local length = laser.length or 40
+    local x0     = p.x - fwd_y * side + fwd_x * start
+    local y0     = p.y + fwd_x * side + fwd_y * start
+    local color  = laser.color or { 1, 0, 0 }
+    local alpha  = laser.alpha or 1
+    local g = love.graphics
+    g.push()
+    self.camera:apply()
+    g.setLineWidth(1)
+    for _, t in ipairs(self.camera:tiles()) do
+        g.push()
+        g.translate(t.ox, t.oy)
+        for i = 0, AIM_LASER_SEGMENTS - 1 do
+            local near = length * i / AIM_LASER_SEGMENTS
+            local far  = length * (i + 1) / AIM_LASER_SEGMENTS
+            g.setColor(color[1], color[2], color[3], alpha * (1 - i / AIM_LASER_SEGMENTS))
+            g.line(x0 + fwd_x * near, y0 + fwd_y * near, x0 + fwd_x * far, y0 + fwd_y * far)
         end
         g.pop()
     end

@@ -178,9 +178,10 @@ end
 
 -- Objects tall enough to stand over a ground vehicle: solid props (trees,
 -- buildings, turrets, enemy vehicles). Flat clutter the tank drives over (scenery
--- stones/dunes, decals, foot soldiers) is non-solid and stays under it.
+-- stones/dunes, decals, foot soldiers) is non-solid and stays under it. A
+-- POWHERE flag rides with the solid pass so its building never covers it.
 local function is_occluder(e)
-    return e.type_data and e.type_data.solid or false
+    return e.rescue_zone or (e.type_data and e.type_data.solid) or false
 end
 
 -- mode (optional) filters against the ground-vehicle split: "under" draws only

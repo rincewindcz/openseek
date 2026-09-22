@@ -63,6 +63,7 @@
       "radius": 20,
       "world_range": 1800,
       "zoom_range": 600,
+      "base_size": 1.6,
       "zoom_scale": 1.6,
       "zoom_pivot": [0.5, 1.0],
       "zoom_time": 0.3,

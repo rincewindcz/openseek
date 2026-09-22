@@ -392,6 +392,7 @@ function Gameplay:draw()
     app.weather:draw()
     app.lightfx:draw_night(app.camera)
     app.lightfx:draw_additive(app.camera)
+    app.combat:draw_aim_laser(self.player)   -- EXTRA (aim_laser)
     app.postfx:end_world(0, 0, love.graphics.getDimensions())
     app.hud:draw()
     if mission and mission.state == "return_to_base" then self:draw_return_prompt() end

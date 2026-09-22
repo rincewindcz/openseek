@@ -34,8 +34,10 @@ local RADAR_BUILDING = {
     radar     = true,
 }
 -- Blip colors: the classic set for the see-through radar, and a brighter set
--- the EXTRA (radar_backdrop) blends toward as its dark backdrop fades in.
+-- the EXTRA (radar_backdrop) blends toward as its dark backdrop fades in. The
+-- player's base is black in the original, lifted toward a pale blue.
 local RADAR_COLORS = {
+    base      = { classic = { 0.0, 0.0, 0.0 },    bright = { 0.6, 0.8, 1.0 } },
     building  = { classic = { 0.33, 0.18, 0.07 }, bright = { 0.5, 0.32, 0.16 } },
     enemy     = { classic = { 1.0, 0.15, 0.15 },  bright = { 1.0, 0.2, 0.15 } },
     air       = { classic = { 1.0, 0.4, 0.8 },    bright = { 1.0, 0.45, 0.9 } },   -- enemy helicopters
@@ -658,9 +660,10 @@ function Hud:_draw_radar(g, item, x, y, s)
     local dot_r   = math.max(0.8, s * 0.8)
 
     -- Bucket blips by priority and draw low-to-high so the mission goal is never
-    -- hidden under a building/enemy dot: buildings (brown) first, enemies (red)
-    -- next, objectives (white) last on top.
+    -- hidden under a building/enemy dot: buildings (brown) and the home base
+    -- (black: its buildings, and the pad as a larger blip) first, enemies (red) next, objectives (white) last on top.
     local buildings, enemies, objectives, air, pickups = {}, {}, {}, {}, {}
+    local base, base_buildings = {}, {}
 
     local function plot(bucket, ex, ey)
         local wdx, wdy = self.world:delta(ex, ey, p.x, p.y)
@@ -676,11 +679,15 @@ function Hud:_draw_radar(g, item, x, y, s)
             local bucket
             if     e.objective          then bucket = objectives
             elseif RADAR_ENEMY[kind]    then bucket = enemies
+            elseif e.base_building      then bucket = base_buildings
             else                             bucket = buildings
             end
             plot(bucket, e.x, e.y)
         end
     end
+
+    local home = self.world.home_entity
+    if home then plot(base, home.x, home.y) end
 
     -- Airborne enemy helicopters live outside world.entities (heli system).
     for _, h in ipairs(self.world.air_units or {}) do
@@ -698,19 +705,22 @@ function Hud:_draw_radar(g, item, x, y, s)
     end
 
     local backdrop = Config.radar_backdrop or 0
-    local function draw_blips(blips, colors)
+    local function draw_blips(blips, colors, size)
+        local half     = dot_r * (size or 1)
         local dim, lit = colors.classic, colors.bright
         g.setColor(dim[1] + (lit[1] - dim[1]) * backdrop, dim[2] + (lit[2] - dim[2]) * backdrop,
             dim[3] + (lit[3] - dim[3]) * backdrop, 0.95)
         for _, b in ipairs(blips) do
-            g.rectangle("fill", cx + b[1] - dot_r, cy + b[2] - dot_r, dot_r * 2, dot_r * 2)
+            g.rectangle("fill", cx + b[1] - half, cy + b[2] - half, half * 2, half * 2)
         end
     end
-    draw_blips(buildings,  RADAR_COLORS.building)
-    draw_blips(enemies,    RADAR_COLORS.enemy)
-    draw_blips(air,        RADAR_COLORS.air)
-    draw_blips(pickups,    RADAR_COLORS.pickup)
-    draw_blips(objectives, RADAR_COLORS.objective)
+    draw_blips(buildings,      RADAR_COLORS.building)
+    draw_blips(base_buildings, RADAR_COLORS.base)
+    draw_blips(base,           RADAR_COLORS.base, item.base_size or 1.6)
+    draw_blips(enemies,        RADAR_COLORS.enemy)
+    draw_blips(air,            RADAR_COLORS.air)
+    draw_blips(pickups,        RADAR_COLORS.pickup)
+    draw_blips(objectives,     RADAR_COLORS.objective)
 
     -- Co-op teammate (split screen): a larger dot in the teammate's color.
     local mate = self.coplayer

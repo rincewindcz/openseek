@@ -126,6 +126,7 @@ local CATEGORIES = {
         { key = "radar_zoom_grow",     label = "RADAR ZOOM GROW", kind = "toggle" },
         { key = "radar_backdrop",      label = "RADAR BACKDROP",  kind = "range", min = 0, max = 1.0, step = 0.1 },
         { key = "engine_intro",        label = "ENGINE INTRO",    kind = "toggle" },
+        { key = "aim_laser",           label = "AIM LASER",       kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }

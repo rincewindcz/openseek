@@ -533,6 +533,7 @@ function CoopGameplay:draw()
         app.lightfx.headlight_on = not p.death
         app.lightfx:draw_night(cam)
         app.lightfx:draw_additive(cam)
+        app.combat:draw_aim_laser(p)   -- EXTRA (aim_laser)
         app.postfx:end_world(vx, 0, vw, H)
         app.hud.player         = p
         app.hud.coplayer       = other

@@ -223,6 +223,7 @@ function RescueSystem:_clear_site(site)
     self.world:say("voice.pow_delivered")
     for _, b in ipairs(site.buildings) do b.protected = false end
     site.zone.rescue_hidden = true
+    site.zone.objective     = nil   -- off the radar
 end
 
 function RescueSystem:update(dt)

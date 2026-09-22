@@ -125,7 +125,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 
 | Scene | Role |
 |-------|------|
-| `title` | Engine intro card while `engine_intro` is on (Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`. |
+| `title` | Engine intro card on the first launch or while `engine_intro` is on (Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`. |
 | `main_menu` | Main menu; pushed over a running game on Esc. NEW GAME replaces it with `new_game`. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL (`mainmen` has no B J K Q Y Z). |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
@@ -186,7 +186,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header, delta input, checksums, `.osr` files. |
 | `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory; co-op adds a `coop` table per player), one JSON file per slot in `saves/`. |
-| `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom and pickup blips), counters, OVERKILL banner, rolling score. |
+| `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base and pickup blips), counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse. |
@@ -302,7 +302,17 @@ machine_gun burst 4). Approaches beyond `ORBIT_R * 1.25`, otherwise orbits withi
 - Rescue: `powhere.bin` buildings are shielded until empty. Landing 1.0 s on the
   paired `lh.bin` pad walks POWs out; leaving sends them back. POWs die to enemy
   fire, to player fire only with `friendly_fire_pows`. Loose `pow.bin` uses
-  fly-over or land-near pickup.
+  fly-over or land-near pickup. The `powhere.bin` flag stays drawn over its
+  building until the site is emptied, then fades out.
+- Objectives show white on the radar until completed (destroyed, emptied or
+  collected). The player's base shows black, as in the original: its buildings
+  as normal blips and the home pad (`World.home_entity`) as a larger one
+  (`base_size` in `data/hud.json`).
+- Base buildings (class flag `0x40`, `Entity.base_building`) cannot be damaged
+  by the player, as in the original; with `friendly_fire_pows` on they can be
+  destroyed but give no score, streak, stats or power-up drop. Those with no
+  class hit points (`base1.bin`) get `base_hit_points` from the `structure`
+  entry of `data/entity_types.json`.
 - Sabotage: `landhere.bin` pad pairs with the nearest target building (shielded).
   Landing sends an agent to plant. `individual` detonates per building (stage11);
   `all` waits for every charge (stage13). Site clears when destroyed and agent
@@ -399,7 +409,7 @@ Options:
 | `speed_scale` | GAMEPLAY | Motion multiplier; animation unscaled. |
 | `hud_scale` | GAMEPLAY | HUD size and inset. |
 | `axis_aligned_pickups` | GAMEPLAY | Screen-upright pickups and pads, as the original. |
-| `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs. |
+| `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs and can destroy the player's base buildings (no score, stats or drops). |
 | `endstats_count_up` | GAMEPLAY | Stats count up instead of down. |
 | `score_count_up` | GAMEPLAY | HUD score rolls to new total (frame time, presentation). |
 | `shop_fx` | GAMEPLAY | Animated shop medal purse (presentation). |

@@ -197,7 +197,7 @@ function Overview:_draw_panel()
           settings.death_enabled and COLORS.on or COLORS.off, x, yy)
     yy = row(g, "[C]", "Pickups",   Config.axis_aligned_pickups and "AXIS-ALIGNED" or "ROTATED",
           COLORS.value, x, yy)
-    yy = row(g, "[P]", "POW friendly fire", Config.friendly_fire_pows and "ON" or "OFF",
+    yy = row(g, "[P]", "Friendly fire", Config.friendly_fire_pows and "ON" or "OFF",
           Config.friendly_fire_pows and COLORS.on or COLORS.off, x, yy)
     yy = row(g, "[H]", "HUD scale", string.format("%.2f", Config.hud_scale),
           COLORS.value, x, yy)

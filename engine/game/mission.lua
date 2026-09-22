@@ -249,6 +249,7 @@ function Mission:_update_rescue_people(o)
                         o.collected[z.id] = true
                         o.progress = o.progress + 1
                         p.pows  = (p.pows or 0) + 1
+                        z.objective = nil   -- off the radar
                     end
                 end
             end
@@ -277,6 +278,7 @@ function Mission:_update_rescue(o)
                         o.collected[z.id] = true
                         o.progress = o.progress + 1
                         p.pows = (p.pows or 0) + 1
+                        z.objective = nil   -- off the radar
                     end
                 end
             end
