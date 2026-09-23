@@ -1,13 +1,15 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local json = require "lib.json"
-local Log  = require "engine.core.log"
+local json   = require "lib.json"
+local Log    = require "engine.core.log"
+local Assets = require "engine.core.assets"
 
 -- Vehicle catalogue shared by the scenes: the per-vehicle weapon cycles, the
 -- equip-screen bays, and the cosmetic variants of each vehicle (chopper skins
 -- 1-3, tank camo sets built from the enemy tanks) loaded from
--- data/vehicle_variants.json.
+-- data/vehicle_variants.json. A variant whose art is not in the pack (the
+-- shareware lacks the missions the later tank sets come from) is left out.
 local Vehicles = {}
 
 -- Weapon lists per vehicle (order determines cycle order). Free-play modes
@@ -53,8 +55,36 @@ local variants = {
     },
 }
 
-local VARIANTS_PATH = "data/vehicle_variants.json"
-local loaded        = false
+local VARIANTS_PATH   = "data/vehicle_variants.json"
+local ANIMATIONS_PATH = "data/animations.json"
+local loaded          = false
+
+-- The clips a variant draws: its chopper sprite set or its tank hull and turret.
+local function variant_clips(kind, skin, v)
+    if kind == "chopper" then return { "choppit" .. skin } end
+    return { v.hull, v.turret }
+end
+
+-- Runs before Animation.load (the options page builds its choices at require
+-- time), so the clip frames are checked in the definitions directly.
+local function drop_missing(kind, clips)
+    local kept = {}
+    for skin, v in ipairs(variants[kind]) do
+        local present = true
+        for _, name in ipairs(variant_clips(kind, skin, v)) do
+            local def = clips[name]
+            if not (def and def.frames and def.frames[1] and Assets.exists(def.frames[1])) then
+                present = false
+            end
+        end
+        if present or skin == 1 then
+            kept[#kept + 1] = v
+        else
+            Log.info("vehicles", "%s variant %s not in the game data", kind, v.name)
+        end
+    end
+    variants[kind] = kept
+end
 
 -- Read the variant file on first use, so tables built at require time (the
 -- options page choices) already see it. Without it the built-ins stay.
@@ -70,6 +100,9 @@ local function ensure_loaded()
     for _, kind in ipairs(Vehicles.KINDS) do
         if type(data[kind]) == "table" and #data[kind] > 0 then variants[kind] = data[kind] end
     end
+    local defs = love.filesystem.getInfo(ANIMATIONS_PATH) and love.filesystem.read(ANIMATIONS_PATH)
+    local clips = defs and json.decode(defs) or {}
+    for _, kind in ipairs(Vehicles.KINDS) do drop_missing(kind, clips) end
 end
 
 function Vehicles.variant_count(vehicle)

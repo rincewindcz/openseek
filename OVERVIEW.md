@@ -55,7 +55,9 @@ decoded from the user's own copy of the game and are never distributed.
   only show the label. `--selftest` exits with code 1.
 - The number of missions offered follows the stages present
   (`World:mission_count()`): the campaign ends after the last stage and the
-  mission picker cycles only those missions.
+  mission picker cycles only those missions. Vehicle variants whose hull /
+  turret (or chopper) frames are not in the pack are dropped from the list
+  (`game/vehicles.lua`; the shareware keeps tanks GREEN, DESERT, ARCTIC).
 - Files in `content/` must not contain pixels copied from the game or from
   `assets/`. Palette-bound sprites are white-on-alpha masks tinted at draw time.
 
