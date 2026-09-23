@@ -29,26 +29,14 @@ import struct
 import sys
 from pathlib import Path
 
-THIS_DIR  = Path(__file__).resolve().parent
-REPO_ROOT = THIS_DIR.parent
+THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 import decode_planar as dp
-from PIL import Image
+import gamedata
+import image
 
 W = 384  # mode-X back-buffer width in pixels (STRIDE 96 * 4 planes)
-
-
-def find_game_dir(hint):
-    if hint:
-        p = Path(hint)
-        if p.exists():
-            return p
-        sys.exit(f"game dir not found: {hint}")
-    for c in (REPO_ROOT.parent / "dos" / "seek", Path.home() / "dos" / "seek"):
-        if (c / "data").exists():
-            return c
-    sys.exit("Could not find game directory. Pass --game-dir.")
 
 
 def decode_stream(data, frame_off):
@@ -116,7 +104,7 @@ def crop_box(canvas, x0, x1, y0, y1, palette):
     xs = [c[0] for c in px]
     ys = [c[1] for c in px]
     a, b, c, d = min(xs), max(xs), min(ys), max(ys)
-    img = Image.new("RGBA", (b - a + 1, d - c + 1), (0, 0, 0, 0))
+    img = image.new("RGBA", (b - a + 1, d - c + 1), (0, 0, 0, 0))
     for (x, y), p in px.items():
         img.putpixel((x - a, y - c), (palette[p * 3] * 4, palette[p * 3 + 1] * 4,
                                       palette[p * 3 + 2] * 4, 255))
@@ -147,16 +135,16 @@ LINES = [
 ]
 
 
-def main():
+def main(argv=None):
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--game-dir", default=None)
-    args = ap.parse_args()
-    game = find_game_dir(args.game_dir)
+    args = ap.parse_args(argv)
+    game = gamedata.find_game_dir(args.game_dir)
     pal = (game / "data" / "PHASEPAL.BIN").read_bytes()[:768]
-    out = REPO_ROOT / "assets" / "phend"
+    out = gamedata.ASSETS / "phend"
     out.mkdir(parents=True, exist_ok=True)
-    print(f"Game dir: {game}\n -> {out.relative_to(REPO_ROOT)}/")
+    print(f"Game dir: {game}\n -> {out}/")
 
     layout = {"lines": []}
 

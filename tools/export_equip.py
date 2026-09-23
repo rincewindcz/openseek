@@ -19,22 +19,8 @@ containers:
                        switch on tank-only phases).
   EQPNUMS              gold 5x6 digits 0-9 (planar).
 
-Palette: the widget sprites index a region the embedded fullscreen palette
-leaves wrong (the game sets it at runtime, like MAINMEN). The runtime palette
-is reconstructed in two parts. Indices 0-79 are GOVPAL verbatim: the equip
-UI's gold header ramp (24-27), the grey text ramp (64-74), black outline (16)
-match it exactly. Indices 80+ (the screen plates / bevels / photo shades) are
-sampled from our own assets/fullscreen/EQP*.png exports: per index, the mode
-color over pixels whose 3x3 index neighborhood is uniform (interior pixels,
-immune to the capture's downscale blur), falling back to the median over all
-its pixels for thin features. Both screens contribute; every index the
-widgets use is covered.
-
-The backdrops are also re-rendered here (320x240) from their index maps
-through the reconstructed palette: the assets/fullscreen/ PNGs are
-screenshot-derived (per-index color variance from the capture downscale), so
-widgets pasted over them would seam; rendering both from one palette makes
-the widget states land pixel-identical on the baked art.
+Palette: the equip screens draw in their backdrop's palette (the first 768
+bytes of EQPCHP.BIN; EQPTNK.BIN carries the same one), widgets included.
 
 Layout: each row/button frame is template-matched against the backdrop index
 map (exact match with a tiny tolerance), giving the design-space position of
@@ -49,25 +35,17 @@ import json
 import sys
 from pathlib import Path
 
-THIS_DIR  = Path(__file__).resolve().parent
-REPO_ROOT = THIS_DIR.parent
+THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 import decode_planar as dp
-from decode_fullscreen import deinterleave_modex
-
-try:
-    from PIL import Image
-    import numpy as np
-except ImportError:
-    sys.exit("pip install pillow numpy")
+import export_fullscreen
+import gamedata
+import image
 
 MATCH_TOLERANCE = 4     # max mismatching pixels for a template hit
 PIP_PITCH       = 5     # pip box pitch (4 px box + 1 px shadow)
 PIP_W, PIP_H    = 4, 8
-# The fullscreen EQP*.png backdrops the engine draws sit 24 px left of the BIN
-# index maps the widget positions are template-matched against.
-FULLSCREEN_X_SHIFT = -24
 
 # widget container weapon order (frame triples: normal / selected / dark)
 WEAPONS = {
@@ -104,21 +82,8 @@ CHARACTERISTICS = {
 BUTTONS = ["ok", "exit", "switch"]   # G2 frame pairs 0/1, 2/3, 4/5; f06 = plate
 
 
-def find_game_dir(hint):
-    if hint:
-        p = Path(hint)
-        if p.exists():
-            return p
-        sys.exit(f"game dir not found: {hint}")
-    for c in (REPO_ROOT.parent / "dos" / "seek", Path.home() / "dos" / "seek"):
-        if (c / "data").exists():
-            return c
-    sys.exit("Could not find game directory. Pass --game-dir.")
-
-
 def index_map(bin_path):
-    data = bin_path.read_bytes()
-    return np.asarray(deinterleave_modex(data[14 + 768:]))
+    return export_fullscreen.index_map(bin_path.read_bytes())
 
 
 def blitter_frames(bin_path):
@@ -139,53 +104,28 @@ def planar_frames(bin_path):
     return out
 
 
-def build_palette(maps, pngs, gov):
-    """GOVPAL for indices 0-79, backdrop-sampled colors for 80+."""
-    pal = [None] * 256
-    for i in range(80):   # GOVPAL entries 80+ are placeholder sentinels
-        pal[i] = (min(gov[i * 3] * 4, 255), min(gov[i * 3 + 1] * 4, 255),
-                  min(gov[i * 3 + 2] * 4, 255))
-    for arr, png_path in zip(maps, pngs):
-        ref = np.asarray(Image.open(png_path).convert("RGB"))
-        interior = np.ones(arr.shape, dtype=bool)
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                interior &= np.roll(np.roll(arr, dy, axis=0), dx, axis=1) == arr
-        interior[0, :] = interior[-1, :] = False
-        interior[:, 0] = interior[:, -1] = False
-        for idx in np.unique(arr):
-            if pal[idx] is not None:
-                continue
-            m  = arr == idx
-            mi = m & interior
-            if mi.sum() >= 8:
-                cols = ref[mi].reshape(-1, 3)
-                uniq, counts = np.unique(cols, axis=0, return_counts=True)
-                pal[idx] = tuple(int(v) for v in uniq[counts.argmax()])
-            else:
-                pal[idx] = tuple(int(v) for v in
-                                 np.median(ref[m].reshape(-1, 3), axis=0))
-    return pal
+def build_palette(game):
+    pal = (game / "data" / "EQPCHP.BIN").read_bytes()[:768]
+    return [tuple(min(v * 4, 255) for v in pal[i * 3:i * 3 + 3]) for i in range(256)]
 
 
-def canvas_arr(canvas):
-    xs = [c[0] for c in canvas]
-    ys = [c[1] for c in canvas]
-    f = np.full((max(ys) + 1, max(xs) + 1), -1, dtype=np.int16)
+def canvas_grid(canvas):
+    """Rows of palette indices from the origin to the canvas extent, -1 = empty."""
+    w = max(c[0] for c in canvas) + 1
+    h = max(c[1] for c in canvas) + 1
+    grid = [[-1] * w for _ in range(h)]
     for (x, y), v in canvas.items():
-        f[y, x] = v
-    return f
+        grid[y][x] = v
+    return grid
 
 
 def save_canvas(canvas, pal, path):
-    f = canvas_arr(canvas)
-    h, w = f.shape
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    for y in range(h):
-        for x in range(w):
-            p = f[y, x]
+    grid = canvas_grid(canvas)
+    img = image.new("RGBA", (len(grid[0]), len(grid)))
+    for y, row in enumerate(grid):
+        for x, p in enumerate(row):
             if p >= 0:
-                img.putpixel((x, y), (*(pal[p] or (255, 0, 255)), 255))
+                img.putpixel((x, y), pal[p])
     img.save(path)
 
 
@@ -198,14 +138,15 @@ def fit_track(canvas, width):
     are kept; the surplus comes off the widest colour runs of the interior, one
     column at a time, so the red / orange / green zones stay even.
     """
-    f = canvas_arr(canvas)
-    h, w = f.shape
+    f = canvas_grid(canvas)
+    h, w = len(f), len(f[0])
     if w <= width:
         return canvas
+    column = lambda x: [row[x] for row in f]
     runs, keep = [], list(range(w))
     start = 1
     for x in range(2, w - 2):
-        if not np.array_equal(f[:, x], f[:, start]):
+        if column(x) != column(start):
             runs.append([start, x - 1])
             start = x
     runs.append([start, w - 3])
@@ -213,63 +154,86 @@ def fit_track(canvas, width):
         widest = max(runs, key=lambda r: r[1] - r[0])
         keep.remove(widest[1])
         widest[1] -= 1
-    return {(nx, y): int(f[y, x]) for nx, x in enumerate(keep)
-            for y in range(h) if f[y, x] >= 0}
+    return {(nx, y): f[y][x] for nx, x in enumerate(keep)
+            for y in range(h) if f[y][x] >= 0}
+
+
+_positions = {}
+
+
+def positions_by_index(arr):
+    """index -> [(x, y)] over an index map, cached per map."""
+    key = id(arr)
+    if key not in _positions:
+        table = {}
+        for y, row in enumerate(arr):
+            for x, v in enumerate(row):
+                table.setdefault(v, []).append((x, y))
+        _positions[key] = table
+    return _positions[key]
 
 
 def find_all(frame, arr, tolerance=MATCH_TOLERANCE):
-    """All (x, y) where the frame matches the index map within tolerance."""
-    from numpy.lib.stride_tricks import sliding_window_view
-    f = canvas_arr(frame)
-    h, w = f.shape
-    win  = sliding_window_view(arr, (h, w))
-    errs = ((win != f) & (f >= 0)).sum(axis=(2, 3))
-    ys, xs = np.where(errs <= tolerance)
-    return sorted(zip(xs.tolist(), ys.tolist()), key=lambda p: (p[1], p[0]))
+    """All (x, y) where the frame matches the index map within tolerance.
+
+    A hit mismatches at most `tolerance` pixels, so it matches at least one of
+    tolerance + 1 anchor pixels exactly: candidates come from those anchors."""
+    f = canvas_grid(frame)
+    h, w = len(f), len(f[0])
+    H, W = len(arr), len(arr[0])
+    pixels = [(x, y, v) for y, row in enumerate(f) for x, v in enumerate(row) if v >= 0]
+    step = max(1, len(pixels) // (tolerance + 1))
+    anchors = pixels[::step][:tolerance + 1]
+    table = positions_by_index(arr)
+    candidates = set()
+    for ax, ay, v in anchors:
+        for x, y in table.get(v, ()):
+            ox, oy = x - ax, y - ay
+            if 0 <= ox <= W - w and 0 <= oy <= H - h:
+                candidates.add((ox, oy))
+    hits = []
+    for ox, oy in candidates:
+        errors = 0
+        for x, y, v in pixels:
+            if arr[oy + y][ox + x] != v:
+                errors += 1
+                if errors > tolerance:
+                    break
+        else:
+            hits.append((ox, oy))
+    return sorted(hits, key=lambda p: (p[1], p[0]))
 
 
 def find_pips(arr, y, x_from, x_to):
     """The x of the first pip box (border index 24 lit or 69 empty) on row y."""
     for x in range(x_from, x_to):
-        col = arr[y:y + PIP_H, x]
-        if np.all((col == 69) | (col == 70)) or np.all((col == 24) | (col == 26)):
+        col = [arr[y + dy][x] for dy in range(PIP_H)]
+        if all(v in (69, 70) for v in col) or all(v in (24, 26) for v in col):
             # require a full triple to reject stray matches
-            b2 = arr[y, x + PIP_PITCH:x + PIP_PITCH + PIP_W]
-            if np.all((b2 == 69) | (b2 == 24)):
+            b2 = arr[y][x + PIP_PITCH:x + PIP_PITCH + PIP_W]
+            if all(v in (69, 24) for v in b2):
                 return x
     return None
 
 
 def find_bay1_row(arr):
     """Bay 1's baked CHAIN-GUN row: the wide 247-background run, top-left."""
-    region = arr[36:110, 0:140]
-    ys, xs = np.where(region == 247)
-    if len(xs) == 0:
+    points = [(x, y) for y in range(36, 110) for x in range(140) if arr[y][x] == 247]
+    if not points:
         return None
-    x0, x1 = int(xs.min()), int(xs.max())
-    y0, y1 = int(ys.min()) + 36, int(ys.max()) + 36
+    x0, x1 = min(p[0] for p in points), max(p[0] for p in points)
+    y0, y1 = min(p[1] for p in points), max(p[1] for p in points)
     return {"x": x0, "y": y0, "w": x1 - x0 + 1, "h": y1 - y0 + 1}
 
 
 def crop_pips(arr, pal, x, y, out_dir):
     """Crop the lit and empty pip boxes (bay 1 shows one lit + two empty)."""
     for name, px in (("pip_lit", x), ("pip_empty", x + PIP_PITCH)):
-        img = Image.new("RGBA", (PIP_W, PIP_H), (0, 0, 0, 0))
+        img = image.new("RGBA", (PIP_W, PIP_H))
         for dy in range(PIP_H):
             for dx in range(PIP_W):
-                p = int(arr[y + dy, px + dx])
-                img.putpixel((dx, dy), (*(pal[p] or (255, 0, 255)), 255))
+                img.putpixel((dx, dy), pal[arr[y + dy][px + dx]])
         img.save(out_dir / f"{name}.png")
-
-
-def save_backdrop(arr, pal, path):
-    h, w = arr.shape
-    img = Image.new("RGB", (w, h))
-    px = img.load()
-    for y in range(h):
-        for x in range(w):
-            px[x, y] = pal[int(arr[y, x])] or (255, 0, 255)
-    img.save(path)
 
 
 def export_screen(vehicle, game, pal, maps, out):
@@ -293,7 +257,7 @@ def export_screen(vehicle, game, pal, maps, out):
 
     # Positions: the backdrop bakes each row in an arbitrary state (the tank
     # screen mixes normal and selected), so match all three per weapon.
-    row_w = {w: canvas_arr(rows[wi * 3]).shape[1] for wi, w in enumerate(weapons)}
+    row_w = {w: len(canvas_grid(rows[wi * 3])[0]) for wi, w in enumerate(weapons)}
     hits = {w: [] for w in weapons}
     for wi, weapon in enumerate(weapons):
         for si in range(3):
@@ -362,50 +326,25 @@ def export_screen(vehicle, game, pal, maps, out):
     if len(buttons) > 6 and buttons[6]:
         save_canvas(buttons[6], pal, out / f"{vehicle}_btn_plate.png")
 
-    # Widget positions above are matched against the BIN index map; the engine
-    # draws the assets/fullscreen/ backdrop, which sits FULLSCREEN_X_SHIFT px left
-    # of that map, so shift the matched x into fullscreen space. (CHARACTERISTICS
-    # are measured directly in fullscreen space, so they are left alone.)
-    for bay in layout["bays"]:
-        if "x" in bay:
-            bay["x"] += FULLSCREEN_X_SHIFT
-        if bay.get("pips_x") is not None:
-            bay["pips_x"] += FULLSCREEN_X_SHIFT
-        for row in bay.get("rows", []):
-            row["x"] += FULLSCREEN_X_SHIFT
-            if row.get("pips_x") is not None:
-                row["pips_x"] += FULLSCREEN_X_SHIFT
-    for sp in layout["specials"]:
-        sp["x"] += FULLSCREEN_X_SHIFT
-    for b in layout["buttons"].values():
-        b["x"] += FULLSCREEN_X_SHIFT
-
     n_rows = sum(len(b.get("rows", [])) for b in layout["bays"])
     print(f"  {vehicle}: {len(layout['bays'])} bays ({n_rows} rows), "
           f"{len(layout['specials'])} specials, {len(layout['buttons'])} buttons")
     return layout
 
 
-def main():
+def main(argv=None):
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--game-dir", default=None)
-    args = ap.parse_args()
-    game = find_game_dir(args.game_dir)
-    out  = REPO_ROOT / "assets" / "equip"
+    args = ap.parse_args(argv)
+    game = gamedata.find_game_dir(args.game_dir)
+    out  = gamedata.ASSETS / "equip"
     out.mkdir(parents=True, exist_ok=True)
-    print(f"Game dir: {game}\n -> {out.relative_to(REPO_ROOT)}/")
+    print(f"Game dir: {game}\n -> {out}/")
 
-    maps, pngs = {}, []
-    for vehicle, (back_stem, _g, _g2) in SCREENS.items():
-        png = REPO_ROOT / "assets" / "fullscreen" / f"{back_stem}.png"
-        if not png.exists():
-            sys.exit(f"missing {png} (run the fullscreen export first)")
-        maps[vehicle] = index_map(game / "data" / f"{back_stem}.BIN")
-        pngs.append(png)
-
-    pal = build_palette([maps["chopper"], maps["tank"]], pngs,
-                        (game / "data" / "GOVPAL.BIN").read_bytes())
+    maps = {vehicle: index_map(game / "data" / f"{back_stem}.BIN")
+            for vehicle, (back_stem, _g, _g2) in SCREENS.items()}
+    pal = build_palette(game)
 
     layout = {}
     for vehicle in SCREENS:

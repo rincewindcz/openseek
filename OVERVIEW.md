@@ -26,18 +26,36 @@ decoded from the user's own copy of the game and are never distributed.
 
 | Root | Source | Tracked |
 |------|--------|---------|
-| `assets/` | Exporters in `tools/` run against the original game files. | no |
+| `assets/` | `tools/build_pack.py` run against the original game files. | no |
 | `content/` | Original work. | yes |
-| `tools/MENUTITLE_PAL.BIN` | Menu-title palette reconstructed from a screenshot and interpolated. Not present in the game files. | yes |
 
 - Data-driven paths resolve through `engine/core/assets.lua`: `content/...` is
   used as is, any other path is prefixed with `assets/`.
-- `Assets.pack_present()` checks the files the boot path needs
+- The pack is built on the user's machine, never distributed. Release builds
+  convert into `assets/` in the LOVE save directory, which LOVE searches before
+  the source, so the same paths resolve. A developer checkout may keep
+  `assets/` in the repo root instead.
+- `assets/manifest.json` (written by `build_pack.py`): `schema`, `edition`
+  (`shareware` / `registered`), `missions` (0-1 or 0-4), `failed` exporter
+  steps, `source` (`download` or the converted path).
+- `Assets.pack_status()`: `missing` if a file the boot path needs is absent
   (`stage00.json`, `fonts/chars.json`, `fullscreen/TITLE.png`, `sounds.json`,
-  `mission_text.json`). If any is missing, `love.load` loads nothing else and
-  plays the engine intro card, which then dims behind a `MISSING GAME DATA`
-  label drawn in `content/fonts/loaded/loaded.ttf`; any key or a click skips to
-  the dimmed state, `Esc` quits; `--selftest` exits with code 1.
+  `mission_text.json`), `outdated` if `manifest.schema ~= Assets.SCHEMA`, else
+  `ok`. A pack without a manifest is accepted (developer export).
+- Not `ok`: `love.load` loads nothing else and hands the callbacks to
+  `ui/data_setup.lua`. It plays the engine intro card, dims it behind
+  `MISSING GAME DATA` / `GAME DATA OUTDATED` in `content/fonts/loaded/loaded.ttf`
+  and, on desktop with a converter present, offers `DOWNLOAD SHAREWARE`,
+  `USE MY COPY` (typed or pasted path, or a folder / zip dropped on the window),
+  `REBUILD GAME DATA` (outdated pack with a recorded source) and `QUIT`. The
+  converter runs in a `love.thread` through `io.popen`; its progress lines drive
+  the bar, and `DONE` restarts LOVE (`love.event.quit("restart")`). Converter
+  lookup: `openseek-setup.exe` (Windows) or `openseek-setup.pyz` next to the
+  game, else `tools/build_pack.py` in an unfused source checkout. Web and mobile
+  only show the label. `--selftest` exits with code 1.
+- The number of missions offered follows the stages present
+  (`World:mission_count()`): the campaign ends after the last stage and the
+  mission picker cycles only those missions.
 - Files in `content/` must not contain pixels copied from the game or from
   `assets/`. Palette-bound sprites are white-on-alpha masks tinted at draw time.
 
@@ -195,7 +213,8 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/menu` | Main menu over `MAINP`, `mainmen` font. |
 | `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
 | `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. |
-| `ui/mission_select` | `STAGE0X_MPIC` carousel, phase buttons. |
+| `ui/mission_select` | `STAGE0X_MPIC` carousel over the missions present, phase buttons. |
+| `ui/data_setup` | First-run screen without a usable pack: runs the converter, restarts into the game (section 2). |
 | `ui/info_screen` | CREDITS / HIGH SCORES shell. |
 | `ui/pointer` | Mouse / touch pointer in 320x240 design space. |
 | `ui/layout` | 320x240 design space, letterbox `fit`. |
@@ -476,30 +495,54 @@ galleries, debug mission picker, headless checks.
 
 ## 13. Tools
 
-Requires Python 3, `pillow`, `numpy`. Game directory via `--game-dir`.
+The pack pipeline needs only Python 3.8+ and its standard library
+(`tools/image.py` replaces Pillow). Each exporter takes `--game-dir` (an
+extracted game: `data/`, `STAGE0N/`, `SFX/`) and writes under
+`gamedata.ASSETS`.
+
+`build_pack.py SOURCE --out DIR` (or `--download --out DIR`) is the entry
+point:
+
+- `SOURCE` is a game directory (`DATA.JAM` + `DATA.JAL`, or the files
+  `UNPACK.EXE` extracted) or a release zip. `--download` fetches the shareware
+  `seeksw1.zip` (md5 `0bf3fa0359bbc3186d6041f1cab8b524`) from `MIRRORS` into
+  `--cache`.
+- `unjam.py` reads the JAM in memory (AR002, `-lh5-`); the game trees are
+  normalized into a temporary directory (`data/` lowercase, the rest
+  uppercase); every exporter runs in-process; the result replaces `DIR` via
+  `DIR.new`; exporter output goes to `DIR.log`. `DIR` must be absent, empty or a
+  previous pack (`--force` otherwise).
+- stdout: `source ...`, `found N files, EDITION, missions [...]`,
+  `download NN%`, `[i/n] export_x`, then `WARN ...`, `ERROR ...` (exit 1) or
+  `DONE DIR`.
+
+`build_setup.py` packages the converter: `build/openseek-setup.pyz` (zipapp)
+and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
+`data/entity_types.json` and `content/fonts/main_synth/`, read through
+`gamedata.read_resource`.
 
 | Tool | Output |
 |------|--------|
-| `export_love2d.py all` | `assets/stageMP.json`, `assets/stageMP/` |
+| `export_love2d.py all` | `assets/stageMP.json`, `assets/stageMP/` for the missions present |
+| `export_fullscreen.py` | `assets/fullscreen/`: every fullscreen BIN (`NAME.png`, `STAGE0N_NAME.png`) in its own palette |
 | `export_projectiles.py` | `assets/stage00/` projectiles |
 | `export_player.py` | `assets/player/` |
 | `export_hud.py` | `assets/hud/` |
 | `export_animations.py` | `assets/effects/` |
 | `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its stage palette) |
-| `export_mainmen.py` | `assets/mainmen/`, `assets/mainmen/font/`, `assets/fonts/mainmen.*` (palette from `MAINMEN.BMP`) |
-| `menutitle.py` | `tools/MENUTITLE_PAL.BIN` (needs a CREDITS screenshot) |
-| `export_screens.py` | CREDANIM / HIANIM, POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards |
+| `export_mainmen.py` | `assets/mainmen/` (words, generated arrow cursor), `assets/mainmen/font/`, `assets/fonts/mainmen.*`, `assets/fonts/main.*` (plus `content/fonts/main_synth/`); runtime menu palette in `MENU_PALETTE` |
+| `export_screens.py` | CREDANIM / HIANIM (CREDITS / HISCORE palette, de-wrapped by `menutitle.py`), POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards |
 | `export_mission.py` | `assets/mission/` |
 | `export_mission_text.py` | `assets/mission_text.json` |
-| `export_sounds.py [SFX dir]` | `assets/sounds/`, `assets/sounds.json` |
+| `export_sounds.py` | `assets/sounds/`, `assets/sounds.json` |
 | `export_phend.py` | `assets/phend/` |
-| `export_shop.py` | `assets/pow/` sprites, `assets/pow/weapon_info.json` (WINF / WINFT prices and descriptions), `assets/fonts/charspow.*` in the shop palette (palette from `assets/fullscreen/POWUP*.png` plus screenshot-measured indices and the darkened-tile grey ramp; run after `export_fonts.py`) |
-| `export_equip.py` | `assets/equip/` (needs `assets/fullscreen/EQP*.png`) |
-| `decode_fullscreen_v2.py` | Fullscreen PNG; palette from `--dosbox-ref` screenshot, else embedded block x4 (wrong colours) |
+| `export_shop.py` | `assets/pow/` sprites, `assets/pow/weapon_info.json` (WINF / WINFT prices and descriptions), `assets/fonts/charspow.*`, all in the `POWUP.BIN` palette (disabled buttons grey out 224 / 215; run after `export_fonts.py`) |
+| `export_equip.py` | `assets/equip/` in the `EQPCHP.BIN` palette, `layout.json` template-matched on the backdrop index maps |
 | `decode_level.py` | Stage BIN -> JSON (`--summary`) |
 | `decode_blitter.py` | Exact world-sprite decoder |
-| `decode_planar.py` | Exact planar HUD sprite decoder (`--pal-offset 14` for fullscreen palettes) |
-| `decode_palette.py`, `decode_sincos.py`, `decode_stage_assets.py`, `decode_font.py`, `decode_fullscreen.py` | Viewers / dumps |
+| `decode_planar.py` | Exact planar HUD sprite decoder |
+| `unjam.py` | `DATA.JAM` / `DATA.JAL` lister and extractor |
+| `decode_palette.py`, `decode_sincos.py`, `decode_stage_assets.py`, `decode_font.py`, `decode_fullscreen.py`, `decode_fullscreen_v2.py` | Viewers / dumps (need Pillow, numpy) |
 
 ## 14. Controls
 

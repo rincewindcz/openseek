@@ -37,6 +37,8 @@ import argparse
 import struct
 import sys
 
+import image
+
 CHAIN1 = 0x1dbc27
 CTRL1 = 0x1dbe57
 CHAIN2 = 0x1dbe75
@@ -151,18 +153,17 @@ def frame_header(data, frame_off):
 
 
 def render(canvas, palette, scale=4):
-    from PIL import Image
     if not canvas:
         return None
     xs = [c[0] for c in canvas]
     ys = [c[1] for c in canvas]
     x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-    img = Image.new('RGBA', (x1 - x0 + 1, y1 - y0 + 1), (0, 0, 0, 0))
+    img = image.new('RGBA', (x1 - x0 + 1, y1 - y0 + 1), (0, 0, 0, 0))
     for (x, y), p in canvas.items():
         r, g, b = palette[p * 3] * 4, palette[p * 3 + 1] * 4, palette[p * 3 + 2] * 4
         img.putpixel((x - x0, y - y0), (r, g, b, 255))
     if scale > 1:
-        img = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
+        img = img.resize((img.width * scale, img.height * scale), image.NEAREST)
     return img
 
 

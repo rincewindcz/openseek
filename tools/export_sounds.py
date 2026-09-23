@@ -15,20 +15,19 @@ Output:
 underscores, so BOMB.SFX -> bomb_sfx and BOMB.SPC -> bomb_spc stay distinct.
 
 Usage:
-  export_sounds.py                 # source: ~/dos/seek/SFX
-  export_sounds.py /path/to/SFX    # explicit source directory
+  export_sounds.py                          # source: ~/dos/seek/SFX
+  export_sounds.py --game-dir /path/to/seek # source: <game dir>/SFX
 """
 
+import argparse
 import json
 import os
 import re
 import struct
 import sys
 
-REPO      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR   = os.path.join(REPO, "assets", "sounds")
-CATALOG   = os.path.join(REPO, "assets", "sounds.json")
-DEFAULT_SRC = os.path.expanduser("~/dos/seek/SFX")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gamedata
 
 FIB_DELTA = [-34, -21, -13, -8, -5, -3, -2, -1, 0, 1, 2, 3, 5, 8, 13, 21]
 
@@ -132,12 +131,18 @@ def write_wav(path, rate, signed_pcm):
         f.write(pcm)
 
 
-def main():
-    src = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SRC
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Export sound effects to assets/sounds/")
+    ap.add_argument("--game-dir", default=None)
+    args = ap.parse_args(argv)
+
+    src = os.path.join(gamedata.find_game_dir(args.game_dir), "SFX")
     if not os.path.isdir(src):
         sys.exit("source directory not found: " + src)
 
-    os.makedirs(OUT_DIR, exist_ok=True)
+    out_dir = os.path.join(gamedata.ASSETS, "sounds")
+    catalog_path = os.path.join(gamedata.ASSETS, "sounds.json")
+    os.makedirs(out_dir, exist_ok=True)
     buckets = {key: [] for key, _, _ in CATEGORIES}
     buckets[FALLBACK[0]] = []
     titles = {key: title for key, title, _ in CATEGORIES}
@@ -157,7 +162,7 @@ def main():
         rate, samples = result
         name = norm_name(filename)
         out  = name + ".wav"
-        write_wav(os.path.join(OUT_DIR, out), rate, samples)
+        write_wav(os.path.join(out_dir, out), rate, samples)
         key, _ = category_for(name)
         buckets[key].append({
             "name":  name,
@@ -173,16 +178,16 @@ def main():
         if items:
             catalog.append({"name": key, "title": titles[key], "items": items})
 
-    with open(CATALOG, "w") as f:
+    with open(catalog_path, "w") as f:
         json.dump(catalog, f, indent=2)
         f.write("\n")
 
-    print("converted %d sound(s) to %s" % (converted, OUT_DIR))
+    print("converted %d sound(s) to %s" % (converted, out_dir))
     for cat in catalog:
         print("  %-11s %d" % (cat["name"], len(cat["items"])))
     if skipped:
         print("skipped (not 8SVX): " + ", ".join(skipped))
-    print("catalog: " + CATALOG)
+    print("catalog: " + catalog_path)
 
 
 if __name__ == "__main__":

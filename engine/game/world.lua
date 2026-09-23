@@ -165,8 +165,17 @@ function World:_discover()
     end
     table.sort(self.stages)
     if #self.stages == 0 then
-        error("no assets/stageXX.json found - run tools/export_love2d.py first")
+        error("no assets/stageXX.json found - run tools/build_pack.py first")
     end
+end
+
+-- Missions present in the pack: 2 in the shareware release, 5 registered.
+function World:mission_count()
+    local count = 0
+    for _, name in ipairs(self.stages) do
+        count = math.max(count, (tonumber(name:match("^stage(%d)")) or 0) + 1)
+    end
+    return count
 end
 
 function World:load(name)

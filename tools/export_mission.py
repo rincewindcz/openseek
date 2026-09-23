@@ -25,10 +25,11 @@ import argparse
 import sys
 from pathlib import Path
 
-THIS_DIR  = Path(__file__).resolve().parent
-REPO_ROOT = THIS_DIR.parent
+THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
+import gamedata
+import image
 
 # PHGADS frame indices: name -> (normal, highlighted).
 BUTTONS = {
@@ -37,18 +38,6 @@ BUTTONS = {
     "phase01": (0, 1), "phase02": (3, 4), "phase03": (6, 7), "phase04": (15, 16),
 }
 COMPLETED = {"phase01": 2, "phase02": 5, "phase03": 8, "phase04": 17}
-
-
-def find_game_dir(hint):
-    if hint:
-        p = Path(hint)
-        if p.exists():
-            return p
-        sys.exit(f"game dir not found: {hint}")
-    for c in (REPO_ROOT.parent / "dos" / "seek", Path.home() / "dos" / "seek", REPO_ROOT):
-        if (c / "data").exists():
-            return c
-    sys.exit("Could not find game directory. Pass --game-dir.")
 
 
 def decode(data, frames, i):
@@ -65,9 +54,8 @@ def bbox(canvas):
 
 
 def render_pal(canvas, pal):
-    from PIL import Image
     x0, x1, y0, y1 = bbox(canvas)
-    img = Image.new("RGBA", (x1 - x0 + 1, y1 - y0 + 1), (0, 0, 0, 0))
+    img = image.new("RGBA", (x1 - x0 + 1, y1 - y0 + 1), (0, 0, 0, 0))
     for (x, y), idx in canvas.items():
         r = min(255, pal[idx * 3] * 4)
         g = min(255, pal[idx * 3 + 1] * 4)
@@ -78,22 +66,21 @@ def render_pal(canvas, pal):
 
 def render_title(canvas):
     # MSPHASE: idx 1 -> white fill, idx 0 -> black outline, else transparent.
-    from PIL import Image
     x0, x1, y0, y1 = bbox(canvas)
-    img = Image.new("RGBA", (x1 - x0 + 1, y1 - y0 + 1), (0, 0, 0, 0))
+    img = image.new("RGBA", (x1 - x0 + 1, y1 - y0 + 1), (0, 0, 0, 0))
     for (x, y), idx in canvas.items():
         c = (252, 252, 252, 255) if idx == 1 else (0, 0, 0, 255)
         img.putpixel((x - x0, y - y0), c)
     return img
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Export mission-menu widgets to assets/mission/")
     ap.add_argument("--game-dir", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    game_dir = find_game_dir(args.game_dir)
-    out_dir  = REPO_ROOT / "assets" / "mission"
+    game_dir = gamedata.find_game_dir(args.game_dir)
+    out_dir  = gamedata.ASSETS / "mission"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     govpal = (game_dir / "data" / "GOVPAL.BIN").read_bytes()[:768]

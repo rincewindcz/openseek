@@ -30,6 +30,7 @@ import struct
 import sys
 
 from decode_blitter import read_frames
+import image
 
 
 def frame_header(data, frame_off):
@@ -79,18 +80,17 @@ def decode_frame(data, frame_off, frame_end=None):
 
 
 def render(canvas, palette, scale=4):
-    from PIL import Image
     if not canvas:
         return None
     xs = [c[0] for c in canvas]
     ys = [c[1] for c in canvas]
     x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-    img = Image.new('RGBA', (x1 - x0 + 1, y1 - y0 + 1), (0, 0, 0, 0))
+    img = image.new('RGBA', (x1 - x0 + 1, y1 - y0 + 1), (0, 0, 0, 0))
     for (x, y), p in canvas.items():
         r, g, b = palette[p * 3] * 4, palette[p * 3 + 1] * 4, palette[p * 3 + 2] * 4
         img.putpixel((x - x0, y - y0), (r, g, b, 255))
     if scale > 1:
-        img = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
+        img = img.resize((img.width * scale, img.height * scale), image.NEAREST)
     return img
 
 
@@ -100,8 +100,8 @@ def main():
     ap.add_argument('--frame', default='all', help='frame index or "all"')
     ap.add_argument('--palette', default=None, help='768-byte VGA palette')
     ap.add_argument('--pal-offset', type=int, default=0,
-                    help='byte offset of the palette in --palette (14 for a '
-                         'fullscreen image whose palette follows its header)')
+                    help='byte offset of the palette in --palette (0 for a palette '
+                         'BIN and for a fullscreen image, which starts with its palette)')
     ap.add_argument('--out', default='.', help='output directory')
     ap.add_argument('--scale', type=int, default=4)
     ap.add_argument('--verify', action='store_true', help='parse only, no PNG')

@@ -79,6 +79,7 @@ end
 function MissionSelect:init()
     self.active     = false
     self.t          = 0
+    self.missions   = 5
     self.mission    = 0
     self.phase      = 0
     self.row        = ROW_CAROUSEL
@@ -128,7 +129,9 @@ end
 function MissionSelect:is_active() return self.active end
 function MissionSelect:close() self.active = false end
 
-function MissionSelect:open()
+function MissionSelect:open(missions)
+    self.missions   = missions or self.missions
+    self.mission    = math.min(self.mission, self.missions - 1)
     self.t          = 0
     self.row        = ROW_CAROUSEL
     self.pressed    = nil
@@ -190,7 +193,7 @@ end
 
 function MissionSelect:_cycle_mission(dir)
     self.prev_mpic = self:_mpic(self.mission)
-    self.mission   = (self.mission + dir) % 5
+    self.mission   = (self.mission + dir) % self.missions
     self.slide_t   = 0
     self.slide_dir = dir
     if dir < 0 then self.bump_l = BUMP_TIME else self.bump_r = BUMP_TIME end

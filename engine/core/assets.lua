@@ -16,11 +16,24 @@
 --
 -- Loaders take the JSON path and go through Assets.path / Assets.exists rather
 -- than concatenating "assets/" themselves.
+--
+-- tools/build_pack.py writes the pack with a manifest.json (schema, edition,
+-- missions). Release builds convert into the save directory, which LOVE
+-- searches before the source, so the same "assets/..." paths resolve there.
+-- A pack without a manifest is a developer pack exported by hand and is
+-- accepted as is.
+
+local json = require "lib.json"
 
 local Assets = {}
 
-local PACK    = "assets/"
-local CONTENT = "content/"
+-- Bump together with PACK_SCHEMA in tools/build_pack.py whenever the exporters
+-- change what the engine reads; an older pack is then rebuilt.
+Assets.SCHEMA = 1
+
+local PACK     = "assets/"
+local CONTENT  = "content/"
+local MANIFEST = PACK .. "manifest.json"
 
 -- Pack files the boot path cannot run without.
 local REQUIRED = {
@@ -40,11 +53,21 @@ function Assets.exists(p)
     return love.filesystem.getInfo(Assets.path(p)) ~= nil
 end
 
-function Assets.pack_present()
+-- The pack manifest, or nil for a developer pack without one.
+function Assets.manifest()
+    if not love.filesystem.getInfo(MANIFEST) then return nil end
+    local ok, manifest = pcall(json.decode, love.filesystem.read(MANIFEST) or "")
+    return ok and type(manifest) == "table" and manifest or nil
+end
+
+-- "ok", "missing" (no usable pack) or "outdated" (built for an older schema).
+function Assets.pack_status()
     for _, p in ipairs(REQUIRED) do
-        if not Assets.exists(p) then return false end
+        if not Assets.exists(p) then return "missing" end
     end
-    return true
+    local manifest = Assets.manifest()
+    if manifest and manifest.schema ~= Assets.SCHEMA then return "outdated" end
+    return "ok"
 end
 
 return Assets

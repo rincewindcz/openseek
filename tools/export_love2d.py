@@ -28,38 +28,37 @@ conversion.
 Usage:
   export_love2d.py 00            # mission 0, phase 0
   export_love2d.py 00 01 02 03
-  export_love2d.py all           # all 20 stages
+  export_love2d.py all           # every stage of the missions present
+  export_love2d.py all --game-dir /path/to/seek
 """
 
+import argparse
 import json
-import struct
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import decode_blitter as db
-
-ROOT = Path(__file__).resolve().parent.parent
-ASSETS = ROOT / "assets"
+import decode_level
+import gamedata
 
 # Kinds that draw a unit sprite (soldiers) carry a dead pose a fixed frame offset
 # past their alive frame in the same arc-pair BIN (ENEMY.BIN: alive arc 0-31,
 # dead arc 32-63). Exported as a sibling {stem}_f{frame+offset}.png that the
 # engine derives by name; no extra JSON field needed.
 def _dead_frame_offsets():
-    import json as _json
-    types = _json.loads((ROOT / "data" / "entity_types.json").read_text())
+    types = json.loads(gamedata.read_resource("data/entity_types.json"))
     return {k: v["dead_frame_offset"] for k, v in types.items()
             if isinstance(v, dict) and "dead_frame_offset" in v}
 
 
-def find_bin(name: str, source_dir: int, mission: int) -> Path | None:
+def find_bin(game_dir: Path, name: str, source_dir: int, mission: int) -> Path | None:
     candidates = []
     if source_dir >= 0:
-        candidates.append(ROOT / f"STAGE{source_dir:02d}" / name.upper())
-    candidates.append(ROOT / f"STAGE{mission:02d}" / name.upper())
-    candidates.append(ROOT / "data" / name.upper())
-    candidates += [ROOT / f"STAGE{i:02d}" / name.upper() for i in range(5)]
+        candidates.append(game_dir / f"STAGE{source_dir:02d}" / name.upper())
+    candidates.append(game_dir / f"STAGE{mission:02d}" / name.upper())
+    candidates.append(game_dir / "data" / name.upper())
+    candidates += [game_dir / f"STAGE{i:02d}" / name.upper() for i in range(5)]
     for c in candidates:
         if c.exists():
             return c
@@ -85,24 +84,23 @@ def render_class_frame(bin_path: Path, frame: int, palette: bytes):
     return img, min_x - ex[1], min_y - ex[2]
 
 
-def export_stage(mission: int, phase: int) -> None:
+def export_stage(game_dir: Path, mission: int, phase: int) -> None:
     tag = f"stage{mission}{phase}"
-    stage_bin = ROOT / "data" / f"STAGE{mission}{phase}.BIN"
-    out_json = ASSETS / f"{tag}.json"
-    sprite_dir = ASSETS / tag
+    stage_bin = game_dir / "data" / f"STAGE{mission}{phase}.BIN"
+    out_json = gamedata.ASSETS / f"{tag}.json"
+    sprite_dir = gamedata.ASSETS / tag
     sprite_dir.mkdir(parents=True, exist_ok=True)
 
-    import decode_level
     level = decode_level.parse_stage(stage_bin.read_bytes())
 
-    pal_path = ROOT / f"STAGE{mission:02d}" / "PAL.BIN"
+    pal_path = game_dir / f"STAGE{mission:02d}" / "PAL.BIN"
     if not pal_path.exists():
-        pal_path = ROOT / f"STAGE{mission:02d}" / "PAL1.BIN"
+        pal_path = game_dir / f"STAGE{mission:02d}" / "PAL1.BIN"
     palette = pal_path.read_bytes()
 
     # segment value = palette color index of the line (passed to the line
     # drawer at 0x1df450); resolve via the mission's in-game palette PAL1.BIN
-    pal1_path = ROOT / f"STAGE{mission:02d}" / "PAL1.BIN"
+    pal1_path = game_dir / f"STAGE{mission:02d}" / "PAL1.BIN"
     pal1 = pal1_path.read_bytes() if pal1_path.exists() else palette
     for seg in level["segments"]:
         i = seg["value"] * 3
@@ -118,7 +116,7 @@ def export_stage(mission: int, phase: int) -> None:
         frame = max(0, cls["frame_base"])
         key = (cls["asset"], frame)
         if key not in rendered:
-            src = find_bin(asset["file"], asset["source_dir"], mission)
+            src = find_bin(game_dir, asset["file"], asset["source_dir"], mission)
             if src is None:
                 failed.append((asset["file"], "file not found"))
                 rendered[key] = None
@@ -142,7 +140,7 @@ def export_stage(mission: int, phase: int) -> None:
                 dframe = frame + off
                 dkey = (cls["asset"], dframe)
                 if dkey not in rendered:
-                    src = find_bin(asset["file"], asset["source_dir"], mission)
+                    src = find_bin(game_dir, asset["file"], asset["source_dir"], mission)
                     # Only export a real dead frame; skip assets whose arc is too
                     # short (e.g. mine.bin filed as a unit kind has no dead pose).
                     n = len(db.read_frames(src.read_bytes())) if src else 0
@@ -154,16 +152,27 @@ def export_stage(mission: int, phase: int) -> None:
 
     out_json.write_text(json.dumps(level, indent=2))
     print(f"{tag}: {ok} class frames, {len(level['entities'])} entities "
-          f"-> {out_json.relative_to(ROOT)}")
+          f"-> {out_json}")
     for name, why in failed:
         print(f"  MISSING {name}: {why} (renderer draws a placeholder)")
 
 
-if __name__ == "__main__":
-    args = sys.argv[1:] or ["00"]
-    if args == ["all"]:
-        args = [f"{m}{p}" for m in range(5) for p in range(4)]
-    for a in args:
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Export stages to assets/stageMP.json and assets/stageMP/")
+    ap.add_argument("stages", nargs="*", default=["00"],
+                    help="MP tags (12 = mission 1 phase 2) or 'all' (every mission present)")
+    ap.add_argument("--game-dir", default=None)
+    args = ap.parse_args(argv)
+
+    game_dir = gamedata.find_game_dir(args.game_dir)
+    tags = args.stages
+    if tags == ["all"]:
+        tags = [f"{m}{p}" for m in gamedata.missions(game_dir) for p in range(4)]
+    for a in tags:
         if len(a) != 2 or not a.isdigit():
             sys.exit(f"bad stage tag {a!r}: expected MP digits, e.g. 12 = mission 1 phase 2")
-        export_stage(int(a[0]), int(a[1]))
+        export_stage(game_dir, int(a[0]), int(a[1]))
+
+
+if __name__ == "__main__":
+    main()

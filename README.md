@@ -32,3 +32,20 @@ The engine is built using Lua and the Love2D framework and it's not a direct cop
     <br/>
     <img src="screenshots/seek_4.png" alt="Seek & Destroy Gameplay 2" width="800">
 </div>
+
+# Game data
+
+openSEEK converts the original game files on your machine on first launch:
+
+* **DOWNLOAD SHAREWARE** fetches the freely distributable Seek & Destroy v1.0 shareware release (missions 1 and 2) and converts it.
+* **USE MY COPY** converts your own DOS installation (the folder with `DATA.JAM`, or the files already unpacked) or a release `.zip`. Type or paste the path, or drop the folder onto the window. The full version unlocks all five missions.
+
+The converter ships next to the game (`openseek-setup.exe` on Windows, `openseek-setup.pyz` elsewhere, which needs Python 3.8+ and nothing else). The converted data lives in the LOVE save directory, not in the game folder.
+
+From a source checkout the same converter runs directly:
+
+```sh
+python3 tools/build_pack.py --download --out assets      # shareware
+python3 tools/build_pack.py ~/dos/seek --out assets      # your own copy
+love .
+```

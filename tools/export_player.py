@@ -13,13 +13,13 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-from PIL import Image
 
-THIS_DIR  = Path(__file__).resolve().parent
-REPO_ROOT = THIS_DIR.parent
+THIS_DIR = Path(__file__).resolve().parent
 
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
+import gamedata
+import image
 
 # (BIN stem in data/, output prefix, frames to keep, palette). The chopper
 # pitch/bank/drop and rotor sets are state/spin animations (keep all); tanktop is
@@ -53,23 +53,6 @@ PLAYER_SPRITES = [
 ]
 
 
-def find_game_dir(hint):
-    if hint:
-        p = Path(hint)
-        if p.exists():
-            return p
-        sys.exit(f"game dir not found: {hint}")
-    candidates = [
-        REPO_ROOT.parent / "dos" / "seek",
-        Path.home() / "dos" / "seek",
-        REPO_ROOT,
-    ]
-    for c in candidates:
-        if (c / "data").exists():
-            return c
-    sys.exit("Could not find game directory. Pass --game-dir.")
-
-
 def decode_all_frames(data):
     frame_offsets = db.read_frames(data)
     canvases = []
@@ -94,7 +77,7 @@ def shared_canvas_bounds(canvases):
 
 
 def render_frame_on_canvas(canvas, palette, x_min, y_min, w, h):
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    img = image.new("RGBA", (w, h), (0, 0, 0, 0))
     for (x, y), p in canvas.items():
         r = palette[p * 3]     * 4
         g = palette[p * 3 + 1] * 4
@@ -135,13 +118,13 @@ def export_sprite_group(src_path, prefix, out_dir, palette, keep=None):
     return names
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Export player sprites to assets/player/")
     ap.add_argument("--game-dir", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    game_dir = find_game_dir(args.game_dir)
-    out_dir  = REPO_ROOT / "assets" / "player"
+    game_dir = gamedata.find_game_dir(args.game_dir)
+    out_dir  = gamedata.ASSETS / "player"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     pal_path = game_dir / "STAGE00" / "PAL.BIN"

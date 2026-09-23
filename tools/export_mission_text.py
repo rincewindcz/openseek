@@ -29,25 +29,14 @@ import sys
 from pathlib import Path
 
 THIS_DIR = Path(__file__).resolve().parent
-REPO_ROOT = THIS_DIR.parent
+sys.path.insert(0, str(THIS_DIR))
+import gamedata
 
 MISSIONS = 5
 PHASES = 4
 BLOCK_LINES = 18  # fixed per-phase stride within each MT file
 SLOTS = 3         # box slots per phase block
 SLOT_LINES = BLOCK_LINES // SLOTS  # 6 lines per box slot
-
-
-def find_game_dir(hint):
-    if hint:
-        p = Path(hint)
-        if p.exists():
-            return p
-        sys.exit(f"game dir not found: {hint}")
-    for c in (REPO_ROOT.parent / "dos" / "seek", Path.home() / "dos" / "seek", REPO_ROOT):
-        if (c / "data").exists():
-            return c
-    sys.exit("Could not find game directory. Pass --game-dir.")
 
 
 def parse_block(lines):
@@ -71,13 +60,13 @@ def parse_mission(data):
     return blocks
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Export original mission text to assets/mission_text.json")
     ap.add_argument("--game-dir", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    game_dir = find_game_dir(args.game_dir)
-    out_path = REPO_ROOT / "assets" / "mission_text.json"
+    game_dir = gamedata.find_game_dir(args.game_dir)
+    out_path = gamedata.ASSETS / "mission_text.json"
 
     result = {}
     for m in range(MISSIONS):

@@ -11,11 +11,12 @@ import argparse
 import sys
 from pathlib import Path
 
-THIS_DIR  = Path(__file__).resolve().parent
-REPO_ROOT = THIS_DIR.parent
+THIS_DIR = Path(__file__).resolve().parent
 
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
+import gamedata
+import image
 
 
 # (BIN stem, output prefix, fps, loop)
@@ -35,26 +36,6 @@ ANIMATIONS = [
     ("METALRT",  "metalrt",  18, True),
     ("METALSZ",  "metalsz",  18, True),
 ]
-
-
-def find_game_dir(hint):
-    if hint:
-        p = Path(hint)
-        if p.exists():
-            return p
-        sys.exit(f"game dir not found: {hint}")
-    candidates = [
-        REPO_ROOT.parent / "dos" / "seek",
-        Path.home() / "dos" / "seek",
-        REPO_ROOT,
-    ]
-    for c in candidates:
-        if (c / "STAGE00").exists():
-            return c
-    sys.exit(
-        "Could not find game directory.\n"
-        "Pass --game-dir /path/to/seek (the directory containing STAGE00/)."
-    )
 
 
 def export_anim(game_dir, out_dir, bin_stem, prefix, palette):
@@ -96,7 +77,6 @@ MISSION_ANIMATIONS = [
 def export_mission_anim(game_dir, out_dir, bin_stem, prefix, mission, keep):
     """Render a STAGE0{m} animation on a shared canvas so a sequence (e.g. a walk
     cycle) keeps its frame-to-frame alignment. Returns the written file names."""
-    from PIL import Image
     src      = game_dir / f"STAGE0{mission}" / (bin_stem + ".BIN")
     pal_path = game_dir / f"STAGE0{mission}" / "PAL.BIN"
     if not src.exists() or not pal_path.exists():
@@ -117,7 +97,7 @@ def export_mission_anim(game_dir, out_dir, bin_stem, prefix, mission, keep):
     w, h = x1 - x0 + 1, y1 - y0 + 1
     names = []
     for cv in canvases:
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        img = image.new("RGBA", (w, h), (0, 0, 0, 0))
         for (x, y), p in cv.items():
             r, g, b = palette[p * 3] * 4, palette[p * 3 + 1] * 4, palette[p * 3 + 2] * 4
             img.putpixel((x - x0, y - y0), (r, g, b, 255))
@@ -138,13 +118,13 @@ def export_all_mission_anims(game_dir, out_dir):
     return results
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Export SEEK effect animations to assets/effects/")
     ap.add_argument("--game-dir", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    game_dir = find_game_dir(args.game_dir)
-    out_dir  = REPO_ROOT / "assets" / "effects"
+    game_dir = gamedata.find_game_dir(args.game_dir)
+    out_dir  = gamedata.ASSETS / "effects"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     pal_path = game_dir / "STAGE00" / "PAL.BIN"

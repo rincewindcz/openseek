@@ -10,25 +10,22 @@ decoder its container uses (world blitter or the raw planar HUD class, routed
 automatically by decode_planar.is_planar) and rendered in that screen's own
 palette:
 
-  credanim   menu CREDITS option    recovered DAC palette         -> assets/credits/
-  hianim     menu HIGH SCORES opt.   recovered DAC palette         -> assets/hiscore/
+  credanim   menu CREDITS option    CREDITS.BIN palette           -> assets/credits/
+  hianim     menu HIGH SCORES opt.   HISCORE.BIN palette           -> assets/hiscore/
   powcount   POW figure + label      GOVPAL.BIN                    -> assets/pow/
   killicon   kill tank icon          PHASEPAL.BIN                  -> assets/hud/
   okbadge    OVERKILL badge          PHASEPAL.BIN                  -> assets/hud/
   burn/burn2 stage fire animation    STAGE00 palette               -> assets/effects/
   phase1..4  objective briefing      each STAGE0{m} palette        -> assets/phase/
 
-CREDANIM ("CREDITS") and HIANIM ("HIGH SCORES") are the animated main-menu
-options. Their gold-face / grey-bevel title colors match no shipped BIN (the
-game assembles the palette in the DAC at load time), so they use the palette
-recovered from an original-game screenshot and are column de-wrapped; see
-menutitle.py. POWCOUNT uses only the gold ramp and draws in GOVPAL like the
-other in-game fonts; the shop sprites that need the POWUP/POWUPT runtime
-palette (POWNAMES, POWMEDAL, POWARMED, POWFOCUS, POWWGADS, POWNUMS, POWGADS)
-are exported by tools/export_shop.py instead. A palette source is either a raw
-768-byte VGA palette BIN (first 768 bytes) or a fullscreen image whose palette
-is embedded after a 14-byte header (MAINP). PEOPLE.BIN and HATCH.BIN are
-excluded: PEOPLE dispatches to a different (still unsolved) per-width routine,
+CREDANIM ("CREDITS") and HIANIM ("HIGH SCORES") are the animated titles of
+the credits and high-score screens, drawn in those screens' fullscreen
+palettes and column de-wrapped (see menutitle.py). POWCOUNT uses only the gold
+ramp and draws in GOVPAL like the other in-game fonts; the shop sprites that
+need the POWUP/POWUPT palette (POWNAMES, POWMEDAL, POWARMED, POWFOCUS,
+POWWGADS, POWNUMS, POWGADS) are exported by tools/export_shop.py instead. A
+palette source is the first 768 bytes of a palette BIN or of a fullscreen
+image. PEOPLE.BIN and HATCH.BIN are excluded: PEOPLE dispatches to a different (still unsolved) per-width routine,
 and HATCH is the "Unavailable in Shareware Version" placeholder screen.
 """
 
@@ -36,33 +33,16 @@ import argparse
 import sys
 from pathlib import Path
 
-THIS_DIR  = Path(__file__).resolve().parent
-REPO_ROOT = THIS_DIR.parent
+THIS_DIR = Path(__file__).resolve().parent
 
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
 import decode_planar as dp
+import gamedata
 import menutitle
 
-FS_HEADER = 14  # fullscreen images store their palette after a 14-byte header
-
-
-def find_game_dir(hint):
-    if hint:
-        p = Path(hint)
-        if p.exists():
-            return p
-        sys.exit(f"game dir not found: {hint}")
-    for c in (REPO_ROOT.parent / "dos" / "seek", Path.home() / "dos" / "seek", REPO_ROOT):
-        if (c / "data").exists():
-            return c
-    sys.exit("Could not find game directory. Pass --game-dir.")
-
-
-def load_palette(path, embedded):
-    data = Path(path).read_bytes()
-    off  = FS_HEADER if embedded else 0
-    return data[off:off + 768]
+def load_palette(path):
+    return Path(path).read_bytes()[:768]
 
 
 def export_sprite(src_path, prefix, out_dir, palette, transform=None):
@@ -80,25 +60,24 @@ def export_sprite(src_path, prefix, out_dir, palette, transform=None):
         fname = f"{prefix}_f{i:02d}.png"
         img.save(out_dir / fname)
         names.append(fname)
-    rel = out_dir.relative_to(REPO_ROOT)
-    print(f"  {src_path.name}: {len(names)} frames -> {rel}/")
+    print(f"  {src_path.name}: {len(names)} frames -> {out_dir}/")
     return names
 
 
-# (source BIN under data/, output prefix, out subdir, palette BIN, embedded?)
+# (source BIN under data/, output prefix, out subdir, palette BIN)
 # CREDANIM/HIANIM are handled separately (see export_titles): they need the
-# recovered DAC palette and column de-wrap, not a shipped palette BIN.
+# column de-wrap.
 # The shop sprites drawn in the POWUP/POWUPT runtime palette (POWNAMES,
 # POWMEDAL, POWARMED, POWFOCUS, POWWGADS, POWNUMS, POWGADS) are exported by
 # tools/export_shop.py, not here: GOVPAL only covers indices 0-79 and
 # mis-colours their icon bodies, medal, button faces and shadows. POWCOUNT uses
 # only the gold ramp and stays on GOVPAL.
 JOBS = [
-    ("data/POWCOUNT", "powcount", "pow",     "data/GOVPAL.BIN",   False),
-    ("data/KILLICON", "killicon", "hud",     "data/PHASEPAL.BIN", False),
-    ("data/OKBADGE",  "okbadge",  "hud",     "data/PHASEPAL.BIN", False),
-    ("STAGE00/BURN",  "burn",  "effects", "STAGE00/PAL.BIN", False),
-    ("STAGE00/BURN2", "burn2", "effects", "STAGE00/PAL.BIN", False),
+    ("data/POWCOUNT", "powcount", "pow",     "data/GOVPAL.BIN"),
+    ("data/KILLICON", "killicon", "hud",     "data/PHASEPAL.BIN"),
+    ("data/OKBADGE",  "okbadge",  "hud",     "data/PHASEPAL.BIN"),
+    ("STAGE00/BURN",  "burn",     "effects", "STAGE00/PAL.BIN"),
+    ("STAGE00/BURN2", "burn2",    "effects", "STAGE00/PAL.BIN"),
 ]
 
 
@@ -113,46 +92,45 @@ def stage_palette(sdir):
 def export_titles(game_dir):
     """CREDANIM / HIANIM: the animated CREDITS and HIGH SCORES menu titles.
 
-    Rendered in the recovered runtime palette (gold face + grey 3D bevel; see
-    menutitle.py) and column de-wrapped, since the blitter wraps these
-    full-width frames around the 384 px Mode X row."""
-    palette = menutitle.load_palette()
+    Rendered in their screen's palette and column de-wrapped, since the
+    blitter wraps these full-width frames around the 384 px Mode X row."""
     print("Menu titles -> assets/credits, assets/hiscore/")
-    for stem, prefix, sub in (("CREDANIM", "credanim", "credits"),
-                              ("HIANIM", "hianim", "hiscore")):
+    for stem, prefix, sub, screen in (("CREDANIM", "credanim", "credits", "CREDITS"),
+                                      ("HIANIM",   "hianim",   "hiscore", "HISCORE")):
         src = game_dir / "data" / (stem + ".BIN")
         if not src.exists():
             print(f"  skip {stem}: not found")
             continue
-        out_dir = REPO_ROOT / "assets" / sub
+        palette = load_palette(game_dir / "data" / (screen + ".BIN"))
+        out_dir = gamedata.ASSETS / sub
         out_dir.mkdir(parents=True, exist_ok=True)
         export_sprite(src, prefix, out_dir, palette, transform=menutitle.unsplit)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Export screen sprites to assets/")
     ap.add_argument("--game-dir", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    game_dir = find_game_dir(args.game_dir)
+    game_dir = gamedata.find_game_dir(args.game_dir)
     print(f"Game dir: {game_dir}\n")
 
     export_titles(game_dir)
     print()
 
-    for stem, prefix, sub, pal_rel, embedded in JOBS:
+    for stem, prefix, sub, pal_rel in JOBS:
         src = game_dir / (stem + ".BIN")
         if not src.exists():
             print(f"  skip {stem}: not found")
             continue
-        palette = load_palette(game_dir / pal_rel, embedded)
-        out_dir = REPO_ROOT / "assets" / sub
+        palette = load_palette(game_dir / pal_rel)
+        out_dir = gamedata.ASSETS / sub
         out_dir.mkdir(parents=True, exist_ok=True)
         export_sprite(src, prefix, out_dir, palette)
 
     # Phase briefing cards: one objective list per phase, drawn in the stage's
     # own in-game palette. STAGE0{m}/PHASE{n}.BIN -> assets/phase/.
-    out_dir = REPO_ROOT / "assets" / "phase"
+    out_dir = gamedata.ASSETS / "phase"
     print("\nPhase briefing cards -> assets/phase/")
     for m in range(5):
         sdir    = game_dir / f"STAGE0{m}"

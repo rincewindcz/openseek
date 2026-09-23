@@ -10,13 +10,13 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-from PIL import Image
 
-THIS_DIR  = Path(__file__).resolve().parent
-REPO_ROOT = THIS_DIR.parent
+THIS_DIR = Path(__file__).resolve().parent
 
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
+import gamedata
+import image
 
 # (BIN stem, output prefix, frames to keep, source stage, output stage). The port
 # draws the axis-aligned frame 0 and rotates at runtime, so the rotation-arc sets
@@ -50,23 +50,6 @@ PROJECTILE_SPRITES = [
 ]
 
 
-def find_game_dir(hint):
-    if hint:
-        p = Path(hint)
-        if p.exists():
-            return p
-        sys.exit(f"game dir not found: {hint}")
-    candidates = [
-        REPO_ROOT.parent / "dos" / "seek",
-        Path.home() / "dos" / "seek",
-        REPO_ROOT,
-    ]
-    for c in candidates:
-        if (c / "STAGE00").exists():
-            return c
-    sys.exit("Could not find game directory. Pass --game-dir.")
-
-
 def decode_all_frames(data):
     frame_offsets = db.read_frames(data)
     canvases = []
@@ -91,7 +74,7 @@ def shared_canvas_bounds(canvases):
 
 
 def render_frame(canvas, palette, x_min, y_min, w, h):
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    img = image.new("RGBA", (w, h), (0, 0, 0, 0))
     for (x, y), p in canvas.items():
         r = palette[p * 3]     * 4
         g = palette[p * 3 + 1] * 4
@@ -136,12 +119,12 @@ def export_sprite(src_path, prefix, out_dir, palette, keep=None):
     return names
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Export projectile sprites to assets/stage0{n}/")
     ap.add_argument("--game-dir", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    game_dir = find_game_dir(args.game_dir)
+    game_dir = gamedata.find_game_dir(args.game_dir)
     print(f"Game dir: {game_dir}")
     print()
 
@@ -154,7 +137,7 @@ def main():
             continue
         if src_stage not in palettes:
             palettes[src_stage] = (stage_dir / "PAL.BIN").read_bytes()
-        out_dir = REPO_ROOT / "assets" / f"stage{out_stage:02d}"
+        out_dir = gamedata.ASSETS / f"stage{out_stage:02d}"
         out_dir.mkdir(parents=True, exist_ok=True)
         export_sprite(src, prefix, out_dir, palettes[src_stage], keep)
 

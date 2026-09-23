@@ -36,24 +36,17 @@ Usage:
 
 import argparse
 import json
-import struct
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import decode_blitter as db
 import decode_planar as dp
+import gamedata
+import image
 
-try:
-    from PIL import Image
-except ImportError:
-    print("ERROR: Pillow is required. Install with: pip install pillow", file=sys.stderr)
-    sys.exit(1)
-
-ROOT = Path(__file__).resolve().parent.parent
-OUT_DIR = ROOT / "assets" / "fonts"
-ATLAS_WIDTH = 512
-GLYPH_PAD = 1
+ATLAS_WIDTH   = 512
+GLYPH_PAD     = 1
 BLIT_ORIGIN_Y = 100  # decode_frame anchors the blit at y0 = 100
 
 # Full sets (endchars/hichars/hichars2/keysfont/savechar) are ASCII-indexed:
@@ -94,19 +87,6 @@ for _m in range(5):
 
 # darkest ramp index still renders at this intensity, so shaded edges stay visible
 MIN_INTENSITY = 0.45
-
-
-def find_game_dir(override: str | None) -> Path:
-    candidates = []
-    if override:
-        candidates.append(Path(override).expanduser())
-    candidates += [ROOT, Path("~/dos/seek").expanduser()]
-    for c in candidates:
-        if (c / "data" / "PHASENUM.BIN").exists():
-            return c
-    print("ERROR: could not find the game files (data/PHASENUM.BIN). "
-          "Pass --game-dir.", file=sys.stderr)
-    sys.exit(1)
 
 
 def load_palette(path: Path):
@@ -156,7 +136,7 @@ def mask_ramp(glyphs, palette, key):
 
 def render_glyph(glyph, mode, ramp, keyset, palette):
     canvas, min_x, min_y, w, h = glyph
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    img = image.new("RGBA", (w, h), (0, 0, 0, 0))
     px = img.load()
     for (x, y), idx in canvas.items():
         if mode == "truecolor":
@@ -184,7 +164,7 @@ def pack(images):
         x += img.width + GLYPH_PAD
         row_h = max(row_h, img.height)
     atlas_h = y + row_h
-    atlas = Image.new("RGBA", (ATLAS_WIDTH, atlas_h), (0, 0, 0, 0))
+    atlas = image.new("RGBA", (ATLAS_WIDTH, atlas_h), (0, 0, 0, 0))
     meta = {}
     for key, (gx, gy, img, min_x, min_y) in placed.items():
         atlas.paste(img, (gx, gy), img)
@@ -233,8 +213,9 @@ def export_font(name, cfg, game_dir, palette=None):
             "advance": m["w"] + 1,
         }
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    atlas.save(OUT_DIR / f"{name}.png")
+    out_dir = gamedata.ASSETS / "fonts"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    atlas.save(out_dir / f"{name}.png")
     meta = {
         "name": name,
         "image": f"{name}.png",
@@ -244,18 +225,18 @@ def export_font(name, cfg, game_dir, palette=None):
         "charmap": cfg.get("charmap", None),
         "word": cfg.get("word", False),
     }
-    (OUT_DIR / f"{name}.json").write_text(json.dumps(meta, indent=2))
+    (out_dir / f"{name}.json").write_text(json.dumps(meta, indent=2))
     print(f"  {name}: {len(glyphs_out)} glyphs, atlas "
           f"{atlas.width}x{atlas.height}, line {line_height}px ({cfg['mode']})")
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Export Seek & Destroy bitmap fonts")
     ap.add_argument("fonts", nargs="*", help="font names (default: all)")
     ap.add_argument("--game-dir", help="path to the extracted game files")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    game_dir = find_game_dir(args.game_dir)
+    game_dir = gamedata.find_game_dir(args.game_dir)
     print(f"Game dir: {game_dir}")
     names = args.fonts or list(FONTS)
     for name in names:

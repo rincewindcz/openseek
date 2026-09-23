@@ -21,7 +21,7 @@ function MissionSelectScene:init(app)
 end
 
 function MissionSelectScene:enter()
-    self.picker:open()
+    self.picker:open(self.app.world:mission_count())
 end
 
 function MissionSelectScene:leave()
