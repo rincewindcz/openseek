@@ -7,6 +7,7 @@ local Layout   = require "engine.ui.layout"
 local Pointer  = require "engine.ui.pointer"
 local Audio    = require "engine.core.audio"
 local Log      = require "engine.core.log"
+local Assets   = require "engine.core.assets"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
 -- OPTIONS / CREDITS / HIGH SCORES / LOAD / SAVE / ORDER INFO / EXIT over the
@@ -33,6 +34,9 @@ local ROW_X   = 60      -- label left edge
 local ROW_Y0  = 38      -- first row top
 local ROW_DY  = 20      -- row pitch
 local DIM_ALPHA = 0.35  -- disabled-entry alpha
+
+-- manifest.json edition -> the label over the build tag.
+local EDITION_LABELS = { shareware = "SW DATA", registered = "FULL GAME DATA" }
 
 local ARROW_GAP = 8     -- gap between the arrow tip and the label
 local ARROW_SPEED = 12  -- higher = snappier tween between rows
@@ -92,6 +96,10 @@ function Menu:init(entries)
     -- Bottom-right build tag, drawn in the in-game CHARS font (truecolor gold).
     self.version_font = Font.get("chars")
     self.version_text = "OPENSEEK 0.9"
+    -- Which original data the pack was built from, above the build tag. A pack
+    -- exported by hand has no manifest and shows none.
+    local manifest    = Assets.manifest()
+    self.edition_text = manifest and EDITION_LABELS[manifest.edition] or nil
 
     local ok, img = pcall(love.graphics.newImage, "assets/fullscreen/MAINP.png")
     if ok then
@@ -348,8 +356,14 @@ function Menu:draw()
     -- the menu. CHARS is truecolor (no alpha tint), so only show it once the
     -- menu is fully up rather than leaving gold text over the fade-to-black.
     if fade >= 1 then
-        local vw = self.version_font:width(self.version_text)
-        self.version_font:print(self.version_text, screen_w - vw - 4, screen_h - self.version_font.line_height - 3)
+        local font = self.version_font
+        local vw   = font:width(self.version_text)
+        local vy   = screen_h - font.line_height - 3
+        font:print(self.version_text, screen_w - vw - 4, vy)
+        if self.edition_text then
+            local ew = font:width(self.edition_text)
+            font:print(self.edition_text, screen_w - ew - 4, vy - font.line_height - 2)
+        end
     end
 
     g.setColor(1, 1, 1, 1)
