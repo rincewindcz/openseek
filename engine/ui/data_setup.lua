@@ -12,10 +12,13 @@ local Class = require "engine.core.class"
 -- mobile) it only reports the missing data.
 local DataSetup = Class()
 
-local FADE_IN  = 0.25
-local HOLD     = 0.8
-local DIM_TIME = 0.5
-local DIM      = 0.3
+local FADE_IN     = 0.25
+local HOLD        = 0.8
+local DIM_TIME    = 0.5
+local DIM         = 0.45
+local LIFT        = 0.22   -- screen heights the intro card rises once dimmed
+local PANEL_TOP   = 0.5    -- highest the text panel starts, in screen heights
+local PANEL_ALPHA = 0.75
 
 local FONT_PATH = "content/fonts/loaded/loaded.ttf"
 local DESKTOP   = { Linux = true, Windows = true, ["OS X"] = true }
@@ -265,6 +268,11 @@ end
 
 -- drawing
 
+local WHITE = { 1, 1, 1 }
+local GREY  = { 0.7, 0.7, 0.7 }
+local GOLD  = { 1, 0.85, 0.3 }
+local RED   = { 1, 0.4, 0.3 }
+
 function DataSetup:_fonts(screen_h)
     local size = math.max(12, math.floor(screen_h / 18))
     if size ~= self.font_size then
@@ -274,10 +282,46 @@ function DataSetup:_fonts(screen_h)
     end
 end
 
-local function print_centered(font, text, y, screen_w)
-    local g = love.graphics
-    g.setFont(font)
-    g.print(text, math.floor((screen_w - font:getWidth(text)) / 2), math.floor(y))
+-- The text block for the current mode, top to bottom: { font, text, color,
+-- item index } rows, a "bar" row for the progress bar, a "space" row for a gap.
+function DataSetup:_rows()
+    local rows, small = {}, self.small_font
+    local function add(text, color, item) rows[#rows + 1] = { font = small, text = text, color = color, item = item } end
+    local function space() rows[#rows + 1] = { space = true } end
+    rows[1] = { font = self.font, text = self:title(), color = WHITE }
+    space()
+    if self.mode == "menu" or self.mode == "report" then
+        for i, item in ipairs(self.items) do
+            local selected = i == self.selected and self.mode == "menu"
+            add(selected and ("> " .. item.text .. " <") or item.text, selected and GOLD or WHITE, i)
+        end
+        local hint = self.items[self.selected] and self.items[self.selected].hint or ""
+        if hint ~= "" then
+            space()
+            add(hint, GREY)
+        end
+    elseif self.mode == "path" then
+        add("TYPE OR PASTE (CTRL+V) THE PATH, OR DROP IT HERE", GREY)
+        space()
+        add(self.path .. ((math.floor(self.elapsed * 2) % 2 == 0) and "_" or " "), WHITE)
+        space()
+        add("ENTER TO CONVERT, ESC TO GO BACK", GREY)
+    elseif self.mode == "running" then
+        add(self.label, WHITE)
+        rows[#rows + 1] = { bar = true }
+    elseif self.mode == "error" then
+        add("CONVERSION FAILED", RED)
+        for text in tostring(self.error):gmatch("[^\n]+") do add(text, WHITE) end
+        space()
+        add("PRESS ANY KEY", GREY)
+    end
+    return rows
+end
+
+function DataSetup:_row_height(row)
+    if row.space then return self.small_font:getHeight() * 0.6 end
+    if row.bar then return self.small_font:getHeight() * 1.2 end
+    return row.font:getHeight() * 1.25
 end
 
 function DataSetup:draw()
@@ -286,64 +330,51 @@ function DataSetup:draw()
     self:_fonts(screen_h)
     local dim = math.min(1, math.max(0, (self.elapsed - self:_dim_start()) / DIM_TIME))
     local brightness = math.min(1, self.elapsed / FADE_IN) * (1 - dim * (1 - DIM))
+    local ease = dim * dim * (3 - 2 * dim)
+
+    -- The intro card slides up so its logo clears the text panel below it.
     g.clear(0, 0, 0, 1)
     local img_w, img_h = self.intro:getDimensions()
     local scale = math.min(screen_w / img_w, screen_h / img_h)
+    local img_y = (screen_h - img_h * scale) / 2 - ease * screen_h * LIFT
     g.setColor(brightness, brightness, brightness, 1)
-    g.draw(self.intro, (screen_w - img_w * scale) / 2, (screen_h - img_h * scale) / 2, 0, scale, scale)
+    g.draw(self.intro, (screen_w - img_w * scale) / 2, img_y, 0, scale, scale)
 
-    local line_h = self.font:getHeight()
-    local small_h = self.small_font:getHeight()
-    local y = screen_h * 0.52
-    g.setColor(1, 1, 1, dim)
-    print_centered(self.font, self:title(), y, screen_w)
-    y = y + line_h * 1.4
+    local rows = self:_rows()
+    local total, width = 0, 0
+    for _, row in ipairs(rows) do
+        total = total + self:_row_height(row)
+        if row.text then width = math.max(width, row.font:getWidth(row.text)) end
+    end
+    local pad     = self.small_font:getHeight()
+    local top     = math.max(screen_h * PANEL_TOP, screen_h - total - pad * 3)
+    local panel_w = math.min(screen_w - pad * 2, math.max(width, screen_w * 0.45) + pad * 4)
+    g.setColor(0, 0, 0, PANEL_ALPHA * dim)
+    g.rectangle("fill", (screen_w - panel_w) / 2, top - pad, panel_w, total + pad * 2, pad * 0.5)
+    g.setColor(0.45, 0.45, 0.8, 0.5 * dim)
+    g.rectangle("line", (screen_w - panel_w) / 2, top - pad, panel_w, total + pad * 2, pad * 0.5)
+
     self.item_rects = {}
-
-    if self.mode == "menu" or self.mode == "report" then
-        for i, item in ipairs(self.items) do
-            local selected = i == self.selected and self.mode == "menu"
-            local text = selected and ("> " .. item.text .. " <") or item.text
-            local w = self.small_font:getWidth(text)
-            g.setColor(1, selected and 0.85 or 1, selected and 0.3 or 1, dim)
-            print_centered(self.small_font, text, y, screen_w)
-            self.item_rects[i] = { x = (screen_w - w) / 2, y = y, w = w, h = small_h }
-            y = y + small_h * 1.3
+    local y = top
+    for _, row in ipairs(rows) do
+        local h = self:_row_height(row)
+        if row.bar then
+            local bar_w, bar_h = panel_w - pad * 4, math.max(4, math.floor(pad * 0.4))
+            local bar_x = (screen_w - bar_w) / 2
+            local bar_y = y + (h - bar_h) / 2
+            g.setColor(1, 1, 1, 0.25 * dim)
+            g.rectangle("fill", bar_x, bar_y, bar_w, bar_h)
+            g.setColor(GOLD[1], GOLD[2], GOLD[3], dim)
+            g.rectangle("fill", bar_x, bar_y, bar_w * self.progress, bar_h)
+        elseif row.text then
+            local w = row.font:getWidth(row.text)
+            local x = math.floor((screen_w - w) / 2)
+            g.setFont(row.font)
+            g.setColor(row.color[1], row.color[2], row.color[3], dim)
+            g.print(row.text, x, math.floor(y))
+            if row.item then self.item_rects[row.item] = { x = x, y = y, w = w, h = h } end
         end
-        local hint = self.items[self.selected] and self.items[self.selected].hint or ""
-        g.setColor(0.7, 0.7, 0.7, dim)
-        print_centered(self.small_font, hint, y + small_h * 0.5, screen_w)
-    elseif self.mode == "path" then
-        g.setColor(0.7, 0.7, 0.7, dim)
-        print_centered(self.small_font, "TYPE OR PASTE (CTRL+V) THE PATH, OR DROP IT HERE", y, screen_w)
-        y = y + small_h * 1.5
-        local cursor = (math.floor(self.elapsed * 2) % 2 == 0) and "_" or " "
-        g.setColor(1, 1, 1, dim)
-        print_centered(self.small_font, self.path .. cursor, y, screen_w)
-        y = y + small_h * 1.5
-        g.setColor(0.7, 0.7, 0.7, dim)
-        print_centered(self.small_font, "ENTER TO CONVERT, ESC TO GO BACK", y, screen_w)
-    elseif self.mode == "running" then
-        g.setColor(1, 1, 1, dim)
-        print_centered(self.small_font, self.label, y, screen_w)
-        y = y + small_h * 1.5
-        local bar_w, bar_h = screen_w * 0.4, math.max(4, math.floor(small_h * 0.4))
-        local bar_x = (screen_w - bar_w) / 2
-        g.setColor(1, 1, 1, 0.25 * dim)
-        g.rectangle("fill", bar_x, y, bar_w, bar_h)
-        g.setColor(1, 0.85, 0.3, dim)
-        g.rectangle("fill", bar_x, y, bar_w * self.progress, bar_h)
-    elseif self.mode == "error" then
-        g.setColor(1, 0.4, 0.3, dim)
-        print_centered(self.small_font, "CONVERSION FAILED", y, screen_w)
-        y = y + small_h * 1.5
-        g.setColor(1, 1, 1, dim)
-        for text in tostring(self.error):gmatch("[^\n]+") do
-            print_centered(self.small_font, text, y, screen_w)
-            y = y + small_h * 1.2
-        end
-        g.setColor(0.7, 0.7, 0.7, dim)
-        print_centered(self.small_font, "PRESS ANY KEY", y + small_h * 0.5, screen_w)
+        y = y + h
     end
     g.setColor(1, 1, 1, 1)
 end
