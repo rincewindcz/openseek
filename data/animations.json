@@ -859,30 +859,23 @@
     "fps": 1,
     "loop": false
   },
-  "vtank_steel": {
+  "vtank_jungle": {
     "frames": [
       "stage21/jtank_f0.png"
     ],
     "fps": 1,
     "loop": false
   },
-  "vtank_steel_top": {
+  "vtank_jungle_top": {
     "frames": [
       "stage21/jtanktop_f0.png"
     ],
     "fps": 1,
     "loop": false
   },
-  "vtank_rust": {
+  "vtank_desert2_top": {
     "frames": [
-      "stage31/tank_f0.png"
-    ],
-    "fps": 1,
-    "loop": false
-  },
-  "vtank_rust_top": {
-    "frames": [
-      "stage31/tankt2_f0.png"
+      "player/vtank_desert2_top_f0.png"
     ],
     "fps": 1,
     "loop": false

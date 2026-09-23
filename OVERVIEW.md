@@ -391,7 +391,7 @@ replay header `player.N.skin` / `player.N.tank`).
 | Vehicle | Variants | Art |
 |---------|----------|-----|
 | Chopper | GREEN, ARCTIC, DESERT | `CHOP*1..3` player sets (2 and 3 unused in the original). |
-| Tank | GREEN, DESERT, ARCTIC, STEEL, RUST | Player `TANKBGRN` / `TANKTOP`; enemy hull + turret pairs from stage01 (`tank` / `tanktop`), stage11 (`stank`), stage21 (`jtank`), stage31 (`tank` / `tankt2`, night palette). |
+| Tank | GREEN, DESERT, ARCTIC, JUNGLE, DESERT 2 | Player `TANKBGRN` / `TANKTOP`; enemy hull + turret pairs from stage01 (`tank` / `tanktop`), stage11 (`stank`), stage21 (`jtank`). DESERT 2 is the mission 3 night tank (desert hull + `TANKT2`), its turret re-rendered in the mission 0 day palette as `player/vtank_desert2_top_f0.png` (`export_player.py`); the enemy night tank keeps its own art. |
 
 - Tank fields: `hull` / `turret` clips (`vtank_*` in `data/animations.json`),
   `hull_anchor` / `turret_anchor` pivots from the stage `render` offsets
@@ -525,10 +525,10 @@ and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
 
 | Tool | Output |
 |------|--------|
-| `export_love2d.py all` | `assets/stageMP.json`, `assets/stageMP/` for the missions present |
+| `export_love2d.py all` | `assets/stageMP.json`, `assets/stageMP/` for the missions present (`CLEAR_INDICES`: per-sprite palette indices exported transparent, the sand dune's black crest) |
 | `export_fullscreen.py` | `assets/fullscreen/`: every fullscreen BIN (`NAME.png`, `STAGE0N_NAME.png`) in its own palette |
 | `export_projectiles.py` | `assets/stage00/` projectiles |
-| `export_player.py` | `assets/player/` |
+| `export_player.py` | `assets/player/`, plus `VARIANT_SPRITES` (the DESERT 2 turret in the day palette) |
 | `export_hud.py` | `assets/hud/` |
 | `export_animations.py` | `assets/effects/` |
 | `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its stage palette) |

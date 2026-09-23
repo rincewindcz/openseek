@@ -42,6 +42,14 @@ import decode_blitter as db
 import decode_level
 import gamedata
 
+# Palette indices exported transparent per sprite file. The sand dune draws
+# its crest in index 0 (black), which reads as a hole over the desert floor.
+# Other sprites keep index 0: CMDRHUT's roof shading and the jeep's wheels use it.
+CLEAR_INDICES = {
+    "sanddune.bin": {0},
+}
+
+
 # Kinds that draw a unit sprite (soldiers) carry a dead pose a fixed frame offset
 # past their alive frame in the same arc-pair BIN (ENEMY.BIN: alive arc 0-31,
 # dead arc 32-63). Exported as a sibling {stem}_f{frame+offset}.png that the
@@ -65,8 +73,8 @@ def find_bin(game_dir: Path, name: str, source_dir: int, mission: int) -> Path |
     return None
 
 
-def render_class_frame(bin_path: Path, frame: int, palette: bytes):
-    """Decode one frame; returns (PIL image, ox, oy) or (None, why, None).
+def render_class_frame(bin_path: Path, frame: int, palette: bytes, clear=()):
+    """Decode one frame; returns (image, ox, oy) or (None, why, None).
     (ox, oy) is the PNG top-left offset from the entity position."""
     data = bin_path.read_bytes()
     frames = db.read_frames(data)
@@ -77,6 +85,9 @@ def render_class_frame(bin_path: Path, frame: int, palette: bytes):
     canvas, status = db.decode_frame(data, off, end)
     if status != "ok" or not canvas:
         return None, status or "empty", None
+    canvas = {xy: i for xy, i in canvas.items() if i not in clear}
+    if not canvas:
+        return None, "empty", None
     img = db.render(canvas, palette, scale=1)
     min_x = min(c[0] for c in canvas)
     min_y = min(c[1] for c in canvas)
@@ -121,7 +132,8 @@ def export_stage(game_dir: Path, mission: int, phase: int) -> None:
                 failed.append((asset["file"], "file not found"))
                 rendered[key] = None
             else:
-                img, ox, oy = render_class_frame(src, frame, palette)
+                clear = CLEAR_INDICES.get(asset["file"].lower(), ())
+                img, ox, oy = render_class_frame(src, frame, palette, clear)
                 if img is None:
                     failed.append((f"{asset['file']} f{frame}", ox))
                     rendered[key] = None

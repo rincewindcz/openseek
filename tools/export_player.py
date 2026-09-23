@@ -5,9 +5,11 @@ Export player sprites (chopper + tank) to assets/player/.
 Each animation group uses a shared canvas size (max bounding box across all
 frames) so all frames can be drawn from the same center anchor.
 
+Also re-renders enemy vehicle parts a player tank variant borrows in a day
+palette (VARIANT_SPRITES).
+
 Usage:
-  python3 tools/export_player.py
-  python3 tools/export_player.py --game-dir /path/to/dos/seek
+  python3 tools/export_player.py --game-dir /path/to/seek
 """
 
 import argparse
@@ -18,6 +20,7 @@ THIS_DIR = Path(__file__).resolve().parent
 
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
+import export_love2d
 import gamedata
 import image
 
@@ -50,6 +53,16 @@ PLAYER_SPRITES = [
     ("TANKTOP",  "tanktop",  {0},  None),
     ("CHOPSHAD", "chopshad", None, None),
     ("TANKSHAD", "tankshad", None, None),
+]
+
+
+# Enemy vehicle parts re-rendered for a player tank variant: (BIN under the game
+# dir, palette, output name). The mission 3 turret is drawn only in the night
+# palette on its stages; in the desert palette it makes the DESERT 2 variant
+# (data/vehicle_variants.json), usable on every mission. Cropped like the stage
+# sprites (export_love2d), so the variant's anchors match the enemy tank's.
+VARIANT_SPRITES = [
+    ("STAGE03/TANKT2.BIN", "STAGE00/PAL.BIN", "vtank_desert2_top_f0.png"),
 ]
 
 
@@ -163,6 +176,18 @@ def main(argv=None):
             if not src.exists():
                 continue
             export_sprite_group(src, prefix + "n", out_dir, night, keep)
+
+    print()
+    for rel, pal_rel, name in VARIANT_SPRITES:
+        src, pal_src = game_dir / rel, game_dir / pal_rel
+        if not src.exists() or not pal_src.exists():
+            print(f"  skip {name}: {rel} not found")
+            continue
+        img = export_love2d.render_class_frame(src, 0, pal_src.read_bytes())[0]
+        if img is None:
+            continue
+        img.save(out_dir / name)
+        print(f"  {rel} -> assets/player/{name}")
 
 
 if __name__ == "__main__":
