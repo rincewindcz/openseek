@@ -4,39 +4,66 @@
 local Class      = require "engine.core.class"
 local Scene      = require "engine.core.scene"
 local Font       = require "engine.core.font"
-local Layout     = require "engine.ui.layout"
+local Assets     = require "engine.core.assets"
 local InfoScreen = require "engine.ui.info_screen"
+local json       = require "lib.json"
 
 -- Credits scene: the CREDITS backdrop with the flying-in CREDITS title, the
--- authoring lines, and an EXIT button bottom-right. Reached from the main menu's
+-- credits entries, and an EXIT button bottom-right. data/credits.json places
+-- each entry in the 320x240 design space and names its style: a heading over a
+-- name (large for openSEEK, small for the original team, in the fonts of the
+-- original credits) or a single label line. Reached from the main menu's
 -- CREDITS entry via replace(); EXIT returns to the menu the same way.
 local Credits = Class(Scene)
 
 Credits.ui_pointer = true
 
-local DW = Layout.DESIGN_W
-local NAME_COLOR = { 1, 0.8, 0.2 }   -- high-score gold
+local DATA_PATH     = "data/credits.json"
+local FALLBACK_FONT = "hichars"   -- a pack exported before credchars existed
+local WHITE         = { 1, 1, 1 }
+
+local function font(name)
+    if not name or not Assets.exists("fonts/" .. name .. ".json") then name = FALLBACK_FONT end
+    return Font.get(name)
+end
 
 function Credits:init(app)
     Scene.init(self, app)
     self.screen = InfoScreen:new("CREDITS", "credits_title")
     self.screen.on_exit = function() self.app.scenes:replace("main_menu") end
 
-    self.heading_font = Font.get("mainmen")   -- menu word art (uppercase only)
-    self.name_font    = Font.get("hichars")   -- high-score font
-
-    -- mainmen has no lowercase glyphs, so the heading is drawn upper case.
-    self.heading = "OPENSEEK PROGRAMMING"
-    self.name    = "Michal Genserek"
-
-    self.screen.on_draw_content = function(_, fade)
-        self.heading_font:print(self.heading,
-            (DW - self.heading_font:width(self.heading)) / 2, 118,
-            { color = { 1, 1, 1, fade } })
-        self.name_font:print(self.name,
-            (DW - self.name_font:width(self.name)) / 2, 142,
-            { color = { NAME_COLOR[1], NAME_COLOR[2], NAME_COLOR[3], fade } })
+    local raw  = love.filesystem.getInfo(DATA_PATH) and love.filesystem.read(DATA_PATH)
+    local data = raw and json.decode(raw) or {}
+    self.styles = {}
+    for name, s in pairs(data.styles or {}) do
+        self.styles[name] = {
+            heading_font = s.heading_font and font(s.heading_font),
+            name_font    = s.name_font and font(s.name_font),
+            font         = s.font and font(s.font),
+            name_dy      = s.name_dy or 0,
+            color        = s.color or WHITE,
+        }
     end
+    self.entries = data.entries or {}
+
+    self.screen.on_draw_content = function(_, fade) self:_draw_entries(fade) end
+end
+
+function Credits:_draw_entries(fade)
+    for _, e in ipairs(self.entries) do
+        local s = self.styles[e.style]
+        if s then
+            local color = { s.color[1], s.color[2], s.color[3], fade }
+            if e.text and s.font then s.font:print(e.text, e.x, e.y, { color = color }) end
+            if e.heading and s.heading_font then
+                s.heading_font:print(e.heading, e.x, e.y, { color = color })
+            end
+            if e.name and s.name_font then
+                s.name_font:print(e.name, e.x, e.y + s.name_dy, { color = color })
+            end
+        end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function Credits:enter()             self.screen:open()          end

@@ -1,9 +1,10 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class = require "engine.core.class"
-local Scene = require "engine.core.scene"
-local Font  = require "engine.core.font"
+local Class  = require "engine.core.class"
+local Scene  = require "engine.core.scene"
+local Font   = require "engine.core.font"
+local Assets = require "engine.core.assets"
 
 -- Test overlay scene: renders every original bitmap font (assets/fonts/, from
 -- tools/export_fonts.py) so glyph decode, mapping, and runtime tinting can be
@@ -29,16 +30,19 @@ function FontGallery:draw()
     local y     = 40
     local scale = 2
     for _, name in ipairs(Font.NAMES) do
-        local font = Font.get(name)
-        g.setColor(0.55, 0.6, 0.7, 1)
-        g.print(name, 10, y)
-        local x = 130
-        if font.word then
-            font:print_word(x, y, { scale = scale, color = FONT_GOLD })
-        else
-            font:print(FONT_SAMPLE, x, y, { scale = scale, color = FONT_GOLD })
+        -- The shareware pack lacks the later missions' OVERKILL fonts.
+        if Assets.exists("fonts/" .. name .. ".json") then
+            local font = Font.get(name)
+            g.setColor(0.55, 0.6, 0.7, 1)
+            g.print(name, 10, y)
+            local x = 130
+            if font.word then
+                font:print_word(x, y, { scale = scale, color = FONT_GOLD })
+            else
+                font:print(FONT_SAMPLE, x, y, { scale = scale, color = FONT_GOLD })
+            end
+            y = y + font.line_height * scale + 16
         end
-        y = y + font.line_height * scale + 16
     end
     g.setColor(1, 1, 1)
 end

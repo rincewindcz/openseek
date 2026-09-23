@@ -54,7 +54,7 @@ import export_sounds
 import gamedata
 from unjam import ArchiveError, JamArchive
 
-PACK_SCHEMA = 2
+PACK_SCHEMA = 3
 
 SHAREWARE_ZIP = "seeksw1.zip"
 SHAREWARE_MD5 = "0bf3fa0359bbc3186d6041f1cab8b524"

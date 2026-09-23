@@ -1,0 +1,15 @@
+{
+  "styles": {
+    "large": { "heading_font": "main", "name_font": "credchars", "name_dy": 18 },
+    "small": { "heading_font": "credchars", "name_font": "chars", "name_dy": 11 },
+    "label": { "font": "hichars", "color": [0.85, 0.87, 0.92] }
+  },
+  "entries": [
+    { "style": "large", "x": 16,  "y": 40,  "heading": "OPENSEEK", "name": "MICHAL GENSEREK" },
+    { "style": "label", "x": 16,  "y": 92,  "text": "ORIGINAL GAME AUTHORS" },
+    { "style": "small", "x": 16,  "y": 110, "heading": "PROGRAMMING", "name": "AARON KOOLEN" },
+    { "style": "small", "x": 168, "y": 110, "heading": "GRAPHICS", "name": "ROD SMITH" },
+    { "style": "small", "x": 16,  "y": 140, "heading": "3D GRAPHICS", "name": "GRANT WALLIS" },
+    { "style": "small", "x": 168, "y": 140, "heading": "SOUND LIBRARY", "name": "PAUL ANDREWS" }
+  ]
+}

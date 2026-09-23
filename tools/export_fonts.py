@@ -72,6 +72,10 @@ FONTS = {
     "endchars": {"src": "data/ENDCHARS.BIN",  "mode": "mask",
                  "pal": "STAGE00/PAL.BIN", "key": [255, 0, 255]},
     "hichars":  {"src": "data/HICHARS.BIN",   "mode": "mask"},
+    # HICHARS in the credits screen's palette: the gold face and black shadow
+    # of the names baked into CREDNMS, for credits lines the original lacks.
+    "credchars": {"src": "data/HICHARS.BIN",  "mode": "truecolor",
+                  "pal": "data/CREDITS.BIN"},
     "hichars2": {"src": "data/HICHARS2.BIN",  "mode": "mask"},
     "keysfont": {"src": "data/KEYSFONT.BIN",  "mode": "mask"},
     "savechar": {"src": "data/SAVECHAR.BIN",  "mode": "mask"},

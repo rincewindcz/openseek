@@ -149,7 +149,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `main_menu` | Main menu; pushed over a running game on Esc. NEW GAME replaces it with `new_game`. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL (`mainmen` has no B J K Q Y Z). |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
-| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`; top-10 table with name entry, one per qualifying player after a co-op run. |
+| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a label in the small style (`credchars` heading, `chars` name). High scores: top-10 table with name entry, one per qualifying player after a co-op run. |
 | `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
 | `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
@@ -476,6 +476,7 @@ galleries, debug mission picker, headless checks.
 | `data/missions.json` | Section 9. |
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
+| `data/credits.json` | Credits: `styles` (fonts, name offset, label colour) and positioned `entries` (`heading` / `name`, or a label `text`), 320x240 design space. |
 | `data/animations.json` | Named animation clips. |
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
 | `data/audio.json` | Sound events. |
@@ -531,7 +532,7 @@ and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
 | `export_player.py` | `assets/player/`, plus `VARIANT_SPRITES` (the DESERT 2 turret in the day palette) |
 | `export_hud.py` | `assets/hud/` |
 | `export_animations.py` | `assets/effects/` |
-| `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its stage palette) |
+| `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its stage palette; `credchars`: HICHARS in the CREDITS palette) |
 | `export_mainmen.py` | `assets/mainmen/` (words, generated arrow cursor), `assets/mainmen/font/`, `assets/fonts/mainmen.*`, `assets/fonts/main.*` (plus `content/fonts/main_synth/`); runtime menu palette in `MENU_PALETTE` |
 | `export_screens.py` | CREDANIM / HIANIM (CREDITS / HISCORE palette, de-wrapped by `menutitle.py`), POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards |
 | `export_mission.py` | `assets/mission/` |
