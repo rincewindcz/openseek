@@ -94,6 +94,7 @@ end
 function Renderer:_draw_world()
     self:draw_ground()
     self:draw_objects()
+    self:draw_explosions()
 end
 
 -- Run a layer function once per overlapping map copy so the world reads as
@@ -287,16 +288,28 @@ function Renderer:_draw_entity(e, vp, mode)
                 g.draw(img, e.x + hs.ox, e.y + hs.oy, 0, 1, 1, iw / 2, ih / 2)
             end
         end
-    else
-        -- Not alive: the persistent crater is drawn earlier (see _draw_craters)
-        -- so it stays at the bottom of the stack, under every entity.
-        if e.state == "exploding" and e.anim then
-            local img = e.anim:current_image()
-            if img then
-                local iw, ih = img:getDimensions()
-                g.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
-            end
-        end
+    end
+    -- Not alive: the persistent crater is drawn earlier (see _draw_craters) and
+    -- the death explosion later (draw_explosions), over the pickups it drops.
+end
+
+-- Death explosions of the objects, drawn after the pickups so a building's
+-- blast is not hidden by the powerup it leaves behind.
+function Renderer:draw_explosions()
+    local w = self.world
+    self:_world_pass(function(_, vp)
+        love.graphics.setColor(1, 1, 1)
+        World.each_in_y(w.objects, w.object_index, vp.y0, vp.y1, self._draw_explosion, self, vp)
+    end)
+end
+
+function Renderer:_draw_explosion(e, vp)
+    if e.state ~= "exploding" or not e.anim or (e.type_data and e.type_data.sprite)
+    or e.x < vp.x0 or e.x > vp.x1 or e.y < vp.y0 or e.y > vp.y1 then return end
+    local img = e.anim:current_image()
+    if img then
+        local iw, ih = img:getDimensions()
+        love.graphics.draw(img, e.x, e.y, 0, 1, 1, iw / 2, ih / 2)
     end
 end
 

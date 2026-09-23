@@ -385,6 +385,7 @@ function Gameplay:draw()
     end
     app.saboteur:draw_markers()  -- target reticles
     app.powerups:draw()
+    app.renderer:draw_explosions()   -- building blasts over the pickups they drop
     local soft = app.postfx:soft_shadows_active()
     app.postfx:begin_shadows()
     app.helis:draw_shadows(soft) -- aircraft ground shadows, under the flyers
