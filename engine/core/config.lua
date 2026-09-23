@@ -157,11 +157,13 @@ local Config = {
     -- Small details (engine/game/detail_fx.lua, data/detail_fx.json), all
     -- presentation only: the tank turret kicks back on a shell shot with muzzle
     -- smoke, the chaingun spills casings, a tank at speed kicks up tread dust,
-    -- and destroyed buildings and tanks keep smoking.
+    -- destroyed buildings and tanks keep smoking, and a tank shell bursts where
+    -- it strikes.
     tank_recoil   = true,
     shell_casings = true,
     tread_dust    = true,
     wreck_smoke   = true,
+    shell_impact  = true,
 
     -- Play the short openSEEK engine card before the TITLE card on every launch
     -- (engine/scenes/title.lua). Independent of this key, the card plays once on
@@ -184,7 +186,7 @@ local PERSISTED = {
     "explosive_trees", "tree_crush_speed", "hit_flash", "camera_shake", "camera_shake_amount",
     "radar_zoom_grow", "radar_backdrop", "engine_intro", "aim_laser",
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
-    "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke",
+    "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
     "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",

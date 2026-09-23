@@ -136,6 +136,7 @@ local CATEGORIES = {
         { key = "shell_casings",       label = "SHELL CASINGS",   kind = "toggle" },
         { key = "tread_dust",          label = "TREAD DUST",      kind = "toggle" },
         { key = "wreck_smoke",         label = "WRECK SMOKE",     kind = "toggle" },
+        { key = "shell_impact",        label = "SHELL IMPACT",    kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }

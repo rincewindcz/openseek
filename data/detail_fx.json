@@ -38,6 +38,10 @@
     "jitter": 2,
     "max": 200
   },
+  "impact": {
+    "weapons": { "shells": "explosion_medium" },
+    "scale": 1
+  },
   "wreck_smoke": {
     "explosions": {
       "large":  { "time": 25, "interval": 0.35 },

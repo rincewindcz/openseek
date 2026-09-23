@@ -433,7 +433,7 @@ Toggleable extras (EXTRAS page):
 | `hit_flash` | off | Damaged armed enemies flash white (`game/impact_fx`). |
 | `camera_shake`, `camera_shake_amount` | off, 1.0 | Explosions and hits near the camera shake the view, scaled by the amount (`game/impact_fx`). |
 | `tank_tracks` | on | A driving tank leaves faint tread marks that fade out (`game/tracks`). |
-| `tank_recoil`, `shell_casings`, `tread_dust`, `wreck_smoke` | on | Turret kick and muzzle smoke on a shell shot, chaingun casings, dust behind a fast tank, smoking wrecks (`game/detail_fx`). |
+| `tank_recoil`, `shell_casings`, `tread_dust`, `wreck_smoke`, `shell_impact` | on | Turret kick and muzzle smoke on a shell shot, chaingun casings, dust behind a fast tank, smoking wrecks, an explosion where a tank shell strikes (`game/detail_fx`). |
 
 Options:
 

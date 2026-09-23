@@ -11,7 +11,9 @@ local Animation = require "engine.core.animation"
 --   shell_casings the chaingun spills brass casings that settle and fade
 --   tread_dust    a tank at speed kicks up dust (snow in winter) behind its treads
 --   wreck_smoke   destroyed buildings and tanks keep smoking for a while
--- Fed one way by the World forwarders (:weapon_fired, :wreck) and by the players
+--   shell_impact  a tank shell bursts into an explosion where it strikes
+-- Fed one way by the World forwarders (:weapon_fired, :projectile_impact, :wreck)
+-- and by the players
 -- read after each tick; never read back by the simulation (DETERMINISM.md D2).
 -- Tuning is data/detail_fx.json.
 local DetailFX = Class()
@@ -50,6 +52,7 @@ function DetailFX:reset()
     self.casings    = {}   -- {x, y, vx, vy, rot, spin, age}
     self.dusts      = {}   -- {x, y, vx, vy, age}
     self.wrecks     = {}   -- {x, y, left, time, interval, timer}
+    self.impacts    = {}   -- {anim, x, y, scale}
 end
 
 -- emitters
@@ -102,6 +105,16 @@ function DetailFX:_casing(player)
         vy = vy * spec.carry + math.sin(out) * speed,
         rot = math.random() * 2 * math.pi, spin = (math.random() - 0.5) * 2 * spec.spin, age = 0,
     }
+end
+
+-- EXTRA (shell_impact): a player round of a listed weapon struck at (x, y).
+-- Returns the clip it plays, or nil.
+function DetailFX:impact(x, y, weapon_name)
+    local spec = self.data.impact
+    local clip = spec and spec.weapons[weapon_name or ""]
+    if not Config.shell_impact or not clip then return nil end
+    self.impacts[#self.impacts + 1] = { anim = Animation.new(clip), x = x, y = y, scale = spec.scale or 1 }
+    return clip
 end
 
 -- EXTRA (wreck_smoke): an entity died with the given explosion size.
@@ -221,6 +234,12 @@ function DetailFX:update(dt, players)
     end
     for _, p in ipairs(players) do self:_tread_dust(dt, p) end
     self.smokes = update_puffs(self.smokes, dt)
+    local impacts = {}
+    for _, b in ipairs(self.impacts) do
+        b.anim:update(dt)
+        if not b.anim:is_done() then impacts[#impacts + 1] = b end
+    end
+    self.impacts = impacts
     self:_update_dusts(dt)
     self:_update_casings(dt)
     self:_update_wrecks(dt)
@@ -317,9 +336,17 @@ end
 
 -- Air layer, over the objects: muzzle and wreck smoke.
 function DetailFX:draw_air()
-    if #self.smokes == 0 then return end
-    draw_puffs(self.smokes)
-    love.graphics.setColor(1, 1, 1)
+    local g = love.graphics
+    g.setColor(1, 1, 1)
+    for _, b in ipairs(self.impacts) do   -- EXTRA (shell_impact)
+        local img = b.anim:current_image()
+        if img then
+            local w, h = img:getDimensions()
+            g.draw(img, b.x, b.y, 0, b.scale, b.scale, w / 2, h / 2)
+        end
+    end
+    if #self.smokes > 0 then draw_puffs(self.smokes) end
+    g.setColor(1, 1, 1)
 end
 
 return DetailFX

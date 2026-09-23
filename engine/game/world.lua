@@ -819,6 +819,17 @@ function World:weapon_fired(x, y, weapon_name, shooter)
     if self.detailfx then self.detailfx:fire(x, y, weapon_name, shooter) end
 end
 
+-- A player round struck a target (DetailFX shell_impact); an impact explosion
+-- lights and sounds like any other of its size.
+function World:projectile_impact(x, y, weapon_name)
+    local clip = self.detailfx and self.detailfx:impact(x, y, weapon_name)
+    local size = clip and clip:match("^explosion_(%a+)")
+    if size then
+        self:explosion_light(x, y, size)
+        self:sound("explosion." .. size, x, y)
+    end
+end
+
 -- An entity died with the given explosion size (a smoking wreck, DetailFX).
 function World:wreck(x, y, explosion)
     if self.detailfx then self.detailfx:wreck(x, y, explosion) end

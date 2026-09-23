@@ -26,6 +26,7 @@ function Projectile:init(p)
     self.lifetime   = p.lifetime
     self.radius     = p.radius
     self.weapon_def = p.weapon_def
+    self.weapon     = p.weapon      -- weapons.json key
     self.angle_rad  = p.angle_rad  -- Love2D draw rotation (radians)
     self.max_range  = p.max_range
     self.accel      = p.accel or 0  -- forward acceleration (px/s^2), e.g. tracers
@@ -303,6 +304,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             lifetime   = weapon_def.lifetime    or 2,
             radius     = weapon_def.proj_radius or 3,
             weapon_def = weapon_def,
+            weapon     = weapon_name,
             sprite     = sprite,
             max_range  = max_range,
             accel      = weapon_def.proj_accel or 0,
@@ -803,6 +805,7 @@ function CombatSystem:_check_hit(projectile)
                     end
                     if projectile.aoe > 0 then self:_apply_aoe(projectile) end
                     if killed then self:_credit_kill(projectile.shooter, e, killed) end
+                    self.world:projectile_impact(projectile.x, projectile.y, projectile.weapon)
                     return true
                 end
             end
@@ -817,6 +820,7 @@ function CombatSystem:_check_hit(projectile)
                     if dx * dx + dy * dy < hit_range * hit_range then
                         self.heli_sys:hit(h, projectile.damage, projectile.shooter)
                         if projectile.aoe > 0 then self:_apply_aoe(projectile) end
+                        self.world:projectile_impact(projectile.x, projectile.y, projectile.weapon)
                         return true
                     end
                 end
