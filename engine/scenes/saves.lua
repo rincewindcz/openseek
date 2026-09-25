@@ -6,6 +6,7 @@ local Scene    = require "engine.core.scene"
 local Font     = require "engine.core.font"
 local Layout   = require "engine.ui.layout"
 local Pointer  = require "engine.ui.pointer"
+local Hint     = require "engine.ui.hint"
 local Audio    = require "engine.core.audio"
 local Savegame = require "engine.game.savegame"
 local Log      = require "engine.core.log"
@@ -15,7 +16,7 @@ local Log      = require "engine.core.log"
 -- rather than the same screen (the original's own SAVEPIC art bakes eight fixed
 -- slot boxes, which this list cannot use). The list is unlimited and scrolls,
 -- every slot showing the name the player typed and the phase the run is parked
--- on, with the highlighted slot's score, medals and spare vehicles under the
+-- on, with the highlighted slot's score, medals and lives under the
 -- list. Reached from the mission briefing's SAVE and LOAD buttons and from the
 -- main menu's LOAD entry.
 --
@@ -330,7 +331,7 @@ function Saves:_draw_detail(fade)
         end
         text = table.concat(parts, "   ")
     elseif slot then
-        text = string.format("SCORE %d   MEDALS %d   SPARE %d",
+        text = string.format("SCORE %d   MEDALS %d   LIVES %d",
             math.floor(tonumber(slot.score) or 0),
             math.floor(tonumber((slot.loadout or {}).medals) or 0),
             math.floor(tonumber(slot.lives) or 0))
@@ -390,16 +391,15 @@ function Saves:draw()
 
     local hint
     if self.entry then
-        hint = "TYPE A NAME   ENTER SAVES   ESC CANCELS"
+        hint = "TYPE A NAME   {ENTER} SAVES   {ESC} CANCELS"
     elseif self.pending_delete then
         hint = "PRESS DEL AGAIN TO ERASE THIS SLOT"
     elseif self.mode == "save" then
-        hint = "UP/DOWN SELECT   ENTER SAVE   DEL ERASE   ESC BACK"
+        hint = "{UP/DOWN} SELECT   {ENTER} SAVE   {DEL} ERASE   {ESC} BACK"
     else
-        hint = "UP/DOWN SELECT   ENTER LOAD   DEL ERASE   ESC BACK"
+        hint = "{UP/DOWN} SELECT   {ENTER} LOAD   {DEL} ERASE   {ESC} BACK"
     end
-    self.hint_font:print(hint, (DESIGN_W - self.hint_font:width(hint)) / 2, FOOTER_Y,
-        { color = { 1, 1, 1, 0.6 * fade } })
+    Hint.print_centered(self.hint_font, hint, DESIGN_W, FOOTER_Y, { alpha = fade })
 
     g.pop()
     g.setColor(1, 1, 1, 1)

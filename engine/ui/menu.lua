@@ -10,15 +10,15 @@ local Log      = require "engine.core.log"
 local Assets   = require "engine.core.assets"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
--- OPTIONS / CREDITS / HIGH SCORES / LOAD / SAVE / ORDER INFO / EXIT over the
--- MAINP backdrop, with a triangular cursor next to the highlighted entry).
+-- OPTIONS / CREDITS / HIGH SCORES / LOAD / ADVANCED / EXIT over the MAINP
+-- backdrop, with a triangular cursor next to the highlighted entry).
 -- Purely presentational: confirming an entry plays a short flash/fade-out and
 -- then calls self.on_select(id); the caller (main.lua) sets that callback and
 -- decides what each id means.
 --
--- Entry labels are drawn from the `mainmen` bitmap font: the original MAINMEN
+-- Entry labels are drawn from the `main` bitmap font: the original MAINMEN
 -- word art sliced per letter and packed into a standard font atlas
--- (assets/fonts/mainmen.{png,json}, see tools/export_mainmen.py), truecolor
+-- (assets/fonts/main.{png,json}, see tools/export_mainmen.py), truecolor
 -- through the captured runtime menu palette so glyphs match the original screen
 -- pixel for pixel. The selection arrow is the gold triangle cropped from
 -- MAINMENU.BMP (assets/mainmen/arrow.png).
@@ -63,8 +63,7 @@ local Menu_DEFAULT_ENTRIES = {
     { id = "credits",    label = "CREDITS" },
     { id = "hiscores",   label = "HIGH SCORES" },
     { id = "load",       label = "LOAD",       enabled = false },
-    { id = "mission",    label = "MISSION" },
-    { id = "editor",     label = "EDITOR",     gap_after = 8 },
+    { id = "advanced",   label = "ADVANCED",   gap_after = 8 },
     { id = "exit",       label = "EXIT" },
 }
 
@@ -80,8 +79,11 @@ function Menu:init(entries)
     self.active  = false
 
     -- The original main-menu word art, packed per letter into a standard font
-    -- atlas; every entry is composed from it (uppercase only).
-    self.font = Font.get("mainmen")
+    -- atlas; every entry is composed from it (uppercase only). MAIN is the full
+    -- alphabet (the twenty decoded letters plus the six synthesized ones), so
+    -- labels outside the nine shipped menu words can be drawn; MAINMEN is the
+    -- decoded-only subset a pack exported before MAIN existed still has.
+    self.font = Font.get(Assets.exists("fonts/main.json") and "main" or "mainmen")
 
     local y = ROW_Y0
     for _, e in ipairs(self.entries) do

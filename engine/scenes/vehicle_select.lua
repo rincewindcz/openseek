@@ -10,6 +10,7 @@ local Config    = require "engine.core.config"
 local Log       = require "engine.core.log"
 local Layout    = require "engine.ui.layout"
 local Pointer   = require "engine.ui.pointer"
+local Hint      = require "engine.ui.hint"
 local PlayerTag = require "engine.ui.player_tag"
 local Vehicles  = require "engine.game.vehicles"
 local Mission   = require "engine.game.mission"
@@ -500,12 +501,12 @@ function VehicleSelect:draw()
 
     local hints
     if self.players == 2 then
-        hints = { "P1  W S CARD   A D VARIANT", "P2  ARROWS     ENTER START   ESC BACK" }
+        hints = { "P1  {W S} CARD   {A D} VARIANT", "P2  {ARROWS}     {ENTER} START   {ESC} BACK" }
     else
-        hints = { "UP DOWN CARD   LEFT RIGHT VARIANT", "ENTER START   ESC BACK" }
+        hints = { "{UP DOWN} CARD   {LEFT RIGHT} VARIANT", "{ENTER} START   {ESC} BACK" }
     end
     for k, h in ipairs(hints) do
-        shadow_print(self.hint_font, h, 8, HINT_Y[k], { 1, 1, 1, 0.6 * fade })
+        Hint.print(self.hint_font, h, 8, HINT_Y[k], { alpha = fade, shadow = true })
     end
     self:_draw_plate(1, START_XY, fade)
     self:_draw_plate(2, EXIT_XY, fade)

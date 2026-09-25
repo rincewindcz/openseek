@@ -54,11 +54,8 @@ function MainMenu:_select(id)
         app.scenes:replace("saves", { mode = "load", return_to = "main_menu" })
     elseif id == "options" then
         app.scenes:replace("advanced_settings")
-    elseif id == "mission" then
-        app.scenes:replace("mission_select")   -- debug mission/phase picker
-    elseif id == "editor" then
-        -- Drop into the overview (dev/editor) view. TODO: real level editor.
-        app.scenes:switch("overview")
+    elseif id == "advanced" then
+        app.scenes:replace("advanced_menu")    -- mission picker, replays, editor
     elseif id == "exit" then
         love.event.quit()
     end

@@ -11,6 +11,7 @@ local Audio      = require "engine.core.audio"
 local Sound      = require "engine.game.sound"
 local Display    = require "engine.core.display"
 local Pointer    = require "engine.ui.pointer"
+local Hint       = require "engine.ui.hint"
 local PostFX     = require "engine.game.postfx"
 local Vehicles   = require "engine.game.vehicles"
 local Difficulty = require "engine.game.difficulty"
@@ -503,16 +504,15 @@ function AdvancedSettings:draw()
     local hint
     local row = not menu_focus and self:_options()[self.cursor] or nil
     if self.capturing then
-        hint = "PRESS A KEY   ESC CANCELS"
+        hint = "PRESS A KEY   {ESC} CANCELS"
     elseif menu_focus then
-        hint = "UP/DOWN SELECT   ENTER OPEN   ESC EXIT"
+        hint = "{UP/DOWN} SELECT   {ENTER} OPEN   {ESC} EXIT"
     elseif row and row.kind == "keybind" then
-        hint = "LEFT/RIGHT COLUMN   ENTER BIND   DEL CLEAR"
+        hint = "{LEFT/RIGHT} COLUMN   {ENTER} BIND   {DEL} CLEAR"
     else
-        hint = "UP/DOWN MOVE   LEFT/RIGHT CHANGE   ESC BACK"
+        hint = "{UP/DOWN} MOVE   {LEFT/RIGHT} CHANGE   {ESC} BACK"
     end
-    self.hint_font:print(hint, (DESIGN_W - self.hint_font:width(hint)) / 2, FOOTER_Y,
-        { color = { 1, 1, 1, 0.6 * fade } })
+    Hint.print_centered(self.hint_font, hint, DESIGN_W, FOOTER_Y, { alpha = fade })
 
     g.pop()
     g.setColor(1, 1, 1, 1)

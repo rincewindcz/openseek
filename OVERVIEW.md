@@ -146,10 +146,11 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | Scene | Role |
 |-------|------|
 | `title` | Engine intro card on the first launch or while `engine_intro` is on (Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`. |
-| `main_menu` | Main menu; pushed over a running game on Esc. NEW GAME replaces it with `new_game`. |
-| `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL (`mainmen` has no B J K Q Y Z). |
+| `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT); pushed over a running game on Esc. NEW GAME replaces it with `new_game`. |
+| `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
+| `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
-| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a label in the small style (`credchars` heading, `chars` name). High scores: top-10 table with name entry, one per qualifying player after a co-op run. |
+| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name). High scores: top-10 table with name entry, one per qualifying player after a co-op run. |
 | `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
 | `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
@@ -159,7 +160,8 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `gameplay` (F1) | Player-locked rotating camera, combat. |
 | `sandbox` (F3) | Gameplay plus live vehicle parameter editor. |
 | `coop_gameplay` (F7, LOCAL COOP) | Split-screen two-player co-op; full screen when one player is left in a campaign. |
-| `replays` (F4) | Play back, verify, toggle recording, delete. |
+| `replays` (F4) | Dev replay panel over the overview: play back, verify, toggle recording, delete. |
+| `replay_select` | REPLAYS screen (menu ADVANCED), built like `saves` over a blue-tinted `MAINP`: watch a recording, two-step delete, left / right (or the label) flip newest / oldest first, stage / mode / players / running time of the highlighted one, flagged when it was recorded on an older build. Playback returns here through `app.replay_return`. |
 | `saves` | SAVE / LOAD slots over the green-tinted `MAINP` backdrop: unlimited named slots, scrolling, name entry, two-step delete. Opened from the briefing (both modes) and from the menu LOAD entry. |
 | `anim_gallery`, `font_gallery`, `sound_gallery` (F8/F9/F10) | Asset galleries. |
 
@@ -212,7 +214,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/end_stats` | DESTRUCTION STATS screen; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse. |
-| `ui/menu` | Main menu over `MAINP`, `mainmen` font. |
+| `ui/menu` | Main menu over `MAINP`, `main` font (`mainmen` on a pack exported before `main` existed). Also drives the `new_game` and `advanced_menu` submenus. |
 | `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
 | `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. |
 | `ui/mission_select` | `STAGE0X_MPIC` carousel over the missions present, phase buttons. |
@@ -220,6 +222,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/info_screen` | CREDITS / HIGH SCORES shell. |
 | `ui/pointer` | Mouse / touch pointer in 320x240 design space. |
 | `ui/layout` | 320x240 design space, letterbox `fit`. |
+| `ui/hint` | Two-tone footer key hints: `{ENTER} LOAD` draws the braced key name gold and the action white. |
 | `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Drawn while the last input was touch. |
 | `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay. |
 | `dev/selftest` | Scripted phase run three ways, compared per tick. |
@@ -456,7 +459,7 @@ Options:
 | `audio_positional` | AUDIO | Directional mix; off centres all sounds. |
 | `coop_split_pan` | AUDIO | Split-screen stereo bias. |
 | `voice_callouts` | AUDIO | Radio callouts. |
-| `fullscreen`, `vsync`, `window_size`, `show_fps` | DISPLAY | Window mode, letterboxing. |
+| `fullscreen`, `vsync`, `window_size`, `show_fps` | DISPLAY | Window mode, letterboxing. `show_fps` draws the counter in the `chars` font on the HUD's pixel grid, under the score readout. |
 | `data/keybinds.json` | CONTROLS | Rebindable gameplay actions. |
 
 Modes and tools: split-screen co-op (free play and campaign), vehicle select

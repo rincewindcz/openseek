@@ -8,8 +8,7 @@ local Menu  = require "engine.ui.menu"
 -- NEW GAME mode picker, in the main menu's style: a solo or a two-player
 -- split-screen campaign, both continuing to the vehicle select screen. Reached
 -- by replacing the main menu (a running game underneath stays suspended until
--- a run actually starts); CANCEL and Esc put the main menu back. The labels
--- keep to the MAINMEN word-art letters, which have no B, J, K, Q, Y or Z.
+-- a run actually starts); CANCEL and Esc put the main menu back.
 local NewGame = Class(Scene)
 
 NewGame.ui_pointer = true

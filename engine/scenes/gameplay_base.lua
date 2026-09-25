@@ -426,7 +426,8 @@ function GameplayBase:save_recording()
 end
 
 -- Playback reached its last recorded tick, diverged, or was cut short (the phase
--- ended or the viewer bailed out): report and go back to the replay list.
+-- ended or the viewer bailed out): report and go back to the replay list the
+-- playback was started from (app.replay_return, the dev F4 browser by default).
 function GameplayBase:finish_playback(reason)
     local app = self.app
     app.replay_result = {
@@ -450,7 +451,9 @@ function GameplayBase:finish_playback(reason)
     app.replay_play   = nil
     app.replay_verify = false
     self.tick_scale   = 1
-    app.scenes:switch("replays")
+    local back = app.replay_return or "replays"
+    app.replay_return = nil
+    app.scenes:switch(back)
 end
 
 -- A "REPLAY" tag over the game while a recording is being played back, with the

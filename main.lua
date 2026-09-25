@@ -22,6 +22,7 @@ local Config          = require "engine.core.config"
 local Input           = require "engine.core.input"
 local Screenshot      = require "engine.core.screenshot"
 local Display         = require "engine.core.display"
+local Font            = require "engine.core.font"
 local Mission         = require "engine.game.mission"
 local Score           = require "engine.game.score"
 local Screen          = require "engine.core.screen"
@@ -54,8 +55,17 @@ local SoundGallery    = require "engine.scenes.sound_gallery"
 local Credits         = require "engine.scenes.credits"
 local HiScores        = require "engine.scenes.hiscores"
 local Replays         = require "engine.scenes.replays"
+local ReplaySelect    = require "engine.scenes.replay_select"
+local AdvancedMenu    = require "engine.scenes.advanced_menu"
 local Saves           = require "engine.scenes.saves"
 local Selftest        = require "engine.dev.selftest"
+
+-- FPS counter (Config.show_fps): the in-game CHARS font, placed clear of the
+-- HUD score readout above it.
+local FPS_FONT  = "chars"
+local FPS_X     = 10
+local FPS_Y     = 34
+local FPS_SCALE = 2
 
 -- The shared app context handed to every scene: the world and the systems
 -- around it, the fullscreen fade overlay, the stats screen, and the pre-game
@@ -156,6 +166,7 @@ function love.load(args)
         replay_play       = nil,   -- Replay being played back (set by the replay picker)
         replay_verify     = false, -- playback at speed, only to check for divergence
         replay_result     = nil,   -- outcome of the last playback, shown by the picker
+        replay_return     = nil,   -- scene playback returns to (set by the picker)
         viewer_zoom_index = 4,     -- overview zoom, restored when a game mode ends
         campaign          = false, -- NEW GAME run: advance phase->phase, accumulate score
         run_score         = 0,     -- score carried across phases of a campaign run
@@ -225,6 +236,8 @@ function love.load(args)
     scenes:register("credits",          Credits:new(app))
     scenes:register("hiscores",         HiScores:new(app))
     scenes:register("replays",          Replays:new(app))
+    scenes:register("replay_select",    ReplaySelect:new(app))
+    scenes:register("advanced_menu",    AdvancedMenu:new(app))
     scenes:register("saves",            Saves:new(app))
     scenes:switch("title")
 
@@ -300,11 +313,11 @@ function love.draw()
     end
 
     if Config.show_fps then
-        love.graphics.setColor(0, 0, 0, 0.5)
-        love.graphics.print("FPS " .. love.timer.getFPS(), 5, 5)
-        love.graphics.setColor(1, 1, 0.4, 1)
-        love.graphics.print("FPS " .. love.timer.getFPS(), 4, 4)
-        love.graphics.setColor(1, 1, 1, 1)
+        -- In the HUD's own body font, on the HUD's pixel grid, below the score
+        -- readout (top-left, 8 px tall at scale 3 from y = 6).
+        local hud_scale = (Config.hud_scale or 1) * Display.view_scale()
+        Font.get(FPS_FONT):print("FPS " .. love.timer.getFPS(),
+            FPS_X * hud_scale, FPS_Y * hud_scale, { scale = FPS_SCALE * hud_scale })
     end
 end
 
