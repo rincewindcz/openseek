@@ -288,7 +288,7 @@ function Gameplay:update(dt)
         if app.end_stats:is_active() then
             app.world:update(dt)
         else
-            self:on_stats_done()   -- reverse close finished: hand off to the next scene
+            self:on_stats_done()   -- stats screen dismissed: hand off to the next scene
         end
         return
     end

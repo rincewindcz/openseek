@@ -102,7 +102,6 @@ local CATEGORIES = {
         { key = "hud_scale",            label = "HUD SIZE",        kind = "range", min = 0.8, max = 1.6, step = 0.1 },
         { key = "axis_aligned_pickups", label = "CLASSIC PICKUPS", kind = "toggle" },
         { key = "friendly_fire_pows",   label = "FRIENDLY FIRE",   kind = "toggle" },
-        { key = "endstats_count_up",    label = "STATS COUNT UP",  kind = "toggle" },
         { key = "score_count_up",       label = "SCORE COUNT UP",  kind = "toggle" },
         { key = "shop_fx",              label = "SHOP EFFECTS",    kind = "toggle" },
         { key = "chopper_skin",         label = "CHOPPER",         kind = "choice", choices = Vehicles.skin_choices("chopper") },

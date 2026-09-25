@@ -47,12 +47,6 @@ local Config = {
     -- vehicle left sits out the rest of the run. Read when a run starts.
     coop_lives = "separate",
 
-    -- End-of-phase DESTRUCTION STATS tally direction. The original counts each
-    -- line's percentage / tally down to zero while the bonus drains into TOTAL
-    -- SCORE. true builds the values up from zero instead (icons and percentages
-    -- rise as the score climbs), which reads more naturally.
-    endstats_count_up = true,
-
     -- Visual effect layer (engine/game/lightfx.lua). effects_flashes toggles the
     -- modern oversaturation layer (muzzle flashes, explosion bursts, full-screen
     -- washes); turn it off for the classic look. flash_intensity scales that
@@ -182,7 +176,7 @@ local PERSISTED = {
     "postfx_enabled", "postfx_preset", "postfx_grade", "postfx_contrast", "postfx_sharpen",
     "postfx_bloom", "postfx_vignette", "postfx_grain", "postfx_soft_shadows",
     "speed_scale", "hud_scale", "axis_aligned_pickups", "friendly_fire_pows",
-    "endstats_count_up", "score_count_up", "shop_fx", "chopper_skin", "tank_skin", "coop_lives",
+    "score_count_up", "shop_fx", "chopper_skin", "tank_skin", "coop_lives",
     "explosive_trees", "tree_crush_speed", "hit_flash", "camera_shake", "camera_shake_amount",
     "radar_zoom_grow", "radar_backdrop", "engine_intro", "aim_laser",
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",

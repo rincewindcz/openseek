@@ -501,9 +501,9 @@ function GameplayBase:on_stats_done()
 end
 
 -- End-stats key handling: any key (Esc included) steps the screen, snapping the
--- tally and then starting the reverse count-down close. The handoff via
--- on_stats_done() fires from update() once the close finishes, so the animation
--- always plays out before the scene changes.
+-- reveal, then the scoring pass, then dismissing it. The handoff via
+-- on_stats_done() fires from update() once the screen goes inactive, so the
+-- animation always plays out before the scene changes.
 function GameplayBase:end_stats_keypressed(_key)
     self.app.end_stats:keypressed()
 end

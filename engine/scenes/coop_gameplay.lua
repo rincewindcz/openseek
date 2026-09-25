@@ -377,7 +377,7 @@ function CoopGameplay:update(dt)
         if app.end_stats:is_active() then
             app.world:update(dt)
         else
-            self:on_stats_done()   -- reverse close finished: hand off (base -> menu)
+            self:on_stats_done()   -- stats screen dismissed: hand off (base -> menu)
         end
         return
     end

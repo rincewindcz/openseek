@@ -3,7 +3,6 @@
 
 local Class  = require "engine.core.class"
 local Assets = require "engine.core.assets"
-local Config = require "engine.core.config"
 local Score  = require "engine.game.score"
 local Layout = require "engine.ui.layout"
 local Log    = require "engine.core.log"
@@ -11,9 +10,13 @@ local Log    = require "engine.core.log"
 -- End-of-phase DESTRUCTION STATS screen. Drawn over the dimmed game once the
 -- chopper lands home: a header (PHASE n / DESTRUCTION STATS), five tallied
 -- lines (ground forces %, buildings %, choppers shot down, rescues, an OK
--- rating), and a running TOTAL SCORE. Each line counts toward (or, emulating
--- the original, down from) its value while the bonus folds into the score; a
--- row of kill icons tracks the live value proportionally. See export_phend.py.
+-- rating), and a running TOTAL SCORE.
+--
+-- Two phases on one time axis. The reveal counts each line up from zero, its
+-- row of kill icons filling proportionally, with the score untouched. The
+-- scoring pass then winds every line back down to zero, and each line pays its
+-- bonus into TOTAL SCORE as it empties, the way the original tallies a phase.
+-- Both passes are staggered line by line. See export_phend.py.
 local EndStats = Class()
 
 local DIR = "phend/"   -- under assets/
@@ -32,10 +35,12 @@ local ICON_GAP  = 2
 local TOTAL_Y   = 216     -- TOTAL SCORE row
 local MAX_ICONS = 10      -- 10 icons == 100% / full tally
 
-local LINE_TIME    = 0.7  -- seconds to tally one line
-local LINE_STAGGER = 0.45 -- gap between successive lines starting
-local CLOSE_SPEED  = 1.6  -- reverse-tally rate on close, relative to the count-up
-local BADGE_FPS    = 18
+local LINE_TIME     = 0.7  -- seconds to count one line up
+local LINE_STAGGER  = 0.45 -- gap between successive lines starting to count up
+local PHASE_GAP     = 0.5  -- pause between the reveal and the scoring pass
+local SCORE_TIME    = 0.45 -- seconds to wind one line back down into the score
+local SCORE_STAGGER = 0.3  -- gap between successive lines starting to wind down
+local BADGE_FPS     = 18
 
 function EndStats:init()
     self.active = false
@@ -142,61 +147,62 @@ function EndStats:start(stats)
         self.rows[#self.rows + 1] = row
     end
 
-    self.phase       = stats.phase or 1
-    self.t           = 0
-    self.badge_t     = 0
-    self.active      = true
-    self.closing     = false
-    self.applied     = false
-    -- Time for the last line to finish counting up (all lines full). The reverse
-    -- close starts from here so it begins winding down at once, with no dead zone.
-    self._tally_time = math.max(0, #self.rows - 1) * LINE_STAGGER + LINE_TIME
-    self._total_time = self._tally_time + LINE_STAGGER + 0.6
+    self.phase   = stats.phase or 1
+    self.t       = 0
+    self.badge_t = 0
+    self.active  = true
+    self.applied = false
+    -- When the last line finishes counting up, when the scoring pass starts, and
+    -- when the last line has been paid into the score.
+    local last        = math.max(0, #self.rows - 1)
+    self._reveal_time = last * LINE_STAGGER + LINE_TIME
+    self._score_at    = self._reveal_time + PHASE_GAP
+    self._score_time  = self._score_at + last * SCORE_STAGGER + SCORE_TIME
 end
 
 function EndStats:is_active() return self.active end
 
--- progress 0..1 of row i (1-based), eased.
-function EndStats:_row_prog(i)
-    local start = (i - 1) * LINE_STAGGER
-    local p = (self.t - start) / LINE_TIME
+local function smoothstep(p)
     if p <= 0 then return 0 end
     if p >= 1 then return 1 end
-    return p * p * (3 - 2 * p)   -- smoothstep
+    return p * p * (3 - 2 * p)
+end
+
+-- How much of row i (1-based) has counted up, 0..1, eased.
+function EndStats:_row_revealed(i)
+    return smoothstep((self.t - (i - 1) * LINE_STAGGER) / LINE_TIME)
+end
+
+-- How much of row i has since been wound back down into the score, 0..1. The
+-- scoring pass only starts once every line is full, so it never overtakes the
+-- reveal.
+function EndStats:_row_scored(i)
+    return smoothstep((self.t - self._score_at - (i - 1) * SCORE_STAGGER) / SCORE_TIME)
+end
+
+-- What a row still shows, 0..1 of its value: counted up, less what has already
+-- been paid into the score.
+function EndStats:_row_fill(i)
+    return math.max(0, self:_row_revealed(i) - self:_row_scored(i))
 end
 
 function EndStats:update(dt)
     if not self.active then return end
     self.badge_t = self.badge_t + dt
-    if self.closing then
-        -- Reverse tally on close: wind the line readouts back down toward zero,
-        -- the mirror of the count-up, then drop the screen. The TOTAL SCORE holds
-        -- at its full value instead (_total_score) - it is what was banked, and
-        -- watching it fall back reads as losing the bonus. Purely cosmetic either
-        -- way: _apply_final credited the score when the tally settled. A bit
-        -- quicker than the count-up so the close does not drag.
-        self.t = self.t - dt * CLOSE_SPEED
-        if self.t <= 0 then
-            self.t      = 0
-            self.active = false
-        end
-        return
-    end
     self.t = self.t + dt
-    if not self.applied and self.t >= self._total_time then
+    if not self.applied and self.t >= self._score_time then
         self:_apply_final()
     end
 end
 
--- Running TOTAL SCORE: the base plus however much of each line's bonus has
--- tallied so far, and the whole bonus once the close starts winding the lines
--- back down.
+-- Running TOTAL SCORE: the base plus the part of each line's bonus the scoring
+-- pass has already counted off that line.
 function EndStats:_total_score()
     local s = self.base_score
     for i, row in ipairs(self.rows) do
-        local prog = self.closing and 1 or self:_row_prog(i)
+        local scored = self:_row_scored(i)
         for _, col in ipairs(row.cols) do
-            s = s + math.floor(col.bonus * prog + 0.5)
+            s = s + math.floor(col.bonus * scored + 0.5)
         end
     end
     return s
@@ -222,22 +228,19 @@ function EndStats:_apply_final()
     end
 end
 
--- Advance the screen a step: snap the tally to complete, then start the reverse
--- count-down close, then (an impatient press mid-close) finish it at once. The
--- screen only goes inactive once the close animation reaches zero (or here on the
--- skip); the scene watches is_active() to know when to hand off.
+-- Advance the screen a step: snap the reveal to a full board and start the
+-- scoring pass at once, then snap that to a settled board and a banked score,
+-- then dismiss. The scene watches is_active() to know when to hand off.
 function EndStats:keypressed()
     if not self.active then return false end
-    if self.closing then return true end   -- close is animating; let it play out
-    if self.t < self._tally_time then
-        self.t = self._tally_time   -- first press snaps the count-up to completion
-        return true
+    if self.t < self._score_at then
+        self.t = self._score_at
+    elseif self.t < self._score_time then
+        self.t = self._score_time
+        self:_apply_final()
+    else
+        self.active = false
     end
-    -- Tally settled: bank the score, then run the reverse count-down close from a
-    -- full board (clamp away the settle pause so it starts winding down at once).
-    self:_apply_final()
-    self.t       = self._tally_time
-    self.closing = true
     return true
 end
 
@@ -270,10 +273,9 @@ end
 local COOP_RX = { 244, 300 }
 
 function EndStats:_draw_row_values(g, row, i, ry)
-    local prog = self:_row_prog(i)
+    local fill = self:_row_fill(i)
     for j, col in ipairs(row.cols) do
-        local shown = Config.endstats_count_up and (col.value * prog)
-            or (col.value * (1 - prog))
+        local shown = col.value * fill
         local rx, gold, color
         if self.coop then
             rx, gold, color = COOP_RX[j] or NUM_RX, false, col.color
@@ -346,8 +348,7 @@ function EndStats:draw()
             -- proportional kill-icon row under the label (single player only; co-op
             -- shows two value columns instead).
             local col   = row.cols[1]
-            local prog  = self:_row_prog(i)
-            local shown = Config.endstats_count_up and (col.value * prog) or (col.value * (1 - prog))
+            local shown = col.value * self:_row_fill(i)
             local frac  = (row.pct and (shown / 100) or (shown / MAX_ICONS))
             g.push()
             g.translate(0, ry + ICON_Y)
