@@ -267,7 +267,19 @@ function Replay.load(path)
     return replay
 end
 
--- Recorded files, newest first, with their headers loaded for the picker.
+-- When a recording was made, as a sortable YYYYMMDDHHMMSS number. The stamp
+-- comes first from the name path_for() wrote (stage12-20260924-183000.osr);
+-- a file renamed or copied from elsewhere falls back to its modification time.
+function Replay.recorded_at(path, name)
+    local date, time = name:match("%-(%d%d%d%d%d%d%d%d)%-(%d%d%d%d%d%d)%.osr$")
+    if date then return tonumber(date .. time) end
+    local info = love.filesystem.getInfo(path)
+    local modtime = info and info.modtime
+    return modtime and tonumber(os.date("%Y%m%d%H%M%S", modtime)) or 0
+end
+
+-- Recorded files, newest first, with their headers loaded for the picker. The
+-- name starts with the stage, so the order is by recording time, not by name.
 function Replay.list()
     local out = {}
     if not love.filesystem.getInfo(Replay.DIR) then return out end
@@ -276,11 +288,19 @@ function Replay.list()
             local path = Replay.DIR .. "/" .. name
             local replay = Replay.load(path)
             if replay then
-                out[#out + 1] = { path = path, name = name, replay = replay }
+                out[#out + 1] = {
+                    path = path,
+                    name = name,
+                    time = Replay.recorded_at(path, name),
+                    replay = replay,
+                }
             end
         end
     end
-    table.sort(out, function(a, b) return a.name > b.name end)
+    table.sort(out, function(a, b)
+        if a.time ~= b.time then return a.time > b.time end
+        return a.name < b.name
+    end)
     return out
 end
 

@@ -161,7 +161,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `sandbox` (F3) | Gameplay plus live vehicle parameter editor. |
 | `coop_gameplay` (F7, LOCAL COOP) | Split-screen two-player co-op; full screen when one player is left in a campaign. |
 | `replays` (F4) | Dev replay panel over the overview: play back, verify, toggle recording, delete. |
-| `replay_select` | REPLAYS screen (menu ADVANCED), built like `saves` over a blue-tinted `MAINP`: watch a recording, two-step delete, left / right (or the label) flip newest / oldest first, stage / mode / players / running time of the highlighted one, flagged when it was recorded on an older build. Playback returns here through `app.replay_return`. |
+| `replay_select` | REPLAYS screen (menu ADVANCED), built like `saves` over a blue-tinted `MAINP`: watch a recording, two-step delete, left / right (or the label) step the order between newest, oldest and by progress, stage / mode / players / running time of the highlighted one, flagged when it was recorded on an older build. Playback returns here through `app.replay_return`. |
 | `saves` | SAVE / LOAD slots over the green-tinted `MAINP` backdrop: unlimited named slots, scrolling, name entry, two-step delete. Opened from the briefing (both modes) and from the menu LOAD entry. |
 | `anim_gallery`, `font_gallery`, `sound_gallery` (F8/F9/F10) | Asset galleries. |
 

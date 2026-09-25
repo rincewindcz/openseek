@@ -14,7 +14,8 @@ local Log     = require "engine.core.log"
 -- REPLAY screen: the player-facing recording browser, built like the SAVE /
 -- LOAD panel (engine/scenes/saves.lua) but tinted blue, with the stage each
 -- recording was made on in the row and its mode / players / running time under
--- the list. Left / right flip the list between newest and oldest first.
+-- the list. Left / right step the sort order: newest, oldest, or by progress
+-- (the stage the run was recorded on).
 -- Reached from the ADVANCED submenu. The raw dev browser on F4 in the overview
 -- (engine/scenes/replays.lua) stays as it is: that one also verifies.
 --
@@ -47,6 +48,15 @@ local FADE_IN     = 0.25
 
 local TICKS_PER_SECOND = 60
 
+-- Sort orders, stepped by left / right. Recording time comes from the file name
+-- stamp (Replay.recorded_at), never from the name itself: the name starts with
+-- the stage, so sorting by it would group by progress instead of by date.
+local ORDERS = {
+    { id = "newest",   label = "NEWEST FIRST" },
+    { id = "oldest",   label = "OLDEST FIRST" },
+    { id = "progress", label = "BY PROGRESS"  },
+}
+
 local GOLD = { 1, 0.8, 0.2 }
 
 function ReplaySelect:init(app)
@@ -55,7 +65,7 @@ function ReplaySelect:init(app)
     self.font      = Font.get("chars")
     self.hint_font = Font.get("keysfont")
 
-    self.newest_first = true   -- kept across visits, not persisted
+    self.order = 1   -- index into ORDERS, kept across visits, not persisted
 
     local ok, bg = pcall(love.graphics.newImage, "assets/fullscreen/MAINP.png")
     if ok then bg:setFilter("linear", "linear"); self.bg = bg end
@@ -73,20 +83,31 @@ function ReplaySelect:enter(opts)
     self:_refresh()
 end
 
--- Replay.list() is newest first; the file names are timestamps, so flipping the
--- order is a reversal of the same sort.
+-- Replay.list() is already newest first; the other orders re-sort it, with the
+-- recording time as the tie-break so a stage played twice keeps its sequence.
 function ReplaySelect:_refresh()
     self.rows = Replay.list()
-    if not self.newest_first then
-        table.sort(self.rows, function(a, b) return a.name < b.name end)
+    local id  = ORDERS[self.order].id
+    if id == "oldest" then
+        table.sort(self.rows, function(a, b)
+            if a.time ~= b.time then return a.time < b.time end
+            return a.name < b.name
+        end)
+    elseif id == "progress" then
+        table.sort(self.rows, function(a, b)
+            local sa = tostring(a.replay.header.stage or "")
+            local sb = tostring(b.replay.header.stage or "")
+            if sa ~= sb then return sa < sb end
+            if a.time ~= b.time then return a.time < b.time end
+            return a.name < b.name
+        end)
     end
     self.cursor = math.min(self.cursor, #self.rows + 1)
     self:_scroll_to(self.cursor)
 end
 
-function ReplaySelect:_set_order(newest_first)
-    if self.newest_first == newest_first then return end
-    self.newest_first   = newest_first
+function ReplaySelect:_step_order(dir)
+    self.order          = ((self.order - 1 + dir) % #ORDERS) + 1
     self.cursor         = 1
     self.scroll         = 0
     self.pending_delete = nil
@@ -160,8 +181,8 @@ end
 function ReplaySelect:keypressed(key)
     if     key == "up"     then self:_move(-1)
     elseif key == "down"   then self:_move(1)
-    elseif key == "left"   then self:_set_order(true)
-    elseif key == "right"  then self:_set_order(false)
+    elseif key == "left"   then self:_step_order(-1)
+    elseif key == "right"  then self:_step_order(1)
     elseif key == "return" or key == "space" or key == "kpenter" then self:_activate(self.cursor)
     elseif key == "delete" or key == "backspace" then self:_delete(self.cursor)
     elseif key == "escape" then self:_back()
@@ -177,7 +198,7 @@ end
 -- The sort-order label is a widget of its own (the only one the cursor does not
 -- stop on), so the pointer can flip the order without the keyboard.
 function ReplaySelect:_order_label()
-    return self.newest_first and "NEWEST FIRST" or "OLDEST FIRST"
+    return ORDERS[self.order].label
 end
 
 function ReplaySelect:_order_at(x, y)
@@ -208,7 +229,7 @@ end
 
 function ReplaySelect:mousepressed(x, y)
     if self:_order_at(x, y) then
-        self:_set_order(not self.newest_first)
+        self:_step_order(1)
         return
     end
     local i = self:_index_at(x, y)
