@@ -147,11 +147,12 @@ function EndStats:start(stats)
         self.rows[#self.rows + 1] = row
     end
 
-    self.phase   = stats.phase or 1
-    self.t       = 0
-    self.badge_t = 0
-    self.active  = true
-    self.applied = false
+    self.phase     = stats.phase or 1
+    self.t         = 0
+    self.badge_t   = 0
+    self.active    = true
+    self.applied   = false
+    self.dismissed = false
     -- When the last line finishes counting up, when the scoring pass starts, and
     -- when the last line has been paid into the score.
     local last        = math.max(0, #self.rows - 1)
@@ -188,6 +189,10 @@ end
 
 function EndStats:update(dt)
     if not self.active then return end
+    if self.dismissed then
+        self.active = false
+        return
+    end
     self.badge_t = self.badge_t + dt
     self.t = self.t + dt
     if not self.applied and self.t >= self._score_time then
@@ -230,7 +235,8 @@ end
 
 -- Advance the screen a step: snap the reveal to a full board and start the
 -- scoring pass at once, then snap that to a settled board and a banked score,
--- then dismiss. The scene watches is_active() to know when to hand off.
+-- then dismiss. The dismiss lands on the next update(): the scene hands off when
+-- is_active() drops right after its update() call, so a press must not clear it.
 function EndStats:keypressed()
     if not self.active then return false end
     if self.t < self._score_at then
@@ -239,7 +245,7 @@ function EndStats:keypressed()
         self.t = self._score_time
         self:_apply_final()
     else
-        self.active = false
+        self.dismissed = true
     end
     return true
 end
