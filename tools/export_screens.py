@@ -20,8 +20,8 @@ palette:
 
 CREDANIM ("CREDITS") and HIANIM ("HIGH SCORES") are the animated titles of
 the credits and high-score screens, drawn in those screens' fullscreen
-palettes and column de-wrapped (see menutitle.py). POWCOUNT uses only the gold
-ramp and draws in GOVPAL like the other in-game fonts; the shop sprites that
+palettes onto their fixed frame box (see menutitle.py). POWCOUNT uses only the
+gold ramp and draws in GOVPAL like the other in-game fonts; the shop sprites that
 need the POWUP/POWUPT palette (POWNAMES, POWMEDAL, POWARMED, POWFOCUS,
 POWWGADS, POWNUMS, POWGADS) are exported by tools/export_shop.py instead. A
 palette source is the first 768 bytes of a palette BIN or of a fullscreen
@@ -45,7 +45,7 @@ def load_palette(path):
     return Path(path).read_bytes()[:768]
 
 
-def export_sprite(src_path, prefix, out_dir, palette, transform=None):
+def export_sprite(src_path, prefix, out_dir, palette):
     data   = src_path.read_bytes()
     dec    = dp if dp.is_planar(data) else db
     frames = dec.read_frames(data)
@@ -54,8 +54,6 @@ def export_sprite(src_path, prefix, out_dir, palette, transform=None):
         canvas, status = dec.decode_frame(data, off, end)
         if status != "ok" or not canvas:
             continue
-        if transform:
-            canvas = transform(canvas)
         img   = dec.render(canvas, palette, scale=1)
         fname = f"{prefix}_f{i:02d}.png"
         img.save(out_dir / fname)
@@ -65,8 +63,8 @@ def export_sprite(src_path, prefix, out_dir, palette, transform=None):
 
 
 # (source BIN under data/, output prefix, out subdir, palette BIN)
-# CREDANIM/HIANIM are handled separately (see export_titles): they need the
-# column de-wrap.
+# CREDANIM/HIANIM are handled separately (see export_titles): they render onto
+# the frame box.
 # The shop sprites drawn in the POWUP/POWUPT runtime palette (POWNAMES,
 # POWMEDAL, POWARMED, POWFOCUS, POWWGADS, POWNUMS, POWGADS) are exported by
 # tools/export_shop.py, not here: GOVPAL only covers indices 0-79 and
@@ -92,8 +90,8 @@ def stage_palette(sdir):
 def export_titles(game_dir):
     """CREDANIM / HIANIM: the animated CREDITS and HIGH SCORES menu titles.
 
-    Rendered in their screen's palette and column de-wrapped, since the
-    blitter wraps these full-width frames around the 384 px Mode X row."""
+    Rendered in their screen's palette onto the fixed frame box from the frame
+    header (see menutitle.py), so all frames of a title share one canvas."""
     print("Menu titles -> assets/credits, assets/hiscore/")
     for stem, prefix, sub, screen in (("CREDANIM", "credanim", "credits", "CREDITS"),
                                       ("HIANIM",   "hianim",   "hiscore", "HISCORE")):
@@ -104,7 +102,17 @@ def export_titles(game_dir):
         palette = load_palette(game_dir / "data" / (screen + ".BIN"))
         out_dir = gamedata.ASSETS / sub
         out_dir.mkdir(parents=True, exist_ok=True)
-        export_sprite(src, prefix, out_dir, palette, transform=menutitle.unsplit)
+        data  = src.read_bytes()
+        count = 0
+        for i, (off, end) in enumerate(db.read_frames(data)):
+            canvas, status = db.decode_frame(data, off, end)
+            if status != "ok" or not canvas:
+                continue
+            img = db.render(menutitle.to_box(canvas), palette, scale=1,
+                            box=menutitle.box_size(data, off))
+            img.save(out_dir / f"{prefix}_f{i:02d}.png")
+            count += 1
+        print(f"  {src.name}: {count} frames -> {out_dir}/")
 
 
 def main(argv=None):

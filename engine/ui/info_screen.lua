@@ -18,7 +18,6 @@ local InfoScreen = Class()
 local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
 
 local TITLE_CY     = 24     -- vertical center of the zoom-in title
-local TITLE_MAX_W  = 300    -- title art is scaled down to fit this width
 local EXIT_MARGIN  = 8      -- design px the EXIT button is inset from the corner
 local FOCUS_PAD    = 2
 local OPEN_TIME    = 0.3
@@ -36,18 +35,7 @@ function InfoScreen:init(backdrop_name, title_clip)
     self.backdrop = img("assets/fullscreen/" .. backdrop_name .. ".png")
     if self.backdrop then self.backdrop:setFilter("linear", "linear") end
 
-    -- Title fly-in. Scaled uniformly so its widest frame fits TITLE_MAX_W (the
-    -- HIGH SCORES art ends wider than the screen; CREDITS already fits).
-    self.title_clip = title_clip
-    self.title      = Animation.new(title_clip)
-    local clip, maxw = Animation.clip(title_clip), 1
-    if clip then
-        for i = 1, clip:frame_count() do
-            local f = clip.frames[i]
-            if f and f:getWidth() > maxw then maxw = f:getWidth() end
-        end
-    end
-    self.title_scale = math.min(1, TITLE_MAX_W / maxw)
+    self.title = Animation.new(title_clip)
 
     self.exit_up   = img("assets/mission/exit.png")
     self.exit_down = img("assets/mission/exit_hi.png")
@@ -143,13 +131,12 @@ function InfoScreen:draw()
         g.draw(self.backdrop, 0, 0, 0, DW / self.backdrop:getWidth(), DH / self.backdrop:getHeight())
     end
 
-    -- Title fly-in, centered horizontally over the top of the backdrop.
+    -- Title fly-in. Every frame shares the title's fixed box, so centering the
+    -- image (not its art) keeps the animation in place, as the original does.
     local frame = self.title:current_image()
     if frame then
-        local ax, ay = Animation.frame_anchor(self.title_clip, self.title.frame)
-        local s = self.title_scale
         g.setColor(1, 1, 1, fade)
-        g.draw(frame, DW / 2, TITLE_CY, 0, s, s, ax, ay)
+        g.draw(frame, DW / 2, TITLE_CY, 0, 1, 1, frame:getWidth() / 2, frame:getHeight() / 2)
     end
 
     if self.on_draw_content then self.on_draw_content(g, fade) end

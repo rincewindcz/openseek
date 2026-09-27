@@ -150,7 +150,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
-| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name). High scores: top-10 table with name entry, one per qualifying player after a co-op run. |
+| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry, one per qualifying player after a co-op run. |
 | `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
 | `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
@@ -536,7 +536,7 @@ and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
 | `export_animations.py` | `assets/effects/` |
 | `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its stage palette; `credchars`: HICHARS in the CREDITS palette) |
 | `export_mainmen.py` | `assets/mainmen/` (words, generated arrow cursor), `assets/mainmen/font/`, `assets/fonts/mainmen.*`, `assets/fonts/main.*` (plus `content/fonts/main_synth/`); runtime menu palette in `MENU_PALETTE` |
-| `export_screens.py` | CREDANIM / HIANIM (CREDITS / HISCORE palette, de-wrapped by `menutitle.py`), POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards |
+| `export_screens.py` | CREDANIM / HIANIM (CREDITS / HISCORE palette, fixed frame box via `menutitle.py`), POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards |
 | `export_mission.py` | `assets/mission/` |
 | `export_mission_text.py` | `assets/mission_text.json` |
 | `export_sounds.py` | `assets/sounds/`, `assets/sounds.json` |

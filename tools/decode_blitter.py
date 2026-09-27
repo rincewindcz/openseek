@@ -152,13 +152,20 @@ def frame_header(data, frame_off):
     return w, h, ex
 
 
-def render(canvas, palette, scale=4):
+def render(canvas, palette, scale=4, box=None):
+    """Render cropped to the canvas bounds, or onto a fixed (w, h) box whose
+    top-left corner is canvas (0, 0)."""
     if not canvas:
         return None
-    xs = [c[0] for c in canvas]
-    ys = [c[1] for c in canvas]
-    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-    img = image.new('RGBA', (x1 - x0 + 1, y1 - y0 + 1), (0, 0, 0, 0))
+    if box:
+        x0, y0 = 0, 0
+        size   = box
+    else:
+        xs = [c[0] for c in canvas]
+        ys = [c[1] for c in canvas]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        size = (x1 - x0 + 1, y1 - y0 + 1)
+    img = image.new('RGBA', size, (0, 0, 0, 0))
     for (x, y), p in canvas.items():
         r, g, b = palette[p * 3] * 4, palette[p * 3 + 1] * 4, palette[p * 3 + 2] * 4
         img.putpixel((x - x0, y - y0), (r, g, b, 255))

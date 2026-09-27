@@ -4,6 +4,7 @@
 local Class      = require "engine.core.class"
 local Scene      = require "engine.core.scene"
 local Font       = require "engine.core.font"
+local Assets     = require "engine.core.assets"
 local InfoScreen = require "engine.ui.info_screen"
 local Pointer    = require "engine.ui.pointer"
 local json       = require "lib.json"
@@ -22,8 +23,12 @@ local HiScores = Class(Scene)
 
 HiScores.ui_pointer = true
 
-local GOLD = { 1, 0.8, 0.2 }
-local LIVE = { 1, 1, 1 }   -- the row being typed into, brighter than the rest
+-- The gold credits font is truecolor and ignores these tints; they only color
+-- the hichars fallback of a pack exported before credchars existed.
+local FONT          = "credchars"
+local FALLBACK_FONT = "hichars"
+local GOLD          = { 1, 0.8, 0.2 }
+local LIVE          = { 1, 1, 1 }   -- the row being typed into, brighter than the rest
 
 local MAX_ROWS   = 10
 local NAME_MAX   = 8      -- longest nickname the entry field accepts
@@ -45,7 +50,7 @@ function HiScores:init(app)
     self.screen = InfoScreen:new("HISCORE", "hiscore_title")
     self.screen.on_exit = function() self.app.scenes:replace("main_menu") end
 
-    self.font = Font.get("hichars")
+    self.font = Font.get(Assets.exists("fonts/" .. FONT .. ".json") and FONT or FALLBACK_FONT)
     self.screen.on_draw_content = function(g, fade) self:_draw_table(g, fade) end
 end
 
