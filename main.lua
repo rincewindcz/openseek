@@ -34,6 +34,7 @@ local Audio           = require "engine.core.audio"
 local Assets          = require "engine.core.assets"
 local Sound           = require "engine.game.sound"
 local Log             = require "engine.core.log"
+local Replay          = require "engine.game.replay"
 local json            = require "lib.json"
 
 local Title           = require "engine.scenes.title"
@@ -163,6 +164,7 @@ function love.load(args)
         after_stage_load  = after_stage_load,
         tick              = 0,     -- fixed simulation ticks since the phase started
         record_runs       = true,  -- write a replay file for every phase played
+        upload_runs       = Replay.upload_enabled(), -- also hand each one to the hosting web page
         replay_play       = nil,   -- Replay being played back (set by the replay picker)
         replay_verify     = false, -- playback at speed, only to check for divergence
         replay_result     = nil,   -- outcome of the last playback, shown by the picker

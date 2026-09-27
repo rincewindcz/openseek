@@ -422,6 +422,7 @@ function GameplayBase:save_recording()
     else
         Log.warn("replay", "failed to save recording")
     end
+    if self.app.upload_runs then self.recording:upload() end
     self.recording = nil
 end
 

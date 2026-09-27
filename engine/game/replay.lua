@@ -3,6 +3,7 @@
 
 local Class      = require "engine.core.class"
 local InputFrame = require "engine.core.input_frame"
+local json       = require "lib.json"
 
 -- Recorded run: the header describing the starting conditions, the per-tick input
 -- frames, and periodic state checksums. Input only, no state snapshots, so a file
@@ -23,8 +24,9 @@ local InputFrame = require "engine.core.input_frame"
 -- lines. A tick with no line repeats the previous mask with no events.
 local Replay = Class()
 
-Replay.FORMAT = 2
-Replay.DIR    = "replays"
+Replay.FORMAT     = 2
+Replay.DIR        = "replays"
+Replay.UPLOAD_TAG = "OSREPLAY-UPLOAD "
 
 -- Config keys that change the simulation. They are stored in the header and
 -- re-applied during playback, and held to the recorded values while a run is
@@ -306,6 +308,23 @@ end
 
 function Replay:delete()
     if self.path then love.filesystem.remove(self.path) end
+end
+
+-- upload
+
+-- A web build made to collect recordings ships build.json with replay_upload
+-- set; the page hosting it posts every finished phase to a server.
+function Replay.upload_enabled()
+    if not love.filesystem.getInfo("build.json") then return false end
+    local ok, build = pcall(json.decode, love.filesystem.read("build.json"))
+    return ok and type(build) == "table" and build.replay_upload == true
+end
+
+-- love.js has no sockets, so the recording leaves on stdout as one tagged line
+-- that the hosting page intercepts. A replay never contains a tab, so newlines
+-- travel as tabs.
+function Replay:upload()
+    print(Replay.UPLOAD_TAG .. (self:serialize():gsub("\n", "\t")))
 end
 
 -- simulation parameters
