@@ -1,10 +1,11 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Loadout = require "engine.game.loadout"
-local Config  = require "engine.core.config"
-local Score   = require "engine.game.score"
-local Log     = require "engine.core.log"
+local Loadout  = require "engine.game.loadout"
+local Config   = require "engine.core.config"
+local Score    = require "engine.game.score"
+local Savegame = require "engine.game.savegame"
+local Log      = require "engine.core.log"
 
 -- NEW GAME run state. A solo run carries one score, lives and bonus threshold
 -- on the app (run_score / run_lives / run_bonus_life) and one Loadout. A co-op
@@ -93,6 +94,7 @@ function Campaign.finish(app)
     local scores = Campaign.final_scores(app)
     app.campaign = false
     app.coop_run = nil
+    Savegame.clear_autosave()
     app.scenes:switch("hiscores", scores)
 end
 
@@ -121,6 +123,19 @@ function Campaign.advance(app)
     if next_m and next_m ~= cur_m then
         app.screen:show_mission(next_m)
     end
+end
+
+-- Reopen a run captured by engine/game/savegame.lua (a slot or the autosave) at
+-- the briefing of the phase it is parked on. Returns false for unusable data.
+function Campaign.resume(app, data)
+    if not Savegame.apply(app, data) then return false end
+    local stage = data.stage
+    Log.info("game", "resumed %s at %s, score %d", data.name or "?", stage, app.run_score)
+    app.world:load(stage)
+    app.after_stage_load()
+    app.scenes:switch("mission_briefing", stage)
+    app.screen:show_mission(tonumber(stage:match("^stage(%d)")))
+    return true
 end
 
 return Campaign

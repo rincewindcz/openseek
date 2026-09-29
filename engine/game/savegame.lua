@@ -18,10 +18,16 @@ local Log     = require "engine.core.log"
 -- reopens that briefing. A co-op run adds a `coop` table: the lives rule and
 -- pool, each player's score, lives, threshold, out flag, inventory and
 -- vehicle variants (engine/game/campaign.lua).
+--
+-- The run in progress is also kept in one autosave file outside the slot
+-- directory, rewritten every time a campaign briefing opens and removed when the
+-- run ends, so the main menu's RESUME can reopen the last briefing after the
+-- run was left or the game was closed.
 local Savegame = {}
 
-Savegame.DIR     = "saves"
-Savegame.VERSION = 1
+Savegame.DIR      = "saves"
+Savegame.AUTOSAVE = "autosave.json"
+Savegame.VERSION  = 1
 
 local function capture_coop(app)
     local run = app.campaign and app.coop_run
@@ -140,6 +146,22 @@ function Savegame.read(path)
         return nil
     end
     return data
+end
+
+function Savegame.autosave(app)
+    return Savegame.write(Savegame.capture(app, "AUTOSAVE"), Savegame.AUTOSAVE)
+end
+
+function Savegame.read_autosave()
+    return Savegame.read(Savegame.AUTOSAVE)
+end
+
+function Savegame.has_autosave()
+    return love.filesystem.getInfo(Savegame.AUTOSAVE) ~= nil
+end
+
+function Savegame.clear_autosave()
+    if Savegame.has_autosave() then Savegame.delete(Savegame.AUTOSAVE) end
 end
 
 -- Every readable slot, newest first.

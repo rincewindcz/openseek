@@ -6,12 +6,14 @@ local Scene       = require "engine.core.scene"
 local MissionMenu = require "engine.ui.mission_menu"
 local EquipScreen = require "engine.ui.equip_screen"
 local Campaign    = require "engine.game.campaign"
+local Savegame    = require "engine.game.savegame"
 
 -- Pre-mission briefing scene wrapping the MISSION/PHASE menu (the menu itself
 -- is the briefing). PLAY opens the vehicle equip screen (or drops straight
 -- into the game when the equip art is not exported); SHOP opens the weapon
 -- shop; SAVE / LOAD open the slot screen (engine/scenes/saves.lua), which is
 -- also where a loaded run comes back to; EXIT backs out to the main menu.
+-- Opening it in a campaign run rewrites the autosave the menu's RESUME reopens.
 local MissionBriefing = Class(Scene)
 
 MissionBriefing.ui_pointer = true
@@ -25,6 +27,7 @@ end
 function MissionBriefing:enter(stage_name)
     local world = self.app.world
     self.menu:open(stage_name or world.stage_name or world.stages[1])
+    if self.app.campaign then Savegame.autosave(self.app) end
 end
 
 function MissionBriefing:leave()

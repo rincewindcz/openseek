@@ -9,7 +9,7 @@ local Pointer  = require "engine.ui.pointer"
 local Hint     = require "engine.ui.hint"
 local Audio    = require "engine.core.audio"
 local Savegame = require "engine.game.savegame"
-local Log      = require "engine.core.log"
+local Campaign = require "engine.game.campaign"
 
 -- SAVE / LOAD screen: an options-style panel of named slots over the pulsating
 -- main-menu backdrop, tinted green so it reads as a sibling of the OPTIONS page
@@ -142,15 +142,7 @@ function Saves:_commit_entry()
 end
 
 function Saves:_load_slot(row)
-    local app = self.app
-    if not Savegame.apply(app, row.data) then return end
-    local stage = row.data.stage
-    Log.info("game", "loaded %s at %s, score %d", row.data.name or "?", stage, app.run_score)
-    Audio.play_event("ui.confirm")
-    app.world:load(stage)
-    app.after_stage_load()
-    app.scenes:switch("mission_briefing", stage)
-    app.screen:show_mission(tonumber(stage:match("^stage(%d)")))
+    if Campaign.resume(self.app, row.data) then Audio.play_event("ui.confirm") end
 end
 
 function Saves:_activate(i)

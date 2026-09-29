@@ -5,10 +5,12 @@ local Class    = require "engine.core.class"
 local Scene    = require "engine.core.scene"
 local Menu     = require "engine.ui.menu"
 local Savegame = require "engine.game.savegame"
+local Campaign = require "engine.game.campaign"
 local Sound    = require "engine.game.sound"
 
 -- Main menu scene. Switched to after the title card, or pushed over a running
 -- gameplay scene (Esc in game), in which case RESUME pops back to the game.
+-- Otherwise RESUME reopens the campaign autosave at its briefing.
 local MainMenu = Class(Scene)
 
 MainMenu.ui_pointer = true
@@ -31,7 +33,7 @@ function MainMenu:leave()
 end
 
 function MainMenu:_open()
-    self.menu:set_enabled("resume", self.over_game)
+    self.menu:set_enabled("resume", self.over_game or Savegame.has_autosave())
     self.menu:set_enabled("load", Savegame.any())
     self.menu:open()
 end
@@ -45,7 +47,12 @@ function MainMenu:_select(id)
         -- Solo or co-op, then the vehicle select screen, which starts the run.
         app.scenes:replace("new_game")
     elseif id == "resume" then
-        if self.over_game then app.scenes:pop() end
+        if self.over_game then
+            app.scenes:pop()
+        elseif not Campaign.resume(app, Savegame.read_autosave()) then
+            Savegame.clear_autosave()   -- unreadable: drop it and disable RESUME
+            self:_open()
+        end
     elseif id == "credits" then
         app.scenes:replace("credits")
     elseif id == "hiscores" then
