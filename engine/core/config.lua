@@ -159,6 +159,17 @@ local Config = {
     wreck_smoke   = true,
     shell_impact  = true,
 
+    -- On-screen touch controls (engine/ui/touch_controls.lua), set on the MOBILE
+    -- UI page, which only web and touch builds show. touch_color keys into the
+    -- control's colours (gold / white); touch_opacity multiplies every alpha of
+    -- the controls; touch_button_scale and touch_stick_scale size the buttons and
+    -- the stick; touch_left_handed mirrors the layout (buttons left, stick right).
+    touch_color        = "gold",
+    touch_opacity      = 1.0,
+    touch_button_scale = 1.0,
+    touch_stick_scale  = 1.0,
+    touch_left_handed  = false,
+
     -- Play the short openSEEK engine card before the TITLE card on every launch
     -- (engine/scenes/title.lua). Independent of this key, the card plays once on
     -- the first launch (no saved settings yet) and whenever the game data is missing.
@@ -186,6 +197,8 @@ local PERSISTED = {
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
     "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",
     "fullscreen", "vsync", "window_size", "show_fps",
+    "touch_color", "touch_opacity", "touch_button_scale", "touch_stick_scale",
+    "touch_left_handed",
 }
 
 -- Overlay any saved values onto the shipped defaults. Called once at startup.

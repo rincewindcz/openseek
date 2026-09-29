@@ -50,19 +50,23 @@ end
 
 -- Push the persisted display settings onto the window. Called at startup and
 -- whenever a DISPLAY option changes. A no-op on failure (headless / unsupported).
+-- The web page letterboxes a fixed canvas and owns fullscreen (tools/web/seek.js),
+-- so the web build ignores the persisted size and fullscreen.
 function Display.apply()
-    local s = size_for(Config.window_size)
+    local web        = love.system.getOS() == "Web"
+    local s          = web and Display.SIZES[1] or size_for(Config.window_size)
+    local fullscreen = not web and Config.fullscreen and true or false
     local ok, err = pcall(love.window.setMode, s.w, s.h, {
-        fullscreen     = Config.fullscreen and true or false,
+        fullscreen     = fullscreen,
         fullscreentype = "desktop",
-        resizable      = love.system.getOS() ~= "Web",
+        resizable      = not web,
         usedpiscale    = false,
         vsync          = Config.vsync and 1 or 0,
     })
     if ok then
         local w, h = love.graphics.getDimensions()
         Log.info("display", "%dx%d%s, vsync %s", w, h,
-            Config.fullscreen and " fullscreen" or "", Config.vsync and "on" or "off")
+            fullscreen and " fullscreen" or "", Config.vsync and "on" or "off")
     else
         Log.warn("display", "setMode failed: %s", tostring(err))
     end

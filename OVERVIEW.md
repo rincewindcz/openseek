@@ -117,7 +117,14 @@ Style:
 luacheck .                    # zero warnings required
 love . --selftest [ticks] [stage]
 love . [stageMP]
+love . --touch                # phone controls on a desktop (see below)
 ```
+
+`--touch` turns the left mouse button into a single touch (the pointer moves
+only while it is held, as a finger would) and makes `Z` hold the on-screen FIRE
+button as a second touch, so the stick and FIRE work together. The controls show
+from the start and OPTIONS gains the MOBILE UI page. The OS cursor stays
+visible. Other mouse buttons and the keyboard behave as usual.
 
 | Check | Run after touching |
 |-------|--------------------|
@@ -146,12 +153,12 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | Scene | Role |
 |-------|------|
 | `title` | Engine intro card on the first launch or while `engine_intro` is on (Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`. |
-| `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. |
+| `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT, or FULLSCREEN on the web); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. |
 | `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
 | `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry, one per qualifying player after a co-op run. |
-| `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, GAMEPLAY, EXTRAS. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
+| `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, MOBILE UI, GAMEPLAY, DIFFICULTY, EXTRAS. MOBILE UI only where `TouchControls.available` (web, Android, iOS, `--touch`); the web build drops DISPLAY's FULLSCREEN and WINDOW SIZE. The sidebar packs tighter when it holds more than nine entries. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
 | `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. Rewrites the autosave on every open in a campaign run. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
 | `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. Co-op: once per player (tagged), EXIT steps back a player. |
@@ -223,7 +230,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/pointer` | Mouse / touch pointer in 320x240 design space. |
 | `ui/layout` | 320x240 design space, letterbox `fit`. |
 | `ui/hint` | Two-tone footer key hints: `{ENTER} LOAD` draws the braced key name gold and the action white. |
-| `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Drawn while the last input was touch. |
+| `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Buttons draw their white icon from `content/mobileui/icon_<id>.png` (label when missing), tinted gold or white. MOBILE UI options: `touch_color`, `touch_opacity` (multiplies every alpha), `touch_button_scale`, `touch_stick_scale`, `touch_left_handed` (buttons measured from the left edge, stick on the right half). Drawn while the last input was touch (from the start under `--touch`). |
 | `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay. |
 | `dev/selftest` | Scripted phase run three ways, compared per tick. |
 
@@ -579,11 +586,20 @@ and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
 | Overview: C, [ ] | Axis-aligned pickups, `speed_scale` |
 | Overview: S | Save `data/entity_types.json` |
 | Esc | Back (menu in game) |
-| Touch | Stick: drive. Buttons: FIRE, STRAFE (modifier), LAND, WEAPON, MENU. Tap commits a high-score name. |
+| Touch | Stick: drive. Buttons: FIRE, STRAFE (modifier), LAND, WEAPON, MENU. Tap commits a high-score name. Desktop test with `love . --touch`: left mouse is the finger, `Z` holds FIRE. |
 
 On the web build (`love.system.getOS() == "Web"`) the window is not resizable;
 the page scales the 1280x720 canvas to the viewport. Lowpass filters are skipped
-when `love.audio.isEffectsSupported()` is false.
+when `love.audio.isEffectsSupported()` is false. The main menu shows FULLSCREEN
+instead of EXIT (a page cannot close its tab); it prints `OSPAGE-FULLSCREEN`,
+and `tools/web/seek.js` toggles the page fullscreen. The OPTIONS DISPLAY page
+drops FULLSCREEN and WINDOW SIZE there, and `Display.apply` ignores their
+persisted values (the canvas stays 1280x720, windowed). love.js copies the save
+directory to IndexedDB only on `beforeunload`, so `tools/build_web.sh` patches
+its `love.js` to hand the private `FS` to `Module.onSavesLoaded` once the saves
+are read back; `seek.js` then hooks `FS.trackingDelegate` and syncs about 100 ms
+after every write, delete or rename in the save directory, and again when the
+page is hidden.
 
 `usedpiscale` is off (`conf.lua`, `Display.apply`): units are pixels on every
 platform. On Android and iOS `Display.view_scale()` (screen height / 720)

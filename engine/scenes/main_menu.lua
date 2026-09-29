@@ -13,6 +13,10 @@ local Sound    = require "engine.game.sound"
 -- Otherwise RESUME reopens the campaign autosave at its briefing.
 local MainMenu = Class(Scene)
 
+-- The web build's FULLSCREEN entry asks the hosting page (tools/web/seek.js) to
+-- toggle fullscreen with this stdout line, since the page letterboxes the canvas.
+local PAGE_FULLSCREEN = "OSPAGE-FULLSCREEN"
+
 MainMenu.ui_pointer = true
 
 function MainMenu:init(app)
@@ -65,6 +69,9 @@ function MainMenu:_select(id)
         app.scenes:replace("advanced_menu")    -- mission picker, replays, editor
     elseif id == "exit" then
         love.event.quit()
+    elseif id == "fullscreen" then
+        print(PAGE_FULLSCREEN)
+        self:_open()
     end
 end
 

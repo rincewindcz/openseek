@@ -28,6 +28,7 @@ local Score           = require "engine.game.score"
 local Screen          = require "engine.core.screen"
 local EndStats        = require "engine.ui.end_stats"
 local Pointer         = require "engine.ui.pointer"
+local TouchControls   = require "engine.ui.touch_controls"
 local DataSetup       = require "engine.ui.data_setup"
 local SceneManager    = require "engine.core.scene_manager"
 local Audio           = require "engine.core.audio"
@@ -67,6 +68,14 @@ local FPS_FONT  = "chars"
 local FPS_X     = 10
 local FPS_Y     = 34
 local FPS_SCALE = 2
+
+-- `--touch` tests the phone controls on a desktop: the left mouse button is one
+-- finger, and TOUCH_FIRE_KEY holds the on-screen FIRE button as a second one.
+local TOUCH_FIRE_KEY = "z"
+local MOUSE_TOUCH_ID = "mouse"
+local FIRE_TOUCH_ID  = "fire_key"
+local touch_emulation = false
+local mouse_touching  = false
 
 -- The shared app context handed to every scene: the world and the systems
 -- around it, the fullscreen fade overlay, the stats screen, and the pre-game
@@ -140,6 +149,8 @@ function love.load(args)
     for _, a in ipairs(args or {}) do
         if a == "--selftest" then
             selftest = true
+        elseif a == "--touch" then
+            touch_emulation = true
         elseif tonumber(a) then
             selftest_ticks = selftest_ticks or tonumber(a)
         elseif not a:match("^%-%-") then
@@ -165,6 +176,7 @@ function love.load(args)
         tick              = 0,     -- fixed simulation ticks since the phase started
         record_runs       = true,  -- write a replay file for every phase played
         upload_runs       = Replay.upload_enabled(), -- also hand each one to the hosting web page
+        touch_emulation   = touch_emulation, -- `--touch`: mouse as a finger, MOBILE UI options shown
         replay_play       = nil,   -- Replay being played back (set by the replay picker)
         replay_verify     = false, -- playback at speed, only to check for divergence
         replay_result     = nil,   -- outcome of the last playback, shown by the picker
@@ -183,6 +195,9 @@ function love.load(args)
                      loadout = {}, god = false, ff = false },
         },
     }
+    -- A phone shows its controls from the first touch, which the menus already
+    -- need; the emulation shows them from the start instead.
+    if touch_emulation then Pointer.touch = true end
     app.hud:load("data/hud.json")
     app.hud.world = world
     app.hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
@@ -297,8 +312,10 @@ function love.draw()
     local top = app.scenes:top()
     -- Hide the OS cursor while a pointer-driven UI scene, the stats screen, or
     -- a fullscreen overlay is up (the SELPOINT sprite is drawn instead);
-    -- restore it for gameplay and the overview.
-    local ui = (top and top.ui_pointer) or app.end_stats:is_active() or app.screen:is_active()
+    -- restore it for gameplay and the overview. `--touch` keeps it everywhere,
+    -- since a touch draws no pointer sprite.
+    local ui = not touch_emulation
+        and ((top and top.ui_pointer) or app.end_stats:is_active() or app.screen:is_active())
     if app.hidden_cursor then
         if ui then love.mouse.setCursor(app.hidden_cursor) else love.mouse.setCursor() end
     else
@@ -329,6 +346,14 @@ function love.keypressed(key)
         Screenshot.capture()
         return
     end
+    if touch_emulation and key == TOUCH_FIRE_KEY and not (top and top:captures_keys()) then
+        if not app.screen:is_active() then
+            local x, y = TouchControls.button_center("fire")
+            Pointer.moved(Pointer.x, Pointer.y, true)
+            app.scenes:dispatch("touchpressed", FIRE_TOUCH_ID, x, y)
+        end
+        return
+    end
     -- A fullscreen overlay (title / briefing / crash picture) swallows input.
     -- Esc cancels it (the shower's on_cancel decides where that goes); a
     -- wait_key picture otherwise advances on any key.
@@ -341,6 +366,12 @@ function love.keypressed(key)
         return
     end
     app.scenes:dispatch("keypressed", key)
+end
+
+function love.keyreleased(key)
+    if touch_emulation and key == TOUCH_FIRE_KEY then
+        app.scenes:dispatch("touchreleased", FIRE_TOUCH_ID)
+    end
 end
 
 function love.wheelmoved(dx, dy)
@@ -366,15 +397,25 @@ local function pointer_released(x, y)
 end
 
 -- Mouse events SDL synthesizes from touches (istouch) are dropped: the touch
--- callbacks below already handle those.
+-- callbacks below already handle those. Under `--touch` the left button is
+-- turned into a touch instead, and the pointer only moves while it is down.
 function love.mousemoved(x, y, dx, dy, istouch)
     if istouch then return end
+    if touch_emulation then
+        if mouse_touching then love.touchmoved(MOUSE_TOUCH_ID, x, y) end
+        return
+    end
     Pointer.moved(x, y, false)
     app.scenes:dispatch("mousemoved", x, y, dx, dy)
 end
 
 function love.mousepressed(x, y, button, istouch)
     if istouch then return end
+    if touch_emulation and button == 1 then
+        mouse_touching = true
+        love.touchpressed(MOUSE_TOUCH_ID, x, y)
+        return
+    end
     app.debug_panel:mousepressed(x, y, button)
     if button == 1 then
         Pointer.moved(x, y, false)
@@ -386,6 +427,13 @@ end
 
 function love.mousereleased(x, y, button, istouch)
     if istouch then return end
+    if touch_emulation and button == 1 then
+        if mouse_touching then
+            mouse_touching = false
+            love.touchreleased(MOUSE_TOUCH_ID, x, y)
+        end
+        return
+    end
     if button == 1 then
         Pointer.moved(x, y, false)
         pointer_released(x, y)

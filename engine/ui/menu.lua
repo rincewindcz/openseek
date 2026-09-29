@@ -10,8 +10,9 @@ local Log      = require "engine.core.log"
 local Assets   = require "engine.core.assets"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
--- OPTIONS / CREDITS / HIGH SCORES / LOAD / ADVANCED / EXIT over the MAINP
--- backdrop, with a triangular cursor next to the highlighted entry).
+-- OPTIONS / CREDITS / HIGH SCORES / LOAD / ADVANCED / EXIT, FULLSCREEN on the
+-- web, over the MAINP backdrop, with a triangular cursor next to the
+-- highlighted entry).
 -- Purely presentational: confirming an entry plays a short flash/fade-out and
 -- then calls self.on_select(id); the caller (main.lua) sets that callback and
 -- decides what each id means.
@@ -64,15 +65,23 @@ local Menu_DEFAULT_ENTRIES = {
     { id = "hiscores",   label = "HIGH SCORES" },
     { id = "load",       label = "LOAD",       enabled = false },
     { id = "advanced",   label = "ADVANCED",   gap_after = 8 },
-    { id = "exit",       label = "EXIT" },
+    -- A page cannot close its browser tab, so the web build offers the page's
+    -- fullscreen toggle in EXIT's place.
+    { id = "exit",       label = "EXIT",       web = false },
+    { id = "fullscreen", label = "FULLSCREEN", web = true },
 }
 
 function Menu:init(entries)
     -- Copy so each instance owns its entries (enabled/y are mutated in place)
-    -- rather than sharing / clobbering the module-level defaults.
+    -- rather than sharing / clobbering the module-level defaults. An entry with
+    -- `web` set is kept only on (true) or off (false) the web build.
     self.entries = {}
-    for i, e in ipairs(entries or Menu_DEFAULT_ENTRIES) do
-        self.entries[i] = { id = e.id, label = e.label, enabled = e.enabled, gap_after = e.gap_after }
+    local web = love.system.getOS() == "Web"
+    for _, e in ipairs(entries or Menu_DEFAULT_ENTRIES) do
+        if e.web == nil or e.web == web then
+            self.entries[#self.entries + 1] = { id = e.id, label = e.label, enabled = e.enabled,
+                gap_after = e.gap_after }
+        end
     end
     self.cursor  = 1
     self.t       = 0

@@ -1,23 +1,25 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class      = require "engine.core.class"
-local Scene      = require "engine.core.scene"
-local Font       = require "engine.core.font"
-local Layout     = require "engine.ui.layout"
-local Config     = require "engine.core.config"
-local Input      = require "engine.core.input"
-local Audio      = require "engine.core.audio"
-local Sound      = require "engine.game.sound"
-local Display    = require "engine.core.display"
-local Pointer    = require "engine.ui.pointer"
-local Hint       = require "engine.ui.hint"
-local PostFX     = require "engine.game.postfx"
-local Vehicles   = require "engine.game.vehicles"
-local Difficulty = require "engine.game.difficulty"
+local Class         = require "engine.core.class"
+local Scene         = require "engine.core.scene"
+local Font          = require "engine.core.font"
+local Layout        = require "engine.ui.layout"
+local Config        = require "engine.core.config"
+local Input         = require "engine.core.input"
+local Audio         = require "engine.core.audio"
+local Sound         = require "engine.game.sound"
+local Display       = require "engine.core.display"
+local Pointer       = require "engine.ui.pointer"
+local Hint          = require "engine.ui.hint"
+local PostFX        = require "engine.game.postfx"
+local Vehicles      = require "engine.game.vehicles"
+local Difficulty    = require "engine.game.difficulty"
+local TouchControls = require "engine.ui.touch_controls"
 
 -- Advanced OpenSeek options: a category sidebar (DISPLAY / VIDEO / EFFECTS /
--- AUDIO / CONTROLS / GAMEPLAY / DIFFICULTY / EXTRAS / EXIT) with the selected category's option rows on the right,
+-- AUDIO / CONTROLS / MOBILE UI / GAMEPLAY / DIFFICULTY / EXTRAS / EXIT) with the
+-- selected category's option rows on the right,
 -- over the pulsating main-menu backdrop. Reached from the main menu's OPTIONS
 -- entry. Toggles/ranges edit engine/core/config live; CONTROLS rebinds the central
 -- key map (engine/core/input). Config and bindings are written to the save
@@ -37,6 +39,7 @@ local SIDE_HIT0 = 22    -- sidebar hit-test left / right
 local SIDE_HIT1 = 110
 local SIDE_Y0   = 56
 local CAT_DY    = 17
+local SIDE_SPAN = 136   -- first to last category row; more categories pack tighter
 local PANEL_LX  = 122   -- option label x
 local VALUE_RX  = 298   -- option value right edge
 local ROW_Y0    = 56
@@ -60,11 +63,14 @@ local function match_difficulty() Config.difficulty = Difficulty.match_preset() 
 -- Categories listed in the sidebar. A category with `options` shows a rows panel;
 -- `kind = "controls"` builds its rows from the rebindable input actions; `kind =
 -- "exit"` leaves the screen when chosen. Every option key is a persisted Config
--- field (or, for keybinds, an Input action).
+-- field (or, for keybinds, an Input action). An option with `web = false` is
+-- dropped on the web build, where the page owns the canvas size and fullscreen;
+-- a category with `touch` set is shown only where touch play is possible
+-- (TouchControls.available).
 local CATEGORIES = {
     { title = "DISPLAY", options = {
-        { key = "fullscreen",  label = "FULLSCREEN",  kind = "toggle", on_change = apply_display },
-        { key = "window_size", label = "WINDOW SIZE", kind = "choice", choices = Display.size_choices(), on_change = apply_display },
+        { key = "fullscreen",  label = "FULLSCREEN",  kind = "toggle", on_change = apply_display, web = false },
+        { key = "window_size", label = "WINDOW SIZE", kind = "choice", choices = Display.size_choices(), on_change = apply_display, web = false },
         { key = "vsync",       label = "VSYNC",       kind = "toggle", on_change = apply_display },
         { key = "show_fps",    label = "SHOW FPS",    kind = "toggle" },
     } },
@@ -97,6 +103,14 @@ local CATEGORIES = {
         { key = "voice_callouts",        label = "RADIO CALLS",   kind = "toggle" },
     } },
     { title = "CONTROLS", kind = "controls" },
+    { title = "MOBILE UI", touch = true, options = {
+        { key = "touch_color",        label = "COLOR",       kind = "choice", choices = {
+            { label = "GOLD", value = "gold" }, { label = "WHITE", value = "white" } } },
+        { key = "touch_opacity",      label = "OPACITY",     kind = "range",  min = 0.2, max = 1.5, step = 0.1 },
+        { key = "touch_button_scale", label = "BUTTON SIZE", kind = "range",  min = 0.7, max = 1.3, step = 0.1 },
+        { key = "touch_stick_scale",  label = "STICK SIZE",  kind = "range",  min = 0.7, max = 1.5, step = 0.1 },
+        { key = "touch_left_handed",  label = "LEFT HANDED", kind = "toggle" },
+    } },
     { title = "GAMEPLAY", options = {
         { key = "speed_scale",          label = "GAME SPEED",      kind = "range", min = 0.5, max = 1.2, step = 0.1 },
         { key = "hud_scale",            label = "HUD SIZE",        kind = "range", min = 0.8, max = 1.6, step = 0.1 },
@@ -164,6 +178,23 @@ function AdvancedSettings:init(app)
     end
     self.control_opts[#self.control_opts + 1] = { label = "RESET TO DEFAULTS", kind = "reset" }
 
+    local web   = love.system.getOS() == "Web"
+    local touch = TouchControls.available(app)
+    self.categories = {}
+    for _, cat in ipairs(CATEGORIES) do
+        if touch or not cat.touch then
+            local shown = { title = cat.title, kind = cat.kind }
+            if cat.options then
+                shown.options = {}
+                for _, opt in ipairs(cat.options) do
+                    if not (web and opt.web == false) then shown.options[#shown.options + 1] = opt end
+                end
+            end
+            self.categories[#self.categories + 1] = shown
+        end
+    end
+    self.cat_dy = math.min(CAT_DY, math.floor(SIDE_SPAN / (#self.categories - 1)))
+
     local ok, img = pcall(love.graphics.newImage, "assets/fullscreen/MAINP.png")
     if ok then img:setFilter("linear", "linear"); self.bg = img end
     local aok, arrow = pcall(love.graphics.newImage, "assets/mainmen/arrow.png")
@@ -175,7 +206,7 @@ function AdvancedSettings:enter()
     self.scroll = 0; self.key_col = 1
 end
 
-function AdvancedSettings:_category() return CATEGORIES[self.cat] end
+function AdvancedSettings:_category() return self.categories[self.cat] end
 
 function AdvancedSettings:_options()
     local cat = self:_category()
@@ -192,7 +223,7 @@ function AdvancedSettings:_exit()
 end
 
 function AdvancedSettings:_move_cat(dir)
-    self.cat    = ((self.cat - 1 + dir) % #CATEGORIES) + 1
+    self.cat    = ((self.cat - 1 + dir) % #self.categories) + 1
     self:_set_cursor(1)
     Audio.play_event("ui.move")
 end
@@ -321,8 +352,8 @@ end
 function AdvancedSettings:_sidebar_at(x, y)
     local dx, dy = Pointer.to_design(x, y, DESIGN_W, DESIGN_H)
     if dx < SIDE_HIT0 or dx > SIDE_HIT1 then return nil end
-    for i = 1, #CATEGORIES do
-        local ry = SIDE_Y0 + (i - 1) * CAT_DY
+    for i = 1, #self.categories do
+        local ry = SIDE_Y0 + (i - 1) * self.cat_dy
         if dy >= ry - 3 and dy <= ry + ROW_H then return i end
     end
     return nil
@@ -459,13 +490,13 @@ function AdvancedSettings:draw()
         { color = { 1, 1, 1, fade } })
 
     g.setColor(1, 1, 1, 0.25 * fade)
-    g.rectangle("fill", DIVIDER_X, SIDE_Y0 - 2, 1, CAT_DY * #CATEGORIES - 4)
+    g.rectangle("fill", DIVIDER_X, SIDE_Y0 - 2, 1, self.cat_dy * #self.categories - 4)
     g.setColor(1, 1, 1, 1)
 
     -- Sidebar categories; the active one is bright (brighter while it holds focus).
     local menu_focus = self.focus == "menu"
-    for i, cat in ipairs(CATEGORIES) do
-        local ry  = SIDE_Y0 + (i - 1) * CAT_DY
+    for i, cat in ipairs(self.categories) do
+        local ry  = SIDE_Y0 + (i - 1) * self.cat_dy
         local sel = (i == self.cat)
         local a   = ((sel and (menu_focus and 1 or 0.85)) or 0.5) * fade
         if cat.kind == "exit" then
