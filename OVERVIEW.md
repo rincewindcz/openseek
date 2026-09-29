@@ -220,7 +220,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base and pickup blips), counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen: lines count up (icons filling), then wind back down as each pays its bonus into TOTAL SCORE; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
-| `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse. |
+| `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse, greys levels the purse cannot pay for (not the selected one, whose COST reads red), slides the focus frame, marks the hovered box and dims LOADED while a higher level is selected. |
 | `ui/menu` | Main menu over `MAINP`, `main` font (`mainmen` on a pack exported before `main` existed). Also drives the `new_game` and `advanced_menu` submenus. |
 | `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
 | `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. |
@@ -459,7 +459,7 @@ Options:
 | `axis_aligned_pickups` | GAMEPLAY | Screen-upright pickups and pads, as the original. |
 | `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs and can destroy the player's base buildings (no score, stats or drops). |
 | `score_count_up` | GAMEPLAY | HUD score rolls to new total (frame time, presentation). |
-| `shop_fx` | GAMEPLAY | Animated shop medal purse (presentation). |
+| `shop_fx` | GAMEPLAY | Animated shop medal purse, unaffordable levels greyed with a red COST, sliding focus frame, hover frame, dimmed LOADED under a higher selection (presentation). |
 | `difficulty`, `enemy_damage`, `enemy_fire_rate`, `enemy_aggression`, `land_for_medals`, `land_for_supplies` | DIFFICULTY | The original's EASY / MEDIUM / HARD (`game/difficulty`, `data/difficulty.json`), each value also editable (preset then reads CUSTOM). Multipliers on enemy damage to the player, enemy fire rate, and aggression (detection and attack range up, reaction delay down); HARD is 1.0 on all, the engine's own tuning. MEDIUM needs a landing to collect medals, HARD also fuel and armor. Replay parameters; replays from before them apply HARD multipliers with no landing rules (`Replay.LEGACY_PARAMS`). |
 | `chopper_skin`, `tank_skin` | GAMEPLAY | Solo chopper and tank variants (section 9a); also set by the vehicle select screen and the overview `V` cycle. Recorded in the replay header. |
 | `coop_lives` | GAMEPLAY | Co-op campaign lives: `separate` or `shared` pool (section 9). |
@@ -496,7 +496,7 @@ galleries, debug mission picker, headless checks.
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius); `low_armor` (armor threshold, floor, fade, edge color and strength, pulse share and rate range, desaturation, edge radii, hit flash time and strength). |
 | `data/detail_fx.json` | `recoil` (weapons, kick, time, muzzle smoke), `casings` (weapons, color, size, speed, drag, lifetime), `tread_dust` (speed threshold, interval, puff size and lifetime, color per mission digit), `wreck_smoke` (time and interval per explosion size, wind, tint, thinning), `pickup_glint` (period, sweep time, band width, strength, screen angle). |
 | `data/tracks.json` | Tank tread marks: lifetime and fade (s), alpha, color, spacing and mark length (world units), gauge and tread width (fractions of hull width), mark cap. |
-| `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets, darkened level tile per weapon level (`powwgads` chopper, `powgadst` tank); `fx` timings for `shop_fx`. |
+| `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets, darkened level tile per weapon level (`powwgads` chopper, `powgadst` tank); `fx` timings, the unaffordable grey and COST tint, LOADED dim, hover alpha and focus slide time for `shop_fx`. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
 | `saves/save-<timestamp>-<n>.json` | One campaign save slot each, written to the save directory only (`game/savegame.lua`). |
 | `autosave.json` | The campaign run in progress at its last briefing, for the main menu's RESUME; written to the save directory only, removed when the run ends (`game/savegame.lua`). |

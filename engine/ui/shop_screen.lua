@@ -26,8 +26,11 @@ local Loadout = require "engine.game.loadout"
 -- count rolls up, the medals a selected level would cost pulse (the row dims
 -- when it is unaffordable), a purchase shakes and shrinks the spent medals
 -- away (a broken ten pops back in as singles), the count rolls down and LOADED
--- stamps onto the bought icon; a refused purchase shakes the purse. Timings
--- are data/shop.json "fx".
+-- stamps onto the bought icon; a refused purchase shakes the purse. Levels the
+-- purse cannot pay for are drawn greyed and darker, except the selected one,
+-- whose COST then reads red. The focus frame slides to a new selection, the
+-- box under the mouse gets a faint one, and LOADED dims while a higher level of
+-- its weapon is selected. Timings are data/shop.json "fx".
 local ShopScreen = Class()
 
 local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
@@ -48,6 +51,19 @@ local LOADED_IMG  = "assets/pow/powarmed_f00.png"
 local FOCUS_IMG   = "assets/pow/powfocus_f00.png"
 local MEDAL_LARGE = "assets/pow/powmedal_f00.png"
 local MEDAL_SMALL = "assets/pow/powmedal_f01.png"
+
+-- EXTRA (shop_fx): redraws the backdrop under an unaffordable level greyed and
+-- darkened.
+local UNAFFORDABLE_SRC = [[
+uniform float desaturate;
+uniform float brightness;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen)
+{
+    vec4 c  = Texel(tex, uv);
+    float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+    return vec4(mix(c.rgb, vec3(l), desaturate) * brightness, c.a) * color;
+}
+]]
 
 local function clamp01(v) return math.max(0, math.min(1, v)) end
 
@@ -84,11 +100,12 @@ local function img(path)
 end
 
 function ShopScreen:init()
-    self.active = false
-    self._cache = {}
-    self.font   = Font.get("charspow")
-    local raw   = love.filesystem.read(LAYOUT_PATH)
-    self.layout = json.decode(raw)
+    self.active              = false
+    self._cache              = {}
+    self.font                = Font.get("charspow")
+    self.unaffordable_shader = nil
+    local raw                = love.filesystem.read(LAYOUT_PATH)
+    self.layout              = json.decode(raw)
 end
 
 function ShopScreen:is_active() return self.active end
@@ -125,6 +142,7 @@ function ShopScreen:open(loadout, weapons, opts)
     self.spend       = nil
     self.stamp       = nil
     self.deny_t0     = nil
+    self.focus_t0    = 0
     self.count_shown = self:_fx() and 0 or loadout.medals
     self:_build()
     self.active = true
@@ -144,6 +162,8 @@ function ShopScreen:_build()
     self.backdrop = self:_img(L.backdrop[self.vehicle])
 
     self.zones, self.grid = {}, {}
+    local bw, bh = 1, 1
+    if self.backdrop then bw, bh = self.backdrop:getDimensions() end
     for _, cat in ipairs(L.categories[self.vehicle]) do
         local xs     = L.columns[cat.column]
         local offset = (cat.column == "right") and #L.columns.left or 0
@@ -154,6 +174,7 @@ function ShopScreen:_build()
                 row = cat.row, col = offset + level, darkened = cat.darkened[level],
                 x = xs[level], y = L.rows[cat.row], w = L.box.w, h = L.box.h,
             }
+            z.quad = love.graphics.newQuad(z.x + 1, z.y + 1, z.w - 2, z.h - 2, bw, bh)
             self.zones[#self.zones + 1] = z
             self.grid[z.row][z.col] = z
         end
@@ -173,6 +194,8 @@ function ShopScreen:_build()
             break
         end
     end
+    self.focus_zone = self.selected
+    self.focus_from = nil
 end
 
 function ShopScreen:_add_button(id, pos, image)
@@ -201,6 +224,12 @@ end
 
 function ShopScreen:selectable(weapon, level)
     return self:box_state(weapon, level) ~= "below"
+end
+
+-- A level above the owned one whose price is more than the purse holds.
+function ShopScreen:unaffordable(weapon, level)
+    local price = self.loadout:price(self.vehicle, weapon, level)
+    return price ~= nil and price > self.loadout.medals
 end
 
 -- Medal cost of the selected level now (0 when it is owned).
@@ -355,15 +384,91 @@ function ShopScreen:_draw_box(g, z)
     local state = self:box_state(z.weapon, z.level)
     if state == "loaded" then
         if not self:_draw_stamp(g, z) then
+            local alpha = select(4, g.getColor())
+            local tint  = self:_loaded_tint(z)
+            g.setColor(tint, tint, tint, alpha)
             self:_draw_at(g, self:_img(LOADED_IMG), z.x, z.y, L.loaded_offset)
+            g.setColor(1, 1, 1, alpha)
         end
     elseif state == "below" then
         local tile = string.format(L.darkened_tiles[self.vehicle], z.darkened)
         self:_draw_at(g, self:_img(tile), z.x, z.y)
+    elseif z ~= self.selected and self:unaffordable(z.weapon, z.level) then
+        self:_draw_unaffordable(g, z)
     end
-    if z == self.selected then
-        self:_draw_at(g, self:_img(FOCUS_IMG), z.x, z.y, L.focus_offset)
+end
+
+-- EXTRA (shop_fx): LOADED dims while a higher level of its weapon is selected.
+function ShopScreen:_loaded_tint(z)
+    local fx  = self:_fx()
+    local sel = self.selected
+    if fx and sel and sel.weapon == z.weapon and sel.level > z.level then return fx.loaded_dim end
+    return 1
+end
+
+-- Design-space top-left of the focus frame. EXTRA (shop_fx): a new selection
+-- slides the frame over from where it was in slide_time; a rebuild (vehicle
+-- switch) places it without sliding.
+function ShopScreen:_focus_pos()
+    local z = self.selected
+    if z ~= self.focus_zone then
+        if self.focus_zone then
+            local x, y = self:_focus_pos_of(self.focus_zone)
+            self.focus_from = { x = x, y = y }
+        end
+        self.focus_zone = z
+        self.focus_t0   = self.clock
     end
+    return self:_focus_pos_of(z)
+end
+
+function ShopScreen:_focus_pos_of(z)
+    local fx   = self:_fx()
+    local from = self.focus_from
+    if not fx or not from or z ~= self.focus_zone then return z.x, z.y end
+    local p = ease_out(clamp01((self.clock - self.focus_t0) / fx.slide_time))
+    return from.x + (z.x - from.x) * p, from.y + (z.y - from.y) * p
+end
+
+-- EXTRA (shop_fx): the selectable box under the mouse, when it is not the
+-- selected one; it gets a faint focus frame.
+function ShopScreen:_hovered()
+    if not self:_fx() or not Pointer.seen or Pointer.touch or self.confirming then return nil end
+    local z = self:_zone_at(Pointer.design(DW, DH))
+    if z and z.kind == "box" and z ~= self.selected and self:selectable(z.weapon, z.level) then
+        return z
+    end
+    return nil
+end
+
+function ShopScreen:_draw_focus(g)
+    local L     = self.layout
+    local image = self:_img(FOCUS_IMG)
+    local alpha = select(4, g.getColor())
+    local hover = self:_hovered()
+    if hover then
+        g.setColor(1, 1, 1, alpha * L.fx.hover_alpha)
+        self:_draw_at(g, image, hover.x, hover.y, L.focus_offset)
+        g.setColor(1, 1, 1, alpha)
+    end
+    if self.selected then
+        local x, y = self:_focus_pos()
+        self:_draw_at(g, image, math.floor(x + 0.5), math.floor(y + 0.5), L.focus_offset)
+    end
+end
+
+-- EXTRA (shop_fx): the icon of a level the purse cannot pay for, greyed and
+-- darkened over the backdrop's own.
+function ShopScreen:_draw_unaffordable(g, z)
+    local fx = self:_fx()
+    if not fx or not self.backdrop then return end
+    self.unaffordable_shader = self.unaffordable_shader or g.newShader(UNAFFORDABLE_SRC)
+    local shader = self.unaffordable_shader
+    shader:send("desaturate", fx.unaffordable.desaturate)
+    shader:send("brightness", fx.unaffordable.brightness)
+    g.setShader(shader)
+    g.draw(self.backdrop, z.quad, z.x + 1, z.y + 1)
+    g.setShader()
 end
 
 -- EXTRA (shop_fx): LOADED dropping onto a just-bought icon from stamp_scale
@@ -564,7 +669,14 @@ function ShopScreen:draw()
     for _, z in ipairs(self.zones) do
         if z.kind == "box" then self:_draw_box(g, z) else self:_draw_button(g, z) end
     end
+    self:_draw_focus(g)
+    local fx = self:_fx()
+    if fx and self.selected and self:unaffordable(self.selected.weapon, self.selected.level) then
+        local red = fx.cost_unaffordable   -- EXTRA (shop_fx)
+        g.setColor(red[1], red[2], red[3], fade)
+    end
     self:_draw_number(g, self:cost(), self.layout.cost)
+    g.setColor(1, 1, 1, fade)
     self:_draw_number(g, math.floor(self.count_shown + 0.5), self.layout.count, self:_deny_offset())
     self:_draw_medals(g)
     self:_draw_description(fade)
