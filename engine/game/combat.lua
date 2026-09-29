@@ -875,7 +875,7 @@ end
 -- Attached to the player so it draws on top of the vehicle, not under it.
 function CombatSystem:_player_hit_fx(p)
     self.world:sound("impact.player", p.x, p.y)
-    self.world:player_hit(p.x, p.y)
+    self.world:player_hit(p.x, p.y, p)
     local clip = PLAYER_HIT_FX[self.world.rng:random(#PLAYER_HIT_FX)]
     if p.add_hit_fx then
         p:add_hit_fx(clip, clip == "fire" and 0.6 or nil)

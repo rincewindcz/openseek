@@ -151,6 +151,9 @@ local CATEGORIES = {
         { key = "tread_dust",          label = "TREAD DUST",      kind = "toggle" },
         { key = "wreck_smoke",         label = "WRECK SMOKE",     kind = "toggle" },
         { key = "shell_impact",        label = "SHELL IMPACT",    kind = "toggle" },
+        { key = "low_armor_fx",        label = "LOW ARMOR FX",    kind = "toggle" },
+        { key = "damage_flash",        label = "DAMAGE FLASH",    kind = "toggle" },
+        { key = "pickup_glint",        label = "PICKUP GLINT",    kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }

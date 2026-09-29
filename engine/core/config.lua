@@ -128,6 +128,18 @@ local Config = {
     camera_shake        = false,
     camera_shake_amount = 1.0,
 
+    -- Low armor warning over the player's view, drawn by the post-processing pass
+    -- (engine/game/postfx.lua, so only with POST FX on; tuning in
+    -- data/impact_fx.json low_armor): low_armor_fx pulses the view's edges red and
+    -- drains their colour while the armor is low, damage_flash flashes the edges
+    -- on each hit taken. Presentation only.
+    low_armor_fx  = false,
+    damage_flash  = false,
+
+    -- A light sweep across each pickup now and then (engine/game/detail_fx.lua,
+    -- data/detail_fx.json pickup_glint). Presentation only.
+    pickup_glint = false,
+
     -- Enlarge the HUD radar while its auto zoom is on (engine/ui/hud.lua, sizes
     -- in data/hud.json). The original only narrowed the range. Presentation only.
     radar_zoom_grow = true,
@@ -192,6 +204,7 @@ local PERSISTED = {
     "radar_zoom_grow", "radar_backdrop", "engine_intro", "aim_laser",
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
+    "low_armor_fx", "damage_flash", "pickup_glint",
     "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",

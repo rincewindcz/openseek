@@ -7,7 +7,8 @@ local json   = require "lib.json"
 
 -- Gameplay post-processing: a filmic grade over the world view (warm tone,
 -- saturation, S-curve contrast, local sharpening, bloom, vignette, animated
--- grain) plus softened ground shadows. Gameplay scenes bracket their
+-- grain) plus softened ground shadows, and the low armor warning ImpactFX hands
+-- to begin_world (EXTRA low_armor_fx). Gameplay scenes bracket their
 -- world pass with begin_world / end_world (the HUD and overlays stay outside, so
 -- they are never filtered) and their shadow draws with begin_shadows /
 -- end_shadows. Each pass costs nothing when its strengths are zero.
@@ -173,6 +174,11 @@ uniform vec3 bloom_tint;
 uniform float vignette_gain;
 uniform float vignette_power;
 uniform float grain_gain;
+uniform float alarm_edge;
+uniform float alarm_desaturate;
+uniform vec3 alarm_color;
+uniform float alarm_inner;
+uniform float alarm_outer;
 
 // Sine-free hash (Dave Hoskins, hash13): stable at any pixel coordinate, unlike
 // fract(sin(x) * k), whose float precision bands and coarsens as x grows.
@@ -198,7 +204,11 @@ float hash(vec3 p) {
     c += Texel(bloom_tex, uv).rgb * bloom_tint * bloom * bloom_gain;
 
     vec2 q = (px - viewport.xy) / viewport.zw * 2.0 - 1.0;
-    c *= clamp(1.0 - vignette * vignette_gain * pow(length(q), vignette_power), 0.0, 1.0);
+    float r = length(q);
+    c *= clamp(1.0 - vignette * vignette_gain * pow(r, vignette_power), 0.0, 1.0);
+
+    c = mix(c, vec3(luma(c)), alarm_desaturate * min(r, 1.0));
+    c = mix(c, alarm_color, alarm_edge * smoothstep(alarm_inner, alarm_outer, r));
 
     float g = hash(vec3(floor((px - viewport.xy) / px_size), grain_seed)) - 0.5;
     c += g * grain * grain_gain * (1.0 - abs(luma(c) * 2.0 - 1.0) * 0.5);
@@ -222,6 +232,7 @@ function PostFX:init()
     self.w, self.h        = 0, 0
     self.world_on         = false
     self.shadows_on       = false
+    self.alarm            = nil   -- this view's low armor warning, set by begin_world
     self.look             = nil   -- the active stage's look, set by enter
 end
 
@@ -286,8 +297,10 @@ local function pass(dst, src, shader)
     g.draw(src, 0, 0, 0, dst:getWidth() / src:getWidth(), dst:getHeight() / src:getHeight())
 end
 
-function PostFX:begin_world()
-    self.world_on = self:grading_active()
+-- alarm is ImpactFX:low_armor for the view's player, or nil.
+function PostFX:begin_world(alarm)
+    self.alarm    = Config.postfx_enabled and alarm or nil
+    self.world_on = self:grading_active() or self.alarm ~= nil
     if not self.world_on then return end
     self:_ensure(love.graphics.getDimensions())
     self.world_prev = redirect(self.world, 0, 0, 0, 1)
@@ -344,6 +357,13 @@ function PostFX:end_world(vx, vy, vw, vh)
     send(s, "vignette_gain", look.vignette)
     send(s, "vignette_power", look.vignette_power)
     send(s, "grain_gain", look.grain)
+    local alarm = self.alarm
+    send(s, "alarm_edge", alarm and alarm.edge or 0)
+    send(s, "alarm_desaturate", alarm and alarm.desaturate or 0)
+    send(s, "alarm_color", alarm and alarm.color or { 0, 0, 0 })
+    send(s, "alarm_inner", alarm and alarm.inner or 0)
+    send(s, "alarm_outer", alarm and alarm.outer or 1)
+    self.alarm = nil
     g.setCanvas(self.world_prev)
     if sx then g.setScissor(sx, sy, sw, sh) end
     g.setShader(s)

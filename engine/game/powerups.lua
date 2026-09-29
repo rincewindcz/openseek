@@ -154,7 +154,9 @@ function Powerups:draw()
     self.camera:apply()
     -- Optionally keep pickups screen-upright (original behaviour) by cancelling the
     -- camera's world rotation; otherwise they rotate with the world.
-    local rot = Config.axis_aligned_pickups and -(self.camera.angle or 0) or 0
+    local rot        = Config.axis_aligned_pickups and -(self.camera.angle or 0) or 0
+    local screen_rot = rot + (self.camera.angle or 0)
+    local detailfx   = self.world.detailfx
     for _, t in ipairs(self.camera:tiles()) do
         g.push()
         g.translate(t.ox, t.oy)
@@ -170,6 +172,9 @@ function Powerups:draw()
                     local iw, ih = img:getDimensions()
                     g.setColor(1, 1, 1)
                     g.draw(img, pu.x, pu.y, rot, 1, 1, iw / 2, ih / 2)
+                    if detailfx and not self:expiring(pu) then   -- EXTRA (pickup_glint)
+                        detailfx:draw_glint(img, pu.x, pu.y, rot, screen_rot, pu.age)
+                    end
                 end
             end
         end

@@ -419,7 +419,7 @@ function CoopGameplay:update(dt)
     self:update_audio(self.players, self.cameras, self:_biases())
     app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
     app.lightfx:update(dt)
-    app.impactfx:update(dt)
+    app.impactfx:update(dt, self.players)
     app.tracks:update(dt, self.players)
     app.detailfx:update(dt, self.players)
     self:tick_replay(self.players)
@@ -504,7 +504,7 @@ function CoopGameplay:draw()
         g.translate(vx, 0)
         g.setScissor(vx, 0, vw, H)
         local ground, air = draw_layers(p, other)
-        app.postfx:begin_world()
+        app.postfx:begin_world(app.impactfx:low_armor(p))
         app.renderer:draw_ground()   -- terrain, decals, craters
         if #ground > 0 then
             app.renderer:draw_objects("under")   -- flat clutter the vehicles sit on

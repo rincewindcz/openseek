@@ -38,6 +38,13 @@
     "jitter": 2,
     "max": 200
   },
+  "pickup_glint": {
+    "period": 1.6,
+    "sweep": 0.3,
+    "width": 0.3,
+    "strength": 0.6,
+    "angle_deg": 45
+  },
   "impact": {
     "weapons": { "shells": "explosion_medium" },
     "scale": 1

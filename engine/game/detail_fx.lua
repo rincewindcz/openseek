@@ -12,6 +12,7 @@ local Animation = require "engine.core.animation"
 --   tread_dust    a tank at speed kicks up dust (snow in winter) behind its treads
 --   wreck_smoke   destroyed buildings and tanks keep smoking for a while
 --   shell_impact  a tank shell bursts into an explosion where it strikes
+--   pickup_glint  a light sweep runs across each pickup now and then
 -- Fed one way by the World forwarders (:weapon_fired, :projectile_impact, :wreck)
 -- and by the players
 -- read after each tick; never read back by the simulation (DETERMINISM.md D2).
@@ -19,6 +20,23 @@ local Animation = require "engine.core.animation"
 local DetailFX = Class()
 
 local DATA_PATH = "data/detail_fx.json"
+
+-- Pickup glint: a band across the sprite along dir (image pixels, unit length),
+-- centred at pos (-1..1 of the sprite's extent along dir), clipped to the sprite's
+-- own pixels and sampled per art pixel so it stays blocky like the art.
+local GLINT_SRC = [[
+uniform vec2 dir;
+uniform vec2 size;
+uniform float pos;
+uniform float width;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen)
+{
+    vec2 p  = floor(uv * size) + 0.5 - size * 0.5;
+    float s = dot(p, dir) / dot(abs(dir), size * 0.5);
+    float k = 1.0 - smoothstep(0.0, width, abs(s - pos));
+    return vec4(color.rgb, Texel(tex, uv).a * k * color.a);
+}
+]]
 
 local function set_of(list)
     local out = {}
@@ -35,6 +53,7 @@ function DetailFX:init()
     self.dust_color     = nil
     self.puff_img       = nil
     self.batch          = nil
+    self.glint_shader   = nil
     self:reset()
 end
 
@@ -331,6 +350,32 @@ function DetailFX:draw_ground()
         g.setColor(1, 1, 1)
         g.draw(batch)
     end
+    g.setColor(1, 1, 1)
+end
+
+-- EXTRA (pickup_glint): redraws a pickup sprite, drawn centred at (x, y) with
+-- rotation rot, as the glint band when one is sweeping. screen_rot is the
+-- sprite's total rotation on screen, so the sweep keeps one screen direction;
+-- t is the pickup's age, offset by its position so pickups glint out of step.
+function DetailFX:draw_glint(img, x, y, rot, screen_rot, t)
+    local spec = self.data.pickup_glint
+    if not Config.pickup_glint or not spec then return end
+    local u = ((t + x * 0.137 + y * 0.311) % spec.period) / spec.sweep
+    if u >= 1 then return end
+    local g      = love.graphics
+    local w, h   = img:getDimensions()
+    local angle  = spec.angle_deg * math.pi / 180 - screen_rot
+    local reach  = 1 + spec.width
+    self.glint_shader = self.glint_shader or g.newShader(GLINT_SRC)
+    local shader = self.glint_shader
+    shader:send("dir", { math.cos(angle), math.sin(angle) })
+    shader:send("size", { w, h })
+    shader:send("pos", reach * (2 * u - 1))
+    shader:send("width", spec.width)
+    g.setShader(shader)
+    g.setColor(1, 1, 1, spec.strength)
+    g.draw(img, x, y, rot, 1, 1, w / 2, h / 2)
+    g.setShader()
     g.setColor(1, 1, 1)
 end
 

@@ -845,8 +845,8 @@ function World:hit_flash(target)
     if self.impactfx then self.impactfx:hit(target) end
 end
 
-function World:player_hit(x, y)
-    if self.impactfx then self.impactfx:player_hit(x, y) end
+function World:player_hit(x, y, player)
+    if self.impactfx then self.impactfx:player_hit(x, y, player) end
 end
 
 -- Same forwarder shape for audio: simulation code names an event and where it

@@ -6,15 +6,19 @@ local json   = require "lib.json"
 local Config = require "engine.core.config"
 
 -- Impact feedback, presentation only: the hit flash on armed enemies (EXTRA
--- hit_flash; buildings and props do not flash) and the camera shake (EXTRA
--- camera_shake). The simulation reaches it one way through the World forwarders (World:hit_flash, :explosion_light, :player_hit,
--- :player_death_light, :weapon_fired) and never reads it back, like LightFX and audio
--- (DETERMINISM.md D2). Timings and strengths are data/impact_fx.json.
+-- hit_flash; buildings and props do not flash), the camera shake (EXTRA
+-- camera_shake) and the low armor warning over a player's view (EXTRA
+-- low_armor_fx, damage_flash; drawn by PostFX). The simulation reaches it one
+-- way through the World forwarders (World:hit_flash, :explosion_light,
+-- :player_hit, :player_death_light, :weapon_fired) and never reads it back, like
+-- LightFX and audio (DETERMINISM.md D2). Timings and strengths are data/impact_fx.json.
 --
 -- A hit flash redraws the damaged sprite as a white silhouette that fades over
 -- hit_flash.time. A shake source sits at a world position and fades with time
 -- and with distance from each camera's focus, so a co-op half barely feels its
--- partner's hits; Camera:apply adds the summed offset in world units.
+-- partner's hits; Camera:apply adds the summed offset in world units. The low
+-- armor warning keeps a level per player that eases toward how far its armor is
+-- below low_armor.threshold, and a pulse phase that quickens as the armor drops.
 local ImpactFX = Class()
 
 local DATA_PATH = "data/impact_fx.json"
@@ -31,6 +35,8 @@ function ImpactFX:init()
     self.data       = raw and json.decode(raw) or {}
     self.flashes    = setmetatable({}, { __mode = "k" })   -- target -> seconds left
     self.shakes     = {}                                   -- {x, y, amount, radius, time, t, phase}
+    self.alarms     = setmetatable({}, { __mode = "k" })   -- player -> {level, phase, hit}
+    self.alarm      = {}                                   -- reused PostFX parameters
     self.world_size = nil
     self.clock      = 0
     self.shader     = nil
@@ -44,6 +50,7 @@ end
 function ImpactFX:reset()
     self.flashes = setmetatable({}, { __mode = "k" })
     self.shakes  = {}
+    self.alarms  = setmetatable({}, { __mode = "k" })
 end
 
 -- emitters
@@ -75,16 +82,22 @@ function ImpactFX:fire(x, y, weapon_name)
     self:_shake(x, y, fire and fire[weapon_name])
 end
 
-function ImpactFX:player_hit(x, y)
+function ImpactFX:player_hit(x, y, player)
     self:_shake(x, y, self.data.shake and self.data.shake.player_hit)
+    -- EXTRA (damage_flash): every hit flashes the view's edges.
+    local spec = self.data.low_armor
+    if Config.damage_flash and spec and player then
+        self:_alarm_state(player).hit = spec.hit_time
+    end
 end
 
 function ImpactFX:player_death(x, y)
     self:_shake(x, y, self.data.shake and self.data.shake.player_death)
 end
 
-function ImpactFX:update(dt)
+function ImpactFX:update(dt, players)
     self.clock = self.clock + dt
+    self:_update_alarms(dt, players)
     for target, left in pairs(self.flashes) do
         left = left - dt
         self.flashes[target] = left > 0 and left or nil
@@ -97,7 +110,67 @@ function ImpactFX:update(dt)
     self.shakes = live
 end
 
+-- How far below low_armor.threshold the player's armor is: 0 at or above it
+-- (or once destroyed), 1 at no armor.
+function ImpactFX:_armor_short(player, spec)
+    if player.death then return 0 end
+    local max_armor = player.max_armor or 100
+    local fraction  = max_armor > 0 and player.armor / max_armor or 1
+    if fraction >= spec.threshold then return 0 end
+    return 1 - fraction / spec.threshold
+end
+
+function ImpactFX:_alarm_state(player)
+    local state = self.alarms[player]
+    if not state then
+        state = { level = 0, phase = 0, hit = 0 }
+        self.alarms[player] = state
+    end
+    return state
+end
+
+-- EXTRA (low_armor_fx): ease each player's level toward its armor shortfall
+-- (low_armor.floor at the threshold, 1 at no armor) at low_armor.fade per second.
+function ImpactFX:_update_alarms(dt, players)
+    local spec = self.data.low_armor
+    if not spec then return end
+    for _, p in ipairs(players or {}) do
+        local state  = self:_alarm_state(p)
+        local short  = Config.low_armor_fx and self:_armor_short(p, spec) or 0
+        local target = short > 0 and (spec.floor + (1 - spec.floor) * short) or 0
+        local step   = dt * spec.fade
+        if state.level < target then
+            state.level = math.min(target, state.level + step)
+        else
+            state.level = math.max(target, state.level - step)
+        end
+        local hz    = spec.pulse_hz[1] + (spec.pulse_hz[2] - spec.pulse_hz[1]) * short
+        state.phase = (state.phase + dt * hz) % 1
+        state.hit   = math.max(0, state.hit - dt)
+    end
+end
+
 -- queries
+
+-- EXTRA (low_armor_fx, damage_flash): the PostFX warning parameters for the view
+-- of player, or nil when it shows nothing. The returned table is reused.
+function ImpactFX:low_armor(player)
+    local spec  = self.data.low_armor
+    local state = spec and player and self.alarms[player]
+    if not state then return nil end
+    local pulse = 0.5 + 0.5 * math.sin(state.phase * 2 * math.pi)
+    local edge  = state.level * spec.edge * (1 - spec.pulse + spec.pulse * pulse)
+                + spec.hit_edge * state.hit / spec.hit_time
+    local desaturate = state.level * spec.desaturate
+    if edge <= 0 and desaturate <= 0 then return nil end
+    local alarm      = self.alarm
+    alarm.edge       = math.min(1, edge)
+    alarm.desaturate = desaturate
+    alarm.color      = spec.color
+    alarm.inner      = spec.inner
+    alarm.outer      = spec.outer
+    return alarm
+end
 
 -- Shortest wrapped distance between two world points on the seamless map.
 function ImpactFX:_distance(ax, ay, bx, by)

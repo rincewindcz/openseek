@@ -1,5 +1,19 @@
 {
   "hit_flash": { "time": 0.08, "strength": 0.85 },
+  "low_armor": {
+    "threshold": 0.5,
+    "floor": 0.45,
+    "fade": 1.5,
+    "color": [0.55, 0.03, 0.0],
+    "edge": 0.8,
+    "pulse": 0.45,
+    "pulse_hz": [0.7, 1.8],
+    "desaturate": 0.6,
+    "inner": 0.4,
+    "outer": 1.25,
+    "hit_time": 0.2,
+    "hit_edge": 0.6
+  },
   "shake": {
     "hz": 24,
     "max": 16,
