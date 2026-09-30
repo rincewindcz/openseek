@@ -80,7 +80,9 @@ function GameplayBase:fire_for(p)
     -- machine gun stays centered.
     local fx, fy = p.x, p.y
     if p.vehicle == "tank" and p.weapon_name == "shells" then fx, fy = p:tank_muzzle() end
-    combat:fire(fx, fy, p:fire_angle(), p.weapon_name, "player", p.weapon_level, nil, p)
+    if combat:fire(fx, fy, p:fire_angle(), p.weapon_name, "player", p.weapon_level, nil, p) == false then
+        return
+    end
     -- Ammo drains per projectile the shot spawns (rockets fire 2/3/4 by level), not
     -- per trigger pull. Flame weapons spawn ground patches, not rounds, so bill one.
     local shots = 1

@@ -390,6 +390,7 @@ function Gameplay:draw()
     local soft = app.postfx:soft_shadows_active()
     app.postfx:begin_shadows()
     app.helis:draw_shadows(soft) -- aircraft ground shadows, under the flyers
+    app.combat.air_strike:draw_shadows(soft)   -- EXTRA (air_strike_fx)
     self.player:draw_shadow(soft) -- flyer only (no-op for the grounded tank)
     if soft then
         self.player:draw_smoke_shadows()
@@ -401,6 +402,7 @@ function Gameplay:draw()
     app.renderer:draw_detail_air()   -- muzzle and wreck smoke
     app.renderer:draw_debris()   -- shrapnel above the explosion effects
     app.helis:draw()             -- airborne enemy helicopters
+    app.combat.air_strike:draw() -- EXTRA (air_strike_fx): friendly craft and their rounds
     if not grounded then
         self.player:draw()
         self.player:draw_world_front()

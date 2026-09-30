@@ -16,8 +16,9 @@ local Vehicles = {}
 -- (overview F1, sandbox, co-op) use these full lists; a campaign run builds
 -- its list from the equip-screen loadout instead (engine/game/loadout.lua).
 Vehicles.WEAPONS = {
-    chopper = { "chaingun", "napalm", "rockets", "mega_missile", "air_to_ground", "air_to_air", "bomb" },
-    tank    = { "chaingun", "shells" },
+    chopper = { "chaingun", "napalm", "rockets", "mega_missile", "air_to_ground", "air_to_air", "bomb",
+                "air_strike" },
+    tank    = { "chaingun", "shells", "air_strike" },
 }
 
 -- Equip-screen catalogue, matching the original screens: the numbered bays

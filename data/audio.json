@@ -51,12 +51,14 @@
     "ui.confirm": { "clip": "select", "bus": "ui", "gain": 0.90, "cooldown": 0.02 },
     "ui.back":    { "clip": "click2", "bus": "ui", "gain": 0.70, "cooldown": 0.02 },
 
-    "voice.mission_complete":  { "clip": "missionc", "bus": "voice", "priority": 9, "cooldown": 4.0 },
-    "voice.return_to_base":    { "clip": "returnto", "bus": "voice", "priority": 8, "cooldown": 8.0 },
-    "voice.objective_cleared": { "clip": "cleared",  "bus": "voice", "priority": 6, "cooldown": 3.0 },
-    "voice.mayday":            { "clip": "mayday",   "bus": "voice", "priority": 10, "cooldown": 3.0 },
-    "voice.pow_aboard":        { "clip": "powcomeo", "bus": "voice", "priority": 5, "cooldown": 2.0 },
-    "voice.pow_delivered":     { "clip": "powletsg", "bus": "voice", "priority": 7, "cooldown": 2.0 },
-    "voice.overkill":          { "clip": "overkill", "bus": "voice", "priority": 4, "cooldown": 2.0 }
+    "voice.mission_complete":    { "clip": "missionc", "bus": "voice", "priority": 9, "cooldown": 4.0 },
+    "voice.return_to_base":      { "clip": "returnto", "bus": "voice", "priority": 8, "cooldown": 8.0 },
+    "voice.objective_cleared":   { "clip": "cleared",  "bus": "voice", "priority": 6, "cooldown": 3.0 },
+    "voice.mayday":              { "clip": "mayday",   "bus": "voice", "priority": 10, "cooldown": 3.0 },
+    "voice.pow_aboard":          { "clip": "powcomeo", "bus": "voice", "priority": 5, "cooldown": 2.0 },
+    "voice.pow_delivered":       { "clip": "powletsg", "bus": "voice", "priority": 7, "cooldown": 2.0 },
+    "voice.overkill":            { "clip": "overkill", "bus": "voice", "priority": 4, "cooldown": 2.0 },
+    "voice.air_strike_call":     { "clip": "4seconds", "bus": "voice", "priority": 6, "cooldown": 1.0 },
+    "voice.air_strike_incoming": { "clip": "incoming", "bus": "voice", "priority": 7, "cooldown": 1.0 }
   }
 }

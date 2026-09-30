@@ -154,6 +154,7 @@ local CATEGORIES = {
         { key = "low_armor_fx",        label = "LOW ARMOR FX",    kind = "toggle" },
         { key = "damage_flash",        label = "DAMAGE FLASH",    kind = "toggle" },
         { key = "pickup_glint",        label = "PICKUP GLINT",    kind = "toggle" },
+        { key = "air_strike_fx",       label = "AIR STRIKE FX",   kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }

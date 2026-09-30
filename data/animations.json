@@ -741,6 +741,13 @@
     "fps": 1,
     "loop": false
   },
+  "strike_jet": {
+    "frames": [
+      "stage40/jet_f0.png"
+    ],
+    "fps": 1,
+    "loop": false
+  },
   "pickup": {
     "frames": [
       "stage00/pickup_f00.png",

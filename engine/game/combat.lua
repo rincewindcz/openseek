@@ -9,6 +9,7 @@ local Mathx     = require "engine.core.mathx"
 local Score     = require "engine.game.score"
 local Stats     = require "engine.game.stats"
 local Shadow    = require "engine.game.shadow"
+local AirStrike = require "engine.game.air_strike"
 
 -- Projectile
 
@@ -139,6 +140,7 @@ function CombatSystem:init(world, camera)
     self.weapons     = {}
     self._swing      = {}
     self._alt        = {}   -- per owner+weapon side toggle for alternate_side weapons
+    self.air_strike  = AirStrike:new(world, self)
 end
 
 -- Spawn a transient world-space effect. opts: {rot, scale, damage, radius,
@@ -197,9 +199,14 @@ function CombatSystem:next_side(owner, weapon_name)
     return (self._alt[tostring(owner) .. weapon_name] == 1) and -1 or 1
 end
 
+-- Returns false when the shot was refused (an air strike already pending), so
+-- the caller spends no ammo.
 function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range_override, shooter)
     local weapon_def = self.weapons[weapon_name]
     if not weapon_def then return end
+    if weapon_def.proj_type == "air_strike" then
+        return self.air_strike:call(x, y, angle_deg, weapon_def, level_idx or 1, shooter)
+    end
     -- Muzzle flash and report at the gun for every shooter (player, ground AI,
     -- helis). The event is named after the weapon; data/audio.json decides which
     -- clip that is, and an unmapped weapon simply fires silently.
@@ -361,6 +368,7 @@ function CombatSystem:reset_phase()
     self.effects     = {}
     self._swing      = {}
     self._alt        = {}
+    self.air_strike:reset()
 end
 
 -- Fire a single shot from an entity along its current aim, mirroring the AI's
@@ -674,6 +682,7 @@ function CombatSystem:update(dt)
     end
     self.projectiles = alive
 
+    self.air_strike:update()
     self:_update_effects(dt)
 end
 

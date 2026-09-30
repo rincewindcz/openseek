@@ -527,6 +527,7 @@ function CoopGameplay:draw()
         local soft = app.postfx:soft_shadows_active()
         app.postfx:begin_shadows()
         app.helis:draw_shadows(soft) -- aircraft ground shadows, under the flyers
+        app.combat.air_strike:draw_shadows(soft)   -- EXTRA (air_strike_fx)
         p:draw_shadow(soft)
         if other then other:draw_remote_shadow(g, cam, soft) end
         if soft then
@@ -539,6 +540,7 @@ function CoopGameplay:draw()
         app.renderer:draw_detail_air()   -- muzzle and wreck smoke
     app.renderer:draw_debris()   -- shrapnel above the explosion effects
         app.helis:draw()             -- airborne enemy helicopters
+        app.combat.air_strike:draw() -- EXTRA (air_strike_fx): friendly craft and their rounds
         for _, pl in ipairs(air) do self:_draw_vehicle(pl, p, cam) end
         if p:is_airborne() then p:draw_world_front() end
         -- Night light map and flash layer per half, from this half's camera; the

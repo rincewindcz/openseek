@@ -42,6 +42,7 @@ local RADAR_COLORS = {
     enemy     = { classic = { 1.0, 0.15, 0.15 },  bright = { 1.0, 0.2, 0.15 } },
     air       = { classic = { 1.0, 0.4, 0.8 },    bright = { 1.0, 0.45, 0.9 } },   -- enemy helicopters
     pickup    = { classic = { 1.0, 0.9, 0.1 },    bright = { 1.0, 0.95, 0.15 } },
+    strike    = { classic = { 1.0, 0.55, 0.15 },  bright = { 1.0, 0.6, 0.2 } },    -- pending air strike
     objective = { classic = { 1.0, 1.0, 1.0 },    bright = { 1.0, 1.0, 1.0 } },
 }
 
@@ -53,8 +54,10 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen)
 }
 ]]
 
--- Blink rate (on/off cycles per second) of a pickup blip about to expire.
+-- Blink rate (on/off cycles per second) of a pickup blip about to expire, and
+-- of a pending air strike's target.
 local RADAR_PICKUP_BLINK = 8
+local RADAR_STRIKE_BLINK = 2
 
 -- Score count-up: exponential approach rate (per second) and the floor speed
 -- (points per second) that keeps the last few digits from crawling.
@@ -439,9 +442,34 @@ function Hud:_target_center(tgt)
     return tgt.x, tgt.y
 end
 
+-- Draws a sights frame centred on a world point, in the player's view.
+function Hud:_draw_sight_at(g, img, p, wx, wy, s)
+    local x, y = p.camera:project(wx, wy)
+    local w, h = img:getDimensions()
+    g.setColor(1, 1, 1)
+    g.draw(img, x, y, 0, s, s, w / 2, h / 2)
+end
+
+-- EXTRA (air_strike_fx): the air strike sight stays on the target of the
+-- player's pending strike, whatever weapon is selected, blinking once the
+-- incoming call has sounded. Returns true while one is pending.
+function Hud:_draw_strike_marker(g, item, p, s)
+    local air_strike = self.combat.air_strike
+    local strike     = Config.air_strike_fx and air_strike:pending(p)
+    if not strike then return false end
+    local def = strike.def
+    local img = item._frames and item._frames[def.sight + 1]
+    if not img then return true end
+    local blink = air_strike:time_to_impact(strike) <= def.incoming
+        and math.floor(self.world.time * def.marker_blink_hz * 2) % 2 == 1
+    if not blink then self:_draw_sight_at(g, img, p, strike.x, strike.y, s) end
+    return true
+end
+
 function Hud:_draw_sight(g, item, s)
     local p = self.player
     if not (p and self.combat and p.camera) then return end
+    local striking   = self:_draw_strike_marker(g, item, p, s)
     local weapon_def = self.combat.weapons[p.weapon_name]
     if not (weapon_def and weapon_def.sight ~= nil) then
         p._sight_x, p._sight_y, p._sight_lock, p._sight_blink = nil, nil, nil, nil
@@ -449,6 +477,18 @@ function Hud:_draw_sight(g, item, s)
     end
     local img = item._frames and item._frames[weapon_def.sight + 1]
     if not img then return end
+
+    -- The air strike sight rests on the point a strike called now would land
+    -- on; while one is pending the marker above takes its place.
+    if weapon_def.proj_type == "air_strike" then
+        p._sight_x, p._sight_y, p._sight_lock, p._sight_blink = nil, nil, nil, nil
+        if not striking then
+            local rad = (p:fire_angle() - 90) * math.pi / 180
+            self:_draw_sight_at(g, img, p, p.x + math.cos(rad) * weapon_def.target_distance,
+                p.y + math.sin(rad) * weapon_def.target_distance, s)
+        end
+        return
+    end
 
     local cam = p.camera
     local screen_w, screen_h = love.graphics.getDimensions()
@@ -704,6 +744,15 @@ function Hud:_draw_radar(g, item, x, y, s)
         end
     end
 
+    -- EXTRA (air_strike_fx): pending air strike targets, blinking.
+    local strikes    = {}
+    local air_strike = Config.air_strike_fx and self.combat and self.combat.air_strike
+    if air_strike and math.floor(self.world.time * RADAR_STRIKE_BLINK * 2) % 2 == 0 then
+        for _, strike in ipairs(air_strike.strikes) do
+            if air_strike:landing(strike) then plot(strikes, strike.x, strike.y) end
+        end
+    end
+
     local backdrop = Config.radar_backdrop or 0
     local function draw_blips(blips, colors, size)
         local half     = dot_r * (size or 1)
@@ -720,6 +769,7 @@ function Hud:_draw_radar(g, item, x, y, s)
     draw_blips(enemies,        RADAR_COLORS.enemy)
     draw_blips(air,            RADAR_COLORS.air)
     draw_blips(pickups,        RADAR_COLORS.pickup)
+    draw_blips(strikes,        RADAR_COLORS.strike, 1.6)
     draw_blips(objectives,     RADAR_COLORS.objective)
 
     -- Co-op teammate (split screen): a larger dot in the teammate's color.

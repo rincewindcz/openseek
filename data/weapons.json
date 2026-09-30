@@ -281,6 +281,73 @@
       }
     ]
   },
+  "air_strike": {
+    "vehicle": "both",
+    "short": "STR",
+    "icon": 2,
+    "sight": 2,
+    "proj_type": "air_strike",
+    "ammo_max": 4,
+    "ammo_pickup": 0,
+    "fire_rate": 2,
+    "target_distance": 160,
+    "radius": 240,
+    "delay": 5.0,
+    "incoming": 1.7,
+    "marker_blink_hz": 3,
+    "levels": [
+      {
+        "strike": "artillery",
+        "impacts": 16,
+        "window": 1.8,
+        "impact_radius": 44,
+        "damage": 8,
+        "explosion": "explosion_medium"
+      },
+      {
+        "strike": "choppers",
+        "craft": 3,
+        "rounds": 8,
+        "lane_spacing": 110,
+        "reach": 0.8,
+        "window": 1.4,
+        "lag": 0.2,
+        "jitter": 18,
+        "impact_radius": 48,
+        "damage": 16,
+        "explosion": "explosion_medium",
+        "standoff": 150,
+        "approach": 900,
+        "altitude": 14,
+        "rotor_offset": 8.7,
+        "rotor_fps": 50,
+        "munition_clip": "ffr",
+        "munition_time": 0.3
+      },
+      {
+        "strike": "jets",
+        "craft": 3,
+        "rounds": 7,
+        "lane_spacing": 130,
+        "reach": 0.9,
+        "window": 0.5,
+        "lag": 0.15,
+        "jitter": 10,
+        "impact_radius": 64,
+        "damage": 32,
+        "explosion": "explosion_large",
+        "debris": 3,
+        "approach": 1500,
+        "altitude": 40,
+        "craft_clip": "strike_jet",
+        "rotor_offset": 8.7,
+        "rotor_fps": 50,
+        "munition_clip": "bomb",
+        "munition_time": 0.4,
+        "munition_min_scale": 0.3
+      }
+    ]
+  },
   "shells": {
     "vehicle": "tank",
     "short": "SHL",

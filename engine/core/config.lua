@@ -140,6 +140,12 @@ local Config = {
     -- data/detail_fx.json pickup_glint). Presentation only.
     pickup_glint = false,
 
+    -- Air strike visuals (engine/game/air_strike.lua, engine/ui/hud.lua): the
+    -- sight left on a pending strike's target, its radar blip, and the friendly
+    -- craft with their rounds. Presentation only; the strike lands the same
+    -- either way.
+    air_strike_fx = true,
+
     -- Enlarge the HUD radar while its auto zoom is on (engine/ui/hud.lua, sizes
     -- in data/hud.json). The original only narrowed the range. Presentation only.
     radar_zoom_grow = true,
@@ -204,7 +210,7 @@ local PERSISTED = {
     "radar_zoom_grow", "radar_backdrop", "engine_intro", "aim_laser",
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
-    "low_armor_fx", "damage_flash", "pickup_glint",
+    "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx",
     "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",

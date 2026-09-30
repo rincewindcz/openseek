@@ -196,6 +196,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. `Player.draw_tank_variant` is shared with the select screen. |
 | `game/enemy_heli` | Enemy helicopter spawn, flight AI, fire, death (`world.air_units`). |
 | `game/combat` | Weapons, projectiles, firing geometry, hits, AoE, effects, ground enemy AI. |
+| `game/air_strike` | Air strike (owned by `game/combat`): impact schedule drawn from `world.rng` at the call, detonated on `world.time`, damage converted from original toughness units; EXTRA craft, rocket and bomb visuals. |
 | `game/mission` | Objectives, progress, return to base. `Mission.for_stage(world, players, stage)`. |
 | `game/rescue` | POW rescue from `powhere.bin` buildings. |
 | `game/saboteur` | Sabotage objective. |
@@ -217,7 +218,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header, delta input, checksums, `.osr` files; hands each finished recording to the hosting page when the web build ships `build.json` with `replay_upload`. |
 | `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory; co-op adds a `coop` table per player), one JSON file per slot in `saves/`, plus the `autosave.json` of the run in progress (written by each campaign briefing, removed by `Campaign.finish`). |
-| `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base and pickup blips), counters, OVERKILL banner, rolling score. |
+| `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base, pickup and air strike blips), weapon sights (the air strike's rests on its target), counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen: lines count up (icons filling), then wind back down as each pays its bonus into TOTAL SCORE; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse, greys levels the purse cannot pay for (not the selected one, whose COST reads red), slides the focus frame, marks the hovered box and dims LOADED while a higher level is selected. |
@@ -267,7 +268,9 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 
 - `CombatSystem:fire` builds projectiles from a weapon def and level: spread,
   streams, swing, side offsets, `alternate_side`. `proj_type "flame"` is a damage
-  cone; `bomb_drop` glides then detonates with shrapnel.
+  cone; `bomb_drop` glides then detonates with shrapnel; `air_strike` goes to
+  `game/air_strike` (one pending per player; `fire` returns false on a refused
+  call so `fire_for` spends no ammo).
 - Player range 640 px unless the weapon sets `range`.
 - Projectiles carry `owner`. Homing steers at capped `turn_rate`.
 - Player ammo: `seed_ammo`, `has_ammo`, `consume_ammo`, `add_ammo`; gated in
@@ -444,6 +447,7 @@ Toggleable extras (EXTRAS page):
 | `camera_shake`, `camera_shake_amount` | off, 1.0 | Explosions and hits near the camera shake the view, scaled by the amount (`game/impact_fx`). |
 | `low_armor_fx`, `damage_flash` | off | Low armor pulses the view's edges red and drains its colour; each hit taken flashes the edges (`game/impact_fx`, drawn by `game/postfx`, needs POST FX on). |
 | `pickup_glint` | off | A light sweep runs across each pickup now and then (`game/detail_fx`). |
+| `air_strike_fx` | on | Air strike sight on a pending target, radar blip, friendly craft with their rockets and bombs (`game/air_strike`, `ui/hud`). |
 | `tank_tracks` | on | A driving tank leaves faint tread marks that fade out (`game/tracks`). |
 | `tank_recoil`, `shell_casings`, `tread_dust`, `wreck_smoke`, `shell_impact` | on | Turret kick and muzzle smoke on a shell shot, chaingun casings, dust behind a fast tank, smoking wrecks, an explosion where a tank shell strikes (`game/detail_fx`). |
 
@@ -481,7 +485,7 @@ galleries, debug mission picker, headless checks.
 
 | File | Contents |
 |------|----------|
-| `data/weapons.json` | Player and enemy weapons: levels, `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit). |
+| `data/weapons.json` | Player and enemy weapons: levels, `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit); `air_strike`: target distance, radius, delay, incoming call, marker blink, per level pattern (`strike`, impacts or craft / rounds / lanes, window, impact radius and toughness damage, explosion) and craft visuals. |
 | `data/entity_types.json` | Per kind: hit radius, explosion, weapon, detection / attack / turn, `solid`, `collision_radius`, `muzzle_offset`, sprite fallbacks, `dead_frame_offset`, `turret_hp`, `turret_explosion`, `ride_linger`. |
 | `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `weapon`, `fire_rate`, `muzzle`, `explosion`, `drop`. |
 | `data/missions.json` | Section 9. |
