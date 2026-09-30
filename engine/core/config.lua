@@ -146,6 +146,10 @@ local Config = {
     -- either way.
     air_strike_fx = true,
 
+    -- Pitch the one explosion sound the original plays for every blast by size
+    -- (data/audio.json size_pitch), so small and large blasts sound apart.
+    explosion_pitch = true,
+
     -- Enlarge the HUD radar while its auto zoom is on (engine/ui/hud.lua, sizes
     -- in data/hud.json). The original only narrowed the range. Presentation only.
     radar_zoom_grow = true,
@@ -211,6 +215,7 @@ local PERSISTED = {
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
     "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx",
+    "explosion_pitch",
     "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",

@@ -11,54 +11,106 @@
   },
 
   "events": {
-    "weapon.chaingun":     { "clip": "chaingun",     "gain": 0.55, "pitch_var": 0.06, "cooldown": 0.07, "max_voices": 3 },
-    "weapon.rockets":      { "clip": "missile_fir",  "gain": 0.80, "pitch_var": 0.05, "cooldown": 0.06 },
-    "weapon.mega_missile": { "clip": "megamiss_spc", "gain": 0.90, "pitch_var": 0.04, "cooldown": 0.08 },
-    "weapon.napalm":       { "clip": "flamer_spc",   "gain": 0.75, "pitch_var": 0.05, "cooldown": 0.10 },
-    "weapon.air_to_ground":{ "clip": "weapon3",      "gain": 0.85, "pitch_var": 0.04, "cooldown": 0.08 },
-    "weapon.air_to_air":   { "clip": "weapon2",      "gain": 0.85, "pitch_var": 0.04, "cooldown": 0.08 },
-    "weapon.bomb":         { "clip": "bomb_spc",     "gain": 0.80, "pitch_var": 0.03, "cooldown": 0.10 },
-    "weapon.shells":       { "clip": "shell_spc",    "gain": 0.95, "pitch_var": 0.05, "cooldown": 0.06 },
+    "weapon.chaingun":       { "clip": "chaingun",    "gain": 0.55, "pitch_var": 0.06, "cooldown": 0.07, "max_voices": 3 },
+    "weapon.rockets":        { "clip": "missile_fir", "gain": 0.80, "pitch_var": 0.05, "cooldown": 0.06 },
+    "weapon.mega_missile":   { "clip": "mega_sfx",    "gain": 0.90, "pitch_var": 0.04, "cooldown": 0.08 },
+    "weapon.napalm":         { "clip": "napalm_sfx",  "gain": 0.75, "pitch_var": 0.05, "cooldown": 0.10 },
+    "weapon.napalm.tank":    { "clip": "flame_sfx",   "gain": 0.75, "pitch_var": 0.05, "cooldown": 0.10 },
+    "weapon.air_to_ground":  { "clip": "missile_fir", "gain": 0.85, "pitch_var": 0.04, "cooldown": 0.08 },
+    "weapon.air_to_air":     { "clip": "missile_fir", "gain": 0.85, "pitch_var": 0.04, "cooldown": 0.08 },
+    "weapon.bomb":           { "clip": "bomb_sfx",    "gain": 0.80, "pitch_var": 0.03, "cooldown": 0.10 },
+    "weapon.shells":         { "clip": "tankgun_sfx", "gain": 0.95, "pitch_var": 0.05, "cooldown": 0.06 },
 
-    "weapon.flak":         { "clip": "gtoair_spc",   "gain": 0.55, "pitch_var": 0.07, "cooldown": 0.09, "max_dist": 900 },
-    "weapon.heavy_flak":   { "clip": "gtoair_spc",   "gain": 0.65, "pitch": 0.85, "pitch_var": 0.06, "cooldown": 0.10, "max_dist": 1000 },
-    "weapon.sgun":         { "clip": "weapon5",      "gain": 0.50, "pitch_var": 0.07, "cooldown": 0.09 },
-    "weapon.enemy_missile":{ "clip": "weapon6",      "gain": 0.60, "pitch_var": 0.05, "cooldown": 0.09 },
-    "weapon.homing_missile": { "clip": "megamiss_spc", "gain": 0.60, "pitch": 0.90, "pitch_var": 0.05, "cooldown": 0.09 },
-    "weapon.machine_gun":  { "clip": "weapon1",      "gain": 0.40, "pitch_var": 0.08, "cooldown": 0.10, "max_dist": 650 },
-    "weapon.tank_cannon":  { "clip": "tankgun_sfx",  "gain": 0.70, "pitch_var": 0.06, "cooldown": 0.10, "max_dist": 900 },
-    "weapon.rifle":        { "clip": "weapon4",      "gain": 0.35, "pitch_var": 0.09, "cooldown": 0.10, "max_dist": 550 },
+    "weapon.flak":           { "clip": "chaingun",    "gain": 0.45, "pitch_var": 0.07, "cooldown": 0.09, "max_dist": 900 },
+    "weapon.heavy_flak":     { "clip": "missile_fir", "gain": 0.60, "pitch": 0.90, "pitch_var": 0.06, "cooldown": 0.10, "max_dist": 1000 },
+    "weapon.sgun":           { "clip": "chaingun",    "gain": 0.45, "pitch_var": 0.07, "cooldown": 0.09 },
+    "weapon.enemy_missile":  { "clip": "missile_fir", "gain": 0.60, "pitch_var": 0.05, "cooldown": 0.09 },
+    "weapon.homing_missile": { "clip": "missile_fir", "gain": 0.60, "pitch": 0.90, "pitch_var": 0.05, "cooldown": 0.09 },
+    "weapon.machine_gun":    { "clip": "chaingun",    "gain": 0.40, "pitch_var": 0.08, "cooldown": 0.10, "max_dist": 650 },
+    "weapon.tank_cannon":    { "clip": "holexp",      "gain": 0.80, "pitch_var": 0.06, "cooldown": 0.10, "max_dist": 900 },
+    "weapon.rifle":          { "clip": "chaingun",    "gain": 0.30, "pitch": 1.15, "pitch_var": 0.09, "cooldown": 0.10, "max_dist": 550 },
 
-    "explosion.large":  { "clip": "kzexp",     "gain": 1.00, "pitch_var": 0.08, "cooldown": 0.05, "min_dist": 160, "max_dist": 1800, "max_voices": 4 },
-    "explosion.medium": { "clip": "holexp",    "gain": 0.85, "pitch_var": 0.09, "cooldown": 0.05, "min_dist": 110, "max_dist": 1200 },
-    "explosion.small":  { "clip": "holexp",    "gain": 0.60, "pitch": 1.25, "pitch_var": 0.10, "cooldown": 0.05, "max_dist": 800 },
-    "explosion.flak":   { "clip": "rico1_sfx", "gain": 0.55, "pitch_var": 0.10, "cooldown": 0.05, "max_dist": 850 },
-    "explosion.bomb":   { "clip": "bomb_sfx",  "gain": 1.00, "pitch_var": 0.05, "cooldown": 0.08, "min_dist": 200, "max_dist": 2100, "max_voices": 2 },
+    "explosion.large":  { "clip": "kzexp", "gain": 1.00, "size_pitch": 1.00, "pitch_var": 0.08, "cooldown": 0.05, "min_dist": 160, "max_dist": 1800, "max_voices": 4 },
+    "explosion.bomb":   { "clip": "kzexp", "gain": 1.00, "size_pitch": 0.85, "pitch_var": 0.05, "cooldown": 0.08, "min_dist": 200, "max_dist": 2100, "max_voices": 4 },
+    "explosion.medium": { "clip": "kzexp", "gain": 0.85, "size_pitch": 1.15, "pitch_var": 0.09, "cooldown": 0.05, "min_dist": 110, "max_dist": 1200, "max_voices": 4 },
+    "explosion.small":  { "clip": "kzexp", "gain": 0.60, "size_pitch": 1.35, "pitch_var": 0.10, "cooldown": 0.05, "max_dist": 800, "max_voices": 4 },
+    "explosion.flak":   { "clip": "kzexp", "gain": 0.40, "size_pitch": 1.60, "pitch_var": 0.10, "cooldown": 0.05, "max_dist": 850, "max_voices": 4 },
 
-    "impact.ricochet":  { "clip": "rico2_sfx", "gain": 0.40, "pitch_var": 0.12, "cooldown": 0.06, "max_dist": 600, "max_voices": 3 },
+    "impact.ricochet":  { "clips": ["rico1_sfx", "rico2_sfx"], "gain": 0.40, "pitch_var": 0.12, "cooldown": 0.06, "max_dist": 600, "max_voices": 3 },
     "impact.player":    { "clip": "rico1_sfx", "gain": 0.70, "pitch_var": 0.10, "cooldown": 0.09, "max_dist": 600 },
     "impact.crush":     { "clip": "mine_sfx",  "gain": 0.55, "pitch_var": 0.12, "cooldown": 0.08, "max_dist": 500 },
 
     "vehicle.chopper":  { "clip": "chopper_sfx", "bus": "engine", "gain": 0.45, "cooldown": 0 },
     "vehicle.tank":     { "clip": "tank_sfx",    "bus": "engine", "gain": 0.45, "cooldown": 0 },
-    "vehicle.takeoff":  { "clip": "tstart_spc",  "bus": "engine", "gain": 0.55, "cooldown": 0.5, "max_dist": 700 },
     "vehicle.reload":   { "clip": "reload",      "bus": "sfx",    "gain": 0.70, "cooldown": 0.5, "max_dist": 700 },
+
+    "hud.warning":  { "clip": "warn", "gain": 0.60, "cooldown": 0.2 },
 
     "pickup.item":  { "clip": "pickup", "gain": 0.80, "cooldown": 0.05, "max_dist": 900 },
     "pickup.medal": { "clip": "pickup", "gain": 0.90, "pitch": 1.3, "cooldown": 0.05, "max_dist": 900 },
 
-    "ui.move":    { "clip": "click",  "bus": "ui", "gain": 0.60, "cooldown": 0.02 },
-    "ui.confirm": { "clip": "select", "bus": "ui", "gain": 0.90, "cooldown": 0.02 },
-    "ui.back":    { "clip": "click2", "bus": "ui", "gain": 0.70, "cooldown": 0.02 },
+    "ui.move":        { "clip": "click",  "bus": "ui", "gain": 0.60, "cooldown": 0.02 },
+    "ui.confirm":     { "clip": "select", "bus": "ui", "gain": 0.90, "cooldown": 0.02 },
+    "ui.back":        { "clip": "click2", "bus": "ui", "gain": 0.70, "cooldown": 0.02 },
+    "ui.stats_tally": { "clip": "click",  "bus": "ui", "gain": 0.55, "cooldown": 0.06 },
+    "ui.stats_icon":  { "clip": "icons",  "bus": "ui", "gain": 0.70, "cooldown": 0.08 },
 
+    "voice.phase_start":         { "clip": "cleared",    "bus": "voice", "priority": 6, "cooldown": 1.0 },
+    "voice.phase_start.tank":    { "clip": "tstart_spc", "bus": "voice", "priority": 6, "cooldown": 1.0 },
     "voice.mission_complete":    { "clip": "missionc", "bus": "voice", "priority": 9, "cooldown": 4.0 },
     "voice.return_to_base":      { "clip": "returnto", "bus": "voice", "priority": 8, "cooldown": 8.0 },
-    "voice.objective_cleared":   { "clip": "cleared",  "bus": "voice", "priority": 6, "cooldown": 3.0 },
+    "voice.lets_go":             { "clip": "letsgeto", "bus": "voice", "priority": 5, "cooldown": 4.0 },
+    "voice.touchdown":           { "clip": "touchdow", "bus": "voice", "priority": 6, "cooldown": 2.0 },
+    "voice.objective_cleared":   { "clip": "yea",      "bus": "voice", "priority": 6, "cooldown": 3.0 },
     "voice.mayday":              { "clip": "mayday",   "bus": "voice", "priority": 10, "cooldown": 3.0 },
+    "voice.armor_half":          { "clip": "tomanyhi", "bus": "voice", "priority": 7, "cooldown": 2.0 },
+    "voice.armor_critical":      { "clip": "damagecr", "bus": "voice", "priority": 8, "cooldown": 2.0 },
+    "voice.just_in_time":        { "clip": "justinti", "bus": "voice", "priority": 6, "cooldown": 2.0 },
+    "voice.finish_him":          { "clip": "finishhi", "bus": "voice", "priority": 5, "cooldown": 8.6 },
     "voice.pow_aboard":          { "clip": "powcomeo", "bus": "voice", "priority": 5, "cooldown": 2.0 },
     "voice.pow_delivered":       { "clip": "powletsg", "bus": "voice", "priority": 7, "cooldown": 2.0 },
     "voice.overkill":            { "clip": "overkill", "bus": "voice", "priority": 4, "cooldown": 2.0 },
     "voice.air_strike_call":     { "clip": "4seconds", "bus": "voice", "priority": 6, "cooldown": 1.0 },
-    "voice.air_strike_incoming": { "clip": "incoming", "bus": "voice", "priority": 7, "cooldown": 1.0 }
+    "voice.air_strike_incoming": { "clip": "incoming", "bus": "voice", "priority": 7, "cooldown": 1.0 },
+
+    "voice.weapon.chaingun":      { "clip": "weapon1",      "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.rockets":       { "clip": "weapon2",      "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.air_to_air":    { "clip": "weapon3",      "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.air_to_ground": { "clip": "weapon4",      "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.air_strike":    { "clip": "weapon5",      "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.napalm":        { "clip": "weapon6",      "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.napalm.tank":   { "clip": "flamer_spc",   "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.shells":        { "clip": "shell_spc",    "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.bomb":          { "clip": "bomb_spc",     "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.mega_missile":  { "clip": "megamiss_spc", "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.mine":          { "clip": "mines_spc",    "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.ground_to_air": { "clip": "gtoair_spc",   "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.power_shell":   { "clip": "powshell_spc", "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+    "voice.weapon.super_napalm":  { "clip": "supernap_spc", "bus": "voice", "group": "weapon", "priority": 3, "cooldown": 0 },
+
+    "voice.come_in":        { "clips": ["comein2", "comein3"],           "bus": "voice", "cooldown": 0.5 },
+    "voice.come_in.tank":   { "clips": ["tcomein1_spc", "tcomein2_spc"], "bus": "voice", "cooldown": 0.5 },
+    "voice.noise_sir":      { "clip": "noisesir", "bus": "voice", "cooldown": 0.5 },
+    "voice.come_in_again":  { "clip": "comein2b", "bus": "voice", "cooldown": 0.5 }
+  },
+
+  "callouts": {
+    "armor_half": 0.5,
+    "armor_critical": 0.05,
+    "fuel_critical": 0.1,
+    "warn_period": 0.91,
+    "select_guard": 0.5,
+    "finish_him": 0.4,
+    "follow_ups": {
+      "voice.return_to_base": { "event": "voice.lets_go", "delay": 8.6 }
+    }
+  },
+
+  "sequences": {
+    "crash": [
+      { "at": 0,    "event": "voice.come_in" },
+      { "at": 0.86, "event": "voice.noise_sir" },
+      { "at": 3.43, "event": "voice.come_in_again" }
+    ]
   }
 }

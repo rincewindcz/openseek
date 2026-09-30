@@ -166,6 +166,7 @@ function Gameplay:spawn_player(carry)
     camera:start_zoom_intro(1.5, 1.0)   -- smooth zoom-in as the level opens
     self.pending_takeoff = true         -- chopper takes off when the zoom-in ends
     self:reset_end_stats()
+    self:announce_start(player)
 end
 
 -- Reload the current stage and respawn the player (R in game mode, or a key
@@ -201,7 +202,8 @@ function Gameplay:on_vehicle_lost()
         -- no viewer to inform).
         self.respawn_tick = app.tick + RESPAWN_TICKS
         if not self.playback then
-            app.screen:show(pic, { fade_in = 0.1, hold = 0.5, fade_out = 0.1 })
+            app.screen:show(pic, { fade_in = 0.1, hold = 0.5, fade_out = 0.1,
+                cues = "crash", variant = player.vehicle })
         end
     else
         Log.info("game", "game over, score %d", player.score or 0)
@@ -212,7 +214,8 @@ function Gameplay:on_vehicle_lost()
         local function finish()
             if app.campaign then Campaign.finish(app) else app.scenes:switch("hiscores", score) end
         end
-        app.screen:show(pic, { fade_in = 0.6, wait_key = true, on_done = finish, on_cancel = finish })
+        app.screen:show(pic, { fade_in = 0.6, wait_key = true, on_done = finish, on_cancel = finish,
+            cues = "crash", variant = player.vehicle })
     end
 end
 
@@ -230,6 +233,7 @@ function Gameplay:respawn_at_base()
     end
     app.camera.x, app.camera.y = player.x, player.y
     app.camera:start_zoom_intro(1.5, 1.0)
+    self:announce_start(player)
     self.pending_takeoff = true
     self.death_timer     = nil
 end
@@ -346,7 +350,7 @@ function Gameplay:update(dt)
         self.pending_takeoff = false
     end
     app.world:update(dt)
-    self:update_audio({ player }, { app.camera })
+    self:update_audio({ player }, { app.camera }, nil, dt)
     app.weather:update(dt, app.camera)
     app.lightfx.headlight_on = not player.death   -- vehicle lights cut on destruction
     app.lightfx:update(dt)

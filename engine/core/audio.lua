@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local json = require "lib.json"
+local json   = require "lib.json"
+local Config = require "engine.core.config"
 
 -- Sound mixer. Two things live here:
 --
@@ -10,7 +11,10 @@ local json = require "lib.json"
 --   browses, auditions and re-files.
 --
 --   The playback mixer: named events from data/audio.json, each mapping to a
---   clip plus its gain, bus, priority and retrigger cooldown. Events play
+--   clip (or a list of clips, one picked at random per play) plus its gain,
+--   bus, priority and retrigger cooldown. An event may have per-vehicle
+--   variants named "<event>.<vehicle>" (the tank's flame thrower answers
+--   weapon.napalm as weapon.napalm.tank). Events play
 --   through a per-clip voice pool, so overlapping shots layer instead of cutting
 --   each other off, and are mixed through named buses the OPTIONS page scales.
 --   Spatialization (which listener, how loud, which side) is decided one layer
@@ -24,8 +28,10 @@ local Audio = {
     _sources = {},   -- name -> love.audio.Source, the gallery's single-shot player
     _last    = nil,  -- name of the most recently played clip
 
-    _events   = {},  -- event name -> def (clip, bus, gain, priority, ...)
-    _defaults = {},  -- fields an event def omits
+    _events    = {},  -- event name -> def (clip, bus, gain, priority, ...)
+    _defaults  = {},  -- fields an event def omits
+    _callouts  = {},  -- voice callout thresholds and timings (engine/game/sound.lua)
+    _sequences = {},  -- name -> { {at, event}, ... } timed cues (engine/core/screen.lua)
     _data     = {},  -- clip name -> love.sound.SoundData (lazy)
     _pool     = {},  -- clip name -> { love.audio.Source, ... } voice pool (lazy)
     _next     = {},  -- event name -> earliest time it may retrigger
@@ -64,13 +70,24 @@ end
 -- Load the event table: { defaults = {...}, events = { name = {...} } }. Every
 -- field an event omits falls back to defaults, then to the code defaults below.
 function Audio.load_events(path)
-    Audio._events, Audio._defaults = {}, {}
+    Audio._events, Audio._defaults, Audio._callouts, Audio._sequences = {}, {}, {}, {}
     local raw = love.filesystem.getInfo(path) and love.filesystem.read(path)
     if not raw then return end
     local ok, data = pcall(json.decode, raw)
     if not ok or type(data) ~= "table" then return end
-    Audio._defaults = data.defaults or {}
-    Audio._events   = data.events   or {}
+    Audio._defaults  = data.defaults  or {}
+    Audio._events    = data.events    or {}
+    Audio._callouts  = data.callouts  or {}
+    Audio._sequences = data.sequences or {}
+end
+
+-- The callouts table (thresholds and timings) and a named cue sequence.
+function Audio.callouts()
+    return Audio._callouts
+end
+
+function Audio.sequence(name)
+    return Audio._sequences[name]
 end
 
 -- Ordered list of { name, title, items = {{name, label, file}, ...} }.
@@ -291,9 +308,26 @@ local function field(def, key, fallback)
     return fallback
 end
 
+-- The event that plays for name: its "<name>.<variant>" entry when one
+-- exists, else name itself.
+function Audio.resolve(name, variant)
+    if variant then
+        local specific = name .. "." .. variant
+        if Audio._events[specific] then return specific end
+    end
+    return name
+end
+
 -- Raw definition of an event, or nil when it is not in the table.
 function Audio.event(name)
     return Audio._events[name]
+end
+
+-- The clip an event plays this time: its clip, or one of its clips at random.
+local function pick_clip(def)
+    local clips = def.clips
+    if clips and #clips > 0 then return clips[math.random(#clips)] end
+    return def.clip
 end
 
 -- One field of an event, resolved through the table's defaults. Used by the
@@ -311,13 +345,15 @@ end
 --   lowpass  0..1 high-frequency retention, 1 = unfiltered (distance muffling)
 --   pitch    extra pitch multiplier on top of the event's own
 --   loop     play as a loop; the caller owns the returned source
--- Returns the playing source, or nil when the event was dropped (muted, unknown,
--- still cooling down, silent, or no voice available).
+--   variant  a vehicle name picking the event's "<name>.<variant>" entry
+-- Returns the playing source and its clip name, or nil when the event was
+-- dropped (muted, unknown, still cooling down, silent, or no voice available).
 function Audio.play_event(name, opts)
     if Audio.muted then return nil end
+    opts = opts or {}
+    name = Audio.resolve(name, opts.variant)
     local def = Audio._events[name]
     if not def then return nil end
-    opts = opts or {}
 
     local now = love.timer.getTime()
     if not opts.loop then
@@ -333,11 +369,15 @@ function Audio.play_event(name, opts)
         * Audio.bus_gain(field(def, "bus", "sfx"))
     if gain <= 0.004 then return nil end
 
-    local src = acquire(def.clip, field(def, "max_voices", MAX_CLIP_VOICES))
+    local clip = pick_clip(def)
+    local src  = acquire(clip, field(def, "max_voices", MAX_CLIP_VOICES))
     if not src then return nil end
 
     local var   = field(def, "pitch_var", 0)
     local pitch = (opts.pitch or 1) * field(def, "pitch", 1)
+    -- EXTRA (explosion_pitch): the original plays one explosion for every size;
+    -- size_pitch tells the sizes apart.
+    if def.size_pitch and Config.explosion_pitch then pitch = pitch * def.size_pitch end
     if var > 0 then pitch = pitch * (1 + (math.random() * 2 - 1) * var) end
 
     src:stop()
@@ -346,7 +386,7 @@ function Audio.play_event(name, opts)
     src:setPitch(math.max(0.1, pitch))
     Audio.place(src, opts.pan or 0, opts.behind, opts.lowpass)
     src:play()
-    return src
+    return src, clip
 end
 
 -- Point a source at a direction relative to the listener. Distance attenuation

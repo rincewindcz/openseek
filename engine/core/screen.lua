@@ -5,6 +5,8 @@ local Class  = require "engine.core.class"
 local Font   = require "engine.core.font"
 local Log    = require "engine.core.log"
 local Assets = require "engine.core.assets"
+local Audio  = require "engine.core.audio"
+local Config = require "engine.core.config"
 
 -- Fullscreen image overlay with fade-in / hold / fade-out phases, used for the
 -- title card, the per-mission briefing picture, and the crash end screen.
@@ -41,7 +43,9 @@ end
 -- it instead of timing out); tag (small bottom-right build-tag text drawn at the
 -- overlay's alpha); skippable (Enter / Space cancel it like Esc, in any phase);
 -- on_done (called once fully faded out); on_cancel (called when the overlay is
--- cancelled, so the shower decides where Esc goes).
+-- cancelled, so the shower decides where Esc goes); cues (a data/audio.json
+-- sequence name: radio lines played at their times while the overlay is up)
+-- with variant (the vehicle picking each line's per-vehicle entry).
 function Screen:show(name, opts)
     opts = opts or {}
     self.active = {
@@ -55,9 +59,25 @@ function Screen:show(name, opts)
         tag       = opts.tag,
         on_done   = opts.on_done,
         on_cancel = opts.on_cancel,
+        cues      = opts.cues and Audio.sequence(opts.cues),
+        variant   = opts.variant,
+        next_cue  = 1,
+        age       = 0,
         phase     = "in",
         t         = 0,
     }
+end
+
+-- Play the overlay's cues that have come due. A dismissed overlay plays no
+-- more of them, like the original's key-skippable sequence.
+function Screen:_play_cues(overlay)
+    local cues = overlay.cues
+    while cues and cues[overlay.next_cue] and cues[overlay.next_cue].at <= overlay.age do
+        if Config.voice_callouts then
+            Audio.play_event(cues[overlay.next_cue].event, { variant = overlay.variant })
+        end
+        overlay.next_cue = overlay.next_cue + 1
+    end
 end
 
 function Screen:is_active()
@@ -86,7 +106,9 @@ end
 function Screen:update(dt)
     local overlay = self.active
     if not overlay then return end
-    overlay.t = overlay.t + dt
+    overlay.t   = overlay.t + dt
+    overlay.age = overlay.age + dt
+    if overlay.phase ~= "out" then self:_play_cues(overlay) end
     if overlay.phase == "in" then
         if overlay.t >= overlay.fade_in then overlay.t = 0; overlay.phase = overlay.wait_key and "wait" or "hold" end
     elseif overlay.phase == "wait" then

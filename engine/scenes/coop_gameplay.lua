@@ -208,10 +208,11 @@ function CoopGameplay:enter()
         c.angle   = p:camera_angle()
         p.camera  = c
     end
-    -- Listeners before the lift-off, or the takeoff sound has nobody to reach.
+    -- Listeners before the lift-off, so the vehicle loops have somebody to reach.
     self:update_audio(self.players, self.cameras, self:_biases())
     for _, p in ipairs(self.players) do
         p:take_off()   -- choppers lift off; no-op for the tank
+        self:announce_start(p)
     end
 
     local coop = app.settings.coop
@@ -319,6 +320,7 @@ function CoopGameplay:_update_down(idx, p, dt)
     Log.info("game", "P%d vehicle lost, %d left", p.number, p.lives)
     p:respawn(p.home_x or p.x, p.home_y or p.y)
     p:take_off()   -- no-op for the tank
+    self:announce_start(p)
     local cam = self.cameras[idx]
     if cam then cam.x, cam.y = p.x, p.y end
     -- Both players were down for a frame but this one had a vehicle left: the
@@ -416,7 +418,7 @@ function CoopGameplay:update(dt)
     app.world:update(dt)
     -- One listener per half, each biased toward its own side of the stereo image
     -- so a blast on the right half is heard on the right (engine/game/sound.lua).
-    self:update_audio(self.players, self.cameras, self:_biases())
+    self:update_audio(self.players, self.cameras, self:_biases(), dt)
     app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
     app.lightfx:update(dt)
     app.impactfx:update(dt, self.players)
@@ -460,7 +462,8 @@ function CoopGameplay:_game_over()
     local last = self.players[#self.players]
     local pic  = (last and last.vehicle == "tank") and "TANKEND" or "DEATHPIC"
     local function finish() Campaign.finish(app) end
-    app.screen:show(pic, { fade_in = 0.6, wait_key = true, on_done = finish, on_cancel = finish })
+    app.screen:show(pic, { fade_in = 0.6, wait_key = true, on_done = finish, on_cancel = finish,
+        cues = "crash", variant = last and last.vehicle })
 end
 
 -- Stats dismissed: a campaign carries the phase into the run and moves on; free

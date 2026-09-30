@@ -212,7 +212,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     -- clip that is, and an unmapped weapon simply fires silently.
     self.world:muzzle_light(x, y)
     self.world:weapon_fired(x, y, weapon_name, shooter)
-    self.world:sound("weapon." .. weapon_name, x, y)
+    self.world:sound("weapon." .. weapon_name, x, y, shooter and shooter.vehicle and { variant = shooter.vehicle })
     level_idx = level_idx or 1
     local level = (weapon_def.levels and weapon_def.levels[level_idx]) or weapon_def
 

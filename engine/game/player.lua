@@ -213,13 +213,7 @@ end
 
 function Player:consume_ammo(name, cost)
     if self.unlimited or self.ammo[name] == nil then return end
-    local left = math.max(0, self.ammo[name] - (cost or 1))
-    -- Dry click on the round that empties the bay, so the player hears the
-    -- weapon go out rather than only seeing the counter.
-    if left == 0 and self.ammo[name] > 0 and self.world then
-        self.world:sound("vehicle.reload", self.x, self.y)
-    end
-    self.ammo[name] = left
+    self.ammo[name] = math.max(0, self.ammo[name] - (cost or 1))
 end
 
 function Player:add_ammo(name, amount)
@@ -841,7 +835,6 @@ function Player:take_off()
     if not self:is_flyer() then return end
     if self.land_state ~= "grounded" then return end
     self.land_state = "taking_off"
-    if self.world then self.world:sound("vehicle.takeoff", self.x, self.y) end
 end
 
 function Player:land()

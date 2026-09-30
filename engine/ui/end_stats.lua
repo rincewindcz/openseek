@@ -6,6 +6,7 @@ local Assets = require "engine.core.assets"
 local Score  = require "engine.game.score"
 local Layout = require "engine.ui.layout"
 local Log    = require "engine.core.log"
+local Audio  = require "engine.core.audio"
 
 -- End-of-phase DESTRUCTION STATS screen. Drawn over the dimmed game once the
 -- chopper lands home: a header (PHASE n / DESTRUCTION STATS), five tallied
@@ -16,7 +17,8 @@ local Log    = require "engine.core.log"
 -- row of kill icons filling proportionally, with the score untouched. The
 -- scoring pass then winds every line back down to zero, and each line pays its
 -- bonus into TOTAL SCORE as it empties, the way the original tallies a phase.
--- Both passes are staggered line by line. See export_phend.py.
+-- Both passes are staggered line by line. See export_phend.py. As in the
+-- original, a kill icon appearing plays `icons` and every tally step `click`.
 local EndStats = Class()
 
 local DIR = "phend/"   -- under assets/
@@ -153,6 +155,8 @@ function EndStats:start(stats)
     self.active    = true
     self.applied   = false
     self.dismissed = false
+    self._icons    = 0
+    self._tally    = nil
     -- When the last line finishes counting up, when the scoring pass starts, and
     -- when the last line has been paid into the score.
     local last        = math.max(0, #self.rows - 1)
@@ -198,6 +202,32 @@ function EndStats:update(dt)
     if not self.applied and self.t >= self._score_time then
         self:_apply_final()
     end
+    self:_play_steps()
+end
+
+-- Kill icons row i shows now (single player; co-op has no icon rows).
+function EndStats:_icon_count(i, row)
+    local shown = row.cols[1].value * self:_row_fill(i)
+    local frac  = row.pct and (shown / 100) or (shown / MAX_ICONS)
+    return math.floor(math.min(MAX_ICONS, frac * MAX_ICONS) + 0.0001)
+end
+
+-- A new kill icon plays `icons`; any other change of a shown figure a tally
+-- click.
+function EndStats:_play_steps()
+    local tally, icons = self:_total_score(), 0
+    for i, row in ipairs(self.rows) do
+        for _, col in ipairs(row.cols) do
+            tally = tally + math.floor(col.value * self:_row_fill(i) + 0.5)
+        end
+        if row.icon and not self.coop then icons = icons + self:_icon_count(i, row) end
+    end
+    if icons > self._icons then
+        Audio.play_event("ui.stats_icon")
+    elseif self._tally and tally ~= self._tally then
+        Audio.play_event("ui.stats_tally")
+    end
+    self._icons, self._tally = icons, tally
 end
 
 -- Running TOTAL SCORE: the base plus the part of each line's bonus the scoring
@@ -296,10 +326,9 @@ function EndStats:_draw_row_values(g, row, i, ry)
     end
 end
 
-function EndStats:_draw_icons(g, row, n_full)
+function EndStats:_draw_icons(g, row, n)
     local img = self.killicon[row.icon]
     if not img then return end
-    local n = math.floor(n_full + 0.0001)
     local w = img:getWidth()
     for k = 0, n - 1 do
         g.setColor(1, 1, 1)
@@ -353,12 +382,9 @@ function EndStats:draw()
         elseif not self.coop then
             -- proportional kill-icon row under the label (single player only; co-op
             -- shows two value columns instead).
-            local col   = row.cols[1]
-            local shown = col.value * self:_row_fill(i)
-            local frac  = (row.pct and (shown / 100) or (shown / MAX_ICONS))
             g.push()
             g.translate(0, ry + ICON_Y)
-            self:_draw_icons(g, row, math.min(MAX_ICONS, frac * MAX_ICONS))
+            self:_draw_icons(g, row, self:_icon_count(i, row))
             g.pop()
         end
 

@@ -858,8 +858,25 @@ function World:sound(event, x, y, opts)
 end
 
 -- A radio callout. Not placed in the world: it comes over the headset.
-function World:say(event)
-    if self.sound_sys then self.sound_sys:say(event) end
+function World:say(event, variant)
+    if self.sound_sys then self.sound_sys:say(event, variant) end
+end
+
+-- Situational callouts (engine/game/sound.lua decides whether a line plays).
+function World:weapon_selected(p)
+    if self.sound_sys then self.sound_sys:weapon_selected(p) end
+end
+
+function World:dry_fire(p)
+    if self.sound_sys then self.sound_sys:dry_fire(p) end
+end
+
+function World:pickup_taken(p, kind)
+    if self.sound_sys then self.sound_sys:pickup_taken(p, kind) end
+end
+
+function World:heli_damaged(before, after)
+    if self.sound_sys then self.sound_sys:heli_damaged(before, after) end
 end
 
 return World

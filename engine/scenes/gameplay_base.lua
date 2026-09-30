@@ -72,7 +72,10 @@ function GameplayBase:fire_for(p)
     local weapon_def = combat.weapons[p.weapon_name]
     if not weapon_def then return end
     if p.fire_timer > 0 then return end
-    if not p:has_ammo(p.weapon_name) then return end
+    if not p:has_ammo(p.weapon_name) then
+        self.app.world:dry_fire(p)
+        return
+    end
     local level = weapon_def.levels and weapon_def.levels[p.weapon_level] or weapon_def
     combat:tick_swing("player", p.weapon_name)
     -- The tank's shells fire from its three barrels in turn, so both the round and
@@ -112,6 +115,13 @@ function GameplayBase:select_weapon(p, i)
     p.fire_timer   = 0
     local def = self.app.combat.weapons[name]
     p.weapon_icon = def and def.icon or 0
+    self.app.world:weapon_selected(p)
+end
+
+-- A vehicle enters the phase (spawn or respawn): the original's start call,
+-- "cleared for takeoff" for the chopper, the tank's own line for the tank.
+function GameplayBase:announce_start(p)
+    self.app.world:say("voice.phase_start", p.vehicle)
 end
 
 -- Count a tick the scene is actually simulating. Called once per update, after
@@ -191,7 +201,7 @@ end
 -- Point the sound system at this scene's cameras and run the engine bed.
 -- `biases` gives each listener its side of a split screen (-1 left, 1 right);
 -- single player passes none.
-function GameplayBase:update_audio(players, cameras, biases)
+function GameplayBase:update_audio(players, cameras, biases, dt)
     local sound = self.app.sound
     if not sound then return end
     local listeners = {}
@@ -200,6 +210,7 @@ function GameplayBase:update_audio(players, cameras, biases)
     end
     sound:set_listeners(listeners)
     sound:update_vehicles(players)
+    sound:update_callouts(players, dt or 0, self.mission)
 end
 
 -- Nothing in the world is audible any more: drop the listeners so a stray event

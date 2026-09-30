@@ -76,7 +76,14 @@ function Sound:init(world)
     self.listeners = {}
     self.muted     = false
     self.loops     = {}   -- key -> { source, event, gain }
-    self.voice     = nil  -- { event, priority, until_t } currently on the radio
+    self.voice     = nil  -- { event, group, priority, until_t, source } on the radio
+    self:_reset_callouts()
+end
+
+function Sound:_reset_callouts()
+    self.pilots     = setmetatable({}, { __mode = "k" })   -- player -> callout state
+    self.follow_ups = {}   -- { event, left } lines queued behind another
+    self.selected_t = nil  -- when a weapon was last selected (announcement guard)
 end
 
 function Sound:set_world(world)
@@ -102,6 +109,7 @@ end
 function Sound:clear_listeners()
     self.listeners = {}
     self:stop_loops()
+    self:_reset_callouts()
 end
 
 -- Attenuation over distance: full inside min_dist, silent past max_dist, with a
@@ -168,6 +176,7 @@ function Sound:emit(event, x, y, opts)
         behind  = behind,
         lowpass = lowpass,
         pitch   = opts and opts.pitch,
+        variant = opts and opts.variant,
     })
 end
 
@@ -180,25 +189,142 @@ end
 
 -- radio callouts
 
--- Speak a callout. One line holds the radio at a time: a higher-priority line
--- cuts in, an equal or lower one is dropped rather than queued, so the channel
--- never runs behind the action. The effects bus ducks for the length of the
--- line. Returns true when the line was spoken.
-function Sound:say(event)
+-- Speak a callout, variant picking its per-vehicle entry. One line holds the
+-- radio at a time: a higher-priority line cuts in, and so does a line of the
+-- same `group` (a newer weapon announcement replaces the last); anything else
+-- is dropped rather than queued, so the channel never runs behind the action.
+-- The effects bus ducks for the length of the line. A line with a follow-up in
+-- callouts.follow_ups queues it, whether or not it was heard. Returns true when
+-- the line was spoken.
+function Sound:say(event, variant)
     if self.muted or not Config.voice_callouts then return false end
-    local def = Audio.event(event)
-    if not def then return false end
+    local follow = (Audio.callouts().follow_ups or {})[event]
+    if follow then self.follow_ups[#self.follow_ups + 1] = { event = follow.event, left = follow.delay } end
+    event = Audio.resolve(event, variant)
+    if not Audio.event(event) then return false end
     local now      = love.timer.getTime()
     local priority = Audio.event_field(event, "priority", 5)
+    local group    = Audio.event_field(event, "group")
     local current  = self.voice
-    if current and now < current.until_t and priority <= current.priority then return false end
-    local src = Audio.play_event(event, { pan = 0 })
+    if current and now < current.until_t and priority <= current.priority
+        and not (group and group == current.group) then
+        return false
+    end
+    local src, clip = Audio.play_event(event, { pan = 0 })
     if not src then return false end
-    local length = Audio.duration(def.clip)
-    self.voice = { event = event, priority = priority, until_t = now + length }
+    if current and current.source ~= src and now < current.until_t then current.source:stop() end
+    local length = Audio.duration(clip)
+    self.voice = { event = event, group = group, priority = priority, until_t = now + length, source = src }
     Audio.duck("sfx",    DUCK_AMOUNT, length, DUCK_RELEASE)
     Audio.duck("engine", DUCK_AMOUNT, length, DUCK_RELEASE)
     return true
+end
+
+-- callouts
+--
+-- The original's situational radio lines and warnings (research on SEEK.EXE's
+-- sound use), decided here from what the simulation reports through the World
+-- forwarders and from the players read after each tick, never fed back.
+-- Thresholds and timings are data/audio.json "callouts".
+
+-- A weapon was selected: announce it (the original's weapon1..6 / *.spc), unless
+-- another was selected within callouts.select_guard seconds. Also re-arms the
+-- empty-trigger call.
+function Sound:weapon_selected(p)
+    local pilot = self:_pilot(p)
+    pilot.dry   = nil
+    local now   = love.timer.getTime()
+    local guard = Audio.callouts().select_guard or 0.5
+    local quiet = self.selected_t == nil or now - self.selected_t >= guard
+    self.selected_t = now
+    if quiet then self:say("voice.weapon." .. p.weapon_name, p.vehicle) end
+end
+
+-- The trigger was pulled on an empty weapon: the reload call, once until the
+-- weapon changes.
+function Sound:dry_fire(p)
+    local pilot = self:_pilot(p)
+    if pilot.dry == p.weapon_name then return end
+    pilot.dry = p.weapon_name
+    self:emit("vehicle.reload", p.x, p.y)
+end
+
+-- p is about to collect a fuel or armor pickup: "just in time" when that gauge
+-- is critical.
+function Sound:pickup_taken(p, kind)
+    local c = Audio.callouts()
+    if kind == "fuel" and p.max_fuel > 0 and p.fuel / p.max_fuel < (c.fuel_critical or 0) then
+        self:say("voice.just_in_time")
+    elseif kind == "armor" and p.max_armor > 0 and p.armor / p.max_armor < (c.armor_critical or 0) then
+        self:say("voice.just_in_time")
+    end
+end
+
+-- An enemy helicopter took a player's hit, its health going from before to
+-- after (fractions of its maximum): "finish him" when that crosses
+-- callouts.finish_him and it still flies.
+function Sound:heli_damaged(before, after)
+    local mark = Audio.callouts().finish_him or 0
+    if after > 0 and before >= mark and after < mark then self:say("voice.finish_him") end
+end
+
+function Sound:_pilot(p)
+    local pilot = self.pilots[p]
+    if not pilot then
+        pilot = { warn_t = 0 }
+        self.pilots[p] = pilot
+    end
+    return pilot
+end
+
+-- Per-tick callouts from each player's state: the armor half / critical lines
+-- (once, re-armed when repaired above the mark), the warning beep every
+-- warn_period while fuel or armor is critical, touchdown on the home pad
+-- (mission:player_home), and queued follow-up lines.
+function Sound:update_callouts(players, dt, mission)
+    if self.muted then return end
+    local c = Audio.callouts()
+    for _, p in ipairs(players) do
+        local pilot = self:_pilot(p)
+        if p.death then
+            pilot.warn_t = 0
+        else
+            local armor = p.max_armor > 0 and p.armor / p.max_armor or 1
+            local fuel  = p.max_fuel  > 0 and p.fuel  / p.max_fuel  or 1
+            if armor < (c.armor_half or 0) then
+                if not pilot.half then pilot.half = true; self:say("voice.armor_half") end
+            else
+                pilot.half = nil
+            end
+            if armor < (c.armor_critical or 0) then
+                if not pilot.critical then pilot.critical = true; self:say("voice.armor_critical") end
+            else
+                pilot.critical = nil
+            end
+            if armor < (c.armor_critical or 0) or fuel < (c.fuel_critical or 0) then
+                pilot.warn_t = pilot.warn_t - dt
+                if pilot.warn_t <= 0 then
+                    pilot.warn_t = c.warn_period or 0.9
+                    self:emit_flat("hud.warning")
+                end
+            else
+                pilot.warn_t = 0
+            end
+            local grounded = p:is_flyer() and p.land_state == "grounded"
+            if grounded and pilot.airborne and mission and mission.home_x and mission:player_home(p) then
+                self:say("voice.touchdown")
+            end
+            pilot.airborne = p:is_flyer() and not grounded
+        end
+    end
+    for i = #self.follow_ups, 1, -1 do
+        local f = self.follow_ups[i]
+        f.left = f.left - dt
+        if f.left <= 0 then
+            table.remove(self.follow_ups, i)
+            self:say(f.event)
+        end
+    end
 end
 
 -- vehicle loops

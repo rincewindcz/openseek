@@ -131,7 +131,9 @@ end
 -- Player projectile landed on this heli (called from CombatSystem:_check_hit).
 function HeliSystem:hit(heli, dmg, shooter)
     if heli.state ~= "alive" then return end
+    local before = heli.hp
     heli.hp = heli.hp - dmg
+    if shooter then self.world:heli_damaged(before / heli.max_hp, math.max(0, heli.hp) / heli.max_hp) end
     self.world:hit_flash(heli)
     -- A scorch burst on the hull at each hit, like the original (fire loops, so it
     -- needs a lifetime; smoke2 plays once and culls itself).

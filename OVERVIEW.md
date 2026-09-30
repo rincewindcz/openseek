@@ -186,7 +186,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/rng` | Seeded per-phase RNG with draw counter. |
 | `core/animation` | `AnimClip` from `data/animations.json`, per-instance `AnimState`. |
 | `core/assets` | Path resolution and pack check (section 2). |
-| `core/audio` | Clip catalog, event table, voice pools, buses, ducking, music. |
+| `core/audio` | Clip catalog, event table (clip lists, per-vehicle variants, size pitch), callouts and sequences, voice pools, buses, ducking, music. |
 | `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. `print` `cell` option draws fixed-pitch at each glyph's in-frame x offset. |
 | `core/screen` | Fullscreen image fade in / hold / out. |
 | `core/mathx` | `atan2` shim, `heading_deg`. |
@@ -208,7 +208,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/impact_fx` | EXTRA hit flash, camera shake and low armor warning (`data/impact_fx.json`), fed by the `World:hit_flash` / `:player_hit` / `:explosion_light` / `:player_death_light` / `:weapon_fired` forwarders and the players after each tick; the shake is a per-camera offset applied in `Camera:apply`, the warning is handed per view to `PostFX:begin_world`. |
 | `game/tracks` | EXTRA tank tread marks (`data/tracks.json`): laid from the players after each tick, faded out by age, drawn by the renderer's ground pass as one sprite batch. |
 | `game/detail_fx` | EXTRA details (`data/detail_fx.json`): tank recoil and muzzle smoke, chaingun casings, tread dust, wreck smoke, pickup glint (drawn from `Powerups:draw`). Fed by the `World:weapon_fired` / `:wreck` forwarders and the players after each tick; ground layer drawn in the renderer's ground pass, smoke by `Renderer:draw_detail_air`. |
-| `game/sound` | Listeners, panning, attenuation, engine loops, radio queue. |
+| `game/sound` | Listeners, panning, attenuation, engine loops, radio queue, situational callouts (section 10). |
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
 | `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
 | `game/vehicles` | Free-play weapon cycles, equip bay and special lists, variants (`data/vehicle_variants.json`, loaded on first use), labels. |
@@ -420,8 +420,28 @@ replay header `player.N.skin` / `player.N.tank`).
 
 - Gameplay names events (`explosion.large`, `weapon.chaingun`, `voice.mayday`);
   `data/audio.json` maps them to clip, bus, gain, pitch, pitch_var, cooldown,
-  min/max distance, max_voices, priority over `defaults`. `weapon.<name>` and
+  min/max distance, max_voices, priority, group over `defaults`. `clips` picks
+  one clip at random per play; `<event>.<vehicle>` is a per-vehicle variant
+  (the tank's `napalm` is the flame thrower). `weapon.<name>` and
   `explosion.<size>` are derived. Unmapped events are silent.
+- The mapping follows the original's own use of each file: fire sounds per
+  weapon, `kzexp` for every explosion (`size_pitch` sets sizes apart, EXTRA
+  `explosion_pitch`), `holexp` for the enemy cannon, `rico1` / `rico2` on a
+  damaged enemy, `weapon1..6` / `*.spc` as the weapon announcements on
+  selection. Not in the original: `missionc`, `powcomeo`, `powletsg`, `yea`
+  (objective cleared) and the player hit ricochet.
+- Callouts (`game/sound`, thresholds in `callouts`): phase start ("cleared" /
+  the tank's start line) on every spawn, weapon announcements (skipped within
+  `select_guard` of the last selection, a newer one replaces the older),
+  `reload` on an empty trigger (once per weapon), armor below half and critical
+  (once, re-armed by a repair), the `warn` beep every `warn_period` while fuel
+  or armor is critical, touchdown on the home pad, "just in time" on a critical
+  pickup, "finish him" when a hit takes an enemy helicopter below `finish_him`,
+  and `follow_ups` (return to base, then "let's go"). Fed through `World`
+  forwarders and the players after each tick.
+- Screens: the crash / game-over picture plays the `crash` sequence (radio
+  "come in" by vehicle, `noisesir`, `comein2b`; a dismissed picture plays no
+  more); the stats screen plays `icons` per kill icon and `click` per tally step.
 - Mixed for the loudest listener (one per camera). Panning in the rotated view
   frame; sources behind the vehicle placed behind the listener. OpenAL rolloff
   off; attenuation and lowpass in fixed world units.
@@ -448,6 +468,7 @@ Toggleable extras (EXTRAS page):
 | `low_armor_fx`, `damage_flash` | off | Low armor pulses the view's edges red and drains its colour; each hit taken flashes the edges (`game/impact_fx`, drawn by `game/postfx`, needs POST FX on). |
 | `pickup_glint` | off | A light sweep runs across each pickup now and then (`game/detail_fx`). |
 | `air_strike_fx` | on | Air strike sight on a pending target, radar blip, friendly craft with their rockets and bombs (`game/air_strike`, `ui/hud`). |
+| `explosion_pitch` | on | The one explosion sound pitched by blast size (`core/audio`, `size_pitch`). |
 | `tank_tracks` | on | A driving tank leaves faint tread marks that fade out (`game/tracks`). |
 | `tank_recoil`, `shell_casings`, `tread_dust`, `wreck_smoke`, `shell_impact` | on | Turret kick and muzzle smoke on a shell shot, chaingun casings, dust behind a fast tank, smoking wrecks, an explosion where a tank shell strikes (`game/detail_fx`). |
 
@@ -494,7 +515,7 @@ galleries, debug mission picker, headless checks.
 | `data/credits.json` | Credits: `styles` (fonts, name offset, label colour) and positioned `entries` (`heading` / `name`, or a label `text`), 320x240 design space. |
 | `data/animations.json` | Named animation clips. |
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
-| `data/audio.json` | Sound events. |
+| `data/audio.json` | Sound events (`defaults`, `events` with clip or `clips`, per-vehicle variants, `size_pitch`, `group`), `callouts` (armor / fuel thresholds, warning period, selection guard, finish-him mark, follow-up lines) and `sequences` (timed screen cues). |
 | `data/postfx.json` | `look` (100% values), `missions` (per mission digit, look fields that differ, e.g. the cold grade of mission 1) and `presets`. |
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius); `low_armor` (armor threshold, floor, fade, edge color and strength, pulse share and rate range, desaturation, edge radii, hit flash time and strength). |
