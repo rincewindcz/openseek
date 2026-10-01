@@ -3,8 +3,8 @@
 Export the registered release's ending sequence to assets/ending/.
 
 The ending (FUN_001f2b70 @ 0x1f2b70, run when the last stage is cleared) plays
-the CD's REGANIM.FLC, starts SEEKEMOD.BIN, then shows six pictures (FIN01..03,
-VIC1..3) with story text typed over them in ENDCHARS. The text and its layout
+the CD's REGANIM.FLC, starts SEEKEMOD.BIN (export_music.py), then shows six
+pictures (FIN01..03, VIC1..3) with story text typed over them in ENDCHARS. The text and its layout
 are compiled into SEEK.EXE: each line is a call to the typewriter routine
 0x1f26f0 with the string address, x and y. The strings sit in the LE data
 object at a fixed distance from their load address (EXE_DELTA), so they are
@@ -19,7 +19,6 @@ Output:
                               alternate_lines (VIC3), prompt position; the
                               prompt text
   assets/ending/reganim.flc   the CD's ending animation, copied when present
-  assets/music/ending.med     SEEKEMOD.BIN, an OctaMED (MMD1) module
   assets/fonts/endstory.*     ENDCHARS in the slides' palette: white face,
                               near-black drop shadow
 
@@ -143,13 +142,6 @@ def main(argv=None):
         print(f"  reganim.flc: {flc.stat().st_size} bytes")
     else:
         print("  no REGANIM.FLC (CD release only): the ending starts with the pictures")
-
-    music = game_dir / "data" / "SEEKEMOD.BIN"
-    if music.exists():
-        music_dir = gamedata.ASSETS / "music"
-        music_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(music, music_dir / "ending.med")
-        print("  music/ending.med")
 
     export_fonts.export_font(FONT[0], FONT[1], game_dir)
 

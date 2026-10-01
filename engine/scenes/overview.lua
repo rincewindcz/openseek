@@ -5,6 +5,7 @@ local Class    = require "engine.core.class"
 local Scene    = require "engine.core.scene"
 local Config   = require "engine.core.config"
 local Vehicles = require "engine.game.vehicles"
+local Sound    = require "engine.game.sound"
 
 -- Pre-game overview (dev/editor view): free camera over the loaded stage, the
 -- SETUP/START/VIEW panel, the stage/kind pickers, the debug panel, and the
@@ -56,6 +57,7 @@ end
 -- always on here, not gated behind F2. Gameplay keeps its own F2 toggle, so we
 -- scope the always-on state to this scene with enter/leave.
 function Overview:enter()
+    Sound.play_music()   -- a world view, silent like play
     self.app.debug_panel.enabled = true
     self.app.debug_panel.editor  = true
     self.panning = false
@@ -292,9 +294,10 @@ function Overview:keypressed(key)
     if key == "f4"  then app.scenes:switch("replays");       return end
     if key == "f11" then
         -- The ending, back here when it ends; Shift plays VIC3's alternate ending.
+        -- Outside a run the stats show data/ending.json's preview record.
         local alternate = love.keyboard.isDown("lshift", "rshift")
         app.scenes:switch("ending", { alternate = alternate, record = app.run_record,
-            on_done = function() app.scenes:switch("overview") end })
+            preview = true, on_done = function() app.scenes:switch("overview") end })
         return
     end
     if key == "f2"  then return end   -- editor is always on here; F2 is a no-op

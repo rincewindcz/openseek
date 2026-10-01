@@ -54,10 +54,10 @@ function Sound.apply_config()
     Audio.set_bus("music",  Config.music_volume)
 end
 
--- Music is optional content: nothing ships with the game, so the bus stays
--- silent until tracks are dropped into assets/music/. Crossfades to the first
--- of `names` that exists there, and fades out when none of them do, so a scene
--- can name a specific track with a generic fallback behind it.
+-- Crossfades to the first of `names` that exists in assets/music/ (the pack's
+-- menu, hiscores and ending modules, or the player's own tracks), and fades
+-- out when none of them do, so a scene can name a specific track with a
+-- generic fallback behind it. With no names it fades the music out.
 function Sound.play_music(...)
     local tracks = Audio.music_tracks()
     local names  = { ... }

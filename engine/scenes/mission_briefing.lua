@@ -7,6 +7,7 @@ local MissionMenu = require "engine.ui.mission_menu"
 local EquipScreen = require "engine.ui.equip_screen"
 local Campaign    = require "engine.game.campaign"
 local Savegame    = require "engine.game.savegame"
+local Sound       = require "engine.game.sound"
 
 -- Pre-mission briefing scene wrapping the MISSION/PHASE menu (the menu itself
 -- is the briefing). PLAY opens the vehicle equip screen (or drops straight
@@ -28,6 +29,7 @@ function MissionBriefing:enter(stage_name)
     local world = self.app.world
     self.menu:open(stage_name or world.stage_name or world.stages[1])
     if self.app.campaign then Savegame.autosave(self.app) end
+    Sound.play_music("menu")   -- back after a phase, as the original restarts it
 end
 
 function MissionBriefing:leave()

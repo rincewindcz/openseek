@@ -4,18 +4,20 @@
 local Class  = require "engine.core.class"
 local Scene  = require "engine.core.scene"
 local Config = require "engine.core.config"
+local Sound  = require "engine.game.sound"
 
 -- Boot scene: the TITLE card fading in over black, preceded by the short
 -- openSEEK engine card on the first launch or while Config.engine_intro is on. Draws an opaque fill
 -- every frame so the overview never flashes during the intro; done, Esc, Enter
 -- or Space drops into the main menu (Enter / Space on the engine card skip only
--- to the TITLE card).
+-- to the TITLE card). The menu music starts here, at boot, as in the original.
 local Title = Class(Scene)
 
 Title.ENGINE_INTRO = "content/intro/openseek_intro.png"
 
 function Title:enter()
     local app = self.app
+    Sound.play_music("menu")
     local function to_menu() app.scenes:switch("main_menu") end
     local function show_title()
         app.screen:show("TITLE", {

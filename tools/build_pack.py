@@ -46,6 +46,7 @@ import export_love2d
 import export_mainmen
 import export_mission
 import export_mission_text
+import export_music
 import export_phend
 import export_player
 import export_projectiles
@@ -78,6 +79,7 @@ STEPS = [
     (export_mission,      []),
     (export_mission_text, []),
     (export_sounds,       []),
+    (export_music,        []),
     (export_phend,        []),
     (export_shop,         []),
     (export_equip,        []),

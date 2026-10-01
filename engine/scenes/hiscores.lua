@@ -6,6 +6,7 @@ local Scene      = require "engine.core.scene"
 local Font       = require "engine.core.font"
 local Assets     = require "engine.core.assets"
 local InfoScreen = require "engine.ui.info_screen"
+local Sound      = require "engine.game.sound"
 local Pointer    = require "engine.ui.pointer"
 local json       = require "lib.json"
 local Log        = require "engine.core.log"
@@ -191,6 +192,9 @@ function HiScores:enter(new_scores)
         for i, e in ipairs(new_scores) do self.pending[i] = { score = e.score or 0, label = e.label } end
     end
     self:_next_entry()
+    -- A run that just ended gets the original's high score music; browsing
+    -- from the menu keeps the menu's.
+    if new_scores then Sound.play_music("hiscores", "menu") else Sound.play_music("menu") end
     self.screen:open()
 end
 

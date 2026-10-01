@@ -44,5 +44,11 @@
             "badges":        "OK BADGES EARNED",
             "score":         "FINAL SCORE"
         }
+    },
+
+    "preview": {
+        "record": { "phases": 20, "time": 9047, "vehicles_lost": 4, "ground": 1236,
+                    "buildings": 418, "choppers": 37, "rescues": 152, "badges": 14 },
+        "scores": 1482750
     }
 }

@@ -137,7 +137,8 @@ function Campaign.finish(app)
 end
 
 -- The last stage was cleared: the original's ending when the pack has it (the
--- registered release), then the credits, then the high-score screen.
+-- registered release), then the credits under the end music, then the
+-- high-score screen.
 function Campaign.complete(app)
     local record = app.run_record
     local scores = close(app)
@@ -146,9 +147,10 @@ function Campaign.complete(app)
         return
     end
     app.scenes:switch("ending", {
-        record  = record,
-        scores  = scores,
-        on_done = function()
+        record     = record,
+        scores     = scores,
+        keep_music = true,
+        on_done    = function()
             app.scenes:switch("credits", function() app.scenes:switch("hiscores", scores) end)
         end,
     })

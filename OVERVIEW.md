@@ -160,7 +160,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
-| `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3. Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, on_done }`; `alternate` types VIC3's alternate ending. EXTRA `ending_stats` adds the run record under FIN01..03. |
+| `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3. Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, preview, keep_music, on_done }`; `alternate` types VIC3's alternate ending, `preview` falls back to `data/ending.json` `preview` without a record (overview F11), `keep_music` leaves the end music playing into the credits (`Campaign.complete`). EXTRA `ending_stats` adds the run record under FIN01..03. |
 | `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name); `enter(on_exit)` replaces EXIT's return to the menu (the ending passes the high scores). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry, one per qualifying player after a co-op run. |
 | `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, MOBILE UI, GAMEPLAY, DIFFICULTY, EXTRAS. MOBILE UI only where `TouchControls.available` (web, Android, iOS, `--touch`); the web build drops DISPLAY's FULLSCREEN and WINDOW SIZE. The sidebar packs tighter when it holds more than nine entries. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
 | `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. Rewrites the autosave on every open in a campaign run. |
@@ -190,7 +190,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/rng` | Seeded per-phase RNG with draw counter. |
 | `core/animation` | `AnimClip` from `data/animations.json`, per-instance `AnimState`. |
 | `core/assets` | Path resolution and pack check (section 2). |
-| `core/audio` | Clip catalog, event table (clip lists, per-vehicle variants, size pitch), callouts and sequences, voice pools, buses, ducking, music (`.ogg`, `.mp3`, `.med`). |
+| `core/audio` | Clip catalog, event table (clip lists, per-vehicle variants, size pitch), callouts and sequences, voice pools, buses, ducking, music (`.ogg`, `.mp3`, `.med`; an `.ogg` / `.mp3` beats a `.med` of the same name). |
 | `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. `print` `cell` option draws fixed-pitch at each glyph's in-frame x offset. |
 | `core/screen` | Fullscreen image fade in / hold / out. |
 | `core/flic` | FLI / FLC player: decodes one frame per `next_frame` into an index buffer and an RGBA `image` (COLOR_256 / 64, DELTA_FLC / FLI, BYTE_RUN, BLACK, COPY); the caller sets the pace. |
@@ -457,9 +457,14 @@ replay header `player.N.skin` / `player.N.tank`).
 - Radio: one line at a time; higher priority interrupts, equal or lower dropped;
   sfx and engine buses duck.
 - Buses: `sfx`, `voice`, `engine`, `ui`, `music`.
-- Music: `.ogg` / `.mp3` / `.med` in `assets/music/`: `menu`, then per phase the
-  first of `stage<MP>`, `mission<M>`, `game`; `ending` for the ending. The tools
-  produce only `ending.med` (the original's `SEEKEMOD.BIN`, an OctaMED module).
+- Music: `.ogg` / `.mp3` / `.med` in `assets/music/`, as the original uses its
+  three modules: `menu` from boot (title), on the main menu and on every
+  briefing (after each phase); per phase the first of `stage<MP>`,
+  `mission<M>`, `game`, else silence (the original plays none in play or the
+  overview); `ending` for the ending and the credits after it; `hiscores` on
+  the high scores after a run (`menu` when browsed from the menu). The pack
+  holds `menu.med`, `hiscores.med` and `ending.med` (OctaMED, played through
+  ModPlug); an `.ogg` / `.mp3` of the same name replaces one.
 
 ## 11. Additions beyond the original
 
@@ -520,7 +525,7 @@ galleries, debug mission picker, headless checks.
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
 | `data/credits.json` | Credits: `styles` (fonts, name offset, label colour) and positioned `entries` (`heading` / `name`, or a label `text`), 320x240 design space. |
-| `data/ending.json` | Ending timing (`char_time`, `tab_pause`, `hold`, fades, text `cell`), music track, `anim` (`frame_time`, `cues`: event -> frame list, `loops`: event, level, fade start and length in frames) and `stats` (position, line height, columns, keys per picture, labels). |
+| `data/ending.json` | Ending timing (`char_time`, `tab_pause`, `hold`, fades, text `cell`), music track, `anim` (`frame_time`, `cues`: event -> frame list, `loops`: event, level, fade start and length in frames), `stats` (position, line height, columns, keys per picture, labels) and `preview` (the record and score F11 shows outside a run). |
 | `data/animations.json` | Named animation clips. |
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
 | `data/audio.json` | Sound events (`defaults`, `events` with clip or `clips`, per-vehicle variants, `size_pitch`, `group`), `callouts` (armor / fuel thresholds, warning period, selection guard, finish-him mark, follow-up lines) and `sequences` (timed screen cues). |
@@ -536,7 +541,8 @@ galleries, debug mission picker, headless checks.
 | `assets/stageMP.json`, `assets/stageMP/*.png` | Stages; one frame-0 PNG per class, `render` offsets, `objectives`, `is_target`, class fields (`toughness`, `explosion_size`, `behaviour`, `drop`, `pows`, ...). |
 | `assets/sounds.json`, `assets/sounds/*.wav` | Clip catalog (categories of `{name, file, label, rate}`), mono 8-bit WAV. |
 | `assets/mission_text.json` | `stage<M><P>` -> `paragraphs`. |
-| `assets/ending/ending.json`, `assets/ending/reganim.flc`, `assets/music/ending.med` | Ending: `prompt` and `slides` (`picture`, `lines` of `{text, x, y}` with tabs, VIC3 `alternate_lines`, `prompt` position); the CD's animation; the end music. Registered release only. |
+| `assets/ending/ending.json`, `assets/ending/reganim.flc` | Ending: `prompt` and `slides` (`picture`, `lines` of `{text, x, y}` with tabs, VIC3 `alternate_lines`, `prompt` position); the CD's animation. Registered release only. |
+| `assets/music/{menu,hiscores,ending}.med` | The original's OctaMED modules (`SEEKMOD`, `SEEKHMOD`, `SEEKEMOD`). |
 | `assets/fonts/<name>.{png,json}` | Atlas + glyph metrics, `charmap` or `word`, `mode` `mask` / `truecolor`. |
 | `assets/equip/`, `assets/phend/` | Screen art + `layout.json` rects. |
 | `assets/pow/weapon_info.json` | Shop catalogue: vehicle -> weapon -> per level `{cost, lines}` (upper-cased description), from `WINF.BIN` / `WINFT.BIN`. |
@@ -588,7 +594,8 @@ and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
 | `export_phend.py` | `assets/phend/` |
 | `export_shop.py` | `assets/pow/` sprites, `assets/pow/weapon_info.json` (WINF / WINFT prices and descriptions), `assets/fonts/charspow.*`, all in the `POWUP.BIN` palette (disabled buttons grey out 224 / 215; run after `export_fonts.py`) |
 | `export_equip.py` | `assets/equip/` in the `EQPCHP.BIN` palette, `layout.json` template-matched on the backdrop index maps |
-| `export_ending.py` | `assets/ending/ending.json` (story text read from `SEEK.EXE` at the registered release's addresses, layout from its code), `reganim.flc` (CD release), `assets/music/ending.med`, `assets/fonts/endstory.*` (ENDCHARS in the FIN01 palette, with its drop shadow) |
+| `export_music.py` | `assets/music/menu.med`, `hiscores.med`, `ending.med`: `SEEKMOD.BIN`, `SEEKHMOD.BIN`, `SEEKEMOD.BIN` as they are |
+| `export_ending.py` | `assets/ending/ending.json` (story text read from `SEEK.EXE` at the registered release's addresses, layout from its code), `reganim.flc` (CD release), `assets/fonts/endstory.*` (ENDCHARS in the FIN01 palette, with its drop shadow) |
 | `decode_level.py` | Stage BIN -> JSON (`--summary`) |
 | `decode_blitter.py` | Exact world-sprite decoder |
 | `decode_planar.py` | Exact planar HUD sprite decoder |
@@ -615,7 +622,7 @@ and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
 | F6 | Fly-over pickup override (ignores the difficulty landing rules) |
 | F7 | Co-op free play (vehicle select) |
 | F8 / F9 / F10 | Animation / font / sound gallery (overview) |
-| F11, Shift+F11 | Ending, VIC3's alternate ending (overview) |
+| F11, Shift+F11 | Ending, VIC3's alternate ending, with the preview stats (overview) |
 | F9 | Radar auto zoom (in game, rebindable). Co-op: P1 Tab, P2 keypad `.` |
 | F12 | Screenshot (rebindable) |
 | Overview: wheel, +/- | Zoom |

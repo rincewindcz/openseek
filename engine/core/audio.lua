@@ -430,19 +430,25 @@ end
 
 -- music
 
--- Tracks are optional: any .ogg / .mp3 / .med dropped into assets/music/
--- becomes available under its bare filename. The pack only brings the
--- original's end music (ending.med, an OctaMED module LOVE plays through
--- ModPlug), so the rest of the music bus is silent until the player adds files.
-local MUSIC_EXTENSIONS = { ogg = true, mp3 = true, med = true }
+-- Any .ogg / .mp3 / .med in assets/music/ is a track under its bare filename.
+-- The pack brings the original's modules (menu, hiscores, ending: OctaMED,
+-- played through ModPlug); an .ogg / .mp3 of the same name replaces one. The
+-- web build skips modules: love.js is not known to decode them, and a failed
+-- load there can take the tab down past pcall.
+local MUSIC_EXTENSIONS = { ogg = 2, mp3 = 2, med = 1 }   -- higher rank wins a name
 
 function Audio.music_tracks()
-    local out = {}
+    local out, rank = {}, {}
     local ok, items = pcall(love.filesystem.getDirectoryItems, "assets/music")
     if not ok then return out end
+    local web = love.system.getOS() == "Web"
     for _, f in ipairs(items) do
         local name, ext = f:match("^(.+)%.(%w+)$")
-        if name and MUSIC_EXTENSIONS[ext:lower()] then out[name] = "assets/music/" .. f end
+        ext = ext and ext:lower()
+        local r = name and not (web and ext == "med") and MUSIC_EXTENSIONS[ext]
+        if r and r > (rank[name] or 0) then
+            out[name], rank[name] = "assets/music/" .. f, r
+        end
     end
     return out
 end

@@ -25,7 +25,10 @@ local json   = require "lib.json"
 --
 -- enter(opts): alternate (VIC3's alternate ending), record (the run's record,
 -- engine/game/campaign.lua), scores (a number, or co-op { score, label }
--- entries), on_done (where to go once it ends; back to the main menu without).
+-- entries), preview (without a record, the sample record and score of
+-- data/ending.json preview, for the overview's viewer), keep_music (leave the
+-- end music playing into the next scene), on_done (where to go once it ends;
+-- back to the main menu without).
 local Ending = Class(Scene)
 
 Ending.hide_cursor = true
@@ -69,14 +72,16 @@ end
 
 function Ending:enter(opts)
     opts = opts or {}
-    self.alternate = opts.alternate and true or false
-    self.record    = opts.record
-    self.scores    = opts.scores
-    self.on_done   = opts.on_done
-    self.finished  = false
-    self.story     = read_json(Assets.path(TEXT_PATH)) or { slides = {} }
-    local font     = Assets.exists("fonts/" .. FONT .. ".json") and FONT or FALLBACK_FONT
-    self.font      = Font.get(font)
+    local preview   = opts.preview and not opts.record and self.cfg.preview or {}
+    local font      = Assets.exists("fonts/" .. FONT .. ".json") and FONT or FALLBACK_FONT
+    self.alternate  = opts.alternate and true or false
+    self.record     = opts.record or preview.record
+    self.scores     = opts.scores or preview.scores
+    self.on_done    = opts.on_done
+    self.keep_music = opts.keep_music and true or false
+    self.finished   = false
+    self.story      = read_json(Assets.path(TEXT_PATH)) or { slides = {} }
+    self.font       = Font.get(font)
 
     Audio.play_music(nil)   -- the animation plays without music, as in the original
     self.anim = Flic.open(Assets.path(ANIM_PATH))
@@ -96,7 +101,7 @@ function Ending:_finish()
     if self.finished then return end
     self.finished = true
     self:_stop_loops()
-    Audio.play_music(nil)
+    if not self.keep_music then Audio.play_music(nil) end
     Log.info("ending", "done")
     if self.on_done then
         self.on_done()
