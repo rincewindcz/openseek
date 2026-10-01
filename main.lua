@@ -251,6 +251,8 @@ function love.load(args)
     scenes:register("font_gallery",     FontGallery:new(app))
     scenes:register("sound_gallery",    SoundGallery:new(app))
     scenes:register("credits",          Credits:new(app))
+    -- Required in place: love.load is at LuaJIT's limit of 60 upvalues.
+    scenes:register("ending",           require("engine.scenes.ending"):new(app))
     scenes:register("hiscores",         HiScores:new(app))
     scenes:register("replays",          Replays:new(app))
     scenes:register("replay_select",    ReplaySelect:new(app))
@@ -311,11 +313,13 @@ end
 function love.draw()
     local top = app.scenes:top()
     -- Hide the OS cursor while a pointer-driven UI scene, the stats screen, or
-    -- a fullscreen overlay is up (the SELPOINT sprite is drawn instead);
+    -- a fullscreen overlay is up (the SELPOINT sprite is drawn instead), and
+    -- under a scene that shows no pointer at all (hide_cursor: the ending);
     -- restore it for gameplay and the overview. `--touch` keeps it everywhere,
     -- since a touch draws no pointer sprite.
     local ui = not touch_emulation
-        and ((top and top.ui_pointer) or app.end_stats:is_active() or app.screen:is_active())
+        and ((top and (top.ui_pointer or top.hide_cursor)) or app.end_stats:is_active()
+            or app.screen:is_active())
     if app.hidden_cursor then
         if ui then love.mouse.setCursor(app.hidden_cursor) else love.mouse.setCursor() end
     else

@@ -311,6 +311,7 @@ function CoopGameplay:_update_down(idx, p, dt)
     if t > 0 then return end
     self.death_timers[idx] = nil
     p.lives = math.max(0, (p.lives or 0) - 1)
+    self.vehicles_lost = self.vehicles_lost + 1
     self:_sync_lives()
     if self:_vehicles_left(idx, p) <= 0 then
         self.out[idx] = true
@@ -474,6 +475,7 @@ function CoopGameplay:on_stats_done()
         return
     end
     self:_carry_run()
+    self:record_phase()
     Campaign.advance(self.app)
 end
 

@@ -32,10 +32,10 @@ NAME      = "openseek-setup"
 MODULES = [
     "build_pack", "gamedata", "unjam", "image",
     "decode_blitter", "decode_planar", "decode_level", "menutitle",
-    "export_animations", "export_equip", "export_fonts", "export_fullscreen",
-    "export_hud", "export_love2d", "export_mainmen", "export_mission",
-    "export_mission_text", "export_phend", "export_player", "export_projectiles",
-    "export_screens", "export_shop", "export_sounds",
+    "export_animations", "export_ending", "export_equip", "export_fonts",
+    "export_fullscreen", "export_hud", "export_love2d", "export_mainmen",
+    "export_mission", "export_mission_text", "export_phend", "export_player",
+    "export_projectiles", "export_screens", "export_shop", "export_sounds",
 ]
 RESOURCES = [
     "data/entity_types.json",

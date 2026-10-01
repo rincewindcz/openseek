@@ -37,6 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import export_animations
+import export_ending
 import export_equip
 import export_fonts
 import export_fullscreen
@@ -54,7 +55,7 @@ import export_sounds
 import gamedata
 from unjam import ArchiveError, JamArchive
 
-PACK_SCHEMA = 3
+PACK_SCHEMA = 4
 
 SHAREWARE_ZIP = "seeksw1.zip"
 SHAREWARE_MD5 = "0bf3fa0359bbc3186d6041f1cab8b524"
@@ -80,9 +81,11 @@ STEPS = [
     (export_phend,        []),
     (export_shop,         []),
     (export_equip,        []),
+    (export_ending,       []),
 ]
 
 GAME_TREES = ("DATA", "SFX") + tuple(f"STAGE0{m}" for m in range(5))
+ROOT_FILES = ("SEEK.EXE", "REGANIM.FLC")
 MAX_DEPTH  = 4
 
 
@@ -170,15 +173,31 @@ def game_members(members):
     return out
 
 
+def root_files(members):
+    """The installation's top-level files the exporters read besides the game
+    trees (the executable's ending text, the CD's ending animation), shallowest
+    match first. Optional: a source without them still converts."""
+    out = {}
+    for path in sorted(members, key=lambda p: len(_split(p))):
+        name = _split(path)[-1].upper()
+        if name in ROOT_FILES and name not in out:
+            out[name] = members[path]
+    return out
+
+
 def stage_source(source, staging):
-    """Write the normalized game trees of `source` (zip or directory) to `staging`."""
+    """Write the normalized game trees and ROOT_FILES of `source` (zip or
+    directory) to `staging`."""
     source = Path(source).expanduser()
     if source.is_dir():
         members = _dir_members(source)
         files = game_members(members)
+        files.update(root_files(members))
     elif zipfile.is_zipfile(source):
         with zipfile.ZipFile(source) as zf:
-            files = {k: v() for k, v in game_members(_zip_members(zf)).items()}
+            members = _zip_members(zf)
+            found   = dict(game_members(members), **root_files(members))
+            files   = {k: v() for k, v in found.items()}
         files = {k: (lambda data=v: data) for k, v in files.items()}
     else:
         raise SourceError(f"not a directory or zip archive: {source}")

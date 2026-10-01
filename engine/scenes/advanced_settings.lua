@@ -156,6 +156,7 @@ local CATEGORIES = {
         { key = "pickup_glint",        label = "PICKUP GLINT",    kind = "toggle" },
         { key = "air_strike_fx",       label = "AIR STRIKE FX",   kind = "toggle" },
         { key = "explosion_pitch",     label = "EXPLOSION PITCH", kind = "toggle" },
+        { key = "ending_stats",        label = "ENDING STATS",    kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }

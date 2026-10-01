@@ -1,0 +1,48 @@
+{
+    "char_time": 0.0142857,
+    "tab_pause": 0.857,
+    "hold":      2.571,
+    "fade_in":   0.5,
+    "fade_out":  0.3,
+    "cell":      8,
+    "music":     "ending",
+
+    "anim": {
+        "frame_time": 0.0571429,
+        "cues": {
+            "weapon.chaingun":      [25, 27, 29, 31, 33, 35, 37, 39,
+                                     169, 171, 173, 175, 177, 179, 181, 183, 185, 187],
+            "impact.ricochet":      [31, 33, 35, 37, 39, 177, 179, 181, 183, 185, 187],
+            "weapon.mega_missile":  [110, 115, 120, 125, 127, 132, 137, 144, 151],
+            "explosion.large":      [127, 132, 137, 142, 149, 154, 161, 168],
+            "voice.return_to_base": [190]
+        },
+        "loops": [
+            { "event": "vehicle.chopper", "level": 1.0, "fade_at": 280, "fade_frames": 205 },
+            { "event": "vehicle.tank",    "level": 0.5, "fade_at": 0,   "fade_frames": 496 }
+        ]
+    },
+
+    "stats": {
+        "x":           8,
+        "y":           150,
+        "line_height": 10,
+        "columns":     38,
+        "pictures": {
+            "FIN01": ["phases", "time", "vehicles_lost"],
+            "FIN02": ["ground", "buildings", "choppers"],
+            "FIN03": ["rescues", "badges", "score"]
+        },
+        "labels": {
+            "phases":        "PHASES CLEARED",
+            "time":          "TIME IN ACTION",
+            "vehicles_lost": "VEHICLES LOST",
+            "ground":        "GROUND FORCES DESTROYED",
+            "buildings":     "BUILDINGS DESTROYED",
+            "choppers":      "CHOPPERS SHOT DOWN",
+            "rescues":       "POWS RESCUED",
+            "badges":        "OK BADGES EARNED",
+            "score":         "FINAL SCORE"
+        }
+    }
+}

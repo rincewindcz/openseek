@@ -150,6 +150,11 @@ local Config = {
     -- (data/audio.json size_pitch), so small and large blasts sound apart.
     explosion_pitch = true,
 
+    -- The run's record (phases, time, vehicles lost, kills, rescues, badges,
+    -- score) typed under the ending's first pictures (engine/scenes/ending.lua,
+    -- layout in data/ending.json stats). The story itself is unchanged.
+    ending_stats = true,
+
     -- Enlarge the HUD radar while its auto zoom is on (engine/ui/hud.lua, sizes
     -- in data/hud.json). The original only narrowed the range. Presentation only.
     radar_zoom_grow = true,
@@ -215,7 +220,7 @@ local PERSISTED = {
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
     "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx",
-    "explosion_pitch",
+    "explosion_pitch", "ending_stats",
     "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",

@@ -5,6 +5,7 @@ local Loadout  = require "engine.game.loadout"
 local Config   = require "engine.core.config"
 local Score    = require "engine.game.score"
 local Savegame = require "engine.game.savegame"
+local Assets   = require "engine.core.assets"
 local Log      = require "engine.core.log"
 
 -- NEW GAME run state. A solo run carries one score, lives and bonus threshold
@@ -14,9 +15,21 @@ local Log      = require "engine.core.log"
 -- vehicles per player, or one "shared" pool (players' lives mirror it). A
 -- player left without a vehicle is `out` for the rest of the run; the run is
 -- over when every player is.
+--
+-- Every run also keeps a record (app.run_record) summed over its cleared
+-- phases and players: phases, simulated seconds, vehicles lost, and the stats
+-- screen's ground forces, buildings, choppers, rescues and OK badges. The
+-- ending reads it (EXTRA ending_stats).
 local Campaign = {}
 
 Campaign.PLAYERS = 2
+
+local ENDING = "ending/ending.json"
+
+function Campaign.new_record()
+    return { phases = 0, time = 0, vehicles_lost = 0, ground = 0, buildings = 0,
+             choppers = 0, rescues = 0, badges = 0 }
+end
 
 function Campaign.start(app, players)
     app.campaign       = true
@@ -25,6 +38,7 @@ function Campaign.start(app, players)
     app.run_bonus_life = Score.BONUS_LIFE_STEP
     app.loadout        = Loadout:new()
     app.coop_run       = nil
+    app.run_record     = Campaign.new_record()
     if players == Campaign.PLAYERS then
         local shared = Config.coop_lives == "shared"
         local run    = { lives_mode = shared and "shared" or "separate", players = {} }
@@ -88,19 +102,61 @@ function Campaign.final_scores(app)
     return out
 end
 
--- The run is over (out of vehicles or the last stage cleared): hand the
--- scores to the high-score screen.
-function Campaign.finish(app)
+-- Fold a cleared phase into the run's record: the stats screen's
+-- participants, the simulated seconds the phase took and the vehicles lost in
+-- it. A run resumed from a save that predates the record keeps none.
+function Campaign.record_phase(app, stats, seconds, vehicles_lost)
+    local record = app.campaign and app.run_record
+    if not (record and stats) then return end
+    local function add(key, v) record[key] = (record[key] or 0) + (v or 0) end
+    add("phases", 1)
+    add("time", seconds)
+    add("vehicles_lost", vehicles_lost)
+    for _, p in ipairs(stats.participants or {}) do
+        add("ground",    p.ground and p.ground.killed)
+        add("buildings", p.buildings and p.buildings.killed)
+        add("choppers",  p.choppers)
+        add("rescues",   p.rescues)
+        add("badges",    p.badges)
+    end
+end
+
+-- End the run: drop its state and the autosave. Returns the final scores.
+local function close(app)
     local scores = Campaign.final_scores(app)
-    app.campaign = false
-    app.coop_run = nil
+    app.campaign   = false
+    app.coop_run   = nil
+    app.run_record = nil
     Savegame.clear_autosave()
-    app.scenes:switch("hiscores", scores)
+    return scores
+end
+
+-- The run is over (out of vehicles): hand the scores to the high-score screen.
+function Campaign.finish(app)
+    app.scenes:switch("hiscores", close(app))
+end
+
+-- The last stage was cleared: the original's ending when the pack has it (the
+-- registered release), then the credits, then the high-score screen.
+function Campaign.complete(app)
+    local record = app.run_record
+    local scores = close(app)
+    if not Assets.exists(ENDING) then
+        app.scenes:switch("hiscores", scores)
+        return
+    end
+    app.scenes:switch("ending", {
+        record  = record,
+        scores  = scores,
+        on_done = function()
+            app.scenes:switch("credits", function() app.scenes:switch("hiscores", scores) end)
+        end,
+    })
 end
 
 -- A phase was cleared and its state carried into the run: open the next
 -- phase's briefing (with the mission picture when a new mission begins), or
--- finish the run after the last stage. The next stage follows the loaded
+-- complete the run after the last stage. The next stage follows the loaded
 -- stage's name, not world.stage_index, which the overview's stage picker moves
 -- without loading anything.
 function Campaign.advance(app)
@@ -111,7 +167,7 @@ function Campaign.advance(app)
     end
     if not next_stage then
         Log.info("game", "campaign complete")
-        Campaign.finish(app)
+        Campaign.complete(app)
         return
     end
     local cur_m  = tonumber((world.stage_name or ""):match("^stage(%d)"))

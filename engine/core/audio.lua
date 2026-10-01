@@ -430,16 +430,19 @@ end
 
 -- music
 
--- Tracks are optional: any .ogg / .mp3 dropped into assets/music/ becomes
--- available under its bare filename. Nothing ships with the game, so the music
--- bus is silent until the player adds files.
+-- Tracks are optional: any .ogg / .mp3 / .med dropped into assets/music/
+-- becomes available under its bare filename. The pack only brings the
+-- original's end music (ending.med, an OctaMED module LOVE plays through
+-- ModPlug), so the rest of the music bus is silent until the player adds files.
+local MUSIC_EXTENSIONS = { ogg = true, mp3 = true, med = true }
+
 function Audio.music_tracks()
     local out = {}
     local ok, items = pcall(love.filesystem.getDirectoryItems, "assets/music")
     if not ok then return out end
     for _, f in ipairs(items) do
-        local name = f:match("^(.+)%.[Oo][Gg][Gg]$") or f:match("^(.+)%.[Mm][Pp]3$")
-        if name then out[name] = "assets/music/" .. f end
+        local name, ext = f:match("^(.+)%.(%w+)$")
+        if name and MUSIC_EXTENSIONS[ext:lower()] then out[name] = "assets/music/" .. f end
     end
     return out
 end

@@ -13,7 +13,8 @@ local json       = require "lib.json"
 -- each entry in the 320x240 design space and names its style: a heading over a
 -- name (large for openSEEK, small for the original team, in the fonts of the
 -- original credits) or a single label line. Reached from the main menu's
--- CREDITS entry via replace(); EXIT returns to the menu the same way.
+-- CREDITS entry via replace(); EXIT returns to the menu the same way. After
+-- the ending, enter(on_exit) is given where EXIT goes instead.
 local Credits = Class(Scene)
 
 Credits.ui_pointer = true
@@ -30,7 +31,9 @@ end
 function Credits:init(app)
     Scene.init(self, app)
     self.screen = InfoScreen:new("CREDITS", "credits_title")
-    self.screen.on_exit = function() self.app.scenes:replace("main_menu") end
+    self.screen.on_exit = function()
+        if self.on_exit then self.on_exit() else self.app.scenes:replace("main_menu") end
+    end
 
     local raw  = love.filesystem.getInfo(DATA_PATH) and love.filesystem.read(DATA_PATH)
     local data = raw and json.decode(raw) or {}
@@ -66,7 +69,11 @@ function Credits:_draw_entries(fade)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function Credits:enter()             self.screen:open()          end
+function Credits:enter(on_exit)
+    self.on_exit = on_exit
+    self.screen:open()
+end
+
 function Credits:leave()             self.screen:close()         end
 function Credits:update(dt)          self.screen:update(dt)      end
 function Credits:draw()              self.screen:draw()          end

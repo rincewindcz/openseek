@@ -200,7 +200,8 @@ function Gameplay:on_vehicle_lost()
         -- Recoverable: the respawn is scheduled on the simulation clock, and the
         -- crash picture only flashes over it (skipped while replaying, which has
         -- no viewer to inform).
-        self.respawn_tick = app.tick + RESPAWN_TICKS
+        self.respawn_tick  = app.tick + RESPAWN_TICKS
+        self.vehicles_lost = self.vehicles_lost + 1
         if not self.playback then
             app.screen:show(pic, { fade_in = 0.1, hold = 0.5, fade_out = 0.1,
                 cues = "crash", variant = player.vehicle })
@@ -256,6 +257,7 @@ function Gameplay:on_stats_done()
         app.loadout.medals = app.loadout.medals + (self.player.medals or 0)
     end
     Log.info("game", "phase cleared, score %d, lives %d", app.run_score, app.run_lives)
+    self:record_phase()
     Campaign.advance(app)
 end
 

@@ -290,6 +290,13 @@ function Overview:keypressed(key)
         return
     end
     if key == "f4"  then app.scenes:switch("replays");       return end
+    if key == "f11" then
+        -- The ending, back here when it ends; Shift plays VIC3's alternate ending.
+        local alternate = love.keyboard.isDown("lshift", "rshift")
+        app.scenes:switch("ending", { alternate = alternate, record = app.run_record,
+            on_done = function() app.scenes:switch("overview") end })
+        return
+    end
     if key == "f2"  then return end   -- editor is always on here; F2 is a no-op
     if app.debug_panel.enabled and app.debug_panel:keypressed(key) then return end
     if key == "f1" then

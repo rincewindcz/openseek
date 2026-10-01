@@ -10,6 +10,7 @@ local InputSource = require "engine.core.input_source"
 local Replay      = require "engine.game.replay"
 local Score       = require "engine.game.score"
 local Sound       = require "engine.game.sound"
+local Campaign    = require "engine.game.campaign"
 local Log         = require "engine.core.log"
 
 -- Shared base for the gameplay scenes (single player, sandbox, co-op split):
@@ -486,7 +487,8 @@ function GameplayBase:draw_replay_tag()
 end
 
 -- Mission won: hold MISSION COMPLETE briefly, then start the DESTRUCTION
--- STATS screen from the subclass's collect_stats().
+-- STATS screen from the subclass's collect_stats(). The stats and the phase's
+-- simulated time are kept for the campaign's run record (record_phase).
 function GameplayBase:update_won(dt)
     local mission = self.mission
     if not (mission and mission.state == "won") then return end
@@ -497,7 +499,9 @@ function GameplayBase:update_won(dt)
     if self.won_timer > 0 then
         self.won_timer = self.won_timer - dt
     elseif not self.end_stats_started then
-        self.app.end_stats:start(self:collect_stats())
+        self.phase_stats = self:collect_stats()
+        self.phase_time  = self.app.world.time
+        self.app.end_stats:start(self.phase_stats)
         self.end_stats_started = true
     end
 end
@@ -505,7 +509,15 @@ end
 function GameplayBase:reset_end_stats()
     self.won_timer            = nil
     self.end_stats_started    = false
+    self.phase_stats          = nil
+    self.phase_time           = nil
+    self.vehicles_lost        = 0
     self.app.end_stats.active = false
+end
+
+-- Fold the cleared phase into the campaign run's record.
+function GameplayBase:record_phase()
+    Campaign.record_phase(self.app, self.phase_stats, self.phase_time, self.vehicles_lost)
 end
 
 -- Where to go once the stats screen is dismissed. Base returns to the menu;

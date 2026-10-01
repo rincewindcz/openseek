@@ -10,7 +10,7 @@ local Log     = require "engine.core.log"
 -- everything a run carries between phases: the stage it is parked on, the
 -- running score, the spare vehicles and the next bonus-vehicle threshold, and
 -- the whole weapon inventory (medals, owned levels, bay loadout, special and
--- vehicle characteristics). There is no slot limit; the player names each one
+-- vehicle characteristics), and the run's record (engine/game/campaign.lua). There is no slot limit; the player names each one
 -- on the SAVE / LOAD screen (engine/scenes/saves.lua).
 --
 -- A save is taken on the mission briefing, which is the one point where the run
@@ -69,6 +69,16 @@ local function apply_coop(app, data)
     return run
 end
 
+-- The run's record keeps only its numbers; a save without one restores none.
+local function apply_record(data)
+    if type(data) ~= "table" then return nil end
+    local record = {}
+    for k, v in pairs(data) do
+        if type(v) == "number" then record[k] = v end
+    end
+    return record
+end
+
 -- The state a run carries, as a plain table. `name` is the player's slot label.
 function Savegame.capture(app, name)
     local loadout = Loadout.active(app)
@@ -83,6 +93,7 @@ function Savegame.capture(app, name)
         vehicle    = loadout.vehicle,
         loadout    = loadout:snapshot(),
         coop       = capture_coop(app),
+        record     = app.campaign and app.run_record or nil,
         time       = os.time(),
         saved_at   = os.date("%Y-%m-%d %H:%M"),
     }
@@ -97,6 +108,7 @@ function Savegame.apply(app, data)
     app.run_lives      = tonumber(data.lives) or Score.START_LIVES
     app.run_bonus_life = tonumber(data.bonus_life) or Score.BONUS_LIFE_STEP
     app.coop_run       = nil
+    app.run_record     = app.campaign and apply_record(data.record) or nil
     if app.campaign and type(data.coop) == "table" then app.coop_run = apply_coop(app, data.coop) end
     local loadout      = Loadout.restore(data.loadout)
     if app.campaign then

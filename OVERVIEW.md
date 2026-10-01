@@ -10,7 +10,7 @@ decoded from the user's own copy of the game and are never distributed.
 |------|----------|
 | `main.lua` | Entry point: game data check, shared `app` context, scene registration, `love.*` callbacks. |
 | `conf.lua` | Window configuration. |
-| `engine/core/` | No game knowledge: class, config, input, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, mathx, log. |
+| `engine/core/` | No game knowledge: class, config, input, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, flic, mathx, log. |
 | `engine/game/` | Simulation and gameplay presentation systems. |
 | `engine/ui/` | Screens and widgets. |
 | `engine/scenes/` | One scene per top-level mode. |
@@ -55,7 +55,9 @@ decoded from the user's own copy of the game and are never distributed.
   only show the label. `--selftest` exits with code 1.
 - The number of missions offered follows the stages present
   (`World:mission_count()`): the campaign ends after the last stage and the
-  mission picker cycles only those missions. Vehicle variants whose hull /
+  mission picker cycles only those missions. A registered pack plays the
+  original's ending there (`scenes/ending.lua`), then the credits, then the
+  high scores; the shareware goes straight to the high scores. Vehicle variants whose hull /
   turret (or chopper) frames are not in the pack are dropped from the list
   (`game/vehicles.lua`; the shareware keeps tanks GREEN, DESERT, ARCTIC).
 - Files in `content/` must not contain pixels copied from the game or from
@@ -145,7 +147,8 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 - Only the top scene receives update, draw and input. Pause is a flag inside
   gameplay scenes.
 - The `Screen` fade overlay is app-level: updated first, drawn last, gates input.
-- `ui_pointer = true` hides the OS cursor and draws the `SELPOINT` sprite.
+- `ui_pointer = true` hides the OS cursor and draws the `SELPOINT` sprite;
+  `hide_cursor = true` (the ending) hides it with no sprite.
 - Touch goes to the scene's `touchpressed/touchmoved/touchreleased` first; a hook
   returning false passes it on to the mouse handlers. Mouse events synthesized
   from touches (`istouch`) are ignored.
@@ -157,7 +160,8 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
-| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry, one per qualifying player after a co-op run. |
+| `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3. Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, on_done }`; `alternate` types VIC3's alternate ending. EXTRA `ending_stats` adds the run record under FIN01..03. |
+| `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name); `enter(on_exit)` replaces EXIT's return to the menu (the ending passes the high scores). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry, one per qualifying player after a co-op run. |
 | `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, MOBILE UI, GAMEPLAY, DIFFICULTY, EXTRAS. MOBILE UI only where `TouchControls.available` (web, Android, iOS, `--touch`); the web build drops DISPLAY's FULLSCREEN and WINDOW SIZE. The sidebar packs tighter when it holds more than nine entries. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
 | `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. Rewrites the autosave on every open in a campaign run. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
@@ -186,9 +190,10 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/rng` | Seeded per-phase RNG with draw counter. |
 | `core/animation` | `AnimClip` from `data/animations.json`, per-instance `AnimState`. |
 | `core/assets` | Path resolution and pack check (section 2). |
-| `core/audio` | Clip catalog, event table (clip lists, per-vehicle variants, size pitch), callouts and sequences, voice pools, buses, ducking, music. |
+| `core/audio` | Clip catalog, event table (clip lists, per-vehicle variants, size pitch), callouts and sequences, voice pools, buses, ducking, music (`.ogg`, `.mp3`, `.med`). |
 | `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. `print` `cell` option draws fixed-pitch at each glyph's in-frame x offset. |
 | `core/screen` | Fullscreen image fade in / hold / out. |
+| `core/flic` | FLI / FLC player: decodes one frame per `next_frame` into an index buffer and an RGBA `image` (COLOR_256 / 64, DELTA_FLC / FLI, BYTE_RUN, BLACK, COPY); the caller sets the pace. |
 | `core/mathx` | `atan2` shim, `heading_deg`. |
 | `core/log` | Timestamped, tagged console lines (`info`, `warn`). |
 | `game/world` | Stage load, entities, ground colour, collision (`blocked`), objectives, shrapnel, dust, `world.time`, `world.rng`, `world.params`. |
@@ -212,12 +217,12 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
 | `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
 | `game/vehicles` | Free-play weapon cycles, equip bay and special lists, variants (`data/vehicle_variants.json`, loaded on first use), labels. |
-| `game/campaign` | NEW GAME run state: solo run fields or `app.coop_run` (per-player score, lives, threshold, out flag, `Loadout`; lives rule and pool), active players, `advance`, `finish`, `resume` (reopen a slot or the autosave at its briefing). |
+| `game/campaign` | NEW GAME run state: solo run fields or `app.coop_run` (per-player score, lives, threshold, out flag, `Loadout`; lives rule and pool), active players, `advance`, `finish` (out of vehicles), `complete` (last stage cleared: ending, credits, high scores), `resume` (reopen a slot or the autosave at its briefing). `app.run_record` sums each cleared phase over all players (`record_phase`, from the gameplay scenes: phases, simulated time, vehicles lost, stats screen kills, rescues, badges). |
 | `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. `Loadout.info` (cost, description lines) from `assets/pow/weapon_info.json`; `price` = list cost minus `trade_in` (`data/shop.json`) of the owned level's cost. `Loadout.active(app, player)` picks a co-op player's own. |
 | `game/score` | Kill values, phase bonus weights, bonus-life ladder, `Score.award`. |
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header, delta input, checksums, `.osr` files; hands each finished recording to the hosting page when the web build ships `build.json` with `replay_upload`. |
-| `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory; co-op adds a `coop` table per player), one JSON file per slot in `saves/`, plus the `autosave.json` of the run in progress (written by each campaign briefing, removed by `Campaign.finish`). |
+| `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory, run record; co-op adds a `coop` table per player), one JSON file per slot in `saves/`, plus the `autosave.json` of the run in progress (written by each campaign briefing, removed by `Campaign.finish`). |
 | `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base, pickup and air strike blips), weapon sights (the air strike's rests on its target), counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen: lines count up (icons filling), then wind back down as each pays its bonus into TOTAL SCORE; per-player columns in co-op. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
@@ -452,8 +457,9 @@ replay header `player.N.skin` / `player.N.tank`).
 - Radio: one line at a time; higher priority interrupts, equal or lower dropped;
   sfx and engine buses duck.
 - Buses: `sfx`, `voice`, `engine`, `ui`, `music`.
-- Music: `.ogg` / `.mp3` in `assets/music/`: `menu`, then per phase the first of
-  `stage<MP>`, `mission<M>`, `game`. No tracks are produced by the tools.
+- Music: `.ogg` / `.mp3` / `.med` in `assets/music/`: `menu`, then per phase the
+  first of `stage<MP>`, `mission<M>`, `game`; `ending` for the ending. The tools
+  produce only `ending.med` (the original's `SEEKEMOD.BIN`, an OctaMED module).
 
 ## 11. Additions beyond the original
 
@@ -469,6 +475,7 @@ Toggleable extras (EXTRAS page):
 | `pickup_glint` | off | A light sweep runs across each pickup now and then (`game/detail_fx`). |
 | `air_strike_fx` | on | Air strike sight on a pending target, radar blip, friendly craft with their rockets and bombs (`game/air_strike`, `ui/hud`). |
 | `explosion_pitch` | on | The one explosion sound pitched by blast size (`core/audio`, `size_pitch`). |
+| `ending_stats` | on | The run record typed under the ending's FIN01..03 story (`scenes/ending`, `data/ending.json` `stats`). |
 | `tank_tracks` | on | A driving tank leaves faint tread marks that fade out (`game/tracks`). |
 | `tank_recoil`, `shell_casings`, `tread_dust`, `wreck_smoke`, `shell_impact` | on | Turret kick and muzzle smoke on a shell shot, chaingun casings, dust behind a fast tank, smoking wrecks, an explosion where a tank shell strikes (`game/detail_fx`). |
 
@@ -513,6 +520,7 @@ galleries, debug mission picker, headless checks.
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
 | `data/credits.json` | Credits: `styles` (fonts, name offset, label colour) and positioned `entries` (`heading` / `name`, or a label `text`), 320x240 design space. |
+| `data/ending.json` | Ending timing (`char_time`, `tab_pause`, `hold`, fades, text `cell`), music track, `anim` (`frame_time`, `cues`: event -> frame list, `loops`: event, level, fade start and length in frames) and `stats` (position, line height, columns, keys per picture, labels). |
 | `data/animations.json` | Named animation clips. |
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
 | `data/audio.json` | Sound events (`defaults`, `events` with clip or `clips`, per-vehicle variants, `size_pitch`, `group`), `callouts` (armor / fuel thresholds, warning period, selection guard, finish-him mark, follow-up lines) and `sequences` (timed screen cues). |
@@ -528,6 +536,7 @@ galleries, debug mission picker, headless checks.
 | `assets/stageMP.json`, `assets/stageMP/*.png` | Stages; one frame-0 PNG per class, `render` offsets, `objectives`, `is_target`, class fields (`toughness`, `explosion_size`, `behaviour`, `drop`, `pows`, ...). |
 | `assets/sounds.json`, `assets/sounds/*.wav` | Clip catalog (categories of `{name, file, label, rate}`), mono 8-bit WAV. |
 | `assets/mission_text.json` | `stage<M><P>` -> `paragraphs`. |
+| `assets/ending/ending.json`, `assets/ending/reganim.flc`, `assets/music/ending.med` | Ending: `prompt` and `slides` (`picture`, `lines` of `{text, x, y}` with tabs, VIC3 `alternate_lines`, `prompt` position); the CD's animation; the end music. Registered release only. |
 | `assets/fonts/<name>.{png,json}` | Atlas + glyph metrics, `charmap` or `word`, `mode` `mask` / `truecolor`. |
 | `assets/equip/`, `assets/phend/` | Screen art + `layout.json` rects. |
 | `assets/pow/weapon_info.json` | Shop catalogue: vehicle -> weapon -> per level `{cost, lines}` (upper-cased description), from `WINF.BIN` / `WINFT.BIN`. |
@@ -549,7 +558,8 @@ point:
   `--cache`.
 - `unjam.py` reads the JAM in memory (AR002, `-lh5-`); the game trees are
   normalized into a temporary directory (`data/` lowercase, the rest
-  uppercase); every exporter runs in-process; the result replaces `DIR` via
+  uppercase) along with the top-level `SEEK.EXE` and `REGANIM.FLC` when present;
+  every exporter runs in-process; the result replaces `DIR` via
   `DIR.new`; exporter output goes to `DIR.log`. `DIR` must be absent, empty or a
   previous pack (`--force` otherwise).
 - stdout: `source ...`, `found N files, EDITION, missions [...]`,
@@ -578,6 +588,7 @@ and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
 | `export_phend.py` | `assets/phend/` |
 | `export_shop.py` | `assets/pow/` sprites, `assets/pow/weapon_info.json` (WINF / WINFT prices and descriptions), `assets/fonts/charspow.*`, all in the `POWUP.BIN` palette (disabled buttons grey out 224 / 215; run after `export_fonts.py`) |
 | `export_equip.py` | `assets/equip/` in the `EQPCHP.BIN` palette, `layout.json` template-matched on the backdrop index maps |
+| `export_ending.py` | `assets/ending/ending.json` (story text read from `SEEK.EXE` at the registered release's addresses, layout from its code), `reganim.flc` (CD release), `assets/music/ending.med`, `assets/fonts/endstory.*` (ENDCHARS in the FIN01 palette, with its drop shadow) |
 | `decode_level.py` | Stage BIN -> JSON (`--summary`) |
 | `decode_blitter.py` | Exact world-sprite decoder |
 | `decode_planar.py` | Exact planar HUD sprite decoder |
@@ -604,6 +615,7 @@ and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
 | F6 | Fly-over pickup override (ignores the difficulty landing rules) |
 | F7 | Co-op free play (vehicle select) |
 | F8 / F9 / F10 | Animation / font / sound gallery (overview) |
+| F11, Shift+F11 | Ending, VIC3's alternate ending (overview) |
 | F9 | Radar auto zoom (in game, rebindable). Co-op: P1 Tab, P2 keypad `.` |
 | F12 | Screenshot (rebindable) |
 | Overview: wheel, +/- | Zoom |
