@@ -13,8 +13,8 @@ expect (data/ lowercase, everything else uppercase), every exporter runs against
 it in-process, and the result replaces --out atomically. --out gets a
 manifest.json the engine checks before booting.
 
-Progress goes to stdout as one line per step ("[3/14] export_player"); exporter
-output goes to <out>.log.
+Progress goes to stdout as "download N%" and "unpack N%" lines, then one line
+per step ("[3/14] export_player"); exporter output goes to <out>.log.
 
 Usage:
   build_pack.py --download --out ~/.local/share/love/openseek/assets
@@ -187,26 +187,33 @@ def root_files(members):
     return out
 
 
+def _write_files(files, staging):
+    shown = -1
+    for i, (rel, load) in enumerate(files.items(), 1):
+        dest = staging / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(load())
+        pct = i * 100 // len(files)
+        if pct != shown:
+            shown = pct
+            progress(f"unpack {pct}%")
+
+
 def stage_source(source, staging):
     """Write the normalized game trees and ROOT_FILES of `source` (zip or
     directory) to `staging`."""
     source = Path(source).expanduser()
     if source.is_dir():
         members = _dir_members(source)
-        files = game_members(members)
-        files.update(root_files(members))
+        files   = dict(game_members(members), **root_files(members))
+        _write_files(files, staging)
     elif zipfile.is_zipfile(source):
         with zipfile.ZipFile(source) as zf:
             members = _zip_members(zf)
-            found   = dict(game_members(members), **root_files(members))
-            files   = {k: v() for k, v in found.items()}
-        files = {k: (lambda data=v: data) for k, v in files.items()}
+            files   = dict(game_members(members), **root_files(members))
+            _write_files(files, staging)
     else:
         raise SourceError(f"not a directory or zip archive: {source}")
-    for rel, load in files.items():
-        dest = staging / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(load())
     if not gamedata.is_game_dir(staging):
         raise SourceError("incomplete game data: data/ or STAGE00/ missing")
     return len(files)
@@ -240,8 +247,8 @@ def download_shareware(cache_dir):
                     f.write(block)
                     done += len(block)
                     pct = done * 100 // total if total else 0
-                    if pct // 10 != shown:
-                        shown = pct // 10
+                    if pct != shown:
+                        shown = pct
                         progress(f"download {pct}%")
         except OSError as exc:
             errors.append(f"{url}: {exc}")

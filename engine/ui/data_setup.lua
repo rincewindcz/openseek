@@ -23,6 +23,10 @@ local PANEL_ALPHA = 0.75
 local FONT_PATH = "content/fonts/loaded/loaded.ttf"
 local DESKTOP   = { Linux = true, Windows = true, ["OS X"] = true }
 
+-- Converter phases in the order they run, each an equal share of the bar.
+local PHASES       = { "download", "unpack", "convert" }
+local LOCAL_PHASES = { "unpack", "convert" }
+
 local THREAD_CODE = [[
 local command, channel = ...
 local pipe = io.popen(command, "r")
@@ -110,7 +114,7 @@ end
 
 -- conversion
 
-function DataSetup:_start(args)
+function DataSetup:_start(args, download)
     local save = love.filesystem.getSaveDirectory()
     love.filesystem.createDirectory("downloads")
     local command = self.command .. " " .. args
@@ -120,6 +124,7 @@ function DataSetup:_start(args)
     self.channel  = love.thread.newChannel()
     self.thread   = love.thread.newThread(THREAD_CODE)
     self.mode     = "running"
+    self.phases   = download and PHASES or LOCAL_PHASES
     self.progress = 0
     self.label    = "STARTING"
     self.lines    = {}
@@ -132,10 +137,14 @@ function DataSetup:_choose(id)
     if id == "quit" then
         love.event.quit()
     elseif id == "download" then
-        self:_start("--download")
+        self:_start("--download", true)
     elseif id == "rebuild" then
         local source = self.manifest.source
-        self:_start(source == "download" and "--download" or quote(source))
+        if source == "download" then
+            self:_start("--download", true)
+        else
+            self:_start(quote(source))
+        end
     elseif id == "path" then
         self.mode = "path"
         love.keyboard.setKeyRepeat(true)
@@ -149,19 +158,36 @@ function DataSetup:_use_path(path)
     self:_start(quote(path))
 end
 
+-- Moves the bar to `fraction` of `phase`; it never moves backwards.
+function DataSetup:_advance(phase, fraction)
+    for i, name in ipairs(self.phases) do
+        if name == phase then
+            self.progress = math.max(self.progress, (i - 1 + fraction) / #self.phases)
+        end
+    end
+end
+
 function DataSetup:_handle_line(line)
     self.lines[#self.lines + 1] = line
     local step, total, name = line:match("^%[(%d+)/(%d+)%] (%S+)")
-    local pct = line:match("^download (%d+)%%")
+    local download = line:match("^download (%d+)%%")
+    local unpack   = line:match("^unpack (%d+)%%")
     if step then
-        self.progress = tonumber(step) / tonumber(total)
-        self.label    = name:gsub("^export_", ""):gsub("_", " "):upper()
-    elseif pct then
-        self.label = "DOWNLOADING " .. pct .. "%"
+        self:_advance("convert", (tonumber(step) - 1) / tonumber(total))
+        self.label = name:gsub("^export_", ""):gsub("_", " "):upper()
+    elseif download then
+        self:_advance("download", tonumber(download) / 100)
+        self.label = "DOWNLOADING " .. download .. "%"
+    elseif line:match("^download cached ") then
+        self:_advance("download", 1)
+    elseif unpack then
+        self:_advance("unpack", tonumber(unpack) / 100)
+        self.label = "UNPACKING " .. unpack .. "%"
     elseif line:match("^ERROR ") then
         self.error = line:sub(7)
     elseif line:match("^DONE ") then
-        self.done = true
+        self.progress = 1
+        self.done     = true
     end
 end
 
@@ -295,10 +321,9 @@ function DataSetup:_rows()
             local selected = i == self.selected and self.mode == "menu"
             add(selected and ("> " .. item.text .. " <") or item.text, selected and GOLD or WHITE, i)
         end
-        local hint = self.items[self.selected] and self.items[self.selected].hint or ""
-        if hint ~= "" then
+        if self.mode == "menu" then
             space()
-            add(hint, GREY)
+            add(self.items[self.selected].hint, GREY)
         end
     elseif self.mode == "path" then
         add("TYPE OR PASTE (CTRL+V) THE PATH, OR DROP IT HERE", GREY)
@@ -324,6 +349,16 @@ function DataSetup:_row_height(row)
     return row.font:getHeight() * 1.25
 end
 
+-- Widest text the menu can show, so its panel keeps one size as the selection moves.
+function DataSetup:_menu_width()
+    local width = 0
+    for _, item in ipairs(self.items) do
+        width = math.max(width, self.small_font:getWidth("> " .. item.text .. " <"),
+            self.small_font:getWidth(item.hint))
+    end
+    return width
+end
+
 function DataSetup:draw()
     local g = love.graphics
     local screen_w, screen_h = g.getDimensions()
@@ -346,6 +381,7 @@ function DataSetup:draw()
         total = total + self:_row_height(row)
         if row.text then width = math.max(width, row.font:getWidth(row.text)) end
     end
+    if self.mode == "menu" then width = math.max(width, self:_menu_width()) end
     local pad     = self.small_font:getHeight()
     local top     = math.max(screen_h * PANEL_TOP, screen_h - total - pad * 3)
     local panel_w = math.min(screen_w - pad * 2, math.max(width, screen_w * 0.45) + pad * 4)

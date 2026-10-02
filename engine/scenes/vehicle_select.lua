@@ -80,6 +80,7 @@ function VehicleSelect:init(app)
     Scene.init(self, app)
     self.title_font = Font.get("mainmen")
     self.name_font  = Font.get("hichars")
+    self.gold_font  = Font.get("credchars")
     self.small_font = Font.get("endchars")
     self.hint_font  = Font.get("keysfont")
 
@@ -418,10 +419,16 @@ function VehicleSelect:_draw_card(c, fade, scale, ox, oy)
             { GOLD[1], GOLD[2], GOLD[3], fade })
     end
 
-    local font = self.name_font
+    -- The active name uses the baked gold credits font; it carries its own outline.
+    local font = active and self.gold_font or self.name_font
     if font:width(v.name) > b.w - 2 * ARROW_W - 4 then font = self.small_font end
-    local name_col = active and { GOLD[1], GOLD[2], GOLD[3], fade } or { 1, 1, 1, 0.5 * fade }
-    shadow_print(font, v.name, math.floor(b.x + (b.w - font:width(v.name)) / 2), b.y + 18, name_col)
+    local name_x = math.floor(b.x + (b.w - font:width(v.name)) / 2)
+    if font.truecolor then
+        font:print(v.name, name_x, b.y + 18, { color = { 1, 1, 1, fade } })
+    else
+        local name_col = active and { GOLD[1], GOLD[2], GOLD[3], fade } or { 1, 1, 1, 0.5 * fade }
+        shadow_print(font, v.name, name_x, b.y + 18, name_col)
+    end
 
     -- One pip per variant, the current one lit.
     local n     = Vehicles.variant_count(c.kind)

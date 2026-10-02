@@ -48,8 +48,9 @@ decoded from the user's own copy of the game and are never distributed.
   and, on desktop with a converter present, offers `DOWNLOAD SHAREWARE`,
   `USE MY COPY` (typed or pasted path, or a folder / zip dropped on the window),
   `REBUILD GAME DATA` (outdated pack with a recorded source) and `QUIT`. The
-  converter runs in a `love.thread` through `io.popen`; its progress lines drive
-  the bar, and `DONE` restarts LOVE (`love.event.quit("restart")`). Converter
+  converter runs in a `love.thread` through `io.popen`; its `download N%`,
+  `unpack N%` and `[i/n]` step lines drive one bar split equally between the
+  phases that run, and `DONE` restarts LOVE (`love.event.quit("restart")`). Converter
   lookup: `openseek-setup.exe` (Windows) or `openseek-setup.pyz` next to the
   game, else `tools/build_pack.py` in an unfused source checkout. Web and mobile
   only show the label. `--selftest` exits with code 1.
@@ -159,7 +160,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT, or FULLSCREEN on the web); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. |
 | `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
-| `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
+| `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews; the active card names its variant in the gold `credchars` font. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
 | `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3. Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, preview, keep_music, on_done }`; `alternate` types VIC3's alternate ending, `preview` falls back to `data/ending.json` `preview` without a record (overview F11), `keep_music` leaves the end music playing into the credits (`Campaign.complete`). EXTRA `ending_stats` adds the run record under FIN01..03. |
 | `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name); `enter(on_exit)` replaces EXIT's return to the menu (the ending passes the high scores). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry, one per qualifying player after a co-op run. |
 | `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, MOBILE UI, GAMEPLAY, DIFFICULTY, EXTRAS. MOBILE UI only where `TouchControls.available` (web, Android, iOS, `--touch`); the web build drops DISPLAY's FULLSCREEN and WINDOW SIZE. The sidebar packs tighter when it holds more than nine entries. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
