@@ -32,6 +32,8 @@ Usage:
   export_love2d.py all --game-dir /path/to/seek
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
