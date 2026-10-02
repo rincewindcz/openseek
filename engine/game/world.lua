@@ -15,7 +15,7 @@ local Log       = require "engine.core.log"
 -- Class flag bit of the player's own base buildings (tested at spawn by the
 -- original, 0x1f64e4). The player's fire cannot harm them (see Entity:take_damage).
 local BASE_FLAG       = 0x40
-local BASE_HIT_POINTS = 1000
+local BASE_HIT_POINTS = 100
 
 local DEBRIS_CLIPS = { "ironsz", "iron2sz", "metal8", "metalrt", "metalsz" }
 local DUST_CLIPS   = { "dust0", "dust1", "dust2" }
@@ -287,7 +287,7 @@ function World:load(name)
         entity.world         = self   -- backref so a dying building can spawn world shrapnel
         entity.kind_name     = cls.kind_name
         entity.base_building = math.floor((cls.flags or 0) / BASE_FLAG) % 2 == 1
-        -- The main base building ships with no hit points (it could never be
+        -- The main base building ships with no toughness (it could never be
         -- hit); friendly fire makes it a sturdy target instead of a one-hit kill.
         if entity.base_building and entity.max_hp <= 0 then
             local hp = entity.type_data.base_hit_points or BASE_HIT_POINTS

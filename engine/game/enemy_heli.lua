@@ -29,7 +29,7 @@ local REACTION_DELAY = 0.9 -- s in attack range before the first volley (evasion
 local FRONT_LIMIT = 90    -- deg; the orbit is kept within this bearing of the player's front
 local FIRE_FRONT  = 115   -- deg; a heli only fires within this bearing, never from the rear blind spot
 local HIT_RADIUS   = 13
-local MAX_HP       = 60
+local MAX_HP       = 20    -- fallback toughness when the stage has no badheli class
 local SPAWN_DELAY  = 2.5 -- gap between spawns while below the cap
 local DYING_TIME   = 1.1 -- fall/burn time before the wreck blows, like the player heli
 local BLAST_RADIUS = 70
@@ -60,6 +60,7 @@ function HeliSystem:init(world, combat)
     self.rotor_ax, self.rotor_ay = 0, 0
     self.kills  = 0   -- enemy helicopters shot down (end-of-phase stats)
     self.points = DEFAULT_POINTS
+    self.max_hp = MAX_HP
 end
 
 -- Read the stage's spawn markers and the badheli render image. Called on each
@@ -73,11 +74,13 @@ function HeliSystem:reset()
     self.world.air_units = self.helis
     self.sprite = nil
     self.points = DEFAULT_POINTS
+    self.max_hp = MAX_HP
     for _, c in ipairs(self.world.stage.classes) do
         if c.kind_name == "enemy_helicopter" then
-            -- Score value comes from the same class record as the sprite: the
-            -- badheli class hit_points, like any other destroyed entity.
+            -- Score value and toughness come from the same class record as the
+            -- sprite, like any other destroyed entity.
             if (c.hit_points or 0) > 0 then self.points = c.hit_points end
+            if (c.toughness or 0) > 0 then self.max_hp = c.toughness end
             local r = self.world.images[c.index + 1]
             if r and r.img then self.sprite = r.img; break end
         end
@@ -113,7 +116,7 @@ function HeliSystem:_spawn_one(player)
     local heli = {
         x = s.x, y = s.y,
         heading = Mathx.heading_deg(dx, dy),
-        hp = MAX_HP, max_hp = MAX_HP,
+        hp = self.max_hp, max_hp = self.max_hp,
         weapon = pick.weapon, level = pick.level,
         burst = pick.burst, intra = pick.intra, cooldown = pick.cooldown,
         burst_left = pick.burst,

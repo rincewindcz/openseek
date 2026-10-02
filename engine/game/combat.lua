@@ -248,8 +248,9 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
 
     local swing_off = 0
     if level.swing then
-        local key = tostring(owner) .. weapon_name
-        swing_off = math.sin(self._swing[key] or 0) * spread
+        local key   = tostring(owner) .. weapon_name
+        local swing = level.swing_deg and level.swing_deg * math.pi / 180 or spread
+        swing_off = math.sin(self._swing[key] or 0) * swing
     end
 
     -- Alternate-side weapons (mega missile) fire one round, swapping the muzzle
@@ -331,11 +332,13 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     end
 end
 
--- Napalm: along each of the level's angle offsets (relative to aim), lay a ray of
--- `count` fire patches that ignite outward from the chopper (the wave). Level 1 =
--- one tongue ahead, level 2 = a -45/0/45 fan, level 3 = an 8-way ring.
+-- Napalm: along each of the level's angle offsets (relative to aim) and lateral
+-- offsets (px), lay a ray of `count` fire patches that ignite outward from the
+-- chopper (the wave). Level 1 = one tongue ahead, level 2 = three parallel
+-- tongues, level 3 = an 8-way ring.
 function CombatSystem:_fire_flame(x, y, _fwd_x, _fwd_y, rad, weapon_def, level)
-    local angles   = level.angles or { 0 }
+    local angles   = level.angles  or { 0 }
+    local offsets  = level.offsets or { 0 }
     local count    = level.count   or weapon_def.count   or 8
     local spacing  = level.spacing or weapon_def.spacing or 20
     local wave     = weapon_def.wave_delay or 0.04
@@ -346,10 +349,13 @@ function CombatSystem:_fire_flame(x, y, _fwd_x, _fwd_y, rad, weapon_def, level)
     for _, a in ipairs(angles) do
         local dir    = rad + a * math.pi / 180
         local cx, cy = math.cos(dir), math.sin(dir)
-        for i = 1, count do
-            local d = i * spacing
-            self:add_effect(weapon_def.effect or "fire", x + cx * d, y + cy * d,
-                { damage = dmg, radius = radius, scale = scale, lifetime = lifetime, delay = (i - 1) * wave })
+        for _, off in ipairs(offsets) do
+            local ox, oy = x - cy * off, y + cx * off
+            for i = 1, count do
+                local d = i * spacing
+                self:add_effect(weapon_def.effect or "fire", ox + cx * d, oy + cy * d,
+                    { damage = dmg, radius = radius, scale = scale, lifetime = lifetime, delay = (i - 1) * wave })
+            end
         end
     end
 end
@@ -894,18 +900,18 @@ function CombatSystem:_player_hit_fx(p)
 end
 
 -- A landed bomb: a big explosion, a scatter of iron/metal shrapnel, and full
--- damage to everything inside the blast radius.
+-- damage to every ground entity within aoe px on both axes (the original's
+-- square blast, 0x1f88b0).
 function CombatSystem:_bomb_detonate(projectile)
     self:add_effect(projectile.weapon_def.explosion or "explosion_large", projectile.x, projectile.y,
         { scale = 1.5, sound = "explosion.bomb" })
     -- Same flying iron/metal shrapnel (and the dust it leaves) as a building blast.
     self.world:spawn_debris(projectile.x, projectile.y, 5 + self.world.rng:random(0, 3), 1.4)
-    local r  = projectile.aoe > 0 and projectile.aoe or 80
-    local r2 = r * r
+    local r = projectile.aoe > 0 and projectile.aoe or 120
     for _, e in ipairs(self.world.hittable) do
         if e:is_alive() and not e.hide_shielded then
             local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
-            if dx * dx + dy * dy < r2 then
+            if math.abs(dx) < r and math.abs(dy) < r then
                 e:on_hit()
                 local killed = e:take_damage(projectile.damage, dx, dy)
                 if killed then self:_credit_kill(projectile.shooter, e, killed) end

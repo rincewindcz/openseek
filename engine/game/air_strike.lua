@@ -16,9 +16,8 @@ local Shadow    = require "engine.game.shadow"
 --
 -- Simulation: the whole impact schedule (time, position) is drawn from
 -- world.rng when the strike is called, and impacts detonate on world.time.
--- Damage is given in the original's units (class toughness, the real health in
--- SEEK.EXE) and converted to each target's openSEEK hit points, so every level
--- keeps the manual's outcome whatever a class's score-derived hp.
+-- Damage is in the original's units, class toughness, which is also every
+-- entity's hit points.
 --
 -- Presentation (EXTRA air_strike_fx): the chopper and jet levels fly their
 -- craft over the area, rockets and bombs leaving them to land exactly on the
@@ -159,21 +158,6 @@ function AirStrike:time_to_impact(strike)
     return strike.t0 + strike.def.delay - self.world.time
 end
 
--- Damage in original toughness units, converted to e's current hp pool (the
--- turret while it stands). A class with toughness 0 dies to any hit, as in
--- the original.
-function AirStrike:_hp_damage(e, amount)
-    local cls, max_hp
-    if e.turret_alive then
-        cls, max_hp = e.turret_class, e.turret_max_hp
-    else
-        cls, max_hp = self.world.stage.classes[e.class_idx + 1], e.max_hp
-    end
-    local toughness = cls and cls.toughness or 0
-    if toughness <= 0 then return max_hp end
-    return amount * max_hp / toughness
-end
-
 function AirStrike:_detonate(strike, impact)
     local spec = strike.spec
     local fx, fy, rx, ry = axes(strike.angle)
@@ -188,7 +172,7 @@ function AirStrike:_detonate(strike, impact)
             local dx, dy = self.world:delta(e.x, e.y, x, y)
             if dx * dx + dy * dy < r2 then
                 e:on_hit()
-                local killed = e:take_damage(self:_hp_damage(e, spec.damage), dx, dy)
+                local killed = e:take_damage(spec.damage, dx, dy)
                 if killed then self.combat:_credit_kill(strike.shooter, e, killed) end
             end
         end

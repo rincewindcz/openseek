@@ -450,7 +450,7 @@ end
 local FALL_TIME    = 1.25  -- seconds for a downed chopper to drop from full altitude
 local TANK_BURN    = 1.6   -- seconds the tank burns before the turret blows
 local BLAST_RADIUS = 90    -- radius of the player's death explosion damage
-local BLAST_DAMAGE = 140   -- damage dealt to nearby entities by that explosion
+local BLAST_DAMAGE = 20    -- toughness damage to nearby entities, the bomb's blast
 
 -- The player's death explosion damages everything around the wreck, like a bomb.
 function Player:_death_blast()

@@ -62,7 +62,7 @@
   },
   "structure": {
     "attack_range": 0,
-    "base_hit_points": 1000,
+    "base_hit_points": 100,
     "collision_radius": 14,
     "detection_radius": 0,
     "explosion": "fire",

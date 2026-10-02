@@ -24,26 +24,28 @@
     "explosion": "explosion_none",
     "levels": [
       {
-        "damage": 3,
-        "fire_rate": 10,
+        "damage": 1,
+        "fire_rate": 7.0,
         "spread_deg": 0,
         "streams": 1,
         "swing": false
       },
       {
-        "damage": 3,
-        "fire_rate": 10,
+        "damage": 1,
+        "fire_rate": 7.0,
         "spread_deg": 0,
         "count": 2,
         "side_offset": 10,
         "swing": false
       },
       {
-        "damage": 3,
-        "fire_rate": 10,
-        "spread_deg": 20,
-        "streams": 2,
-        "swing": true
+        "damage": 1,
+        "fire_rate": 7.0,
+        "spread_deg": 0,
+        "count": 2,
+        "side_offset": 10,
+        "swing": true,
+        "swing_deg": 2.8
       }
     ]
   },
@@ -63,26 +65,26 @@
       "smoke",
       "smoke2"
     ],
-    "ammo_max": 100,
-    "ammo_pickup": 40,
+    "ammo_max": 200,
+    "ammo_pickup": 50,
     "levels": [
       {
-        "damage": 12,
-        "fire_rate": 11.0,
+        "damage": 2,
+        "fire_rate": 7.78,
         "spread_deg": 0,
         "count": 2,
         "side_offset": 16
       },
       {
-        "damage": 12,
-        "fire_rate": 9.0,
-        "spread_deg": 0,
+        "damage": 2,
+        "fire_rate": 7.78,
+        "spread_deg": 2.8,
         "count": 3,
         "side_offset": 10
       },
       {
-        "damage": 12,
-        "fire_rate": 8.0,
+        "damage": 2,
+        "fire_rate": 7.78,
         "spread_deg": 0,
         "side_offsets": [
           -13,
@@ -103,7 +105,7 @@
     "speed": 300,
     "proj_radius": 6,
     "lifetime": 3.5,
-    "aoe": 30,
+    "aoe": 0,
     "explosion": "explosion_large",
     "alternate_side": true,
     "side_offset": 6,
@@ -121,10 +123,10 @@
     "trail": "smoke2",
     "shadow": true,
     "trail_interval": 14,
-    "damage": 100,
-    "fire_rate": 3.0,
-    "ammo_max": 8,
-    "ammo_pickup": 4
+    "damage": 10,
+    "fire_rate": 4.67,
+    "ammo_max": 25,
+    "ammo_pickup": 6
   },
   "napalm": {
     "vehicle": "chopper",
@@ -133,16 +135,16 @@
     "proj_type": "flame",
     "effect": "fire",
     "explosion": "explosion_none",
-    "damage": 40,
+    "damage": 232,
     "aoe": 22,
-    "fire_rate": 2.5,
+    "fire_rate": 1.17,
     "fire_scale": 2.0,
     "fire_lifetime": 1.0,
     "count": 8,
     "spacing": 20,
     "wave_delay": 0.04,
-    "ammo_max": 30,
-    "ammo_pickup": 15,
+    "ammo_max": 4,
+    "ammo_pickup": 1,
     "levels": [
       {
         "angles": [
@@ -151,9 +153,12 @@
       },
       {
         "angles": [
-          -45,
+          0
+        ],
+        "offsets": [
+          -8,
           0,
-          45
+          8
         ]
       },
       {
@@ -186,28 +191,28 @@
     "turn_rate": 70,
     "proj_radius": 6,
     "lifetime": 6.0,
-    "aoe": 30,
+    "aoe": 0,
     "explosion": "explosion_large",
     "sight": 1,
     "target_kind": "ground",
-    "ammo_max": 10,
-    "ammo_pickup": 5,
+    "ammo_max": 100,
+    "ammo_pickup": 25,
     "levels": [
       {
-        "damage": 80,
-        "fire_rate": 1.0,
+        "damage": 5,
+        "fire_rate": 3.5,
         "count": 1,
         "locking": false
       },
       {
-        "damage": 80,
-        "fire_rate": 1.0,
+        "damage": 5,
+        "fire_rate": 3.5,
         "count": 1,
         "locking": true
       },
       {
-        "damage": 80,
-        "fire_rate": 1.0,
+        "damage": 5,
+        "fire_rate": 3.5,
         "count": 2,
         "side_offset": 20,
         "locking": true
@@ -234,24 +239,24 @@
     "explosion": "explosion_medium",
     "sight": 0,
     "target_kind": "air",
-    "ammo_max": 10,
-    "ammo_pickup": 5,
+    "ammo_max": 100,
+    "ammo_pickup": 25,
     "levels": [
       {
-        "damage": 60,
-        "fire_rate": 1.0,
+        "damage": 5,
+        "fire_rate": 3.5,
         "count": 1,
         "locking": false
       },
       {
-        "damage": 60,
-        "fire_rate": 1.0,
+        "damage": 5,
+        "fire_rate": 3.5,
         "count": 1,
         "locking": true
       },
       {
-        "damage": 60,
-        "fire_rate": 1.0,
+        "damage": 5,
+        "fire_rate": 3.5,
         "count": 2,
         "side_offset": 20,
         "locking": true
@@ -270,14 +275,14 @@
     "fall_time": 0.6,
     "proj_radius": 8,
     "lifetime": 5.0,
-    "aoe": 90,
+    "aoe": 120,
     "explosion": "explosion_large",
-    "ammo_max": 6,
-    "ammo_pickup": 3,
+    "ammo_max": 2,
+    "ammo_pickup": 1,
     "levels": [
       {
-        "damage": 120,
-        "fire_rate": 0.5
+        "damage": 20,
+        "fire_rate": 1.75
       }
     ]
   },
@@ -358,24 +363,24 @@
     "speed": 380,
     "proj_radius": 5,
     "lifetime": 2.5,
-    "aoe": 40,
+    "aoe": 0,
     "explosion": "explosion_large",
-    "ammo_max": 20,
-    "ammo_pickup": 10,
+    "ammo_max": 100,
+    "ammo_pickup": 25,
     "levels": [
       {
-        "damage": 100,
-        "fire_rate": 1.0,
+        "damage": 10,
+        "fire_rate": 3.5,
         "count": 1
       },
       {
-        "damage": 100,
-        "fire_rate": 1.5,
+        "damage": 10,
+        "fire_rate": 4.67,
         "count": 1
       },
       {
-        "damage": 100,
-        "fire_rate": 1.5,
+        "damage": 10,
+        "fire_rate": 4.67,
         "count": 2
       }
     ]

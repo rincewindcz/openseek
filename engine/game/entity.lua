@@ -30,8 +30,8 @@ function Entity:init(id, stage_ent, stage_cls)
     self.x            = stage_ent.x
     self.y            = stage_ent.y
     self.angle        = 0
-    self.hp           = stage_cls.hit_points
-    self.max_hp       = stage_cls.hit_points
+    self.hp           = stage_cls.toughness or 0
+    self.max_hp       = stage_cls.toughness or 0
     self.state        = "idle"
     self.state_before = nil
     self.route        = stage_ent.route
@@ -118,9 +118,8 @@ function Entity:attach_turret(render, spin, turret_class)
     self.turret_points = (turret_class and turret_class.hit_points) or 0
     self.has_turret    = true
     self.turret_alive  = true
-    self.turret_max_hp = (self.type_data and self.type_data.turret_hp)
-        or math.max(1, math.floor((self.max_hp or 1) * 0.5))
-    self.turret_hp = self.turret_max_hp
+    self.turret_max_hp = (turret_class and turret_class.toughness) or 0
+    self.turret_hp     = self.turret_max_hp
 end
 
 function Entity:_destroy_turret()

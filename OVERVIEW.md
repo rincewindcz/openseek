@@ -202,7 +202,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. `Player.draw_tank_variant` is shared with the select screen. |
 | `game/enemy_heli` | Enemy helicopter spawn, flight AI, fire, death (`world.air_units`). |
 | `game/combat` | Weapons, projectiles, firing geometry, hits, AoE, effects, ground enemy AI. |
-| `game/air_strike` | Air strike (owned by `game/combat`): impact schedule drawn from `world.rng` at the call, detonated on `world.time`, damage converted from original toughness units; EXTRA craft, rocket and bomb visuals. |
+| `game/air_strike` | Air strike (owned by `game/combat`): impact schedule drawn from `world.rng` at the call, detonated on `world.time`, damage in toughness units; EXTRA craft, rocket and bomb visuals. |
 | `game/mission` | Objectives, progress, return to base. `Mission.for_stage(world, players, stage)`. |
 | `game/rescue` | POW rescue from `powhere.bin` buildings. |
 | `game/saboteur` | Sabotage objective. |
@@ -272,9 +272,17 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 
 ## 7. Combat
 
+- Entity hit points are the class toughness (`+0x20`, `LEVELS.md`), as in the
+  original; the class `hit_points` is only the score value. A folded turret
+  takes its own class toughness, enemy helicopters the `badheli` class's. A
+  toughness of 0 dies to any hit. Player weapon damage, ammo, cadence and level
+  patterns are the original's (`research/WEAPONS.md`, cadence converted at 70
+  ticks per second); speeds and ranges are openSEEK's.
 - `CombatSystem:fire` builds projectiles from a weapon def and level: spread,
-  streams, swing, side offsets, `alternate_side`. `proj_type "flame"` is a damage
-  cone; `bomb_drop` glides then detonates with shrapnel; `air_strike` goes to
+  streams, swing (`swing_deg` amplitude), side offsets, `alternate_side`.
+  `proj_type "flame"` lays rays of damage patches per level `angles` and lateral
+  `offsets`; `bomb_drop` glides, then hits every ground entity within `aoe` px
+  on both axes (the original's square blast); `air_strike` goes to
   `game/air_strike` (one pending per player; `fire` returns false on a refused
   call so `fire_for` spends no ammo).
 - Player range 640 px unless the weapon sets `range`.
@@ -309,7 +317,8 @@ Ground combatants: any type with `weapon` and `detection_radius > 0`.
   `weapon`, `fire_rate`, `muzzle`, `explosion`, `drop` (pickup kind, `true`
   random, `false` none).
 - Two-part units (tank + `*tanktop`, radar + dish) fold at load (`TURRET_DEFS`).
-  Turret absorbs damage and dies first.
+  Turret absorbs damage and dies first; its hit points are its own class
+  toughness.
 - Patrol tanks ease between waypoints and stop before each shot.
 - Hangar tanks (stage12): `shut.bin` hut + tank link (`World:_link_hangar_tanks`).
   Tank rides out along `tanktrak`, lingers `ride_linger`, returns. Hidden tank is
@@ -317,7 +326,7 @@ Ground combatants: any type with `weapon` and `detection_radius > 0`.
 
 Enemy helicopters (`enemy_heli.lua`): spawned at off-screen `badheli` markers,
 one per `SPAWN_DELAY` 2.5 s, capped at marker count. `SPEED` 110, `TURN_RATE`
-120, `ORBIT_R` 270, `ATTACK_R` 360, `FIRE_CONE` 32, `MAX_HP` 60, `BLAST_RADIUS`
+120, `ORBIT_R` 270, `ATTACK_R` 360, `FIRE_CONE` 32, hit points from the `badheli` class toughness (`MAX_HP` 20 without one), `BLAST_RADIUS`
 70, `BLAST_DAMAGE` 40, `REACTION_DELAY` 0.9, `FRONT_LIMIT` 90, `FIRE_FRONT` 115.
 Weapon from `WEAPON_POOL` (chaingun burst 3, homing_missile, air_to_air level 2,
 machine_gun burst 4). Approaches beyond `ORBIT_R * 1.25`, otherwise orbits within
@@ -364,7 +373,7 @@ machine_gun burst 4). Approaches beyond `ORBIT_R * 1.25`, otherwise orbits withi
 - Base buildings (class flag `0x40`, `Entity.base_building`) cannot be damaged
   by the player, as in the original; with `friendly_fire_pows` on they can be
   destroyed but give no score, streak, stats or power-up drop. Those with no
-  class hit points (`base1.bin`) get `base_hit_points` from the `structure`
+  class toughness (`base1.bin`) get `base_hit_points` from the `structure`
   entry of `data/entity_types.json`.
 - Sabotage: `landhere.bin` pad pairs with the nearest target building (shielded).
   Landing sends an agent to plant. `individual` detonates per building (stage11);
@@ -519,8 +528,8 @@ galleries, debug mission picker, headless checks.
 
 | File | Contents |
 |------|----------|
-| `data/weapons.json` | Player and enemy weapons: levels, `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit); `air_strike`: target distance, radius, delay, incoming call, marker blink, per level pattern (`strike`, impacts or craft / rounds / lanes, window, impact radius and toughness damage, explosion) and craft visuals. |
-| `data/entity_types.json` | Per kind: hit radius, explosion, weapon, detection / attack / turn, `solid`, `collision_radius`, `muzzle_offset`, sprite fallbacks, `dead_frame_offset`, `turret_hp`, `turret_explosion`, `ride_linger`. |
+| `data/weapons.json` | Player and enemy weapons: levels (`damage` in toughness units, `fire_rate`, `swing_deg`, flame `angles` / `offsets`), `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit); `air_strike`: target distance, radius, delay, incoming call, marker blink, per level pattern (`strike`, impacts or craft / rounds / lanes, window, impact radius and toughness damage, explosion) and craft visuals. |
+| `data/entity_types.json` | Per kind: hit radius, explosion, weapon, detection / attack / turn, `solid`, `collision_radius`, `muzzle_offset`, sprite fallbacks, `dead_frame_offset`, `turret_explosion`, `ride_linger`. |
 | `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `weapon`, `fire_rate`, `muzzle`, `explosion`, `drop`. |
 | `data/missions.json` | Section 9. |
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable). |
