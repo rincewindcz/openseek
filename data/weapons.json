@@ -487,7 +487,11 @@
     "short": "MIN",
     "icon": 10,
     "proj_type": "mine",
-    "proj_sprite": "mine2",
+    "proj_sprite": [
+      "mine2",
+      "mine1",
+      "mine0"
+    ],
     "proj_sprite_rot": 0,
     "speed": 0,
     "proj_radius": 0,

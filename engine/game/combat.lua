@@ -39,8 +39,13 @@ function Projectile:init(p)
     self._trail_dist    = 0
     self.alive      = true
     self.scale      = 1
-    -- Resolved draw sprite (the per-mission tracer streak overrides weapon_def.proj_sprite).
-    self.sprite     = p.sprite or (p.weapon_def and p.weapon_def.proj_sprite)
+    -- Resolved draw sprite (the per-mission tracer streak overrides weapon_def.proj_sprite;
+    -- false when none of a fallback list is in the game data).
+    if p.sprite ~= nil then
+        self.sprite = p.sprite
+    else
+        self.sprite = p.weapon_def and p.weapon_def.proj_sprite
+    end
     -- Animated sprite (e.g. the growing tracer streak); plays once, holds last frame.
     if p.animate then self.anim = Animation.new(self.sprite) end
     -- Bomb: glides forward while falling away (the sprite shrinks). Both motions
@@ -188,8 +193,21 @@ function CombatSystem:load(path)
 end
 
 -- Draw sprite for a weapon's projectile, swapping in the current mission's tracer.
+-- A list names fallbacks: the first clip the game data has (the shareware
+-- release lacks mine2), or false when it has none.
 function CombatSystem:_resolve_sprite(weapon_def)
     local sprite = weapon_def.proj_sprite
+    if type(sprite) == "table" then
+        local pick = false
+        for _, name in ipairs(sprite) do
+            local clip = Animation.clip(name)
+            if clip and #clip.frames > 0 then
+                pick = name
+                break
+            end
+        end
+        return pick
+    end
     if weapon_def.proj_type == "tracer" and self.world and self.world.stage_name then
         local m    = tonumber(self.world.stage_name:match("^stage(%d)"))
         local name = m and TRACER_SPRITE[m]
