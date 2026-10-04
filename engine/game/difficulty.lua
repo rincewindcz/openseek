@@ -16,8 +16,17 @@ local Difficulty = {}
 local DATA_PATH = "data/difficulty.json"
 
 Difficulty.KEYS = {
-    "enemy_damage", "enemy_fire_rate", "enemy_aggression", "land_for_medals", "land_for_supplies",
+    "enemy_damage_level", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
+    "land_for_medals", "land_for_supplies",
 }
+
+local DAMAGE_LEVELS = { easy = 1, medium = 2, hard = 3 }
+
+-- Index (1..3) into a weapon's enemy_damage table: the original's per-weapon
+-- damage on EASY / MEDIUM / HARD.
+function Difficulty.damage_level()
+    return DAMAGE_LEVELS[Config.enemy_damage_level] or 2
+end
 
 local presets
 

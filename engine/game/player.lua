@@ -92,6 +92,7 @@ function Player:init(x, y)
     self.strafe_speed   = 140
     self.strafe_accel   = 400
     self.fuel_drain     = 1.3
+    self.armor_base     = 20
     self.takeoff_time   = 0.65
     self.land_time      = 0.50
 
@@ -128,10 +129,13 @@ function Player:load_vehicle_def(def)
     self.strafe_speed   = def.strafe_speed   or self.strafe_speed
     self.strafe_accel   = def.strafe_accel   or self.strafe_accel
     self.fuel_drain     = def.fuel_drain     or self.fuel_drain
+    self.armor_base     = def.armor_base     or self.armor_base
     self.takeoff_time   = def.takeoff_time   or self.takeoff_time
     self.land_time      = def.land_time      or self.land_time
     self.turret_rate      = def.turret_rate      or self.turret_rate
     self.collision_radius = def.collision_radius or self.collision_radius
+    self:_apply_config()
+    self.armor = self.max_armor
 end
 
 function Player:is_flyer()
@@ -271,9 +275,14 @@ function Player:overkill_active()
     return (self.banner_t or BANNER_END) < BANNER_END
 end
 
+-- Max armor is the original's (0x20f1e3): the equip armor slider (0..29, from
+-- load_armor 0..100) plus 5, times the vehicle's armor base, over 15.
+local ARMOR_SLIDER_MAX = 29
+
 function Player:_apply_config()
+    local slider   = math.floor(self.load_armor / 100 * ARMOR_SLIDER_MAX)
     self.max_fuel  = 40 + self.load_fuel  * 0.6
-    self.max_armor = 40 + self.load_armor * 0.6
+    self.max_armor = math.floor((slider + 5) * self.armor_base / 15)
     local total = self.load_fuel + self.load_armor
     self.speed_factor = math.max(0.25, math.min(2.0, 2.0 - total / 200.0))
     self.fuel  = math.min(self.fuel,  self.max_fuel)
@@ -757,7 +766,7 @@ function Player:_apply_input(dt)
 end
 
 -- HP the tank loses per tree it bulldozes through (EXTRA: explosive_trees). Tiny.
-local TREE_CRUSH_DAMAGE = 0.5
+local TREE_CRUSH_DAMAGE = 0.35
 
 -- Whether a hull-sized circle at (x, y) is blocked by a solid object. With the
 -- explosive_trees extra on, a tank at speed instead pops a tree it drives into and

@@ -1,15 +1,16 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class     = require "engine.core.class"
-local json      = require "lib.json"
-local Animation = require "engine.core.animation"
-local Config    = require "engine.core.config"
-local Mathx     = require "engine.core.mathx"
-local Score     = require "engine.game.score"
-local Stats     = require "engine.game.stats"
-local Shadow    = require "engine.game.shadow"
-local AirStrike = require "engine.game.air_strike"
+local Class      = require "engine.core.class"
+local json       = require "lib.json"
+local Animation  = require "engine.core.animation"
+local Config     = require "engine.core.config"
+local Mathx      = require "engine.core.mathx"
+local Score      = require "engine.game.score"
+local Stats      = require "engine.game.stats"
+local Shadow     = require "engine.game.shadow"
+local AirStrike  = require "engine.game.air_strike"
+local Difficulty = require "engine.game.difficulty"
 
 -- Projectile
 
@@ -238,6 +239,12 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     local clip      = sprite and Animation.clip(sprite)
     local animate   = clip and #clip.frames > 1 or false
 
+    -- Enemy rounds deal the original's damage for the difficulty level.
+    local damage = level.damage or weapon_def.damage or 10
+    if owner ~= "player" and weapon_def.enemy_damage then
+        damage = weapon_def.enemy_damage[Difficulty.damage_level()]
+    end
+
     local speed      = weapon_def.speed or 0
     local spread     = (level.spread_deg or weapon_def.spread_deg or 0) * math.pi / 180
     local count      = level.count   or 1
@@ -305,7 +312,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             y          = y + oy,
             vx         = math.cos(fire_rad) * speed,
             vy         = math.sin(fire_rad) * speed,
-            damage     = level.damage      or weapon_def.damage or 10,
+            damage     = damage,
             aoe        = weapon_def.aoe    or 0,
             owner      = owner,
             shooter    = shooter,

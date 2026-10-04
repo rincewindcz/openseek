@@ -33,14 +33,15 @@ Replay.UPLOAD_TAG = "OSREPLAY-UPLOAD "
 -- being recorded, so a mid-run options edit cannot desync a replay.
 Replay.PARAMS = {
     "speed_scale", "explosive_trees", "tree_crush_speed", "friendly_fire_pows",
-    "enemy_damage", "enemy_fire_rate", "enemy_aggression", "land_for_medals", "land_for_supplies",
+    "enemy_damage_level", "enemy_damage", "enemy_fire_rate", "enemy_aggression", "land_for_medals",
+    "land_for_supplies",
 }
 
 -- The value a parameter had before it existed, for replays recorded without it:
 -- the difficulty keys arrived later, and older runs played at full strength
 -- with no landing rules.
 Replay.LEGACY_PARAMS = {
-    enemy_damage = 1, enemy_fire_rate = 1, enemy_aggression = 1,
+    enemy_damage_level = "hard", enemy_damage = 1, enemy_fire_rate = 1, enemy_aggression = 1,
     land_for_medals = false, land_for_supplies = false,
 }
 

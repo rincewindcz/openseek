@@ -137,7 +137,7 @@ function Powerups:_apply(def, p)
     if def.kind == "fuel" then
         p:refuel()
     elseif def.kind == "armor" then
-        p:repair()
+        p:repair(p.max_armor / 2)   -- half the maximum, as the original (0x1ff40f)
     elseif def.kind == "medal" then
         p.medals = (p.medals or 0) + 1
     elseif def.kind == "ammo" then

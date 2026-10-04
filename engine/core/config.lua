@@ -107,18 +107,21 @@ local Config = {
 
     -- Difficulty (engine/game/difficulty.lua, presets in data/difficulty.json),
     -- after the original's EASY / MEDIUM / HARD option. difficulty is the preset
-    -- the values below were set from ("custom" once one is edited). The
-    -- multipliers scale enemy damage to the player, enemy fire rate, and enemy
-    -- aggression (detection and attack range up, reaction delay down); 1.0 is
-    -- the engine's own tuning, which is HARD. land_for_medals / land_for_supplies
-    -- make the chopper land on a medal / on fuel and armor to collect it.
-    -- Replay parameters, frozen at phase start.
-    difficulty        = "medium",
-    enemy_damage      = 0.7,
-    enemy_fire_rate   = 0.8,
-    enemy_aggression  = 0.9,
-    land_for_medals   = true,
-    land_for_supplies = false,
+    -- the values below were set from ("custom" once one is edited).
+    -- enemy_damage_level picks the original's per-weapon enemy damage
+    -- ("easy" / "medium" / "hard", weapons.json enemy_damage). The multipliers
+    -- scale that damage, enemy fire rate, and enemy aggression (detection and
+    -- attack range up, reaction delay down); 1.0 for fire rate and aggression is
+    -- the engine's own tuning, which is HARD. land_for_medals /
+    -- land_for_supplies make the chopper land on a medal / on fuel and armor to
+    -- collect it. Replay parameters, frozen at phase start.
+    difficulty         = "medium",
+    enemy_damage_level = "medium",
+    enemy_damage       = 1.0,
+    enemy_fire_rate    = 0.8,
+    enemy_aggression   = 0.9,
+    land_for_medals    = true,
+    land_for_supplies  = false,
 
     -- Presentation EXTRAs, off by default to keep the original's look
     -- (engine/game/impact_fx.lua, timings in data/impact_fx.json): hit_flash
@@ -221,7 +224,7 @@ local PERSISTED = {
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
     "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx",
     "explosion_pitch", "ending_stats",
-    "difficulty", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
+    "difficulty", "enemy_damage_level", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
     "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",

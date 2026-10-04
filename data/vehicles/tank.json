@@ -1,5 +1,6 @@
 {
   "accel": 150,
+  "armor_base": 40,
   "brake": 300,
   "collision_radius": 10,
   "decel": 200,

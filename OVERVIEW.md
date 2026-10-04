@@ -278,6 +278,11 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   toughness of 0 dies to any hit. Player weapon damage, ammo, cadence and level
   patterns are the original's (`research/WEAPONS.md`, cadence converted at 70
   ticks per second); speeds and ranges are openSEEK's.
+- Player armor is the original's scale: max armor `floor((slider + 5) *
+  armor_base / 15)`, the slider being the equip armor 0..1 as 0..29 (chopper
+  6..45, tank 13..90, 25 / 50 at the default). An armor pickup restores half
+  the maximum. Enemy rounds deal their weapon's `enemy_damage` for the damage
+  level, times `enemy_damage`.
 - `CombatSystem:fire` builds projectiles from a weapon def and level: spread,
   streams, swing (`swing_deg` amplitude), side offsets, `alternate_side`.
   `proj_type "flame"` lays rays of damage patches per level `angles` and lateral
@@ -327,7 +332,7 @@ Ground combatants: any type with `weapon` and `detection_radius > 0`.
 Enemy helicopters (`enemy_heli.lua`): spawned at off-screen `badheli` markers,
 one per `SPAWN_DELAY` 2.5 s, capped at marker count. `SPEED` 110, `TURN_RATE`
 120, `ORBIT_R` 270, `ATTACK_R` 360, `FIRE_CONE` 32, hit points from the `badheli` class toughness (`MAX_HP` 20 without one), `BLAST_RADIUS`
-70, `BLAST_DAMAGE` 40, `REACTION_DELAY` 0.9, `FRONT_LIMIT` 90, `FIRE_FRONT` 115.
+70, `BLAST_DAMAGE` 2 / 3 / 4 by damage level, `REACTION_DELAY` 0.9, `FRONT_LIMIT` 90, `FIRE_FRONT` 115.
 Weapon from `WEAPON_POOL` (chaingun burst 3, homing_missile, air_to_air level 2,
 machine_gun burst 4). Approaches beyond `ORBIT_R * 1.25`, otherwise orbits within
 `FRONT_LIMIT` of the player's facing. Full burst then 1.8-3.2 s cooldown.
@@ -507,7 +512,7 @@ Options:
 | `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs and can destroy the player's base buildings (no score, stats or drops). |
 | `score_count_up` | GAMEPLAY | HUD score rolls to new total (frame time, presentation). |
 | `shop_fx` | GAMEPLAY | Animated shop medal purse, unaffordable levels greyed with a red COST, sliding focus frame, hover frame, dimmed LOADED under a higher selection (presentation). |
-| `difficulty`, `enemy_damage`, `enemy_fire_rate`, `enemy_aggression`, `land_for_medals`, `land_for_supplies` | DIFFICULTY | The original's EASY / MEDIUM / HARD (`game/difficulty`, `data/difficulty.json`), each value also editable (preset then reads CUSTOM). Multipliers on enemy damage to the player, enemy fire rate, and aggression (detection and attack range up, reaction delay down); HARD is 1.0 on all, the engine's own tuning. MEDIUM needs a landing to collect medals, HARD also fuel and armor. Replay parameters; replays from before them apply HARD multipliers with no landing rules (`Replay.LEGACY_PARAMS`). |
+| `difficulty`, `enemy_damage_level`, `enemy_damage`, `enemy_fire_rate`, `enemy_aggression`, `land_for_medals`, `land_for_supplies` | DIFFICULTY | The original's EASY / MEDIUM / HARD (`game/difficulty`, `data/difficulty.json`), each value also editable (preset then reads CUSTOM); a named preset is re-applied at startup. `enemy_damage_level` (ENEMY DAMAGE) picks the original's per-weapon enemy damage (`enemy_damage` tables in `data/weapons.json`, `Difficulty.damage_level`). Multipliers on that damage (DAMAGE SCALE, 1.0 in every preset), enemy fire rate, and aggression (detection and attack range up, reaction delay down); HARD is 1.0 on all, the engine's own tuning. MEDIUM needs a landing to collect medals, HARD also fuel and armor. Replay parameters; replays from before them apply HARD with no landing rules (`Replay.LEGACY_PARAMS`). |
 | `chopper_skin`, `tank_skin` | GAMEPLAY | Solo chopper and tank variants (section 9a); also set by the vehicle select screen and the overview `V` cycle. Recorded in the replay header. |
 | `coop_lives` | GAMEPLAY | Co-op campaign lives: `separate` or `shared` pool (section 9). |
 | `master_volume`, `sfx_volume`, `engine_volume`, `voice_volume`, `ui_volume`, `music_volume` | AUDIO | Master and bus volumes. |
@@ -528,11 +533,11 @@ galleries, debug mission picker, headless checks.
 
 | File | Contents |
 |------|----------|
-| `data/weapons.json` | Player and enemy weapons: levels (`damage` in toughness units, `fire_rate`, `swing_deg`, flame `angles` / `offsets`), `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit); `air_strike`: target distance, radius, delay, incoming call, marker blink, per level pattern (`strike`, impacts or craft / rounds / lanes, window, impact radius and toughness damage, explosion) and craft visuals. |
+| `data/weapons.json` | Player and enemy weapons: `enemy_damage` (EASY / MEDIUM / HARD damage to the player when an enemy fires it), levels (`damage` in toughness units, `fire_rate`, `swing_deg`, flame `angles` / `offsets`), `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit); `air_strike`: target distance, radius, delay, incoming call, marker blink, per level pattern (`strike`, impacts or craft / rounds / lanes, window, impact radius and toughness damage, explosion) and craft visuals. |
 | `data/entity_types.json` | Per kind: hit radius, explosion, weapon, detection / attack / turn, `solid`, `collision_radius`, `muzzle_offset`, sprite fallbacks, `dead_frame_offset`, `turret_explosion`, `ride_linger`. |
 | `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `weapon`, `fire_rate`, `muzzle`, `explosion`, `drop`. |
 | `data/missions.json` | Section 9. |
-| `data/vehicles/*.json` | Vehicle tuning (sandbox editable). |
+| `data/vehicles/*.json` | Vehicle tuning (sandbox editable); `armor_base` is the original's per-vehicle armor factor (chopper 20, tank 40). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
 | `data/credits.json` | Credits: `styles` (fonts, name offset, label colour) and positioned `entries` (`heading` / `name`, or a label `text`), 320x240 design space. |
 | `data/ending.json` | Ending timing (`char_time`, `tab_pause`, `hold`, fades, text `cell`), music track, `anim` (`frame_time`, `cues`: event -> frame list, `loops`: event, level, fade start and length in frames), `stats` (position, line height, columns, keys per picture, labels) and `preview` (the record and score F11 shows outside a run). |

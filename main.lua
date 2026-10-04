@@ -115,6 +115,11 @@ function love.load(args)
         _VERSION, love.system.getOS())
     love.graphics.setDefaultFilter("nearest", "nearest")
     Config.load()   -- overlay persisted advanced settings onto the defaults
+    -- A named difficulty preset always carries its current values; CUSTOM keeps
+    -- the saved ones.
+    if Config.difficulty ~= "custom" then
+        require("engine.game.difficulty").apply_preset(Config.difficulty)
+    end
     Input.load()    -- overlay persisted key bindings onto the defaults
     Display.apply() -- restore the saved window mode (size / fullscreen / vsync)
     -- Without a usable pack nothing past this point can load: the data setup

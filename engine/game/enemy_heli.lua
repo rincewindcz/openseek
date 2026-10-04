@@ -1,12 +1,13 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class     = require "engine.core.class"
-local Animation = require "engine.core.animation"
-local Config    = require "engine.core.config"
-local Shadow    = require "engine.game.shadow"
-local Mathx     = require "engine.core.mathx"
-local Score     = require "engine.game.score"
+local Class      = require "engine.core.class"
+local Animation  = require "engine.core.animation"
+local Config     = require "engine.core.config"
+local Shadow     = require "engine.game.shadow"
+local Mathx      = require "engine.core.mathx"
+local Score      = require "engine.game.score"
+local Difficulty = require "engine.game.difficulty"
 
 -- Each spawned heli gets exactly one of these, picked at random. air_to_air uses
 -- its locking level so the missile homes (the original game's heli weapon);
@@ -33,7 +34,7 @@ local MAX_HP       = 20    -- fallback toughness when the stage has no badheli c
 local SPAWN_DELAY  = 2.5 -- gap between spawns while below the cap
 local DYING_TIME   = 1.1 -- fall/burn time before the wreck blows, like the player heli
 local BLAST_RADIUS = 70
-local BLAST_DAMAGE = 40
+local BLAST_DAMAGE = { 2, 3, 4 }   -- per difficulty level, like a tank shell
 local SPRITE_ROT   = 0   -- extra rotation if the badheli frame 0 is not nose-north
 local ROTOR_SPEED  = 15  -- rad/s the rotor disc spins (one blade frame, rotated)
 -- World radius around the player a spawn marker must sit outside of, so a heli
@@ -295,7 +296,7 @@ function HeliSystem:_blast(heli)
         if p and (p.armor or 0) > 0 and not p.death and not p.unlimited then
             local dx, dy = self.world:delta(p.x, p.y, heli.x, heli.y)
             if dx * dx + dy * dy < BLAST_RADIUS * BLAST_RADIUS then
-                p.armor = math.max(0, p.armor - BLAST_DAMAGE * Config.enemy_damage)
+                p.armor = math.max(0, p.armor - BLAST_DAMAGE[Difficulty.damage_level()] * Config.enemy_damage)
             end
         end
     end
