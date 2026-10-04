@@ -149,6 +149,12 @@ local Config = {
     -- either way.
     air_strike_fx = true,
 
+    -- Remote mine (engine/game/combat.lua, engine/scenes/gameplay_base.lua): the
+    -- tank's mine waits where it was dropped until fire is pressed again, and its
+    -- blast also hits the players inside it. Off, it is the original's charge
+    -- that blows by itself after its fuse and spares the player. Replay parameter.
+    remote_mine = true,
+
     -- Pitch the one explosion sound the original plays for every blast by size
     -- (data/audio.json size_pitch), so small and large blasts sound apart.
     explosion_pitch = true,
@@ -222,7 +228,7 @@ local PERSISTED = {
     "radar_zoom_grow", "radar_backdrop", "engine_intro", "aim_laser",
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
-    "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx",
+    "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx", "remote_mine",
     "explosion_pitch", "ending_stats",
     "difficulty", "enemy_damage_level", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",

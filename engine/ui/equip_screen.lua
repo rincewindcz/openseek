@@ -163,9 +163,7 @@ function EquipScreen:row_state(bay_index, weapon)
     return "normal"
 end
 
--- All three specials are always selectable (only one loads at a time); one that
--- has no combat def yet (super napalm) still selects and simply does nothing in
--- game until implemented.
+-- All three specials are always selectable (only one loads at a time).
 function EquipScreen:special_state(weapon)
     if self.loadout.vehicles[self.vehicle].special == weapon then return "sel" end
     return "normal"

@@ -17,14 +17,14 @@ local Vehicles = {}
 -- its list from the equip-screen loadout instead (engine/game/loadout.lua).
 Vehicles.WEAPONS = {
     chopper = { "chaingun", "napalm", "rockets", "mega_missile", "air_to_ground", "air_to_air", "bomb",
-                "air_strike" },
-    tank    = { "chaingun", "shells", "air_strike" },
+                "super_napalm", "air_strike" },
+    tank    = { "chaingun", "shells", "power_shell", "ground_to_air", "mine", "air_strike" },
 }
 
 -- Equip-screen catalogue, matching the original screens: the numbered bays
 -- take the bay weapons (bay 1 is always the chain gun), and one built-in
--- special may be loaded at a time. Weapons without a data/weapons.json entry
--- are not implemented yet and show darkened / unselectable.
+-- special may be loaded at a time. A weapon without a data/weapons.json entry
+-- is not implemented and shows darkened / unselectable.
 Vehicles.BAY_COUNT = { chopper = 6, tank = 4 }
 Vehicles.BAY_WEAPONS = {
     chopper = { "chaingun", "rockets", "air_to_ground", "air_to_air", "napalm", "air_strike" },

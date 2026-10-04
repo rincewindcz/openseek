@@ -375,6 +375,7 @@
     "lifetime": 2.5,
     "aoe": 0,
     "explosion": "explosion_large",
+    "barrel": true,
     "ammo_max": 100,
     "ammo_pickup": 25,
     "levels": [
@@ -392,6 +393,115 @@
         "damage": 10,
         "fire_rate": 4.67,
         "count": 2
+      }
+    ]
+  },
+  "power_shell": {
+    "vehicle": "tank",
+    "short": "PSH",
+    "icon": 12,
+    "proj_type": "sprite",
+    "proj_sprite": "shell",
+    "proj_sprite_rot": 0,
+    "speed": 380,
+    "proj_radius": 5,
+    "lifetime": 1.5,
+    "aoe": 0,
+    "explosion": "explosion_large",
+    "barrel": true,
+    "target_kind": "ground",
+    "pierce": true,
+    "ammo_max": 15,
+    "ammo_pickup": 3,
+    "levels": [
+      {
+        "damage": 60,
+        "fire_rate": 3.5,
+        "count": 1
+      }
+    ]
+  },
+  "ground_to_air": {
+    "vehicle": "tank",
+    "short": "GTA",
+    "icon": 11,
+    "proj_type": "sprite",
+    "proj_sprite": "missle",
+    "proj_sprite_rot": 0,
+    "trail": "smoke",
+    "shadow": true,
+    "trail_interval": 7,
+    "speed": 130,
+    "proj_accel": 280,
+    "max_speed": 430,
+    "turn_rate": 70,
+    "proj_radius": 6,
+    "lifetime": 6.0,
+    "aoe": 0,
+    "explosion": "explosion_medium",
+    "sight": 0,
+    "target_kind": "air",
+    "lock_arc": 180,
+    "ammo_max": 100,
+    "ammo_pickup": 25,
+    "levels": [
+      {
+        "damage": 5,
+        "fire_rate": 3.5,
+        "count": 1,
+        "locking": true
+      }
+    ]
+  },
+  "super_napalm": {
+    "vehicle": "chopper",
+    "short": "SNP",
+    "icon": 13,
+    "proj_type": "flame",
+    "effect": "fire",
+    "explosion": "explosion_none",
+    "damage": 232,
+    "aoe": 24,
+    "fire_rate": 1.17,
+    "fire_scale": 2.0,
+    "fire_lifetime": 1.0,
+    "count": 12,
+    "spacing": 20,
+    "wave_delay": 0.04,
+    "ammo_max": 4,
+    "ammo_pickup": 1,
+    "levels": [
+      {
+        "angles": [
+          -45,
+          -22.5,
+          0,
+          22.5,
+          45
+        ]
+      }
+    ]
+  },
+  "mine": {
+    "vehicle": "tank",
+    "short": "MIN",
+    "icon": 10,
+    "proj_type": "mine",
+    "proj_sprite": "mine2",
+    "proj_sprite_rot": 0,
+    "speed": 0,
+    "proj_radius": 0,
+    "lifetime": 1.43,
+    "aoe": 120,
+    "explosion": "explosion_large",
+    "self_damage": 50,
+    "ammo_max": 8,
+    "ammo_pickup": 2,
+    "levels": [
+      {
+        "damage": 50,
+        "fire_rate": 0.58,
+        "count": 1
       }
     ]
   },

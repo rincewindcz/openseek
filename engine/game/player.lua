@@ -34,6 +34,7 @@ function Player:init(x, y)
     self.armor      = 100
     self.load_fuel  = 100
     self.load_armor = 100
+    self.fire_released = true   -- fire let go since the last shot (remote mine trigger)
 
     self.world_size   = 4096
     self.weapon_idx   = 0       -- HUD sprite index (0-based)
@@ -292,6 +293,7 @@ end
 -- update
 
 function Player:update(dt)
+    if not self:_held("fire") then self.fire_released = true end
     self:_update_streak()
     if self.death then return self:_update_death(dt) end
     self:_update_altitude(dt)

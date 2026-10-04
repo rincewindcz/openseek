@@ -20,6 +20,10 @@
     "weapon.air_to_air":     { "clip": "missile_fir", "gain": 0.85, "pitch_var": 0.04, "cooldown": 0.08 },
     "weapon.bomb":           { "clip": "bomb_sfx",    "gain": 0.80, "pitch_var": 0.03, "cooldown": 0.10 },
     "weapon.shells":         { "clip": "tankgun_sfx", "gain": 0.95, "pitch_var": 0.05, "cooldown": 0.06 },
+    "weapon.power_shell":    { "clip": "tankgun_sfx", "gain": 0.95, "pitch_var": 0.05, "cooldown": 0.06 },
+    "weapon.ground_to_air":  { "clip": "missile_fir", "gain": 0.85, "pitch_var": 0.04, "cooldown": 0.08 },
+    "weapon.super_napalm":   { "clip": "napalm_sfx",  "gain": 0.80, "pitch_var": 0.05, "cooldown": 0.10 },
+    "weapon.mine":           { "clip": "mine_sfx",    "gain": 0.80, "pitch_var": 0.04, "cooldown": 0.10 },
 
     "weapon.flak":           { "clip": "chaingun",    "gain": 0.45, "pitch_var": 0.07, "cooldown": 0.09, "max_dist": 900 },
     "weapon.heavy_flak":     { "clip": "missile_fir", "gain": 0.60, "pitch": 0.90, "pitch_var": 0.06, "cooldown": 0.10, "max_dist": 1000 },

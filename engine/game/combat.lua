@@ -127,6 +127,9 @@ local PLAYER_HIT_FX = { "fire", "missile_smoke", "smoke2" }
 -- Fading steps of the EXTRA (aim_laser) line.
 local AIM_LASER_SEGMENTS = 6
 
+-- Blink rate of an armed remote mine's light (EXTRA remote_mine).
+local MINE_BLINK_HZ = 2
+
 local CombatSystem = Class()
 
 function CombatSystem:init(world, camera)
@@ -276,7 +279,8 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     local target
     if homing then
         if owner == "player" then
-            target = self:player_lock_target(x, y, angle_deg, max_range, weapon_def.target_kind)
+            target = self:player_lock_target(x, y, angle_deg, max_range, weapon_def.target_kind,
+                weapon_def.lock_arc)
         else
             target = self:_nearest_player(x, y)
         end
@@ -334,6 +338,12 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             projectile.homing    = true
             projectile.turn_rate = turn_rate
             projectile.target    = target
+        end
+        if weapon_def.proj_type == "mine" then
+            -- EXTRA (remote_mine): the mine waits for the trigger instead of its fuse.
+            projectile.mine   = true
+            projectile.remote = Config.remote_mine
+            if projectile.remote then projectile.lifetime = math.huge end
         end
         self.projectiles[#self.projectiles + 1] = projectile
     end
@@ -504,8 +514,8 @@ local function ground_lock_priority(e)
 end
 
 -- Nearest live enemy helicopter (air_to_air targets) within range and inside the
--- forward cone. Helicopters live in the heli system, not world.entities.
-function CombatSystem:_lock_air(x, y, facing_deg, range)
+-- forward cone of arc_deg. Helicopters live in the heli system, not world.entities.
+function CombatSystem:_lock_air(x, y, facing_deg, range, arc_deg)
     if not self.heli_sys then return nil end
     local best, best_d2
     local r2 = range and range * range or nil
@@ -516,7 +526,7 @@ function CombatSystem:_lock_air(x, y, facing_deg, range)
             if not r2 or d2 <= r2 then
                 local to_h = Mathx.heading_deg(dx, dy)
                 local diff = ((to_h - facing_deg + 180) % 360) - 180
-                if math.abs(diff) <= LOCK_ARC_DEG and (not best_d2 or d2 < best_d2) then
+                if math.abs(diff) <= arc_deg and (not best_d2 or d2 < best_d2) then
                     best, best_d2 = h, d2
                 end
             end
@@ -526,12 +536,14 @@ function CombatSystem:_lock_air(x, y, facing_deg, range)
 end
 
 -- The target a player's locking weapon acquires from (x, y) while facing
--- facing_deg, within range and the forward LOCK_ARC_DEG cone. kind "air" locks
--- enemy helicopters (air_to_air); otherwise ground entities, ranked by
+-- facing_deg, within range and the forward cone of arc_deg (LOCK_ARC_DEG by
+-- default; the tank's ground-to-air locks all around with 180). kind "air"
+-- locks enemy helicopters (air_to_air); otherwise ground entities, ranked by
 -- ground_lock_priority then distance. Shared by fire() (missile steering) and
 -- the HUD sight reticle, so the reticle shows exactly where the missiles go.
-function CombatSystem:player_lock_target(x, y, facing_deg, range, kind)
-    if kind == "air" then return self:_lock_air(x, y, facing_deg, range) end
+function CombatSystem:player_lock_target(x, y, facing_deg, range, kind, arc_deg)
+    arc_deg = arc_deg or LOCK_ARC_DEG
+    if kind == "air" then return self:_lock_air(x, y, facing_deg, range, arc_deg) end
     local best, best_pri, best_d2
     local r2 = range and range * range or nil
     for _, e in ipairs(self.world.hittable) do
@@ -541,7 +553,7 @@ function CombatSystem:player_lock_target(x, y, facing_deg, range, kind)
             if not r2 or d2 <= r2 then
                 local to_ent = Mathx.heading_deg(dx, dy)
                 local diff   = ((to_ent - facing_deg + 180) % 360) - 180
-                if math.abs(diff) <= LOCK_ARC_DEG then
+                if math.abs(diff) <= arc_deg then
                     local pri = ground_lock_priority(e)
                     if not best or pri > best_pri or (pri == best_pri and d2 < best_d2) then
                         best, best_pri, best_d2 = e, pri, d2
@@ -680,9 +692,10 @@ function CombatSystem:update(dt)
                 { shadow = projectile.weapon_def.shadow })
         end
         local ended
-        if projectile.bomb_phase then
-            -- Bombs do not collide in flight; they detonate when their fall completes.
-            if projectile.alive then alive[#alive + 1] = projectile else self:_bomb_detonate(projectile) end
+        if projectile.bomb_phase or projectile.mine then
+            -- Bombs and mines do not collide; a bomb detonates when its fall
+            -- completes, a mine when its fuse runs out (or on the trigger).
+            if projectile.alive then alive[#alive + 1] = projectile else self:_detonate(projectile) end
         elseif projectile.alive then
             if self:_check_hit(projectile) then
                 ended = true
@@ -817,7 +830,8 @@ function CombatSystem:_check_hit(projectile)
             if e:is_alive() and not e.hide_shielded then
                 local hit_radius = e.type_data.hit_radius
                 local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
-                if dx * dx + dy * dy < (projectile.radius + hit_radius) ^ 2 then
+                if dx * dx + dy * dy < (projectile.radius + hit_radius) ^ 2
+                    and not (projectile.pierced and projectile.pierced[e]) then
                     e:on_hit(self:_hit_clip(projectile.weapon_def))
                     local killed = e:take_damage(projectile.damage, projectile.vx, projectile.vy)
                     -- A round that carries no burst of its own still cracks off
@@ -828,6 +842,15 @@ function CombatSystem:_check_hit(projectile)
                     if projectile.aoe > 0 then self:_apply_aoe(projectile) end
                     if killed then self:_credit_kill(projectile.shooter, e, killed) end
                     self.world:projectile_impact(projectile.x, projectile.y, projectile.weapon)
+                    -- A piercing round (power shell) flies on through what it kills;
+                    -- a folded turret's hull is still ahead of it.
+                    if killed and projectile.weapon_def.pierce then
+                        if killed == "hull" then
+                            projectile.pierced = projectile.pierced or {}
+                            projectile.pierced[e] = true
+                        end
+                        return false
+                    end
                     return true
                 end
             end
@@ -906,10 +929,31 @@ function CombatSystem:_player_hit_fx(p)
     end
 end
 
--- A landed bomb: a big explosion, a scatter of iron/metal shrapnel, and full
--- damage to every ground entity within aoe px on both axes (the original's
--- square blast, 0x1f88b0).
-function CombatSystem:_bomb_detonate(projectile)
+-- The player's live mine (remote_mine), or nil.
+function CombatSystem:player_mine(p)
+    for _, projectile in ipairs(self.projectiles) do
+        if projectile.mine and projectile.alive and projectile.shooter == p then return projectile end
+    end
+end
+
+-- EXTRA (remote_mine): set off p's mines where they lie.
+function CombatSystem:detonate_mines(p)
+    local live = {}
+    for _, projectile in ipairs(self.projectiles) do
+        if projectile.mine and projectile.shooter == p then
+            self:_detonate(projectile)
+        else
+            live[#live + 1] = projectile
+        end
+    end
+    self.projectiles = live
+end
+
+-- A landed bomb or a mine: a big explosion, a scatter of iron/metal shrapnel,
+-- and full damage to every ground entity within aoe px on both axes (the
+-- original's square blast, 0x1f88b0). A remote mine also hits the players
+-- inside it (EXTRA remote_mine).
+function CombatSystem:_detonate(projectile)
     self:add_effect(projectile.weapon_def.explosion or "explosion_large", projectile.x, projectile.y,
         { scale = 1.5, sound = "explosion.bomb" })
     -- Same flying iron/metal shrapnel (and the dust it leaves) as a building blast.
@@ -922,6 +966,17 @@ function CombatSystem:_bomb_detonate(projectile)
                 e:on_hit()
                 local killed = e:take_damage(projectile.damage, dx, dy)
                 if killed then self:_credit_kill(projectile.shooter, e, killed) end
+            end
+        end
+    end
+    if not projectile.remote then return end
+    local self_damage = projectile.weapon_def.self_damage or projectile.damage
+    for _, p in ipairs(self.players) do
+        if p.armor > 0 and not p.death then
+            local dx, dy = self.world:delta(p.x, p.y, projectile.x, projectile.y)
+            if math.abs(dx) < r and math.abs(dy) < r then
+                if not p.unlimited then p.armor = math.max(0, p.armor - self_damage) end
+                self:_player_hit_fx(p)
             end
         end
     end
@@ -1067,6 +1122,11 @@ function CombatSystem:draw()
                     local scale = projectile.scale or 1
                     g.setColor(1, 1, 1, alpha)
                     g.draw(img, projectile.x, projectile.y, projectile.angle_rad + extra, scale, scale, ax, ay)
+                end
+                -- EXTRA (remote_mine): an armed mine blinks red.
+                if projectile.remote and math.floor(self.world.time * MINE_BLINK_HZ * 2) % 2 == 0 then
+                    g.setColor(1, 0.15, 0.1, 1)
+                    g.rectangle("fill", projectile.x - 1, projectile.y - 1, 2, 2)
                 end
             end
         end

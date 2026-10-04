@@ -287,9 +287,15 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   streams, swing (`swing_deg` amplitude), side offsets, `alternate_side`.
   `proj_type "flame"` lays rays of damage patches per level `angles` and lateral
   `offsets`; `bomb_drop` glides, then hits every ground entity within `aoe` px
-  on both axes (the original's square blast); `air_strike` goes to
-  `game/air_strike` (one pending per player; `fire` returns false on a refused
-  call so `fire_for` spends no ammo).
+  on both axes (the original's square blast); `mine` lies where dropped and
+  blasts like the bomb after its fuse, or on a fresh fire press with
+  `remote_mine` (`CombatSystem:player_mine` / `detonate_mines`, `self_damage`
+  to players inside); `air_strike` goes to `game/air_strike` (one pending per
+  player; `fire` returns false on a refused call so `fire_for` spends no ammo).
+- Weapon flags: `pierce` (power shell) flies on through every target it kills;
+  `lock_arc` widens the lock cone (ground-to-air 180, all around); `barrel`
+  fires from the tank's live barrel tip; `target_kind` limits hits to `ground`
+  or `air`.
 - Player range 640 px unless the weapon sets `range`.
 - Projectiles carry `owner`. Homing steers at capped `turn_rate`.
 - Player ammo: `seed_ammo`, `has_ammo`, `consume_ammo`, `add_ammo`; gated in
@@ -494,6 +500,7 @@ Toggleable extras (EXTRAS page):
 | `low_armor_fx`, `damage_flash` | off | Low armor pulses the view's edges red and drains its colour; each hit taken flashes the edges (`game/impact_fx`, drawn by `game/postfx`, needs POST FX on). |
 | `pickup_glint` | off | A light sweep runs across each pickup now and then (`game/detail_fx`). |
 | `air_strike_fx` | on | Air strike sight on a pending target, radar blip, friendly craft with their rockets and bombs (`game/air_strike`, `ui/hud`). |
+| `remote_mine` | on | The tank's mine waits for a fresh fire press and its blast also hits players inside it; off, the original's 1.4 s fuse that spares the player. Replay parameter. |
 | `explosion_pitch` | on | The one explosion sound pitched by blast size (`core/audio`, `size_pitch`). |
 | `ending_stats` | on | The run record typed under the ending's FIN01..03 story (`scenes/ending`, `data/ending.json` `stats`). |
 | `tank_tracks` | on | A driving tank leaves faint tread marks that fade out (`game/tracks`). |

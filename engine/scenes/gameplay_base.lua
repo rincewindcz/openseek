@@ -12,6 +12,7 @@ local Score       = require "engine.game.score"
 local Sound       = require "engine.game.sound"
 local Campaign    = require "engine.game.campaign"
 local Log         = require "engine.core.log"
+local Config      = require "engine.core.config"
 
 -- Shared base for the gameplay scenes (single player, sandbox, co-op split):
 -- firing, weapon cycling, landing, the mission-won -> DESTRUCTION STATS
@@ -72,6 +73,16 @@ function GameplayBase:fire_for(p)
     local combat = self.app.combat
     local weapon_def = combat.weapons[p.weapon_name]
     if not weapon_def then return end
+    -- EXTRA (remote_mine): with a mine out, a fresh press of fire sets it off
+    -- instead of dropping another.
+    if weapon_def.proj_type == "mine" and Config.remote_mine and combat:player_mine(p) then
+        if p.fire_released then
+            combat:detonate_mines(p)
+            p.fire_released = false
+            p.fire_timer    = 1.0 / (weapon_def.levels[1].fire_rate or 1)
+        end
+        return
+    end
     if p.fire_timer > 0 then return end
     if not p:has_ammo(p.weapon_name) then
         self.app.world:dry_fire(p)
@@ -79,11 +90,11 @@ function GameplayBase:fire_for(p)
     end
     local level = weapon_def.levels and weapon_def.levels[p.weapon_level] or weapon_def
     combat:tick_swing("player", p.weapon_name)
-    -- The tank's shells fire from its three barrels in turn, so both the round and
-    -- its muzzle flash originate at the live barrel tip, not the turret center. The
-    -- machine gun stays centered.
+    -- The tank's shells fire from its three barrels in turn (weapons flagged
+    -- `barrel`), so both the round and its muzzle flash originate at the live
+    -- barrel tip, not the turret center. The machine gun stays centered.
     local fx, fy = p.x, p.y
-    if p.vehicle == "tank" and p.weapon_name == "shells" then fx, fy = p:tank_muzzle() end
+    if p.vehicle == "tank" and weapon_def.barrel then fx, fy = p:tank_muzzle() end
     if combat:fire(fx, fy, p:fire_angle(), p.weapon_name, "player", p.weapon_level, nil, p) == false then
         return
     end
@@ -95,6 +106,7 @@ function GameplayBase:fire_for(p)
     end
     p:consume_ammo(p.weapon_name, (weapon_def.ammo_cost or 1) * shots)
     p.fire_timer = 1.0 / (level.fire_rate or weapon_def.fire_rate or 10)
+    p.fire_released = false
 end
 
 -- p's selectable weapons: the equip-screen loadout list when one was applied

@@ -1,6 +1,6 @@
 {
   "recoil": {
-    "weapons": ["shells"],
+    "weapons": ["shells", "power_shell"],
     "kick": 2.5,
     "time": 0.3,
     "smoke_clip": "smoke",
@@ -46,7 +46,7 @@
     "angle_deg": 45
   },
   "impact": {
-    "weapons": { "shells": "explosion_medium" },
+    "weapons": { "shells": "explosion_medium", "power_shell": "explosion_medium" },
     "scale": 1
   },
   "wreck_smoke": {

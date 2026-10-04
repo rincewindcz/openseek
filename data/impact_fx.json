@@ -23,7 +23,8 @@
       "flak":   { "amount": 2.0, "time": 0.18, "radius": 220 }
     },
     "fire": {
-      "shells": { "amount": 2.5, "time": 0.16, "radius": 120 }
+      "shells":      { "amount": 2.5, "time": 0.16, "radius": 120 },
+      "power_shell": { "amount": 3.5, "time": 0.20, "radius": 120 }
     },
     "player_hit":   { "amount": 3.0, "time": 0.22, "radius": 80 },
     "player_death": { "amount": 14.0, "time": 0.80, "radius": 650 }
