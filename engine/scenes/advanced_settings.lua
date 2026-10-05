@@ -160,6 +160,8 @@ local CATEGORIES = {
         { key = "remote_mine",         label = "REMOTE MINE",     kind = "toggle" },
         { key = "explosion_pitch",     label = "EXPLOSION PITCH", kind = "toggle" },
         { key = "ending_stats",        label = "ENDING STATS",    kind = "toggle" },
+        { key = "crash_fx",            label = "CRASH FX",        kind = "toggle" },
+        { key = "crash_cause",         label = "CRASH CAUSE",     kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }

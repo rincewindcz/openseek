@@ -6,6 +6,7 @@ local Scene    = require "engine.core.scene"
 local Config   = require "engine.core.config"
 local Vehicles = require "engine.game.vehicles"
 local Sound    = require "engine.game.sound"
+local CrashFX  = require "engine.ui.crash_fx"
 
 -- Pre-game overview (dev/editor view): free camera over the loaded stage, the
 -- SETUP/START/VIEW panel, the stage/kind pickers, the debug panel, and the
@@ -334,6 +335,12 @@ function Overview:keypressed(key)
         if vehicle == "tank" then Config.tank_skin = skin else Config.chopper_skin = skin end
     end
     if key == "o" then settings.death_enabled = not settings.death_enabled end
+    if key == "delete" then
+        -- The game-over picture of the selected vehicle under the current EXTRAS;
+        -- Shift shows the one before a respawn.
+        CrashFX.preview(app.screen, settings.vehicle, not love.keyboard.isDown("lshift", "rshift"))
+        return
+    end
     if key == "c" then Config.axis_aligned_pickups = not Config.axis_aligned_pickups end
     if key == "p" then Config.friendly_fire_pows = not Config.friendly_fire_pows end
     if key == "h" then

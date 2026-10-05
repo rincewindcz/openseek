@@ -164,6 +164,14 @@ local Config = {
     -- layout in data/ending.json stats). The story itself is unchanged.
     ending_stats = true,
 
+    -- The crash / game-over picture (engine/ui/crash_fx.lua, data/crash_fx.json),
+    -- a still in the original. crash_fx animates it: smoke off the wreck, heat
+    -- haze, a fire glow with embers, and a flash and static cut in place of the
+    -- fade-in. crash_cause types what destroyed the vehicle under the game-over
+    -- picture. Presentation only.
+    crash_fx    = false,
+    crash_cause = false,
+
     -- Enlarge the HUD radar while its auto zoom is on (engine/ui/hud.lua, sizes
     -- in data/hud.json). The original only narrowed the range. Presentation only.
     radar_zoom_grow = true,
@@ -229,7 +237,7 @@ local PERSISTED = {
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
     "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx", "remote_mine",
-    "explosion_pitch", "ending_stats",
+    "explosion_pitch", "ending_stats", "crash_fx", "crash_cause",
     "difficulty", "enemy_damage_level", "enemy_damage", "enemy_fire_rate", "enemy_aggression",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",

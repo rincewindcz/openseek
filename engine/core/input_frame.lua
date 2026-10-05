@@ -28,7 +28,8 @@ function InputFrame.held(frame, action)
 end
 
 -- Edge actions a frame may carry: "takeoff", "weapon" (cycle), "god",
--- "pickup_mode", and "slot:N" (select weapon N). Anything not in this set is
+-- "pickup_mode", "level", "destruct" (free play: wreck the own vehicle), and
+-- "slot:N" (select weapon N). Anything not in this set is
 -- ignored on playback, so a newer recording stays loadable.
 function InputFrame.new(mask, events, turn)
     return { mask = mask or 0, events = events or {}, turn = turn }

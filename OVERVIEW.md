@@ -193,7 +193,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/assets` | Path resolution and pack check (section 2). |
 | `core/audio` | Clip catalog, event table (clip lists, per-vehicle variants, size pitch), callouts and sequences, voice pools, buses, ducking, music (`.ogg`, `.mp3`, `.med`; an `.ogg` / `.mp3` beats a `.med` of the same name). |
 | `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. `print` `cell` option draws fixed-pitch at each glyph's in-frame x offset. |
-| `core/screen` | Fullscreen image fade in / hold / out. |
+| `core/screen` | Fullscreen image fade in / hold / out, with an optional `fx` object animating the picture (`update`, `cue`, `draw`; `cut` skips the fade-in). `is_closing` reports the fade-out. |
 | `core/flic` | FLI / FLC player: decodes one frame per `next_frame` into an index buffer and an RGBA `image` (COLOR_256 / 64, DELTA_FLC / FLI, BYTE_RUN, BLACK, COPY); the caller sets the pace. |
 | `core/mathx` | `atan2` shim, `heading_deg`. |
 | `core/log` | Timestamped, tagged console lines (`info`, `warn`). |
@@ -226,6 +226,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory, run record; co-op adds a `coop` table per player), one JSON file per slot in `saves/`, plus the `autosave.json` of the run in progress (written by each campaign briefing, removed by `Campaign.finish`). |
 | `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base, pickup and air strike blips), weapon sights (the air strike's rests on its target), counters, OVERKILL banner, rolling score. |
 | `ui/end_stats` | DESTRUCTION STATS screen: lines count up (icons filling), then wind back down as each pays its bonus into TOTAL SCORE; per-player columns in co-op. |
+| `ui/crash_fx` | EXTRA crash picture effects (`data/crash_fx.json`), the `fx` of the crash / game-over overlay: smoke, fire glow, embers and heat haze composed at the picture's resolution, flash and static entrance, static burst on a radio cue (`crash_fx`); the typed cause of the loss (`crash_cause`, from `Player.damage_cause`). `CrashFX.show` picks the picture and its timing for both gameplay scenes (the fx is nil with both extras off); `CrashFX.preview` is the overview's `Delete` key. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse, greys levels the purse cannot pay for (not the selected one, whose COST reads red), slides the focus frame, marks the hovered box and dims LOADED while a higher level is selected. |
 | `ui/menu` | Main menu over `MAINP`, `main` font (`mainmen` on a pack exported before `main` existed). Also drives the `new_game` and `advanced_menu` submenus. |
@@ -467,7 +468,7 @@ replay header `player.N.skin` / `player.N.tank`).
   forwarders and the players after each tick.
 - Screens: the crash / game-over picture plays the `crash` sequence (radio
   "come in" by vehicle, `noisesir`, `comein2b`; a dismissed picture plays no
-  more); the stats screen plays `icons` per kill icon and `click` per tally step.
+  more; with `crash_fx` the noise also shows as static, `ui/crash_fx`); the stats screen plays `icons` per kill icon and `click` per tally step.
 - Mixed for the loudest listener (one per camera). Panning in the rotated view
   frame; sources behind the vehicle placed behind the listener. OpenAL rolloff
   off; attenuation and lowpass in fixed world units.
@@ -503,6 +504,7 @@ Toggleable extras (EXTRAS page):
 | `remote_mine` | on | The tank's mine waits for a fresh fire press and its blast also hits players inside it; off, the original's 1.4 s fuse that spares the player. Replay parameter. |
 | `explosion_pitch` | on | The one explosion sound pitched by blast size (`core/audio`, `size_pitch`). |
 | `ending_stats` | on | The run record typed under the ending's FIN01..03 story (`scenes/ending`, `data/ending.json` `stats`). |
+| `crash_fx`, `crash_cause` | off | The crash / game-over picture animated (smoke, fire, embers, heat haze, flash and static cut); the cause of the loss typed at its foot. Either one holds the picture before a respawn long enough to read, with the simulation held under it (`ui/crash_fx`). |
 | `tank_tracks` | on | A driving tank leaves faint tread marks that fade out (`game/tracks`). |
 | `tank_recoil`, `shell_casings`, `tread_dust`, `wreck_smoke`, `shell_impact` | on | Turret kick and muzzle smoke on a shell shot, chaingun casings, dust behind a fast tank, smoking wrecks, an explosion where a tank shell strikes (`game/detail_fx`). |
 
@@ -555,6 +557,7 @@ galleries, debug mission picker, headless checks.
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius); `low_armor` (armor threshold, floor, fade, edge color and strength, pulse share and rate range, desaturation, edge radii, hit flash time and strength). |
 | `data/detail_fx.json` | `recoil` (weapons, kick, time, muzzle smoke), `casings` (weapons, color, size, speed, drag, lifetime), `tread_dust` (speed threshold, interval, puff size and lifetime, color per mission digit), `wreck_smoke` (time and interval per explosion size, wind, tint, thinning), `pickup_glint` (period, sweep time, band width, strength, screen angle). |
+| `data/crash_fx.json` | Crash picture effects: `entrance` (flash, static time), `glitch` (cue events and burst time, tear, band, static mix, scanlines, rate), `haze` (amplitude, wavelength, speed), `smoke` (cap, prewarm, fade-in), `cause` (font, delay, pace, position, verbs, labels, lines), `respawn` (hold and fade-out of the picture before a respawn), `preview` (the overview preview's cause), and per picture `smoke` emitters, `fire` glows with embers and `haze` ellipses, all in art pixels. |
 | `data/tracks.json` | Tank tread marks: lifetime and fade (s), alpha, color, spacing and mark length (world units), gauge and tread width (fractions of hull width), mark cap. |
 | `data/shop.json` | Shop `trade_in` share and screen layout: backdrops, box grid, category placement per vehicle, button / COST / purse / description positions, sprite offsets, darkened level tile per weapon level (`powwgads` chopper, `powgadst` tank); `fx` timings, the unaffordable grey and COST tint, LOADED dim, hover alpha and focus slide time for `shop_fx`. |
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
@@ -642,6 +645,7 @@ and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
 | F4 | Replays |
 | F5 | God mode |
 | F6 | Fly-over pickup override (ignores the difficulty landing rules) |
+| Delete | Free play: wreck the own vehicle (crash picture test). Overview: preview the game-over picture, Shift the one before a respawn |
 | F7 | Co-op free play (vehicle select) |
 | F8 / F9 / F10 | Animation / font / sound gallery (overview) |
 | F11, Shift+F11 | Ending, VIC3's alternate ending, with the preview stats (overview) |

@@ -12,6 +12,7 @@ local Vehicles     = require "engine.game.vehicles"
 local Campaign     = require "engine.game.campaign"
 local Score        = require "engine.game.score"
 local PlayerTag    = require "engine.ui.player_tag"
+local CrashFX      = require "engine.ui.crash_fx"
 local Log          = require "engine.core.log"
 
 -- Split-screen two-player co-op (extra mode, not in the original game): two
@@ -460,11 +461,9 @@ function CoopGameplay:_game_over()
     self.game_over = true
     self:_carry_run()
     Log.info("game", "co-op game over")
-    local last = self.players[#self.players]
-    local pic  = (last and last.vehicle == "tank") and "TANKEND" or "DEATHPIC"
     local function finish() Campaign.finish(app) end
-    app.screen:show(pic, { fade_in = 0.6, wait_key = true, on_done = finish, on_cancel = finish,
-        cues = "crash", variant = last and last.vehicle })
+    CrashFX.show(app.screen, self.players[#self.players] or {}, true,
+        { on_done = finish, on_cancel = finish })
 end
 
 -- Stats dismissed: a campaign carries the phase into the run and moves on; free

@@ -45,12 +45,17 @@ end
 -- on_done (called once fully faded out); on_cancel (called when the overlay is
 -- cancelled, so the shower decides where Esc goes); cues (a data/audio.json
 -- sequence name: radio lines played at their times while the overlay is up)
--- with variant (the vehicle picking each line's per-vehicle entry).
+-- with variant (the vehicle picking each line's per-vehicle entry); fx (an
+-- object animating the picture: update(dt) every frame, cue(event) as each cue
+-- plays, and draw(img, x, y, scale, alpha) in place of the plain picture; an fx
+-- with cut set plays its own entrance, so the overlay skips the fade-in).
 function Screen:show(name, opts)
     opts = opts or {}
+    local fx = opts.fx
     self.active = {
         img       = self:_img(name),
-        fade_in   = opts.fade_in  or 0.5,
+        fx        = fx,
+        fade_in   = (fx and fx.cut) and 0 or (opts.fade_in or 0.5),
         hold      = opts.hold     or 1.5,
         fade_out  = opts.fade_out or 0.5,
         wait_key  = opts.wait_key or false,
@@ -75,6 +80,7 @@ function Screen:_play_cues(overlay)
     while cues and cues[overlay.next_cue] and cues[overlay.next_cue].at <= overlay.age do
         if Config.voice_callouts then
             Audio.play_event(cues[overlay.next_cue].event, { variant = overlay.variant })
+            if overlay.fx then overlay.fx:cue(cues[overlay.next_cue].event) end
         end
         overlay.next_cue = overlay.next_cue + 1
     end
@@ -82,6 +88,11 @@ end
 
 function Screen:is_active()
     return self.active ~= nil
+end
+
+-- The overlay is fading out.
+function Screen:is_closing()
+    return self.active ~= nil and self.active.phase == "out"
 end
 
 -- Overlay a mission's intro picture (assets/fullscreen/STAGE0M_MPIC) above
@@ -108,6 +119,7 @@ function Screen:update(dt)
     if not overlay then return end
     overlay.t   = overlay.t + dt
     overlay.age = overlay.age + dt
+    if overlay.fx then overlay.fx:update(dt) end
     if overlay.phase ~= "out" then self:_play_cues(overlay) end
     if overlay.phase == "in" then
         if overlay.t >= overlay.fade_in then overlay.t = 0; overlay.phase = overlay.wait_key and "wait" or "hold" end
@@ -162,8 +174,13 @@ function Screen:draw()
     if overlay.img then
         local img_w, img_h = overlay.img:getDimensions()
         local scale = math.min(screen_w / img_w, screen_h / img_h)
-        g.setColor(1, 1, 1, alpha)
-        g.draw(overlay.img, (screen_w - img_w * scale) / 2, (screen_h - img_h * scale) / 2, 0, scale, scale)
+        local x, y  = (screen_w - img_w * scale) / 2, (screen_h - img_h * scale) / 2
+        if overlay.fx then
+            overlay.fx:draw(overlay.img, x, y, scale, alpha)
+        else
+            g.setColor(1, 1, 1, alpha)
+            g.draw(overlay.img, x, y, 0, scale, scale)
+        end
     end
     if overlay.tag then
         self.tag_font = self.tag_font or Font.get("chars")

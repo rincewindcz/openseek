@@ -903,7 +903,10 @@ function CombatSystem:_check_hit(projectile)
                     local dx, dy = self.world:delta(p.x, p.y, projectile.x, projectile.y)
                     local hit_range = (p.collision_radius or 12) + projectile.radius
                     if dx * dx + dy * dy < hit_range * hit_range then
-                        if not p.unlimited then p.armor = math.max(0, p.armor - projectile.damage) end
+                        if not p.unlimited then
+                            p.armor        = math.max(0, p.armor - projectile.damage)
+                            p.damage_cause = "friendly_fire"
+                        end
                         return true
                     end
                 end
@@ -916,7 +919,8 @@ function CombatSystem:_check_hit(projectile)
                 local hit_range = (p.collision_radius or 12) + projectile.radius
                 if dx * dx + dy * dy < hit_range * hit_range then
                     if not p.unlimited then
-                        p.armor = math.max(0, p.armor - projectile.damage * Config.enemy_damage)
+                        p.armor        = math.max(0, p.armor - projectile.damage * Config.enemy_damage)
+                        p.damage_cause = projectile.weapon
                     end
                     self:_player_hit_fx(p)
                     return true
@@ -993,7 +997,10 @@ function CombatSystem:_detonate(projectile)
         if p.armor > 0 and not p.death then
             local dx, dy = self.world:delta(p.x, p.y, projectile.x, projectile.y)
             if math.abs(dx) < r and math.abs(dy) < r then
-                if not p.unlimited then p.armor = math.max(0, p.armor - self_damage) end
+                if not p.unlimited then
+                    p.armor        = math.max(0, p.armor - self_damage)
+                    p.damage_cause = "mine"
+                end
                 self:_player_hit_fx(p)
             end
         end

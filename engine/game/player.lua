@@ -57,6 +57,7 @@ function Player:init(x, y)
     self.stat_kills      = { ground = 0, building = 0, chopper = 0 }  -- per-player end-of-phase stats
     self.lives           = Score.START_LIVES      -- spare vehicles
     self.death           = nil     -- death sequence state (set by start_death)
+    self.damage_cause    = nil     -- what last cost armor (weapons.json key or a named cause); crash picture only
 
     self.badges          = 0    -- OK badges earned this phase (debriefing line 5)
     self.streak          = 0    -- chained kills so far, see register_kill
@@ -508,6 +509,7 @@ function Player:respawn(x, y)
     self.altitude    = 0
     self.land_state  = "grounded"
     self.death       = nil
+    self.damage_cause = nil
     self.armor       = self.max_armor
     self.fuel        = self.max_fuel
     self.pows        = 0
@@ -782,7 +784,8 @@ function Player:_solid_at(x, y, r)
         if math.abs(self.speed) >= Config.tree_crush_speed * top then
             self.world:crush_tree(e)
             if not self.unlimited then
-                self.armor = math.max(0, self.armor - TREE_CRUSH_DAMAGE)
+                self.armor        = math.max(0, self.armor - TREE_CRUSH_DAMAGE)
+                self.damage_cause = "tree"
             end
             return false
         end

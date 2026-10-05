@@ -154,6 +154,8 @@ function GameplayBase:apply_input(p, source)
         elseif event == "weapon"      then self:cycle_weapon(p)
         elseif event == "god"         then p.unlimited = not p.unlimited
         elseif event == "level"       then self:cycle_weapon_level(p)
+        elseif event == "destruct"    then
+            if not p.death then p.armor, p.damage_cause = 0, "destruct" end
         elseif event == "pickup_mode" then
             self.app.powerups.easy_mode = not self.app.powerups.easy_mode
         else

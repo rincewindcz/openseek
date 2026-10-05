@@ -296,7 +296,8 @@ function HeliSystem:_blast(heli)
         if p and (p.armor or 0) > 0 and not p.death and not p.unlimited then
             local dx, dy = self.world:delta(p.x, p.y, heli.x, heli.y)
             if dx * dx + dy * dy < BLAST_RADIUS * BLAST_RADIUS then
-                p.armor = math.max(0, p.armor - BLAST_DAMAGE[Difficulty.damage_level()] * Config.enemy_damage)
+                p.armor        = math.max(0, p.armor - BLAST_DAMAGE[Difficulty.damage_level()] * Config.enemy_damage)
+                p.damage_cause = "heli_blast"
             end
         end
     end

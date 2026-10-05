@@ -14,6 +14,7 @@ local Config       = require "engine.core.config"
 local Camera       = require "engine.core.camera"
 local InputFrame   = require "engine.core.input_frame"
 local TouchControls = require "engine.ui.touch_controls"
+local CrashFX      = require "engine.ui.crash_fx"
 local Log          = require "engine.core.log"
 
 -- Single-player gameplay scene: player lifecycle, camera follow, the death /
@@ -194,17 +195,16 @@ function Gameplay:on_vehicle_lost()
     -- already taking over (see the death handler), so no life is spent here.
     if self.mission and self.mission.state == "won" then return end
     player.lives = math.max(0, (player.lives or 0) - 1)
-    local pic    = (player.vehicle == "tank") and "TANKEND" or "DEATHPIC"
     if player.lives > 0 then
         Log.info("game", "vehicle lost, %d left", player.lives)
         -- Recoverable: the respawn is scheduled on the simulation clock, and the
         -- crash picture only flashes over it (skipped while replaying, which has
-        -- no viewer to inform).
+        -- no viewer to inform). With the crash extras the picture stays to be
+        -- read and holds the simulation under it (see update).
         self.respawn_tick  = app.tick + RESPAWN_TICKS
         self.vehicles_lost = self.vehicles_lost + 1
         if not self.playback then
-            app.screen:show(pic, { fade_in = 0.1, hold = 0.5, fade_out = 0.1,
-                cues = "crash", variant = player.vehicle })
+            self.crash_hold = CrashFX.show(app.screen, player, false) ~= nil
         end
     else
         Log.info("game", "game over, score %d", player.score or 0)
@@ -215,8 +215,7 @@ function Gameplay:on_vehicle_lost()
         local function finish()
             if app.campaign then Campaign.finish(app) else app.scenes:switch("hiscores", score) end
         end
-        app.screen:show(pic, { fade_in = 0.6, wait_key = true, on_done = finish, on_cancel = finish,
-            cues = "crash", variant = player.vehicle })
+        CrashFX.show(app.screen, player, true, { on_done = finish, on_cancel = finish })
     end
 end
 
@@ -285,6 +284,18 @@ function Gameplay:update(dt)
     if self.paused then
         if app.sound then app.sound:stop_loops() end
         return
+    end
+    -- EXTRA (crash_fx, crash_cause): the longer crash picture holds the
+    -- simulation on the tick before the respawn until it starts to fade, so the
+    -- vehicle is back on the pad as the picture clears. No tick runs meanwhile,
+    -- as in a pause, so a recording is unaffected.
+    if self.crash_hold then
+        if not app.screen:is_active() or app.screen:is_closing() then
+            self.crash_hold = false
+        elseif self.respawn_tick and app.tick + 1 >= self.respawn_tick then
+            if app.sound then app.sound:stop_loops() end
+            return
+        end
     end
     if app.end_stats:is_active() then
         if app.sound then app.sound:stop_loops() end
@@ -465,6 +476,7 @@ function Gameplay:game_keys(key)
     if Input.pressed("takeoff", key) then self.source:queue("takeoff"); return end
     if Input.pressed("weapon", key)  then self.source:queue("weapon"); return end
     if key == "e" then self.source:queue("level"); return end
+    if key == "delete" and not app.campaign then self.source:queue("destruct"); return end
     if not app.campaign and Overview.picker_keys(app, key) then return end
     local slot = key:match("^(%d)$")
     if slot then self.source:queue("slot:" .. slot); return end

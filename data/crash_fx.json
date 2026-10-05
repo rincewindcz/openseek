@@ -1,0 +1,80 @@
+{
+  "entrance": {
+    "flash":       0.18,
+    "flash_color": [1, 1, 1],
+    "static":      0.55
+  },
+  "glitch": {
+    "events": { "voice.noise_sir": 0.7 },
+    "burst":  0.35,
+    "tear":   14,
+    "band":   3,
+    "noise":  0.7,
+    "lines":  0.3,
+    "rate":   24
+  },
+  "haze": {
+    "amplitude":  0.6,
+    "wavelength": 7,
+    "speed":      3
+  },
+  "smoke": {
+    "max":     240,
+    "prewarm": 7,
+    "fade_in": 0.15
+  },
+  "cause": {
+    "font":      "chars",
+    "delay":     0.8,
+    "char_time": 0.035,
+    "y":         224,
+    "verbs":  { "chopper": "SHOT DOWN BY", "tank": "DESTROYED BY" },
+    "labels": {
+      "flak":           "FLAK",
+      "heavy_flak":     "HEAVY FLAK",
+      "sgun":           "GUN FIRE",
+      "enemy_missile":  "MISSILE",
+      "homing_missile": "HOMING MISSILE",
+      "machine_gun":    "MACHINE GUN",
+      "tank_cannon":    "TANK SHELL",
+      "rifle":          "RIFLE FIRE",
+      "chaingun":       "CHAINGUN",
+      "air_to_air":     "AIR TO AIR MISSILE",
+      "heli_blast":     "EXPLODING CHOPPER",
+      "friendly_fire":  "FRIENDLY FIRE",
+      "mine":           "OWN MINE"
+    },
+    "lines":   { "fuel": "OUT OF FUEL", "tree": "WRECKED ON A TREE", "destruct": "SELF DESTRUCT" },
+    "unknown": "ENEMY FIRE"
+  },
+  "respawn": { "hold": 3.2, "fade_out": 0.3 },
+  "preview": { "cause": "homing_missile" },
+  "pictures": {
+    "DEATHPIC": {
+      "smoke": [
+        { "x": 160, "y": 148, "interval": 0.25, "lifetime": 6, "velocity": [2.5, -15],
+          "jitter": 4, "spread": 2.5, "sway": 3, "size_from": 12, "size_to": 44,
+          "alpha": 0.14, "color": [0.82, 0.88, 0.96] }
+      ],
+      "fire": [
+        { "x": 122, "y": 163, "radius": 14, "color": [1.0, 0.5, 0.12], "alpha": 0.22,
+          "flicker": 0.5, "embers": 2, "ember_velocity": [3, -20], "ember_spread": 7,
+          "ember_life": 2 }
+      ],
+      "haze": [ [167, 105, 24, 58], [160, 158, 175, 8] ]
+    },
+    "TANKEND": {
+      "smoke": [
+        { "x": 130, "y": 130, "interval": 0.16, "lifetime": 7, "velocity": [4, -17],
+          "jitter": 7, "spread": 4, "sway": 4, "size_from": 18, "size_to": 70,
+          "alpha": 0.3, "color": [0.04, 0.05, 0.09] }
+      ],
+      "fire": [
+        { "x": 131, "y": 138, "radius": 20, "color": [1.0, 0.45, 0.1], "alpha": 0.3,
+          "flicker": 0.5, "embers": 5, "ember_velocity": [4, -24], "ember_spread": 9,
+          "ember_life": 2.2 }
+      ],
+      "haze": [ [140, 85, 45, 65], [160, 160, 175, 7] ]
+    }
+  }
+}
