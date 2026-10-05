@@ -167,6 +167,7 @@ function EnemyFire:mine(e, p, dt)
     if near and not p.unlimited then
         p.armor        = math.max(0, p.armor - spec.damage[Difficulty.damage_level()] * Config.enemy_damage)
         p.damage_cause = "enemy_mine"
+        self.world:count("hits")
     end
     e:take_damage(e.hp + 1)
 end

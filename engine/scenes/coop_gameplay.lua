@@ -463,7 +463,7 @@ function CoopGameplay:_game_over()
     Log.info("game", "co-op game over")
     local function finish() Campaign.finish(app) end
     CrashFX.show(app.screen, self.players[#self.players] or {}, true,
-        { on_done = finish, on_cancel = finish })
+        { on_done = finish, on_cancel = finish, stats = self:crash_stats() })
 end
 
 -- Stats dismissed: a campaign carries the phase into the run and moves on; free

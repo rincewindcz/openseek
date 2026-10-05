@@ -169,10 +169,13 @@ local Config = {
     -- The crash / game-over picture (engine/ui/crash_fx.lua, data/crash_fx.json),
     -- a still in the original. crash_fx animates it: smoke off the wreck, heat
     -- haze, a fire glow with embers, and a flash and static cut in place of the
-    -- fade-in. crash_cause types what destroyed the vehicle under the game-over
-    -- picture. Presentation only.
+    -- fade-in. crash_cause types what destroyed the vehicle on it. crash_stats
+    -- adds the run's trivia (pixels travelled, shots fired, ...): one line on the
+    -- picture before a respawn, the whole list on the game-over one.
+    -- Presentation only.
     crash_fx    = false,
     crash_cause = false,
+    crash_stats = false,
 
     -- Enlarge the HUD radar while its auto zoom is on (engine/ui/hud.lua, sizes
     -- in data/hud.json). The original only narrowed the range. Presentation only.
@@ -239,7 +242,7 @@ local PERSISTED = {
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
     "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx", "remote_mine",
-    "explosion_pitch", "ending_stats", "crash_fx", "crash_cause",
+    "explosion_pitch", "ending_stats", "crash_fx", "crash_cause", "crash_stats",
     "difficulty", "enemy_damage_level", "enemy_damage", "enemy_fire_level", "enemy_fire_rate",
     "enemy_aggression",
     "land_for_medals", "land_for_supplies",

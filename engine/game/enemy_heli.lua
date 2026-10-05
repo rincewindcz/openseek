@@ -274,6 +274,7 @@ function HeliSystem:_blast(heli)
             if dx * dx + dy * dy < BLAST_RADIUS * BLAST_RADIUS then
                 p.armor        = math.max(0, p.armor - BLAST_DAMAGE[Difficulty.damage_level()] * Config.enemy_damage)
                 p.damage_cause = "heli_blast"
+                self.world:count("hits")
             end
         end
     end

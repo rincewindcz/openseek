@@ -8,10 +8,13 @@ local Font   = require "engine.core.font"
 local Log    = require "engine.core.log"
 
 -- The crash / game-over picture brought to life, handed to Screen:show as its
--- fx (engine/core/screen.lua). Two EXTRAs, each with its own Config key:
+-- fx (engine/core/screen.lua). Three EXTRAs, each with its own Config key:
 --   crash_fx     smoke rising off the wreck, heat haze, a fire glow with embers,
 --                and a flash and static cut in place of the fade-in
 --   crash_cause  what destroyed the vehicle, typed under the picture
+--   crash_stats  the run's trivia: one line that has something to say on the
+--                picture before a respawn, the whole list in a centred panel
+--                (headed by the cause) on the game-over one
 -- Everything but the text is composed at the picture's own resolution, so it
 -- stays as blocky as the art. Presentation only; tuning is data/crash_fx.json.
 local CrashFX = Class()
@@ -78,7 +81,8 @@ local function load_data()
     if data then return data end
     local raw = love.filesystem.getInfo(DATA_PATH) and love.filesystem.read(DATA_PATH)
     data = raw and json.decode(raw) or {}
-    for _, key in ipairs({ "entrance", "glitch", "haze", "smoke", "cause", "respawn", "preview", "pictures" }) do
+    for _, key in ipairs({ "entrance", "glitch", "haze", "smoke", "cause", "stats", "respawn", "preview",
+        "pictures" }) do
         data[key] = data[key] or {}
     end
     return data
@@ -132,19 +136,54 @@ local function cause_text(spec, vehicle, cause)
     return verb .. " " .. label
 end
 
+-- 1234567 -> "1 234 567".
+local function grouped(n)
+    local text = tostring(n)
+    local head = #text % 3
+    local out  = head > 0 and { text:sub(1, head) } or {}
+    for i = head + 1, #text, 3 do out[#out + 1] = text:sub(i, i + 2) end
+    return table.concat(out, " ")
+end
+
+local function clock(seconds)
+    if seconds >= 3600 then
+        return string.format("%d:%02d:%02d", math.floor(seconds / 3600), math.floor(seconds / 60) % 60,
+            seconds % 60)
+    end
+    return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
+end
+
+-- The run's trivia (key -> number) as rows {key, label, value, amount} in the
+-- data's order, in whole numbers.
+local function stat_rows(spec, stats)
+    local rows = {}
+    for _, key in ipairs(spec.order or {}) do
+        local amount = math.floor(stats[key] or 0)
+        rows[#rows + 1] = {
+            key    = key,
+            label  = (spec.labels or {})[key] or key:upper(),
+            value  = key == "time" and clock(amount) or grouped(amount),
+            amount = amount,
+        }
+    end
+    return rows
+end
+
 -- Show the picture of player's lost vehicle on screen (a Screen). terminal is
 -- the game-over picture, held until a key. Otherwise it is the one before a
 -- respawn: a flash as in the original, or with an extra on held for
 -- respawn.hold so it can be read (a key ends it early). opts carries on_done /
--- on_cancel. Returns the picture's fx, nil with both extras off.
+-- on_cancel and stats, the run's trivia (key -> number, see data stats.order).
+-- Returns the picture's fx, nil with every extra off.
 function CrashFX.show(screen, player, terminal, opts)
     opts = opts or {}
     local d       = load_data()
     local picture = (player.vehicle == "tank") and "TANKEND" or "DEATHPIC"
     local fx
-    if Config.crash_fx or Config.crash_cause then
+    if Config.crash_fx or Config.crash_cause or Config.crash_stats then
         local dry = (player.fuel or 1) <= 0 and (player.armor or 0) > 0
-        fx = CrashFX:new(picture, player.vehicle, dry and "fuel" or player.damage_cause)
+        fx = CrashFX:new(picture, player.vehicle, dry and "fuel" or player.damage_cause,
+            opts.stats, terminal)
     end
     local show = { cues = "crash", variant = player.vehicle, fx = fx,
         on_done = opts.on_done, on_cancel = opts.on_cancel }
@@ -152,7 +191,7 @@ function CrashFX.show(screen, player, terminal, opts)
         show.fade_in, show.wait_key = 0.6, true
     elseif fx then
         show.fade_in, show.fade_out = 0.1, d.respawn.fade_out or 0.3
-        show.wait_key, show.timeout = true, d.respawn.hold or 3.2
+        show.wait_key, show.timeout = true, d.respawn.hold or 4
     else
         show.fade_in, show.hold, show.fade_out = 0.1, 0.5, 0.1
     end
@@ -164,17 +203,39 @@ end
 -- with data/crash_fx.json read again so an edit shows without a restart.
 function CrashFX.preview(screen, vehicle, terminal)
     data = nil
-    local cause = load_data().preview.cause
-    return CrashFX.show(screen, { vehicle = vehicle, damage_cause = cause }, terminal)
+    local preview = load_data().preview
+    return CrashFX.show(screen, { vehicle = vehicle, damage_cause = preview.cause }, terminal,
+        { stats = preview.stats })
 end
 
-function CrashFX:init(picture, vehicle, cause)
+function CrashFX:init(picture, vehicle, cause, stats, terminal)
     local d       = load_data()
     self.data     = d
     self.animated = Config.crash_fx
     self.cut      = self.animated   -- Screen: no fade-in, the entrance plays instead
     self.spec     = self.animated and d.pictures[picture] or {}
-    self.text     = Config.crash_cause and cause_text(d.cause, vehicle, cause) or nil
+    self.lines    = {}    -- typed at the foot of the picture
+    self.panel    = nil   -- {heading, rows}: the game-over list
+    local text = Config.crash_cause and cause_text(d.cause, vehicle, cause) or nil
+    local rows = Config.crash_stats and stats and stat_rows(d.stats, stats) or nil
+    if rows and terminal then
+        -- EXTRA (crash_stats): everything, bar the optional rows with nothing to say.
+        local optional, kept = {}, {}
+        for _, key in ipairs(d.stats.optional or {}) do optional[key] = true end
+        for _, row in ipairs(rows) do
+            if row.amount > 0 or not optional[row.key] then kept[#kept + 1] = row end
+        end
+        self.panel = { heading = text, rows = kept }
+    else
+        self.lines[1] = text
+        -- EXTRA (crash_stats): one row picked from those that have something to say.
+        local telling = {}
+        for _, row in ipairs(rows or {}) do
+            if row.amount > 0 then telling[#telling + 1] = row end
+        end
+        local pick = telling[1] and telling[math.random(#telling)]
+        if pick then self.lines[#self.lines + 1] = pick.label .. " " .. pick.value end
+    end
     self.age      = 0
     self.burst    = nil   -- {t, time}: static burst set off by an audio cue
     self.puffs    = {}    -- {spec, x, y, vx, vy, age, life, sway}
@@ -348,15 +409,62 @@ function CrashFX:_send(effect, img, level)
     effect:send("haze", unpack(zones))
 end
 
--- EXTRA (crash_cause): typed out centred at the foot of the picture.
-function CrashFX:_draw_text(img, x, y, scale, alpha)
+-- EXTRA (crash_cause, crash_stats): the lines typed out one after another,
+-- centred at the foot of the picture.
+function CrashFX:_draw_lines(img, x, y, scale, alpha)
     local spec  = self.data.cause
     local shown = math.floor((self.age - (spec.delay or 1)) / (spec.char_time or 0.035))
-    if shown <= 0 then return end
-    local font   = Font.get(spec.font or "chars")
-    local indent = math.floor((img:getWidth() - font:width(self.text)) / 2)
-    font:print(self.text:sub(1, shown), x + indent * scale, y + (spec.y or 224) * scale,
-        { scale = scale, color = { 1, 1, 1, alpha } })
+    local font  = Font.get(spec.font or "chars")
+    local step  = spec.line_height or 11
+    for i, text in ipairs(self.lines) do
+        if shown <= 0 then return end
+        local indent = math.floor((img:getWidth() - font:width(text)) / 2)
+        local top    = (spec.y or 224) - (#self.lines - i) * step
+        font:print(text:sub(1, shown), x + indent * scale, y + top * scale,
+            { scale = scale, color = { 1, 1, 1, alpha } })
+        shown = shown - #text
+    end
+end
+
+-- EXTRA (crash_stats): the game-over list, typed into a dark panel in the
+-- middle of the picture: the cause as its heading, then label and value rows on
+-- a fixed pitch.
+function CrashFX:_draw_panel(img, x, y, scale, alpha)
+    local g       = love.graphics
+    local spec    = self.data.stats.panel or {}
+    local elapsed = self.age - (spec.delay or 1)
+    if elapsed <= 0 then return end
+    local font    = Font.get(spec.font or "chars")
+    local cell    = spec.cell or 8
+    local columns = spec.columns or 32
+    local step    = spec.line_height or 11
+    local padding = spec.padding or 8
+    local heading = self.panel.heading
+    local rows    = self.panel.rows
+    local head_h  = heading and (spec.heading_gap or 18) or 0
+    local width   = columns * cell
+    local height  = head_h + #rows * step - (step - font.line_height)
+    local left    = math.floor((img:getWidth() - width) / 2)
+    local top     = math.floor((img:getHeight() - height) / 2)
+    local back    = spec.backdrop or { 0, 0, 0, 0.6 }
+    g.setColor(back[1], back[2], back[3], back[4] * alpha * math.min(1, elapsed / (spec.fade or 0.25)))
+    g.rectangle("fill", x + (left - padding) * scale, y + (top - padding) * scale,
+        (width + 2 * padding) * scale, (height + 2 * padding) * scale)
+
+    local shown = math.floor(elapsed / (spec.char_time or 0.01))
+    local opts  = { scale = scale, cell = cell, color = { 1, 1, 1, alpha } }
+    if heading then
+        local indent = math.floor((img:getWidth() - #heading * cell) / 2)
+        font:print(heading:sub(1, shown), x + indent * scale, y + top * scale, opts)
+        shown = shown - #heading
+    end
+    for i, row in ipairs(rows) do
+        if shown <= 0 then break end
+        local gap  = math.max(1, columns - #row.label - #row.value)
+        local text = row.label .. string.rep(" ", gap) .. row.value
+        font:print(text:sub(1, shown), x + left * scale, y + (top + head_h + (i - 1) * step) * scale, opts)
+        shown = shown - #text
+    end
 end
 
 -- Draws img at (x, y) with the given scale and overlay alpha, in place of the
@@ -383,7 +491,11 @@ function CrashFX:draw(img, x, y, scale, alpha)
         g.setColor(1, 1, 1, alpha)
         g.draw(img, x, y, 0, scale, scale)
     end
-    if self.text then self:_draw_text(img, x, y, scale, alpha) end
+    if self.panel then
+        self:_draw_panel(img, x, y, scale, alpha)
+    else
+        self:_draw_lines(img, x, y, scale, alpha)
+    end
     g.setColor(1, 1, 1)
 end
 

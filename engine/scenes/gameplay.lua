@@ -204,7 +204,7 @@ function Gameplay:on_vehicle_lost()
         self.respawn_tick  = app.tick + RESPAWN_TICKS
         self.vehicles_lost = self.vehicles_lost + 1
         if not self.playback then
-            self.crash_hold = CrashFX.show(app.screen, player, false) ~= nil
+            self.crash_hold = CrashFX.show(app.screen, player, false, { stats = self:crash_stats() }) ~= nil
         end
     else
         Log.info("game", "game over, score %d", player.score or 0)
@@ -215,7 +215,8 @@ function Gameplay:on_vehicle_lost()
         local function finish()
             if app.campaign then Campaign.finish(app) else app.scenes:switch("hiscores", score) end
         end
-        CrashFX.show(app.screen, player, true, { on_done = finish, on_cancel = finish })
+        CrashFX.show(app.screen, player, true,
+            { on_done = finish, on_cancel = finish, stats = self:crash_stats() })
     end
 end
 

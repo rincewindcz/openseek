@@ -807,11 +807,13 @@ function Player:_move(dt)
         if self:_solid_at(nx, self.y, r) then nx = self.x end
         local ny = self.y + dy
         if self:_solid_at(nx, ny, r) then ny = self.y end
+        dx, dy = nx - self.x, ny - self.y
         self.x, self.y = nx, ny
     else
         self.x = self.x + dx
         self.y = self.y + dy
     end
+    if self.world then self.world:count("pixels", math.sqrt(dx * dx + dy * dy)) end
 
     -- Seamless wrap: leaving one edge re-enters from the opposite one.
     self.x = self.x % self.world_size

@@ -19,7 +19,8 @@ local Log      = require "engine.core.log"
 -- Every run also keeps a record (app.run_record) summed over its cleared
 -- phases and players: phases, simulated seconds, vehicles lost, and the stats
 -- screen's ground forces, buildings, choppers, rescues and OK badges. The
--- ending reads it (EXTRA ending_stats).
+-- ending reads it (EXTRA ending_stats). It also sums the phases' trivia
+-- (World.tally) for the game-over picture (EXTRA crash_stats).
 local Campaign = {}
 
 Campaign.PLAYERS = 2
@@ -104,11 +105,13 @@ end
 
 -- Fold a cleared phase into the run's record: the stats screen's
 -- participants, the simulated seconds the phase took and the vehicles lost in
--- it. A run resumed from a save that predates the record keeps none.
-function Campaign.record_phase(app, stats, seconds, vehicles_lost)
+-- it, plus the phase's trivia tally. A run resumed from a save that predates
+-- the record keeps none.
+function Campaign.record_phase(app, stats, seconds, vehicles_lost, tally)
     local record = app.campaign and app.run_record
     if not (record and stats) then return end
     local function add(key, v) record[key] = (record[key] or 0) + (v or 0) end
+    for key, v in pairs(tally or {}) do add(key, v) end
     add("phases", 1)
     add("time", seconds)
     add("vehicles_lost", vehicles_lost)

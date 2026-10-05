@@ -26,8 +26,9 @@
   "cause": {
     "font":      "chars",
     "delay":     0.8,
-    "char_time": 0.035,
+    "char_time": 0.02,
     "y":         224,
+    "line_height": 11,
     "verbs":  { "chopper": "SHOT DOWN BY", "tank": "DESTROYED BY" },
     "labels": {
       "enemy_tracer":      "TRACER FIRE",
@@ -44,45 +45,40 @@
       "friendly_fire":     "FRIENDLY FIRE",
       "mine":              "OWN MINE"
     },
-    "lines":  0.3,
-    "rate":   24
-  },
-  "haze": {
-    "amplitude":  0.6,
-    "wavelength": 7,
-    "speed":      3
-  },
-  "smoke": {
-    "max":     240,
-    "prewarm": 7,
-    "fade_in": 0.15
-  },
-  "cause": {
-    "font":      "chars",
-    "delay":     0.8,
-    "char_time": 0.035,
-    "y":         224,
-    "verbs":  { "chopper": "SHOT DOWN BY", "tank": "DESTROYED BY" },
-    "labels": {
-      "flak":           "FLAK",
-      "heavy_flak":     "HEAVY FLAK",
-      "sgun":           "GUN FIRE",
-      "enemy_missile":  "MISSILE",
-      "homing_missile": "HOMING MISSILE",
-      "machine_gun":    "MACHINE GUN",
-      "tank_cannon":    "TANK SHELL",
-      "rifle":          "RIFLE FIRE",
-      "chaingun":       "CHAINGUN",
-      "air_to_air":     "AIR TO AIR MISSILE",
-      "heli_blast":     "EXPLODING CHOPPER",
-      "friendly_fire":  "FRIENDLY FIRE",
-      "mine":           "OWN MINE"
-    },
     "lines":   { "fuel": "OUT OF FUEL", "tree": "WRECKED ON A TREE", "destruct": "SELF DESTRUCT" },
     "unknown": "ENEMY FIRE"
   },
-  "respawn": { "hold": 3.2, "fade_out": 0.3 },
-  "preview": { "cause": "enemy_homing" },
+  "stats": {
+    "order": ["pixels", "shots", "time", "hits", "rounds", "trees", "expired"],
+    "optional": ["trees"],
+    "labels": {
+      "pixels":  "PIXELS TRAVELLED",
+      "shots":   "SHOTS FIRED",
+      "time":    "TOTAL GAME TIME",
+      "hits":    "HITS TAKEN",
+      "rounds":  "ROUNDS FIRED AT YOU",
+      "trees":   "TREES FLATTENED",
+      "expired": "POWER UPS EXPIRED"
+    },
+    "panel": {
+      "font":        "chars",
+      "delay":       0.8,
+      "char_time":   0.008,
+      "fade":        0.25,
+      "cell":        8,
+      "columns":     32,
+      "line_height": 11,
+      "heading_gap": 18,
+      "padding":     8,
+      "backdrop":    [0, 0, 0, 0.6]
+    }
+  },
+  "respawn": { "hold": 4.0, "fade_out": 0.3 },
+  "preview": {
+    "cause": "enemy_homing",
+    "stats": { "pixels": 48213, "shots": 1204, "time": 754, "hits": 37, "rounds": 2310,
+               "trees": 0, "expired": 3 }
+  },
   "pictures": {
     "DEATHPIC": {
       "smoke": [

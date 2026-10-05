@@ -531,7 +531,18 @@ end
 
 -- Fold the cleared phase into the campaign run's record.
 function GameplayBase:record_phase()
-    Campaign.record_phase(self.app, self.phase_stats, self.phase_time, self.vehicles_lost)
+    Campaign.record_phase(self.app, self.phase_stats, self.phase_time, self.vehicles_lost,
+        self.app.world.tally)
+end
+
+-- The run's trivia for the crash picture (EXTRA crash_stats): this phase's
+-- tally and clock on top of what the campaign record holds of earlier phases.
+function GameplayBase:crash_stats()
+    local world  = self.app.world
+    local record = self.app.campaign and self.app.run_record or {}
+    local out    = { time = (record.time or 0) + world.time }
+    for key, v in pairs(world.tally) do out[key] = (record[key] or 0) + v end
+    return out
 end
 
 -- Where to go once the stats screen is dismissed. Base returns to the menu;

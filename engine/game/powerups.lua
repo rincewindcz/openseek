@@ -113,7 +113,9 @@ function Powerups:update(dt)
                 end
             end
         end
-        if not taken and pu.age < TTL then live[#live + 1] = pu end
+        if not taken then
+            if pu.age < TTL then live[#live + 1] = pu else self.world:count("expired") end
+        end
     end
     self.list = live
 end

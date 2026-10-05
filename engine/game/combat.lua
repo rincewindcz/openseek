@@ -241,8 +241,12 @@ end
 function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range_override, shooter)
     local weapon_def = self.weapons[weapon_name]
     if not weapon_def then return end
+    -- Crash picture trivia: the players' shots and the rounds fired at them.
+    local tally = owner == "player" and "shots" or "rounds"
     if weapon_def.proj_type == "air_strike" then
-        return self.air_strike:call(x, y, angle_deg, weapon_def, level_idx or 1, shooter)
+        local called = self.air_strike:call(x, y, angle_deg, weapon_def, level_idx or 1, shooter)
+        if called ~= false then self.world:count(tally) end
+        return called
     end
     -- Muzzle flash and report at the gun for every shooter (player, ground AI,
     -- helis). The event is named after the weapon; data/audio.json decides which
@@ -263,6 +267,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
 
     -- Napalm and similar: a widening cone of ground fire ahead, no projectiles.
     if weapon_def.proj_type == "flame" then
+        self.world:count(tally)
         return self:_fire_flame(x, y, fwd_x, fwd_y, rad, weapon_def, level)
     end
 
@@ -288,6 +293,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     local side       = level.side_offset or 0
     local side_list  = level.side_offsets   -- explicit per-projectile lateral offsets (px)
     local total      = side_list and #side_list or math.max(count, streams)
+    self.world:count(tally, total)
 
     local swing_off = 0
     if level.swing then
@@ -900,6 +906,7 @@ function CombatSystem:_check_hit(projectile)
                         if not p.unlimited then
                             p.armor        = math.max(0, p.armor - projectile.damage)
                             p.damage_cause = "friendly_fire"
+                            self.world:count("hits")
                         end
                         return true
                     end
@@ -915,6 +922,7 @@ function CombatSystem:_check_hit(projectile)
                     if not p.unlimited then
                         p.armor        = math.max(0, p.armor - projectile.damage * Config.enemy_damage)
                         p.damage_cause = projectile.weapon
+                        self.world:count("hits")
                     end
                     self:_player_hit_fx(p)
                     return true
@@ -994,6 +1002,7 @@ function CombatSystem:_detonate(projectile)
                 if not p.unlimited then
                     p.armor        = math.max(0, p.armor - self_damage)
                     p.damage_cause = "mine"
+                    self.world:count("hits")
                 end
                 self:_player_hit_fx(p)
             end

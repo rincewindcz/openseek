@@ -275,6 +275,9 @@ function World:load(name)
     self.combatants    = {}
     self.mines         = {}   -- enemy proximity mines (EnemyFire:mine)
     self.homing_jam    = { ground = 0, air = 0 }   -- radars / radio towers lost this phase
+    -- Trivia of the phase for the crash picture (EXTRA crash_stats): written by
+    -- the simulation through World:count, never read back by it.
+    self.tally         = { pixels = 0, shots = 0, hits = 0, rounds = 0, trees = 0, expired = 0 }
     self.targets       = {}   -- destroy-objective entities (class is_target)
     self.rescue_zones  = {}   -- powhere.bin landing markers (kind 9)
     self.rescue_people = {}   -- pow.bin / people.bin civilians to rescue (kind 11)
@@ -680,7 +683,13 @@ end
 -- EXTRA (explosive_trees): a tank driving into a tree pops it in a small blast
 -- and clears it, rather than being stopped dead. Removes the tree from collision
 -- and rendering, and spawns the burst effect and a small light.
+-- Add to one of the phase's tally counters (World.tally).
+function World:count(key, amount)
+    self.tally[key] = self.tally[key] + (amount or 1)
+end
+
 function World:crush_tree(e)
+    self:count("trees")
     e.state = "dead"
     e.hp    = 0
     if self.combat then self.combat:add_effect("explosion_small", e.x, e.y) end

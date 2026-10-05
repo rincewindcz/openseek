@@ -164,6 +164,7 @@ local CATEGORIES = {
         { key = "ending_stats",        label = "ENDING STATS",    kind = "toggle" },
         { key = "crash_fx",            label = "CRASH FX",        kind = "toggle" },
         { key = "crash_cause",         label = "CRASH CAUSE",     kind = "toggle" },
+        { key = "crash_stats",         label = "CRASH STATS",     kind = "toggle" },
     } },
     { title = "EXIT", kind = "exit" },
 }
