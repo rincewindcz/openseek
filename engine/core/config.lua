@@ -113,7 +113,8 @@ local Config = {
     -- enemy_fire_level the original's enemy reloads, burst pauses and missile
     -- tracking (data/enemy_weapons.json). The multipliers scale that damage, the
     -- enemy fire rate, and enemy aggression (detection and attack range); 1.0
-    -- is the original. land_for_medals /
+    -- is the original. pickup_level picks how long a power-up lies before it
+    -- vanishes (data/powerups.json lifetime). land_for_medals /
     -- land_for_supplies make the chopper land on a medal / on fuel and armor to
     -- collect it. Replay parameters, frozen at phase start.
     difficulty         = "medium",
@@ -122,6 +123,7 @@ local Config = {
     enemy_fire_level   = "medium",
     enemy_fire_rate    = 1.0,
     enemy_aggression   = 1.0,
+    pickup_level       = "medium",
     land_for_medals    = true,
     land_for_supplies  = false,
 
@@ -156,6 +158,12 @@ local Config = {
     -- blast also hits the players inside it. Off, it is the original's charge
     -- that blows by itself after its fuse and spares the player. Replay parameter.
     remote_mine = true,
+
+    -- Weapon finds (engine/game/powerups.lua, data/powerups.json find): a drop
+    -- is now and then a weapon the vehicle does not carry, and picking it up
+    -- adds the weapon for the rest of the phase. Off, a drop is only ever ammo
+    -- for a carried weapon, as in the original. Replay parameter.
+    weapon_finds = true,
 
     -- Pitch the one explosion sound the original plays for every blast by size
     -- (data/audio.json size_pitch), so small and large blasts sound apart.
@@ -244,7 +252,7 @@ local PERSISTED = {
     "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx", "remote_mine",
     "explosion_pitch", "ending_stats", "crash_fx", "crash_cause", "crash_stats",
     "difficulty", "enemy_damage_level", "enemy_damage", "enemy_fire_level", "enemy_fire_rate",
-    "enemy_aggression",
+    "enemy_aggression", "pickup_level", "weapon_finds",
     "land_for_medals", "land_for_supplies",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
     "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",

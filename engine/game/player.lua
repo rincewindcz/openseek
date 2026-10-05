@@ -200,16 +200,11 @@ end
 -- Seed per-weapon ammo to full from the weapon table. Weapons without an
 -- ammo_max (chaingun) stay absent and read as infinite. counts (optional,
 -- weapon -> loaded bay count from the equip loadout) multiplies a weapon's
--- capacity: N bays of one weapon carry N x ammo, the original's rule.
+-- starting load: N bays of one weapon carry N x ammo, the original's rule.
 function Player:seed_ammo(weapons, counts)
-    self.ammo      = {}
-    self._ammo_max = {}
+    self.ammo = {}
     for name, w in pairs(weapons) do
-        if w.ammo_max then
-            local max = w.ammo_max * (counts and counts[name] or 1)
-            self.ammo[name]      = max
-            self._ammo_max[name] = max
-        end
+        if w.ammo_max then self.ammo[name] = w.ammo_max * (counts and counts[name] or 1) end
     end
 end
 
@@ -222,10 +217,10 @@ function Player:consume_ammo(name, cost)
     self.ammo[name] = math.max(0, self.ammo[name] - (cost or 1))
 end
 
-function Player:add_ammo(name, amount)
+-- Add ammo up to cap, which may exceed the starting load, as in the original.
+function Player:add_ammo(name, amount, cap)
     if self.ammo[name] == nil then return end  -- not an ammo-tracked weapon
-    local cap = self._ammo_max and self._ammo_max[name] or self.ammo[name] + amount
-    self.ammo[name] = math.min(cap, self.ammo[name] + amount)
+    self.ammo[name] = math.min(cap or math.huge, self.ammo[name] + amount)
 end
 
 -- OVERKILL banner / OK badge streak

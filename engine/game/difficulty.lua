@@ -6,7 +6,7 @@ local Config = require "engine.core.config"
 
 -- Difficulty presets over the simulation's difficulty Config keys, after the
 -- original's EASY / MEDIUM / HARD option: the level of the enemy damage and
--- fire tables, and whether medals (MEDIUM up) and fuel / armor (HARD) are only
+-- fire tables and of the pickup lifetime, and whether medals (MEDIUM up) and fuel / armor (HARD) are only
 -- collected by landing on them. The damage, fire rate and aggression
 -- multipliers are extra scales, 1.0 in every preset. The presets live in
 -- data/difficulty.json; each key stays
@@ -18,7 +18,7 @@ local DATA_PATH = "data/difficulty.json"
 
 Difficulty.KEYS = {
     "enemy_damage_level", "enemy_damage", "enemy_fire_level", "enemy_fire_rate", "enemy_aggression",
-    "land_for_medals", "land_for_supplies",
+    "pickup_level", "land_for_medals", "land_for_supplies",
 }
 
 local LEVELS = { easy = 1, medium = 2, hard = 3 }
@@ -33,6 +33,12 @@ end
 -- original's enemy reloads, burst pauses and missile tracking.
 function Difficulty.fire_level()
     return LEVELS[Config.enemy_fire_level] or 2
+end
+
+-- Index (1..3) into the pickup lifetimes of data/powerups.json: the original
+-- leaves a power-up lying longer on the easier levels.
+function Difficulty.pickup_level()
+    return LEVELS[Config.pickup_level] or 2
 end
 
 local presets

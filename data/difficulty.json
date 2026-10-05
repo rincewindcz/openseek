@@ -2,19 +2,19 @@
   "presets": [
     {
       "name": "easy", "label": "EASY",
-      "values": { "enemy_damage_level": "easy", "enemy_damage": 1.0, "enemy_fire_level": "easy",
+      "values": { "enemy_damage_level": "easy", "enemy_damage": 1.0, "enemy_fire_level": "easy", "pickup_level": "easy",
                   "enemy_fire_rate": 1.0, "enemy_aggression": 1.0,
                   "land_for_medals": false, "land_for_supplies": false }
     },
     {
       "name": "medium", "label": "MEDIUM",
-      "values": { "enemy_damage_level": "medium", "enemy_damage": 1.0, "enemy_fire_level": "medium",
+      "values": { "enemy_damage_level": "medium", "enemy_damage": 1.0, "enemy_fire_level": "medium", "pickup_level": "medium",
                   "enemy_fire_rate": 1.0, "enemy_aggression": 1.0,
                   "land_for_medals": true, "land_for_supplies": false }
     },
     {
       "name": "hard", "label": "HARD",
-      "values": { "enemy_damage_level": "hard", "enemy_damage": 1.0, "enemy_fire_level": "hard",
+      "values": { "enemy_damage_level": "hard", "enemy_damage": 1.0, "enemy_fire_level": "hard", "pickup_level": "hard",
                   "enemy_fire_rate": 1.0, "enemy_aggression": 1.0,
                   "land_for_medals": true, "land_for_supplies": true }
     }
