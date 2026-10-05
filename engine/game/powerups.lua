@@ -236,8 +236,9 @@ function Powerups:expiring(pu)
 end
 
 -- EXTRA (weapon_finds): p takes a weapon it does not carry and its vehicle can
--- use. It joins p's list for the rest of the phase with a full load, and its
--- ammo starts to drop. Returns false when p already has it or cannot use it.
+-- use. It joins p's list for the rest of the phase with find.ammo of its
+-- starting load (one round at least), and its ammo starts to drop. Returns
+-- false when p already has it or cannot use it.
 function Powerups:_grant(weapon, p)
     for _, name in ipairs(self:_carried(p)) do
         if name == weapon then return false end
@@ -259,7 +260,10 @@ function Powerups:_grant(weapon, p)
         p.weapon_levels = levels
     end
     local def = self.weapons[weapon]
-    if def and def.ammo_max then p.ammo[weapon] = def.ammo_max end
+    if def and def.ammo_max then
+        local share = (self.data.find or {}).ammo or 0.15
+        p.ammo[weapon] = math.max(1, math.floor(def.ammo_max * share + 0.5))
+    end
     self.tables[p] = self:_build_table(p)
     return true
 end

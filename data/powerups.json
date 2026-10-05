@@ -30,5 +30,5 @@
     "power_shell":   17
   },
 
-  "find": { "chance": 0.08, "frames": [6, 7] }
+  "find": { "chance": 0.08, "ammo": 0.15, "frames": [6, 7] }
 }
