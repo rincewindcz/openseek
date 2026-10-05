@@ -1,16 +1,13 @@
 {
   "flak_turret": {
-    "attack_range": 240,
+    "armed": true,
+    "attack_range": 270,
     "collision_radius": 12,
-    "detection_radius": 320,
+    "detection_radius": 300,
     "explosion": "medium",
     "hit_radius": 14,
-    "muzzle_offset": 0,
-    "reaction_delay": 0.6,
     "solid": true,
-    "speed": 0,
-    "turn_speed": 120,
-    "weapon": "heavy_flak"
+    "speed": 0
   },
   "ground_decal": {
     "attack_range": 0,
@@ -19,6 +16,12 @@
     "hit_radius": 0,
     "speed": 0,
     "turn_speed": 0
+  },
+  "mine": {
+    "detection_radius": 0,
+    "explosion": "medium",
+    "hit_radius": 0,
+    "speed": 0
   },
   "powerup_marker": {
   },
@@ -31,34 +34,26 @@
     "turn_speed": 0
   },
   "soldier": {
-    "attack_range": 220,
+    "armed": true,
     "dead_frame_offset": 32,
     "dead_sprite": "soldier_dead",
-    "detection_radius": 280,
+    "detection_radius": 300,
     "explosion": "none",
     "hit_radius": 6,
-    "muzzle_offset": 0,
-    "reaction_delay": 0.7,
     "speed": 0,
     "sprite": "soldier",
-    "sprite_rot": 0,
-    "turn_speed": 100,
-    "weapon": "rifle"
+    "sprite_rot": 0
   },
   "soldier_aggressive": {
-    "attack_range": 240,
+    "armed": true,
     "dead_frame_offset": 32,
     "dead_sprite": "soldier_dead",
-    "detection_radius": 320,
+    "detection_radius": 300,
     "explosion": "none",
     "hit_radius": 6,
-    "muzzle_offset": 0,
-    "reaction_delay": 0.4,
     "speed": 0,
     "sprite": "soldier",
-    "sprite_rot": 0,
-    "turn_speed": 150,
-    "weapon": "rifle"
+    "sprite_rot": 0
   },
   "structure": {
     "attack_range": 0,
@@ -72,21 +67,18 @@
     "turn_speed": 0
   },
   "tank": {
-    "attack_range": 260,
+    "armed": true,
+    "attack_range": 270,
     "collision_radius": 14,
-    "detection_radius": 360,
+    "detection_radius": 300,
     "explosion": "large",
     "hit_radius": 18,
-    "muzzle_offset": 0,
     "patrol_speed": 28,
     "patrol_turn": 70,
-    "reaction_delay": 0.9,
     "ride_linger": 1.2,
     "solid": true,
     "speed": 0,
-    "turn_speed": 70,
-    "turret_explosion": "medium",
-    "weapon": "flak"
+    "turret_explosion": "medium"
   },
   "tree": {
     "attack_range": 0,

@@ -9,23 +9,13 @@ local Mathx      = require "engine.core.mathx"
 local Score      = require "engine.game.score"
 local Difficulty = require "engine.game.difficulty"
 
--- Each spawned heli gets exactly one of these, picked at random. air_to_air uses
--- its locking level so the missile homes (the original game's heli weapon);
--- machine_gun is the per-mission tracer streak. Firing is bursty: it looses a
--- volley of `burst` shots `intra` seconds apart, then waits `cooldown` seconds so
--- the player gets a clear window to dodge and shoot back.
-local WEAPON_POOL = {
-    { weapon = "chaingun",    level = 1, burst = 3, intra = 0.13, cooldown = 1.8 },
-    { weapon = "homing_missile", level = 1, burst = 1, intra = 0,    cooldown = 3.2 },
-    { weapon = "air_to_air",  level = 2, burst = 1, intra = 0,    cooldown = 3.0 },
-    { weapon = "machine_gun", level = 1, burst = 4, intra = 0.11, cooldown = 2.0 },
-}
-
+-- A heli's weapon is its stage class behaviour, as in the original: homing
+-- missiles, or on some stages a fast gun (EnemyFire:heli_mode,
+-- data/enemy_weapons.json "helicopter"), fired whenever the nose is on the player
+-- inside that table's range and cone.
 local SPEED      = 110    -- forward cruise (px/s); slower than the player so it can be engaged
-local TURN_RATE  = 120    -- deg/s heading slew
+local TURN_RATE  = 120    -- deg/s heading slew (scaled by the mode's turn_scale)
 local ORBIT_R    = 270    -- radius it tries to circle the player at
-local ATTACK_R   = 360    -- range within which it will fire
-local FIRE_CONE  = 32     -- deg; the nose must be this close to the player to shoot
 local REACTION_DELAY = 0.9 -- s in attack range before the first volley (evasion window)
 local FRONT_LIMIT = 90    -- deg; the orbit is kept within this bearing of the player's front
 local FIRE_FRONT  = 115   -- deg; a heli only fires within this bearing, never from the rear blind spot
@@ -112,15 +102,12 @@ function HeliSystem:_spawn_one(player)
     end
     if #choices == 0 then choices = self.spawns end
     local s    = choices[self.world.rng:random(#choices)]
-    local pick = WEAPON_POOL[self.world.rng:random(#WEAPON_POOL)]
     local dx, dy = self.world:delta(player.x, player.y, s.x, s.y)
     local heli = {
         x = s.x, y = s.y,
         heading = Mathx.heading_deg(dx, dy),
         hp = self.max_hp, max_hp = self.max_hp,
-        weapon = pick.weapon, level = pick.level,
-        burst = pick.burst, intra = pick.intra, cooldown = pick.cooldown,
-        burst_left = pick.burst,
+        mode = self.combat.enemy_fire:heli_mode(s.behaviour),
         dir = (self.world.rng:random() < 0.5) and 1 or -1,
         phase = self.world.rng:random() * math.pi * 2,
         reload = 0.8, alert_t = 0,
@@ -231,7 +218,7 @@ function HeliSystem:_update_heli(heli, dt)
     end
 
     local diff = ((target - heli.heading + 180) % 360) - 180
-    local step = TURN_RATE * dt * Config.speed_scale
+    local step = TURN_RATE * (heli.mode.turn_scale or 1) * dt * Config.speed_scale
     if math.abs(diff) <= step then heli.heading = target
     else heli.heading = (heli.heading + (diff > 0 and step or -step)) % 360 end
 
@@ -242,27 +229,16 @@ function HeliSystem:_update_heli(heli, dt)
     -- the heli has been in attack range for REACTION_DELAY seconds, so a heli that
     -- just closed in (often from off-screen behind the player) gives an evasion
     -- window instead of firing on arrival. Resets when it falls out of range.
-    local attack_r = ATTACK_R * Config.enemy_aggression
+    local fire     = self.combat.enemy_fire
+    local spec     = fire.data.helicopter
+    local attack_r = spec.range * Config.enemy_aggression
     if dist <= attack_r then heli.alert_t = heli.alert_t + dt else heli.alert_t = 0 end
-    local ready  = heli.alert_t >= REACTION_DELAY / Config.enemy_aggression
-    local face   = math.abs(((toplayer - heli.heading + 180) % 360) - 180)
-    local mid    = heli.burst_left < heli.burst                  -- already firing this volley
-    local in_view   = math.abs(front_pos) <= FIRE_FRONT
-    local can_start = ready and in_view and dist <= attack_r and face <= FIRE_CONE
-    -- A volley only starts when the nose is on the player and in range; once it has,
-    -- it commits to all `burst` rounds (the burst is brief, so the nose barely
-    -- drifts) and then waits out the long cooldown. That makes a clear shoot/pause
-    -- rhythm instead of a constant stream.
-    if heli.reload <= 0 and (mid or can_start) then
-        self.combat:tick_swing(heli, heli.weapon)
-        self.combat:fire(heli.x, heli.y, heli.heading, heli.weapon, heli, heli.level, attack_r * 1.2)
-        heli.burst_left = heli.burst_left - 1
-        if heli.burst_left > 0 then
-            heli.reload = heli.intra / Config.enemy_fire_rate
-        else
-            heli.burst_left = heli.burst
-            heli.reload = heli.cooldown / Config.enemy_fire_rate
-        end
+    local ready   = heli.alert_t >= REACTION_DELAY / Config.enemy_aggression
+    local face    = math.abs(((toplayer - heli.heading + 180) % 360) - 180)
+    local in_view = math.abs(front_pos) <= FIRE_FRONT
+    if heli.reload <= 0 and ready and in_view and dist <= attack_r and face <= spec.fire_cone then
+        self.combat:fire(heli.x, heli.y, heli.heading, heli.mode.weapon, heli, 1)
+        heli.reload = fire:heli_reload(heli.mode)
     end
 end
 

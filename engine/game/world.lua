@@ -16,6 +16,12 @@ local Log       = require "engine.core.log"
 -- original, 0x1f64e4). The player's fire cannot harm them (see Entity:take_damage).
 local BASE_FLAG       = 0x40
 local BASE_HIT_POINTS = 100
+-- Class flag bits of the radars and radio towers whose loss makes the ground
+-- and helicopter missiles track more loosely (counted in World.homing_jam).
+local RADAR_FLAG      = 0x10
+local TOWER_FLAG      = 0x20
+-- Stage class behaviour of a soldier-kind class that is a proximity mine.
+local MINE_BEHAVIOUR  = 2
 
 local DEBRIS_CLIPS = { "ironsz", "iron2sz", "metal8", "metalrt", "metalsz" }
 local DUST_CLIPS   = { "dust0", "dust1", "dust2" }
@@ -88,6 +94,7 @@ end
 -- rotate on its own (radar dish), nil means the AI aims it (tank turret).
 local TURRET_DEFS = {
     { top_match = "tanktop%.bin$",  hull_kind  = "tank" },
+    { top_match = "^tankt2%.bin$",  hull_kind  = "tank" },
     { top_match = "^radarsp%.bin$", hull_asset = "radar.bin", spin = 110 },
 }
 
@@ -130,8 +137,8 @@ end
 
 -- A hand fix from data/overrides.json for one entity field: the current stage's
 -- entry for the sprite file wins, then the entry for the sprite file in every
--- stage; nil when neither sets the field. Fields: weapon, fire_rate, muzzle,
--- explosion, drop (a pickup kind, true for a random pickup, false for none).
+-- stage; nil when neither sets the field. Fields: explosion, drop (a pickup
+-- kind, true for a random pickup, false for none).
 function World:_override(asset_file, field)
     local stage = self.overrides.stages[self.stage_name]
     local entry = stage and stage[asset_file]
@@ -266,6 +273,8 @@ function World:load(name)
     self.decals        = {}
     self.objects       = {}
     self.combatants    = {}
+    self.mines         = {}   -- enemy proximity mines (EnemyFire:mine)
+    self.homing_jam    = { ground = 0, air = 0 }   -- radars / radio towers lost this phase
     self.targets       = {}   -- destroy-objective entities (class is_target)
     self.rescue_zones  = {}   -- powhere.bin landing markers (kind 9)
     self.rescue_people = {}   -- pow.bin / people.bin civilians to rescue (kind 11)
@@ -274,7 +283,7 @@ function World:load(name)
     self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
     self.debris        = {}   -- flying explosion shrapnel {anim, x, y, vx, vy, age, lifetime}
     self.ground_fx     = {}   -- dust left on the ground when shrapnel lands {anim, x, y}
-    self.heli_spawns   = {}   -- {x, y} spawn markers for enemy helicopters (not drawn)
+    self.heli_spawns   = {}   -- {x, y, behaviour} spawn markers for enemy helicopters (not drawn)
     self.air_units     = {}   -- live enemy helicopters (owned by the heli system)
 
     -- First pass: build every entity and index hulls by exact position.
@@ -293,6 +302,23 @@ function World:load(name)
             local hp = entity.type_data.base_hit_points or BASE_HIT_POINTS
             entity.hp, entity.max_hp = hp, hp
         end
+        if math.floor((cls.flags or 0) / RADAR_FLAG) % 2 == 1 then
+            entity.homing_jam = "ground"
+        elseif math.floor((cls.flags or 0) / TOWER_FLAG) % 2 == 1 then
+            entity.homing_jam = "air"
+        end
+        -- The class behaviour is a gun's firing routine and a soldier's weapon;
+        -- a soldier-kind class with the mine behaviour is a proximity mine.
+        if cls.kind_name == "flak_turret" then
+            entity.fire_routine = cls.behaviour or 0
+        elseif cls.kind_name == "soldier" or cls.kind_name == "soldier_aggressive" then
+            if cls.behaviour == MINE_BEHAVIOUR then
+                entity.mine      = true
+                entity.type_data = Entity.type_for("mine")
+            else
+                entity.fire_mode = cls.behaviour or 0
+            end
+        end
         -- Craters are for large static buildings only. Keying on kind "structure"
         -- excludes vehicles/turrets (tank, truck, flak), and the size gate excludes
         -- small machinery filed under "structure" (jeeps, ammo packs).
@@ -309,10 +335,6 @@ function World:load(name)
         if af and af.file then
             local fn = af.file:lower()
             entity.asset_file    = fn
-            entity.weapon        = self:_override(fn, "weapon")
-            entity.fire_rate     = self:_override(fn, "fire_rate")
-            -- Forward muzzle offset so shots leave the barrel, not the hull center.
-            entity.muzzle_offset = self:_override(fn, "muzzle")
             entity.explosion     = self:_override(fn, "explosion") or self:_class_explosion(cls)
             local drop = self:_override(fn, "drop")
             if drop == nil then drop = self:_class_drop(cls) end
@@ -358,10 +380,11 @@ function World:load(name)
         if hull and r then
             -- Fold the turret onto its co-located hull, dropping it as a standalone entity.
             hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy }, tdef.spin, cls)
+            hull.fire_routine = cls.behaviour or 0   -- the tank fires what its turret does
         elseif cls.kind_name == "enemy_helicopter" then
             -- Enemy helicopters are not placed units: each marks a spawn point for the
             -- airborne heli system and is never drawn or hit in place.
-            self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y }
+            self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y, behaviour = cls.behaviour }
         elseif pad_class[raw.class] and self:_near_any(raw.x, raw.y, powhere_pos, PAD_RESCUE_RADIUS) then
             -- A pad by a POWHERE marker is a rescue landing pad: drawn and removed by
             -- the RescueSystem, not the world.
@@ -393,6 +416,7 @@ function World:load(name)
             if entity:is_combatant() then
                 self.combatants[#self.combatants + 1] = entity
             end
+            if entity.mine then self.mines[#self.mines + 1] = entity end
         end
     end
     -- Pair each hangar hut with the tank it hides before the draw order is fixed,

@@ -30,6 +30,40 @@
     "y":         224,
     "verbs":  { "chopper": "SHOT DOWN BY", "tank": "DESTROYED BY" },
     "labels": {
+      "enemy_tracer":      "TRACER FIRE",
+      "enemy_tracer_fast": "TRACER FIRE",
+      "enemy_flak":        "FLAK",
+      "enemy_round":       "GUN FIRE",
+      "enemy_bullet":      "BULLETS",
+      "enemy_shell":       "TANK SHELL",
+      "enemy_homing":      "HOMING MISSILE",
+      "enemy_heli_homing": "CHOPPER MISSILE",
+      "enemy_missile":     "MISSILE",
+      "enemy_mine":        "MINE",
+      "heli_blast":        "EXPLODING CHOPPER",
+      "friendly_fire":     "FRIENDLY FIRE",
+      "mine":              "OWN MINE"
+    },
+    "lines":  0.3,
+    "rate":   24
+  },
+  "haze": {
+    "amplitude":  0.6,
+    "wavelength": 7,
+    "speed":      3
+  },
+  "smoke": {
+    "max":     240,
+    "prewarm": 7,
+    "fade_in": 0.15
+  },
+  "cause": {
+    "font":      "chars",
+    "delay":     0.8,
+    "char_time": 0.035,
+    "y":         224,
+    "verbs":  { "chopper": "SHOT DOWN BY", "tank": "DESTROYED BY" },
+    "labels": {
       "flak":           "FLAK",
       "heavy_flak":     "HEAVY FLAK",
       "sgun":           "GUN FIRE",
@@ -48,7 +82,7 @@
     "unknown": "ENEMY FIRE"
   },
   "respawn": { "hold": 3.2, "fade_out": 0.3 },
-  "preview": { "cause": "homing_missile" },
+  "preview": { "cause": "enemy_homing" },
   "pictures": {
     "DEATHPIC": {
       "smoke": [

@@ -10,6 +10,7 @@ local Score      = require "engine.game.score"
 local Stats      = require "engine.game.stats"
 local Shadow     = require "engine.game.shadow"
 local AirStrike  = require "engine.game.air_strike"
+local EnemyFire  = require "engine.game.enemy_fire"
 local Difficulty = require "engine.game.difficulty"
 
 -- Projectile
@@ -33,6 +34,7 @@ function Projectile:init(p)
     self.max_range  = p.max_range
     self.accel      = p.accel or 0  -- forward acceleration (px/s^2), e.g. tracers
     self.max_speed  = p.max_speed   -- speed cap for accelerating rounds (nil = uncapped)
+    self.min_speed  = p.min_speed   -- speed floor for decelerating rounds (the enemy shell)
     self.traveled   = 0
     self.trail          = p.trail            -- effect clip dropped along the path
     self.trail_interval = p.trail_interval or 14
@@ -81,11 +83,12 @@ end
 
 function Projectile:update(dt)
     if self.bomb_phase then return self:_update_bomb(dt) end
-    if self.accel > 0 then
+    if self.accel ~= 0 then
         local speed_now = math.sqrt(self.vx * self.vx + self.vy * self.vy)
         if speed_now > 0 then
             local new_speed = speed_now + self.accel * dt
             if self.max_speed and new_speed > self.max_speed then new_speed = self.max_speed end
+            if new_speed < (self.min_speed or 0) then new_speed = self.min_speed or 0 end
             self.vx = self.vx / speed_now * new_speed
             self.vy = self.vy / speed_now * new_speed
         end
@@ -150,6 +153,7 @@ function CombatSystem:init(world, camera)
     self._swing      = {}
     self._alt        = {}   -- per owner+weapon side toggle for alternate_side weapons
     self.air_strike  = AirStrike:new(world, self)
+    self.enemy_fire  = nil  -- enemy firing rules (EnemyFire), built by load
 end
 
 -- Spawn a transient world-space effect. opts: {rot, scale, damage, radius,
@@ -189,7 +193,8 @@ end
 function CombatSystem:load(path)
     local raw = love.filesystem.read(path)
     if not raw then error("combat: missing " .. path) end
-    self.weapons = json.decode(raw)
+    self.weapons    = json.decode(raw)
+    self.enemy_fire = EnemyFire:new(self.world, self)
 end
 
 -- Draw sprite for a weapon's projectile, swapping in the current mission's tracer.
@@ -212,6 +217,16 @@ function CombatSystem:_resolve_sprite(weapon_def)
         local m    = tonumber(self.world.stage_name:match("^stage(%d)"))
         local name = m and TRACER_SPRITE[m]
         if name and Animation.clip(name) then sprite = name end
+    end
+    -- An enemy round drawn with whatever sprite the stage files under that
+    -- projectile class (the same gun fires "ffr" in one mission, "bullet" in another).
+    local stage = weapon_def.proj_class and self.world and self.world.stage
+    local cls   = stage and stage.classes[weapon_def.proj_class + 1]
+    local asset = cls and cls.asset and stage.assets[cls.asset + 1]
+    if asset and asset.file then
+        local name = asset.file:lower():gsub("%.bin$", "")
+        local clip = Animation.clip(name)
+        if clip and #clip.frames > 0 then sprite = name end
     end
     return sprite
 end
@@ -329,6 +344,10 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
         end
 
         local fire_rad = rad + angle_off
+        local lifetime = weapon_def.lifetime or 2
+        if weapon_def.lifetime_random then
+            lifetime = lifetime + self.world.rng:random() * weapon_def.lifetime_random
+        end
         local projectile = Projectile:new({
             x          = x + ox,
             y          = y + oy,
@@ -338,7 +357,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             aoe        = weapon_def.aoe    or 0,
             owner      = owner,
             shooter    = shooter,
-            lifetime   = weapon_def.lifetime    or 2,
+            lifetime   = lifetime,
             radius     = weapon_def.proj_radius or 3,
             weapon_def = weapon_def,
             weapon     = weapon_name,
@@ -346,6 +365,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             max_range  = max_range,
             accel      = weapon_def.proj_accel or 0,
             max_speed  = weapon_def.max_speed,
+            min_speed  = weapon_def.min_speed,
             animate    = animate,
             trail          = weapon_def.trail,
             trail_interval = weapon_def.trail_interval,
@@ -356,6 +376,11 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             projectile.homing    = true
             projectile.turn_rate = turn_rate
             projectile.target    = target
+            -- Enemy missiles only take a new bearing on their target now and then.
+            if weapon_def.homing_refresh then
+                projectile.refresh   = self.enemy_fire:homing_refresh(weapon_def.homing_refresh)
+                projectile.refresh_t = 0
+            end
         end
         if weapon_def.proj_type == "mine" then
             -- EXTRA (remote_mine): the mine waits for the trigger instead of its fuse.
@@ -412,33 +437,25 @@ function CombatSystem:reset_phase()
     self.air_strike:reset()
 end
 
--- Fire a single shot from an entity along its current aim, mirroring the AI's
--- muzzle placement. Used by the overview entity editor's FIRE action (and any
--- other one-shot trigger). Returns true if a shot was actually fired.
+-- Fire one volley from an entity along its current aim, the way its AI would.
+-- Used by the overview entity editor's FIRE action. Returns true if it fired.
 function CombatSystem:fire_entity(e)
-    if not e or not e:is_alive() then return false end
+    if not e or not e:is_alive() or not e:is_combatant() then return false end
     if e.has_turret and not e.turret_alive then return false end
-    local td     = e.type_data or {}
-    local weapon = e.weapon or td.weapon
-    if not weapon or not self.weapons[weapon] then return false end
-
     local aim = e.aim_angle or e.angle or 0
-    local sx, sy = e.x, e.y
-    local muzzle_offset = e.muzzle_offset or td.muzzle_offset or 0
-    if muzzle_offset ~= 0 then
-        local muzzle_rad = (aim - 90) * math.pi / 180
-        sx = e.x + math.cos(muzzle_rad) * muzzle_offset
-        sy = e.y + math.sin(muzzle_rad) * muzzle_offset
+    if e.fire_routine then
+        local spec = self.enemy_fire:routine(e.fire_routine)
+        if not spec then return false end
+        self.enemy_fire:volley(e, spec, aim)
+    elseif e.fire_mode then
+        local weapons = self.enemy_fire.data.soldier.weapons
+        self:fire(e.x, e.y, aim, weapons[tostring(e.fire_mode)] or weapons["0"], e, 1)
+    else
+        return false
     end
-    local range = td.attack_range or td.detection_radius or 300
-    self:fire(sx, sy, aim, weapon, e, 1, range * 1.3)
     return true
 end
 
--- Angular threshold (deg) within which a turret/soldier is considered locked on.
-local LOCK_DEG = 8
--- How long before its next shot a patrolling tank slows to a stop (then resumes).
-local STOP_LEAD = 0.8
 -- A hangar tank stays hidden while the player's facing is within this cone of the
 -- hut (the player is "looking at it"); it rides out only when the player looks away.
 local FACE_DEG = 55
@@ -609,8 +626,19 @@ function CombatSystem:_steer_homing(projectile, dt)
     else lost = (tgt.armor or 0) <= 0 or tgt.death ~= nil end   -- player
     if lost then projectile.target = nil; return end
 
-    local dx, dy   = self.world:delta(tgt.x, tgt.y, projectile.x, projectile.y)
-    local desired  = Mathx.atan2(dy, dx)
+    local desired
+    if projectile.refresh then
+        projectile.refresh_t = projectile.refresh_t - dt * Config.speed_scale
+        if projectile.refresh_t <= 0 or not projectile.bearing then
+            local dx, dy = self.world:delta(tgt.x, tgt.y, projectile.x, projectile.y)
+            projectile.bearing   = Mathx.atan2(dy, dx)
+            projectile.refresh_t = projectile.refresh
+        end
+        desired = projectile.bearing
+    else
+        local dx, dy = self.world:delta(tgt.x, tgt.y, projectile.x, projectile.y)
+        desired = Mathx.atan2(dy, dx)
+    end
     local cur      = Mathx.atan2(projectile.vy, projectile.vx)
     local diff     = ((desired - cur + math.pi) % (2 * math.pi)) - math.pi
     local maxstep  = math.rad(projectile.turn_rate) * dt * Config.speed_scale
@@ -623,72 +651,38 @@ function CombatSystem:_steer_homing(projectile, dt)
     projectile.angle_rad = new_angle + math.pi / 2   -- sprite points north at frame 0; align to travel
 end
 
--- Drive enemy aiming and firing. Each combatant rotates its aim toward the
--- nearest player at its turn_speed, and fires its weapon when locked and in range.
+-- Drive enemy aiming and firing: each combatant within its active radius of the
+-- nearest player turns on it and fires by the original's rules (EnemyFire), a
+-- gun through its stage's firing routine, a soldier with its own weapon. Mines
+-- wait for a player to come close.
 function CombatSystem:_update_ai(dt)
+    local fire = self.enemy_fire
     for _, e in ipairs(self.world.combatants) do
         local p = e:is_alive() and self:_nearest_player(e.x, e.y) or nil
         if e.hideable then self:_update_hangar(e, p, dt) end
-        local acquired = false
         if p then
-            local td  = e.type_data
             local dx, dy = self.world:delta(p.x, p.y, e.x, e.y)
-            local d2  = dx * dx + dy * dy
-            local detection = (td.detection_radius or 0) * Config.enemy_aggression
-            e.engaging = false
-            if detection > 0 and d2 <= detection * detection then
-                acquired = true
-                -- Reaction delay: the unit tracks the player immediately (aim below)
-                -- but holds fire until it has had the player in its detection radius
-                -- for reaction_delay seconds, giving the player a window to break off.
-                -- The timer resets whenever the player leaves detection.
-                e.alert_t = (e.alert_t or 0) + dt
-                local ready = e.alert_t >= (td.reaction_delay or 0) / Config.enemy_aggression
-                local target = Mathx.heading_deg(dx, dy)
-                local diff   = ((target - e.aim_angle + 180) % 360) - 180
-                local step   = (td.turn_speed or 90) * dt * Config.speed_scale
-                if math.abs(diff) <= step then
-                    e.aim_angle = target
-                else
-                    e.aim_angle = (e.aim_angle + (diff > 0 and step or -step)) % 360
+            local d2     = dx * dx + dy * dy
+            local radius = fire:active_radius(e)
+            if d2 <= radius * radius then
+                if e.fire_routine then
+                    -- A tank fires through its turret, and a hangar tank only once
+                    -- it has ridden clear of the hut.
+                    local can_fire = ((not e.has_turret) or e.turret_alive)
+                        and not (e.hideable and e.hidden)
+                    fire:turret(e, dx, dy, d2, dt, can_fire)
+                elseif e.fire_mode then
+                    fire:soldier(e, dx, dy, dt)
                 end
                 -- Single-sprite turrets (flak) rotate the whole sprite via e.angle;
                 -- two-part tanks keep the hull fixed and spin only the turret overlay,
                 -- which the renderer draws from aim_angle.
                 if not e.has_turret then e.angle = e.aim_angle end
-
-                local attack_range = td.attack_range and td.attack_range * Config.enemy_aggression
-                    or detection
-                local weapon       = e.weapon or td.weapon
-                -- Patrol only pauses for the brief window around each shot (slow to a
-                -- stop as the reload comes up, fire, then resume), not the whole time
-                -- the player is in range.
-                e.engaging         = ready and d2 <= attack_range * attack_range and e.reload <= STOP_LEAD
-                -- A hangar tank only fires once it has ridden clear of the hut.
-                local can_fire = ready and ((not e.has_turret) or e.turret_alive)
-                    and not (e.hideable and e.hidden)
-                if can_fire and math.abs(diff) < LOCK_DEG and d2 <= attack_range * attack_range then
-                    e.reload = e.reload - dt
-                    if e.reload <= 0 then
-                        -- owner is the firing entity so alternate_side / swing toggles are
-                        -- tracked per turret (e.g. each sgun alternates its own L/R barrel).
-                        -- Spawn forward of the hull center by the turret's muzzle offset.
-                        local sx, sy = e.x, e.y
-                        local muzzle_offset = e.muzzle_offset or td.muzzle_offset or 0
-                        if muzzle_offset ~= 0 then
-                            local muzzle_rad = (e.aim_angle - 90) * math.pi / 180
-                            sx = e.x + math.cos(muzzle_rad) * muzzle_offset
-                            sy = e.y + math.sin(muzzle_rad) * muzzle_offset
-                        end
-                        self:fire(sx, sy, e.aim_angle, weapon, e, 1, attack_range * 1.3)
-                        local w = self.weapons[weapon]
-                        -- Per-stage fire-rate override (e.fire_rate) wins over the weapon's.
-                        e.reload = 1 / ((e.fire_rate or (w and w.fire_rate) or 1) * Config.enemy_fire_rate)
-                    end
-                end
             end
         end
-        if not acquired then e.alert_t = 0 end
+    end
+    for _, e in ipairs(self.world.mines) do
+        if e:is_alive() then fire:mine(e, self:_nearest_player(e.x, e.y), dt) end
     end
 end
 

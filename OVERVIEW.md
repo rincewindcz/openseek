@@ -202,6 +202,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. `Player.draw_tank_variant` is shared with the select screen. |
 | `game/enemy_heli` | Enemy helicopter spawn, flight AI, fire, death (`world.air_units`). |
 | `game/combat` | Weapons, projectiles, firing geometry, hits, AoE, effects, ground enemy AI. |
+| `game/enemy_fire` | Enemy firing rules as the original runs them (owned by `game/combat`, `data/enemy_weapons.json`): a gun's routine (volley, burst, reload per fire level), soldiers, proximity mines, the helicopters' weapon modes, and the homing missiles' bearing refresh with the radar / radio tower penalty. |
 | `game/air_strike` | Air strike (owned by `game/combat`): impact schedule drawn from `world.rng` at the call, detonated on `world.time`, damage in toughness units; EXTRA craft, rocket and bomb visuals. |
 | `game/mission` | Objectives, progress, return to base. `Mission.for_stage(world, players, stage)`. |
 | `game/rescue` | POW rescue from `powhere.bin` buildings. |
@@ -303,20 +304,46 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   `GameplayBase:fire_for`. All spawning goes through `combat:fire`.
 - Weapons flagged `shadow` cast shadows only with soft shadows on.
 
-Ground combatants: any type with `weapon` and `detection_radius > 0`.
+Ground combatants: any type with `armed` and `detection_radius > 0`. Enemy
+fire follows the original (`game/enemy_fire`, `data/enemy_weapons.json`, times
+there in ticks of 1/70 s, three values = EASY / MEDIUM / HARD picked by
+`enemy_fire_level`):
 
-| Kind | Weapon | Detect | Attack | Turn deg/s | Reaction s | Moves |
-|------|--------|-------:|-------:|-----------:|-----------:|-------|
-| soldier | rifle | 280 | 220 | 100 | 0.7 | no |
-| soldier_aggressive | rifle | 320 | 240 | 150 | 0.4 | no |
-| flak_turret | heavy_flak | 320 | 240 | 120 | 0.6 | no |
-| tank | flak | 360 | 260 | 70 | 0.9 | routes, 28 px/s |
+| Kind | Fires | Detect | Attack | Moves |
+|------|-------|-------:|-------:|-------|
+| flak_turret | its class `behaviour` = one of 20 firing routines | 300 | 270 | no |
+| tank | the routine of its folded turret class | 300 | 270 | routes, 28 px/s |
+| soldier, soldier_aggressive | `behaviour` 0 / 3 a bullet, 1 a homing missile | 300 | - | no |
+| mine (soldier class, `behaviour` 2) | proximity charge | - | - | no |
 
-- Targets nearest live player in `detection_radius`, turns at `turn_speed`, waits
-  `reaction_delay` (reset on leaving), fires within `LOCK_DEG` 8 and
-  `attack_range`. Cadence from weapon or a `fire_rate` override.
-- `muzzle_offset` per kind or a `muzzle` override. Per-sprite weapon from a
-  `weapon` override.
+- A unit acts on the nearest live player inside `detection_radius` (the
+  original runs a unit while it is on screen, which the simulation may not
+  read).
+- Guns turn at the routine's `turn` (98.4 deg/s, routines 15 and 17 twice
+  that) and fire only inside `attack_range` once the aim error has stayed
+  under its `arc` (2.8 deg, routine 15: 22.5) for `settle` 30 ticks.
+- A routine is `shots` (weapon, `forward` / `side` muzzle offset in px, a
+  `side` list alternating per volley, `angle` off the barrel, `every` for a
+  side round fired each time the reload passes that many ticks, `reloading`
+  to fire it only between volleys, `volley` within a `cycle`), `reload`
+  (+ `reload_random`), and `burst` volleys closed by a `pause`. Burst guns
+  speed up with the fire level; missile and shell guns do not.
+- Rounds are the `enemy_*` weapons of `data/weapons.json`, one per original
+  projectile type: `enemy_homing` / `enemy_heli_homing` (280 px/s, turn 98.4
+  deg/s toward a bearing refreshed every 9 / 7 / 5 ticks), `enemy_missile`
+  (straight), `enemy_bullet` (140 px/s), `enemy_tracer` / `enemy_tracer_fast`
+  (accelerating), `enemy_shell` (280 slowing to 140, bursts after 64 ticks),
+  `enemy_round` and `enemy_flak` (140 px/s, sprite of the stage's projectile
+  class `proj_class`; flak has a wide `proj_radius` and a random lifetime).
+- `World.homing_jam`: each destroyed radar (class flag 0x10) adds `penalty` 2
+  ticks to the ground missiles' bearing refresh for the rest of the phase,
+  each radio tower (0x20) to the helicopters' missiles.
+- Soldiers snap round (`turn` 787 deg/s), fire when facing the player, reload
+  64 + rand(0..255) ticks.
+- Mines arm when a player comes within `trigger` 100 px, blow after `fuse`
+  and take `damage` 1 / 2 / 4 if a player is still that close.
+- `enemy_fire_rate` and `enemy_aggression` are extra scales on every reload
+  and on both radii, 1.0 in every preset.
 - Structures take their power-up drop and explosion from the exported class
   fields (`drop`, `behaviour`, `explosion_size`), as the original: no drop
   entry never drops, behaviour 1 always drops a medal, the rest drop a random
@@ -326,23 +353,24 @@ Ground combatants: any type with `weapon` and `detection_radius > 0`.
 - `data/overrides.json` fixes single sprites where the data is wrong or
   missing: `assets` (sprite file -> fields, every stage) and `stages` (stage
   -> sprite file -> fields); a stage entry wins field by field. Fields:
-  `weapon`, `fire_rate`, `muzzle`, `explosion`, `drop` (pickup kind, `true`
-  random, `false` none).
-- Two-part units (tank + `*tanktop`, radar + dish) fold at load (`TURRET_DEFS`).
-  Turret absorbs damage and dies first; its hit points are its own class
-  toughness.
-- Patrol tanks ease between waypoints and stop before each shot.
+  `explosion`, `drop` (pickup kind, `true` random, `false` none).
+- Two-part units (tank + `*tanktop` / `tankt2`, radar + dish) fold at load
+  (`TURRET_DEFS`). Turret absorbs damage and dies first; its hit points are
+  its own class toughness.
+- Patrol tanks ease between waypoints and keep driving while they fire.
 - Hangar tanks (stage12): `shut.bin` hut + tank link (`World:_link_hangar_tanks`).
   Tank rides out along `tanktrak`, lingers `ride_linger`, returns. Hidden tank is
   untargetable and drawn under the hut.
 
 Enemy helicopters (`enemy_heli.lua`): spawned at off-screen `badheli` markers,
 one per `SPAWN_DELAY` 2.5 s, capped at marker count. `SPEED` 110, `TURN_RATE`
-120, `ORBIT_R` 270, `ATTACK_R` 360, `FIRE_CONE` 32, hit points from the `badheli` class toughness (`MAX_HP` 20 without one), `BLAST_RADIUS`
+120, `ORBIT_R` 270, hit points from the `badheli` class toughness (`MAX_HP` 20 without one), `BLAST_RADIUS`
 70, `BLAST_DAMAGE` 2 / 3 / 4 by damage level, `REACTION_DELAY` 0.9, `FRONT_LIMIT` 90, `FIRE_FRONT` 115.
-Weapon from `WEAPON_POOL` (chaingun burst 3, homing_missile, air_to_air level 2,
-machine_gun burst 4). Approaches beyond `ORBIT_R * 1.25`, otherwise orbits within
-`FRONT_LIMIT` of the player's facing. Full burst then 1.8-3.2 s cooldown.
+Weapon from the marker's class `behaviour` (`helicopter.modes` in
+`data/enemy_weapons.json`): 0 and 1 a homing missile every 30 + rand(0..63)
+ticks, 2 a bullet every 31; 1 also turns twice as fast. Fires inside `range`
+300 with the nose within `fire_cone` 11.25 deg. Approaches beyond
+`ORBIT_R * 1.25`, otherwise orbits within `FRONT_LIMIT` of the player's facing.
 
 ## 8. Missions
 
@@ -521,7 +549,7 @@ Options:
 | `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs and can destroy the player's base buildings (no score, stats or drops). |
 | `score_count_up` | GAMEPLAY | HUD score rolls to new total (frame time, presentation). |
 | `shop_fx` | GAMEPLAY | Animated shop medal purse, unaffordable levels greyed with a red COST, sliding focus frame, hover frame, dimmed LOADED under a higher selection (presentation). |
-| `difficulty`, `enemy_damage_level`, `enemy_damage`, `enemy_fire_rate`, `enemy_aggression`, `land_for_medals`, `land_for_supplies` | DIFFICULTY | The original's EASY / MEDIUM / HARD (`game/difficulty`, `data/difficulty.json`), each value also editable (preset then reads CUSTOM); a named preset is re-applied at startup. `enemy_damage_level` (ENEMY DAMAGE) picks the original's per-weapon enemy damage (`enemy_damage` tables in `data/weapons.json`, `Difficulty.damage_level`). Multipliers on that damage (DAMAGE SCALE, 1.0 in every preset), enemy fire rate, and aggression (detection and attack range up, reaction delay down); HARD is 1.0 on all, the engine's own tuning. MEDIUM needs a landing to collect medals, HARD also fuel and armor. Replay parameters; replays from before them apply HARD with no landing rules (`Replay.LEGACY_PARAMS`). |
+| `difficulty`, `enemy_damage_level`, `enemy_damage`, `enemy_fire_level`, `enemy_fire_rate`, `enemy_aggression`, `land_for_medals`, `land_for_supplies` | DIFFICULTY | The original's EASY / MEDIUM / HARD (`game/difficulty`, `data/difficulty.json`), each value also editable (preset then reads CUSTOM); a named preset is re-applied at startup. `enemy_damage_level` (ENEMY DAMAGE) picks the original's per-weapon enemy damage (`enemy_damage` tables in `data/weapons.json`, `Difficulty.damage_level`), `enemy_fire_level` (ENEMY FIRE) its enemy reloads, burst pauses and missile tracking (`data/enemy_weapons.json`, `Difficulty.fire_level`). Extra multipliers, 1.0 in every preset: that damage (DAMAGE SCALE), the enemy fire rate (FIRE SCALE), and aggression (detection and attack range). MEDIUM needs a landing to collect medals, HARD also fuel and armor. Replay parameters; replays from before them apply HARD with no landing rules (`Replay.LEGACY_PARAMS`). |
 | `chopper_skin`, `tank_skin` | GAMEPLAY | Solo chopper and tank variants (section 9a); also set by the vehicle select screen and the overview `V` cycle. Recorded in the replay header. |
 | `coop_lives` | GAMEPLAY | Co-op campaign lives: `separate` or `shared` pool (section 9). |
 | `master_volume`, `sfx_volume`, `engine_volume`, `voice_volume`, `ui_volume`, `music_volume` | AUDIO | Master and bus volumes. |
@@ -543,8 +571,9 @@ galleries, debug mission picker, headless checks.
 | File | Contents |
 |------|----------|
 | `data/weapons.json` | Player and enemy weapons: `proj_sprite` (a list picks the first clip the pack has), `enemy_damage` (EASY / MEDIUM / HARD damage to the player when an enemy fires it), levels (`damage` in toughness units, `fire_rate`, `swing_deg`, flame `angles` / `offsets`), `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit); `air_strike`: target distance, radius, delay, incoming call, marker blink, per level pattern (`strike`, impacts or craft / rounds / lanes, window, impact radius and toughness damage, explosion) and craft visuals. |
-| `data/entity_types.json` | Per kind: hit radius, explosion, weapon, detection / attack / turn, `solid`, `collision_radius`, `muzzle_offset`, sprite fallbacks, `dead_frame_offset`, `turret_explosion`, `ride_linger`. |
-| `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `weapon`, `fire_rate`, `muzzle`, `explosion`, `drop`. |
+| `data/entity_types.json` | Per kind: hit radius, explosion, `armed`, detection / attack radius, `solid`, `collision_radius`, sprite fallbacks, `dead_frame_offset`, `turret_explosion`, `ride_linger`. |
+| `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `explosion`, `drop`. Empty at present. |
+| `data/enemy_weapons.json` | Enemy fire in the original's units (`tick_rate` 70): `turret` (settle, turn, arc), `homing` (bearing refresh per level, radar penalty), the 20 `routines`, `soldier`, `mine`, `helicopter`. |
 | `data/missions.json` | Section 9. |
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable); `armor_base` is the original's per-vehicle armor factor (chopper 20, tank 40). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |

@@ -33,9 +33,9 @@ local C = {
 
 -- Step size for numeric type_data fields; anything not listed steps by 1.
 local TYPE_STEP = {
-    speed=5, turn_speed=5, attack_range=10, detection_radius=10, hit_radius=1,
+    speed=5, attack_range=10, detection_radius=10, hit_radius=1,
     patrol_speed=5, patrol_turn=5, collision_radius=1, sprite_rot=15,
-    ride_linger=0.1, reaction_delay=0.1,
+    ride_linger=0.1,
 }
 
 -- lower number = picked first (before ground decals / scenery)
@@ -240,16 +240,14 @@ end
 -- wired in from main.lua).
 function Debug:_can_fire()
     local e = self.selected
-    if not self.combat or not e then return false end
-    local td = e.type_data or {}
-    return (e.weapon or td.weapon) ~= nil
+    return self.combat ~= nil and e ~= nil and e:is_combatant()
 end
 
 function Debug:_fire_selected()
     if not self:_can_fire() then return end
-    if self.combat:fire_entity(self.selected) then
-        local td = self.selected.type_data or {}
-        self:_set_status("fired: " .. tostring(self.selected.weapon or td.weapon))
+    local e = self.selected
+    if self.combat:fire_entity(e) then
+        self:_set_status(e.fire_routine and ("fired: routine " .. e.fire_routine) or "fired")
     end
 end
 

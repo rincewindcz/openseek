@@ -38,7 +38,6 @@ function Entity:init(id, stage_ent, stage_cls)
     self.route_pt     = 1
     self.route_points = nil   -- resolved from the stage at load (patrol waypoints)
     self.patrol_v     = 0     -- current patrol speed (eased for accel/decel)
-    self.engaging     = false -- set by the AI: in firing range, so slow to a stop
     self.type_data    = Entity.type_for(stage_cls.kind_name)
     self.anim         = nil
 
@@ -50,11 +49,12 @@ function Entity:init(id, stage_ent, stage_cls)
     self.turret_fx    = nil   -- one-shot explosion played when the turret blows
 
     -- Enemy AI: turret/facing heading toward the player and a reload timer.
-    -- self.weapon may override type_data.weapon for specific sprites (set at load).
+    -- fire_routine (a gun's firing routine) or fire_mode (a soldier's weapon) is
+    -- the stage class behaviour, set at load; EnemyFire plays it.
     self.aim_angle    = 0
     self.reload       = 0
-    self.alert_t      = 0     -- time the player has been in detection (reaction delay)
-    self.weapon       = nil
+    self.fire_routine = nil
+    self.fire_mode    = nil
 
     -- Damage visual effects
     self._damage_smokes = {}   -- {anim, ox, oy}: persistent looping smoke per HP tier
@@ -74,7 +74,7 @@ end
 -- An armed enemy that engages the player: it has a weapon and a detection radius.
 function Entity:is_combatant()
     local td = self.type_data
-    return td ~= nil and td.weapon ~= nil and (td.detection_radius or 0) > 0
+    return td ~= nil and td.armed == true and (td.detection_radius or 0) > 0
 end
 
 -- Returns what this hit destroyed ("turret" or "hull"), else nil. Scoring counts
@@ -171,6 +171,10 @@ function Entity:_start_death(dx, dy)
         self.world:explosion_light(self.x, self.y, explosion)
         self.world:sound("explosion." .. explosion, self.x, self.y)
         self.world:wreck(self.x, self.y, explosion)
+        -- A lost radar or radio tower loosens the enemy missiles' tracking.
+        if self.homing_jam then
+            self.world.homing_jam[self.homing_jam] = self.world.homing_jam[self.homing_jam] + 1
+        end
     end
     -- Unit corpses (soldiers) get nudged in the direction of the killing shot.
     if dx and dy and self.type_data and self.type_data.sprite then
@@ -292,8 +296,9 @@ function Entity:_patrol(dt)
     local base = td and td.patrol_speed or 0
     if not pts or #pts < 2 or base <= 0 then return end
 
-    -- Ease speed toward the target (0 while engaging the player, else cruising).
-    local target = self.engaging and 0 or base
+    -- Ease speed toward cruising: as in the original, a hull keeps driving while
+    -- its turret fires.
+    local target = base
     local accel  = base * 1.5
     if self.patrol_v < target then
         self.patrol_v = math.min(target, self.patrol_v + accel * dt)

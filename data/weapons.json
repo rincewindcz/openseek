@@ -509,68 +509,51 @@
       }
     ]
   },
-  "flak": {
-    "vehicle": "enemy",
-    "proj_type": "tracer",
-    "proj_sprite": "trace",
-    "proj_sprite_rot": 0,
-    "speed": 22,
-    "proj_accel": 140,
-    "proj_radius": 3,
-    "lifetime": 3.5,
-    "aoe": 0,
-    "explosion": "explosion_flak",
-    "enemy_damage": [
-      1,
-      2,
-      3
-    ],
-    "fire_rate": 3,
-    "spread_deg": 0,
-    "count": 1
-  },
-  "heavy_flak": {
+  "enemy_homing": {
     "vehicle": "enemy",
     "proj_type": "sprite",
     "proj_sprite": "missle",
     "proj_sprite_rot": 0,
     "trail": "smoke",
     "shadow": true,
-    "trail_interval": 7,
-    "speed": 150,
+    "trail_interval": 8,
+    "speed": 280,
     "homing": true,
-    "turn_rate": 70,
-    "proj_radius": 6,
-    "lifetime": 6.0,
+    "homing_refresh": "ground",
+    "turn_rate": 98.4,
+    "proj_radius": 3,
+    "lifetime": 2.143,
+    "range": 640,
     "aoe": 0,
     "explosion": "explosion_medium",
     "enemy_damage": [
       1,
       2,
       4
-    ],
-    "fire_rate": 0.9,
-    "spread_deg": 0
+    ]
   },
-  "sgun": {
+  "enemy_heli_homing": {
     "vehicle": "enemy",
     "proj_type": "sprite",
-    "proj_sprite": "bullet",
-    "speed": 240,
-    "proj_accel": 120,
-    "proj_radius": 4,
-    "lifetime": 2.5,
+    "proj_sprite": "missle",
+    "proj_sprite_rot": 0,
+    "trail": "smoke",
+    "shadow": true,
+    "trail_interval": 8,
+    "speed": 280,
+    "homing": true,
+    "homing_refresh": "air",
+    "turn_rate": 98.4,
+    "proj_radius": 3,
+    "lifetime": 2.143,
+    "range": 640,
     "aoe": 0,
-    "explosion": "explosion_flak",
+    "explosion": "explosion_medium",
     "enemy_damage": [
+      1,
       2,
-      2,
-      2
-    ],
-    "fire_rate": 1.4,
-    "spread_deg": 0,
-    "alternate_side": true,
-    "side_offset": 5
+      4
+    ]
   },
   "enemy_missile": {
     "vehicle": "enemy",
@@ -579,78 +562,20 @@
     "proj_sprite_rot": 0,
     "trail": "missile_smoke",
     "shadow": true,
-    "trail_interval": 16,
-    "speed": 200,
-    "proj_radius": 6,
-    "lifetime": 3.0,
+    "trail_interval": 8,
+    "speed": 280,
+    "proj_radius": 3,
+    "lifetime": 2.143,
+    "range": 640,
     "aoe": 0,
     "explosion": "explosion_medium",
     "enemy_damage": [
       1,
       2,
       4
-    ],
-    "fire_rate": 0.8,
-    "spread_deg": 0
+    ]
   },
-  "homing_missile": {
-    "vehicle": "enemy",
-    "proj_type": "sprite",
-    "proj_sprite": "missle",
-    "proj_sprite_rot": 0,
-    "trail": "smoke",
-    "shadow": true,
-    "trail_interval": 7,
-    "speed": 150,
-    "homing": true,
-    "turn_rate": 70,
-    "proj_radius": 6,
-    "lifetime": 6.0,
-    "aoe": 0,
-    "explosion": "explosion_medium",
-    "enemy_damage": [
-      1,
-      2,
-      4
-    ],
-    "fire_rate": 0.6,
-    "spread_deg": 0
-  },
-  "machine_gun": {
-    "vehicle": "enemy",
-    "proj_type": "tracer",
-    "proj_sprite": "trace",
-    "speed": 460,
-    "proj_radius": 2,
-    "lifetime": 1.6,
-    "aoe": 0,
-    "explosion": "explosion_none",
-    "enemy_damage": [
-      1,
-      2,
-      3
-    ],
-    "fire_rate": 8,
-    "spread_deg": 4
-  },
-  "tank_cannon": {
-    "vehicle": "enemy",
-    "proj_type": "sprite",
-    "proj_sprite": "shell",
-    "proj_sprite_rot": 0,
-    "speed": 250,
-    "proj_radius": 5,
-    "lifetime": 2.5,
-    "aoe": 40,
-    "explosion": "explosion_large",
-    "enemy_damage": [
-      2,
-      3,
-      4
-    ],
-    "fire_rate": 0.25
-  },
-  "rifle": {
+  "enemy_bullet": {
     "vehicle": "enemy",
     "proj_type": "bullet",
     "proj_color": [
@@ -659,17 +584,106 @@
       0.3
     ],
     "proj_size": 2,
-    "speed": 300,
-    "proj_radius": 2,
-    "lifetime": 1.5,
+    "speed": 140,
+    "proj_radius": 3,
+    "lifetime": 2.143,
+    "range": 640,
     "aoe": 0,
     "explosion": "explosion_none",
     "enemy_damage": [
       1,
       1,
       1
-    ],
-    "fire_rate": 0.9,
-    "spread_deg": 5
+    ]
+  },
+  "enemy_tracer": {
+    "vehicle": "enemy",
+    "proj_type": "tracer",
+    "proj_sprite": "trace",
+    "proj_sprite_rot": 0,
+    "speed": 17.5,
+    "proj_accel": 153,
+    "proj_radius": 3,
+    "lifetime": 2.143,
+    "range": 640,
+    "aoe": 0,
+    "explosion": "explosion_flak",
+    "enemy_damage": [
+      1,
+      2,
+      3
+    ]
+  },
+  "enemy_tracer_fast": {
+    "vehicle": "enemy",
+    "proj_type": "tracer",
+    "proj_sprite": "trace",
+    "proj_sprite_rot": 0,
+    "speed": 35,
+    "proj_accel": 153,
+    "proj_radius": 3,
+    "lifetime": 2.143,
+    "range": 640,
+    "aoe": 0,
+    "explosion": "explosion_flak",
+    "enemy_damage": [
+      1,
+      2,
+      3
+    ]
+  },
+  "enemy_shell": {
+    "vehicle": "enemy",
+    "proj_type": "sprite",
+    "proj_sprite": "shell",
+    "proj_sprite_rot": 0,
+    "speed": 280,
+    "proj_accel": -153,
+    "min_speed": 140,
+    "proj_radius": 3,
+    "lifetime": 0.914,
+    "range": 640,
+    "aoe": 0,
+    "explosion": "explosion_medium",
+    "enemy_damage": [
+      2,
+      3,
+      4
+    ]
+  },
+  "enemy_round": {
+    "vehicle": "enemy",
+    "proj_type": "sprite",
+    "proj_sprite": "bullet",
+    "proj_class": 97,
+    "speed": 140,
+    "proj_radius": 3,
+    "lifetime": 3.657,
+    "range": 640,
+    "aoe": 0,
+    "explosion": "explosion_flak",
+    "enemy_damage": [
+      2,
+      3,
+      4
+    ]
+  },
+  "enemy_flak": {
+    "vehicle": "enemy",
+    "proj_type": "sprite",
+    "proj_sprite": "bullet",
+    "proj_class": 110,
+    "speed": 140,
+    "proj_radius": 21,
+    "lifetime": 0.914,
+    "lifetime_random": 0.443,
+    "range": 640,
+    "aoe": 0,
+    "explosion": "explosion_flak",
+    "enemy_damage": [
+      2,
+      2,
+      2
+    ]
   }
 }

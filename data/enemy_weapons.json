@@ -1,0 +1,103 @@
+{
+  "tick_rate": 70,
+
+  "turret": {
+    "settle": 30,
+    "turn":   98.4,
+    "arc":    2.8
+  },
+
+  "homing": {
+    "refresh": { "ground": [9, 7, 5], "air": [9, 7, 5] },
+    "penalty": 2
+  },
+
+  "routines": {
+    "0":  { "reload": [60, 60, 60], "reload_random": 255,
+            "shots": [ { "weapon": "enemy_homing" } ] },
+    "1":  { "burst": 5, "reload": [13, 11, 7], "pause": [150, 75, 37],
+            "shots": [ { "weapon": "enemy_tracer", "forward": 32, "side": [4, -2] } ] },
+    "2":  { "burst": 5, "reload": [18, 16, 12], "pause": [200, 100, 50],
+            "shots": [ { "weapon": "enemy_tracer", "forward": 16, "side": [4, -2] } ] },
+    "3":  { "burst": 5, "reload": [72, 64, 48], "pause": [100, 50, 25],
+            "shots": [ { "weapon": "enemy_tracer_fast", "forward": 16 },
+                       { "weapon": "enemy_tracer_fast", "forward": 16, "side": 4,  "angle": 2.8 },
+                       { "weapon": "enemy_tracer_fast", "forward": 16, "side": -4, "angle": -2.8 } ] },
+    "4":  { "burst": 5, "reload": [72, 64, 48], "pause": [100, 50, 25],
+            "shots": [ { "weapon": "enemy_tracer_fast", "forward": 20 },
+                       { "weapon": "enemy_tracer_fast", "forward": 20, "side": 4,  "angle": 2.8 },
+                       { "weapon": "enemy_tracer_fast", "forward": 20, "side": -4, "angle": -2.8 } ] },
+    "5":  { "reload": [60, 60, 60], "reload_random": 255,
+            "shots": [ { "weapon": "enemy_homing", "side": 4 },
+                       { "weapon": "enemy_homing", "side": -4 } ] },
+    "6":  { "reload": [64, 64, 64], "reload_random": 127,
+            "shots": [ { "weapon": "enemy_shell", "forward": 28 } ] },
+    "7":  { "burst": 5, "reload": [16, 12, 4], "pause": [120, 60, 30],
+            "shots": [ { "weapon": "enemy_round", "forward": 4 },
+                       { "weapon": "enemy_round", "forward": 4, "angle": 90 },
+                       { "weapon": "enemy_round", "forward": 4, "angle": 180 },
+                       { "weapon": "enemy_round", "forward": 4, "angle": 270 } ] },
+    "8":  { "burst": 5, "reload": [36, 32, 24], "pause": [200, 100, 50],
+            "shots": [ { "weapon": "enemy_round", "forward": 4 },
+                       { "weapon": "enemy_bullet", "side": 4 },
+                       { "weapon": "enemy_bullet", "side": -4 } ] },
+    "9":  { "burst": 3, "reload": [43, 41, 37], "pause": [250, 125, 62],
+            "shots": [ { "weapon": "enemy_flak", "forward": 16, "side": -4, "angle": -5.6 },
+                       { "weapon": "enemy_flak", "forward": 16, "side": 2,  "angle": 5.6 },
+                       { "weapon": "enemy_bullet", "side": -4, "every": 32 } ] },
+    "10": { "burst": 3, "reload": [23, 21, 17], "pause": [150, 75, 37],
+            "shots": [ { "weapon": "enemy_flak", "forward": 32, "side": [-4, 0] } ] },
+    "11": { "burst": 3, "reload": [43, 41, 37], "pause": [250, 125, 62],
+            "shots": [ { "weapon": "enemy_flak", "forward": 24, "side": -4, "angle": -5.6 },
+                       { "weapon": "enemy_flak", "forward": 24, "side": 2,  "angle": 5.6 } ] },
+    "12": { "burst": 3, "reload": [20, 18, 14], "pause": [125, 62, 31],
+            "shots": [ { "weapon": "enemy_flak", "forward": 16, "side": -4, "angle": -5.6 },
+                       { "weapon": "enemy_flak", "forward": 16, "side": 2,  "angle": 5.6 } ] },
+    "13": { "reload": [64, 64, 64], "reload_random": 127, "cycle": 2,
+            "shots": [ { "weapon": "enemy_shell", "forward": 28, "volley": 1 },
+                       { "weapon": "enemy_shell", "forward": 28, "side": -4, "volley": 2 },
+                       { "weapon": "enemy_shell", "forward": 28, "side": 4,  "volley": 2 } ] },
+    "14": { "reload": [20, 20, 20], "reload_random": 255,
+            "shots": [ { "weapon": "enemy_homing" } ] },
+    "15": { "burst": 3, "reload": [18, 16, 12], "pause": [75, 37, 18], "turn": 196.9, "arc": 22.5,
+            "shots": [ { "weapon": "enemy_flak", "forward": 16, "side": [-4, 0] } ] },
+    "16": { "reload": [10, 10, 10], "reload_random": 255,
+            "shots": [ { "weapon": "enemy_homing", "side": 4 },
+                       { "weapon": "enemy_homing", "side": -4 } ] },
+    "17": { "burst": 10, "reload": [32, 16, 8], "pause": [30, 30, 30], "turn": 196.9,
+            "shots": [ { "weapon": "enemy_bullet" },
+                       { "weapon": "enemy_bullet", "side": 4 },
+                       { "weapon": "enemy_bullet", "side": -4 } ] },
+    "18": { "reload": [80, 70, 65], "reload_random": 255,
+            "shots": [ { "weapon": "enemy_homing", "side": 4 },
+                       { "weapon": "enemy_homing", "side": -4 },
+                       { "weapon": "enemy_missile" } ] },
+    "19": { "burst": 4, "reload": [18, 16, 12], "pause": [200, 100, 50],
+            "shots": [ { "weapon": "enemy_round", "forward": 4, "side": [4, -2] },
+                       { "weapon": "enemy_bullet", "side": 4,  "every": 32, "reloading": true },
+                       { "weapon": "enemy_bullet", "side": -4, "every": 32, "reloading": true } ] }
+  },
+
+  "soldier": {
+    "turn":          787,
+    "reload":        64,
+    "reload_random": 255,
+    "weapons":       { "0": "enemy_bullet", "1": "enemy_homing", "3": "enemy_bullet" }
+  },
+
+  "mine": {
+    "trigger": 100,
+    "fuse":    0.5,
+    "damage":  [1, 2, 4]
+  },
+
+  "helicopter": {
+    "range":     300,
+    "fire_cone": 11.25,
+    "modes": {
+      "0": { "weapon": "enemy_heli_homing", "reload": 30, "reload_random": 63 },
+      "1": { "weapon": "enemy_heli_homing", "reload": 30, "reload_random": 63, "turn_scale": 2 },
+      "2": { "weapon": "enemy_bullet",      "reload": 31 }
+    }
+  }
+}

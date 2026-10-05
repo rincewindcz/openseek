@@ -128,7 +128,9 @@ local CATEGORIES = {
         { key = "enemy_damage_level", label = "ENEMY DAMAGE", kind = "choice", on_change = match_difficulty, choices = {
             { label = "EASY", value = "easy" }, { label = "MEDIUM", value = "medium" }, { label = "HARD", value = "hard" } } },
         { key = "enemy_damage",       label = "DAMAGE SCALE", kind = "range",  min = 0.2, max = 1.5, step = 0.05, on_change = match_difficulty },
-        { key = "enemy_fire_rate",    label = "ENEMY FIRE",   kind = "range",  min = 0.3, max = 1.5, step = 0.05, on_change = match_difficulty },
+        { key = "enemy_fire_level",   label = "ENEMY FIRE",   kind = "choice", on_change = match_difficulty, choices = {
+            { label = "EASY", value = "easy" }, { label = "MEDIUM", value = "medium" }, { label = "HARD", value = "hard" } } },
+        { key = "enemy_fire_rate",    label = "FIRE SCALE",   kind = "range",  min = 0.3, max = 1.5, step = 0.05, on_change = match_difficulty },
         { key = "enemy_aggression",   label = "AGGRESSION",   kind = "range",  min = 0.5, max = 1.5, step = 0.05, on_change = match_difficulty },
         { key = "land_for_medals",    label = "LAND: MEDALS", kind = "toggle", on_change = match_difficulty },
         { key = "land_for_supplies",  label = "LAND: SUPPLY", kind = "toggle", on_change = match_difficulty },
