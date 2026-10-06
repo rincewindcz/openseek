@@ -19,7 +19,8 @@
   "ammo_frames": {
     "air_to_ground": 0,
     "air_to_air":    1,
-    "napalm":        { "chopper": 2, "tank": 11 },
+    "napalm":        2,
+    "flame_thrower": 11,
     "rockets":       3,
     "shells":        10,
     "bomb":          12,

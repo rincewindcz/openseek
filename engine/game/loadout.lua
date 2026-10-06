@@ -26,6 +26,12 @@ local function read_json(path)
     return raw and json.decode(raw) or {}
 end
 
+-- The tank's flame thrower was filed under the chopper's napalm until it
+-- became a weapon of its own: the name a pack exported before that uses in
+-- weapon_info.json, and the name older saves hold per vehicle.
+local LEGACY_INFO = { flame_thrower = "napalm" }
+local RENAMED     = { tank = { napalm = "flame_thrower" } }
+
 local weapon_info, trade_in
 local function catalogue()
     if not weapon_info then
@@ -118,7 +124,8 @@ end
 -- Shop entry of a weapon level: { cost, lines } (the list price and the
 -- description), or nil when the vehicle's shop does not sell it.
 function Loadout.info(vehicle, weapon, level)
-    local levels = (catalogue()[vehicle] or {})[weapon]
+    local sold   = catalogue()[vehicle] or {}
+    local levels = sold[weapon] or sold[LEGACY_INFO[weapon]]
     return levels and levels[level]
 end
 
@@ -190,11 +197,13 @@ function Loadout.restore(data)
     for name, saved in pairs(data.vehicles or {}) do
         local v = loadout.vehicles[name]
         if v and type(saved) == "table" then
+            local renamed = RENAMED[name] or {}
             for weapon, level in pairs(saved.owned or {}) do
-                v.owned[weapon] = tonumber(level) or 0
+                v.owned[renamed[weapon] or weapon] = tonumber(level) or 0
             end
             for i = 1, #v.bays do
                 local weapon = (saved.bays or {})[i]
+                weapon = renamed[weapon] or weapon
                 if weapon and (v.owned[weapon] or 0) >= 1 then v.bays[i] = weapon end
             end
             if saved.special then v.special = saved.special end

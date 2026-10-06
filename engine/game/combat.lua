@@ -41,6 +41,9 @@ function Projectile:init(p)
     self._trail_dist    = 0
     self.alive      = true
     self.scale      = 1
+    -- A clip played once over the flight instead of on the clock (the flame
+    -- thrower's puff, which blooms and thins out by its range).
+    self.flight_anim = p.flight_anim or false
     -- Resolved draw sprite (the per-mission tracer streak overrides weapon_def.proj_sprite;
     -- false when none of a fallback list is in the game data).
     if p.sprite ~= nil then
@@ -107,19 +110,30 @@ function Projectile:update(dt)
     if self.lifetime <= 0 then self.alive = false end
 end
 
+-- Frame (1-based) of the sprite clip to draw: the animation's, or for a
+-- flight_anim round the share of its range it has covered.
+function Projectile:_frame(clip)
+    if self.anim then return self.anim.frame end
+    if self.flight_anim and self.max_range then
+        local n = #clip.frames
+        return math.min(n, math.floor(self.traveled / self.max_range * n) + 1)
+    end
+    return 1
+end
+
 function Projectile:get_image()
     if not self.sprite then return nil end
     if self.anim then return self.anim:current_image() end
     local clip = Animation.clip(self.sprite)
     if not clip or #clip.frames == 0 then return nil end
-    return clip.frames[1]
+    return clip.frames[self:_frame(clip)]
 end
 
 -- Draw origin that centers the sprite's visible art on the projectile position.
 function Projectile:get_anchor()
     if not self.sprite then return 0, 0 end
-    local frame = self.anim and self.anim.frame or 1
-    return Animation.frame_anchor(self.sprite, frame)
+    local clip = Animation.clip(self.sprite)
+    return Animation.frame_anchor(self.sprite, clip and self:_frame(clip) or 1)
 end
 
 -- CombatSystem
@@ -273,12 +287,13 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
 
     -- Range cap: player shots carry the weapon's range so they cannot cross the
     -- map; enemies pass their attack range so their shots reach.
-    local max_range = range_override or self:player_range(weapon_def)
+    local max_range = range_override or level.range or self:player_range(weapon_def)
 
-    -- Multi-frame projectile sprites animate (the tracer streak that grows).
+    -- Multi-frame projectile sprites animate (the tracer streak that grows),
+    -- unless the clip is paced by the flight instead (flight_anim).
     local sprite    = self:_resolve_sprite(weapon_def)
     local clip      = sprite and Animation.clip(sprite)
-    local animate   = clip and #clip.frames > 1 or false
+    local animate   = clip and #clip.frames > 1 and not weapon_def.flight_anim or false
 
     -- Enemy rounds deal the original's damage for the difficulty level.
     local damage = level.damage or weapon_def.damage or 10
@@ -375,6 +390,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             animate    = animate,
             trail          = weapon_def.trail,
             trail_interval = weapon_def.trail_interval,
+            flight_anim    = weapon_def.flight_anim,
             -- Rotation for drawing: angle_deg in our CW-from-north system maps to Love2D radians
             angle_rad  = angle_deg * math.pi / 180 + angle_off,
         })
@@ -854,7 +870,8 @@ function CombatSystem:_check_hit(projectile)
                     local killed = e:take_damage(projectile.damage, projectile.vx, projectile.vy)
                     -- A round that carries no burst of its own still cracks off
                     -- the target it did not kill; a kill has its own explosion.
-                    if e:is_alive() and (projectile.weapon_def.explosion or "explosion_none") == "explosion_none" then
+                    if e:is_alive() and (projectile.weapon_def.explosion or "explosion_none") == "explosion_none"
+                        and projectile.weapon_def.ricochet ~= false then
                         self.world:sound("impact.ricochet", projectile.x, projectile.y)
                     end
                     if projectile.aoe > 0 then self:_apply_aoe(projectile) end

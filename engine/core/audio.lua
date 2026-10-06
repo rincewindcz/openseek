@@ -13,8 +13,8 @@ local Config = require "engine.core.config"
 --   The playback mixer: named events from data/audio.json, each mapping to a
 --   clip (or a list of clips, one picked at random per play) plus its gain,
 --   bus, priority and retrigger cooldown. An event may have per-vehicle
---   variants named "<event>.<vehicle>" (the tank's flame thrower answers
---   weapon.napalm as weapon.napalm.tank). Events play
+--   variants named "<event>.<vehicle>" (the tank answers voice.phase_start
+--   as voice.phase_start.tank). Events play
 --   through a per-clip voice pool, so overlapping shots layer instead of cutting
 --   each other off, and are mixed through named buses the OPTIONS page scales.
 --   Spatialization (which listener, how loud, which side) is decided one layer

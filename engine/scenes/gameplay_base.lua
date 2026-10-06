@@ -92,9 +92,12 @@ function GameplayBase:fire_for(p)
     combat:tick_swing("player", p.weapon_name)
     -- The tank's shells fire from its three barrels in turn (weapons flagged
     -- `barrel`), so both the round and its muzzle flash originate at the live
-    -- barrel tip, not the turret center. The machine gun stays centered.
+    -- barrel tip, not the turret center. A `barrel` number names one barrel
+    -- (the flame thrower's nozzle). The machine gun stays centered.
     local fx, fy = p.x, p.y
-    if p.vehicle == "tank" and weapon_def.barrel then fx, fy = p:tank_muzzle() end
+    if p.vehicle == "tank" and weapon_def.barrel then
+        fx, fy = p:tank_muzzle(tonumber(weapon_def.barrel))
+    end
     if combat:fire(fx, fy, p:fire_angle(), p.weapon_name, "player", p.weapon_level, nil, p) == false then
         return
     end

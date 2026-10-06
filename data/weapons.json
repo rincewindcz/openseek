@@ -396,6 +396,46 @@
       }
     ]
   },
+  "flame_thrower": {
+    "vehicle": "tank",
+    "short": "FLM",
+    "icon": 6,
+    "proj_type": "sprite",
+    "proj_sprite": "fire",
+    "flight_anim": true,
+    "speed": 140,
+    "proj_radius": 6,
+    "lifetime": 2.0,
+    "aoe": 0,
+    "explosion": "explosion_none",
+    "hit_effect": "fire",
+    "ricochet": false,
+    "barrel": 2,
+    "ammo_max": 300,
+    "ammo_pickup": 75,
+    "levels": [
+      {
+        "damage": 1,
+        "fire_rate": 11.67,
+        "count": 1,
+        "range": 40
+      },
+      {
+        "damage": 1,
+        "fire_rate": 11.67,
+        "count": 1,
+        "range": 120
+      },
+      {
+        "damage": 1,
+        "fire_rate": 11.67,
+        "spread_deg": 2.8,
+        "count": 2,
+        "side_offset": 8,
+        "range": 120
+      }
+    ]
+  },
   "power_shell": {
     "vehicle": "tank",
     "short": "PSH",

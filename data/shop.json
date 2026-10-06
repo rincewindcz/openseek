@@ -24,10 +24,10 @@
       { "weapon": "air_strike",    "column": "right", "row": 3, "darkened": [47, 50, 53] }
     ],
     "tank": [
-      { "weapon": "chaingun",   "column": "left",  "row": 1, "darkened": [2, 5, 8] },
-      { "weapon": "napalm",     "column": "left",  "row": 2, "darkened": [11, 14, 17] },
-      { "weapon": "shells",     "column": "right", "row": 1, "darkened": [29, 32, 35] },
-      { "weapon": "air_strike", "column": "right", "row": 2, "darkened": [38, 41, 44] }
+      { "weapon": "chaingun",      "column": "left",  "row": 1, "darkened": [2, 5, 8] },
+      { "weapon": "flame_thrower", "column": "left",  "row": 2, "darkened": [11, 14, 17] },
+      { "weapon": "shells",        "column": "right", "row": 1, "darkened": [29, 32, 35] },
+      { "weapon": "air_strike",    "column": "right", "row": 2, "darkened": [38, 41, 44] }
     ]
   },
   "loaded_offset": [3, 14],

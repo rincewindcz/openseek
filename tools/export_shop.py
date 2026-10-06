@@ -69,7 +69,7 @@ WEAPON_INFO = {
         "AIM": "air_to_air", "NAP": "napalm", "STR": "air_strike",
     }),
     "tank": ("WINFT.BIN", {
-        "CHAIN_GUN": "chaingun", "FLAME_THROWER": "napalm", "SHELLS": "shells",
+        "CHAIN_GUN": "chaingun", "FLAME_THROWER": "flame_thrower", "SHELLS": "shells",
         "STR": "air_strike",
     }),
 }

@@ -320,7 +320,16 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   takes its own class toughness, enemy helicopters the `badheli` class's. A
   toughness of 0 dies to any hit. Player weapon damage, ammo, cadence and level
   patterns are the original's (`research/WEAPONS.md`, cadence converted at 70
-  ticks per second); speeds and ranges are openSEEK's.
+  ticks per second); speeds and ranges are openSEEK's, except the tank's
+  flame thrower, whose stream only closes at the original's 140 px/s and
+  40 / 120 / 120 px reach per level.
+- Tank weapons in every mode are the original's: chain gun, shells, flame
+  thrower and air strike in the bays, power shell, ground-to-air and mine as
+  specials (`Vehicles.BAY_WEAPONS` / `SPECIAL_WEAPONS`; free play carries all
+  of them, `Vehicles.WEAPONS`). The flame thrower (`flame_thrower`) spends one
+  of its 300 units per flame, each a `fire` puff that blooms and thins out
+  over its flight and deals 1 toughness to the first ground or air target it
+  touches; level 3 fires two, from either side of the nozzle.
 - Player armor is the original's scale: max armor `floor((slider + 5) *
   armor_base / 15)`, the slider being the equip armor 0..1 as 0..29 (chopper
   6..45, tank 13..90, 25 / 50 at the default). An armor pickup restores half
@@ -337,9 +346,12 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   player; `fire` returns false on a refused call so `fire_for` spends no ammo).
 - Weapon flags: `pierce` (power shell) flies on through every target it kills;
   `lock_arc` widens the lock cone (ground-to-air 180, all around); `barrel`
-  fires from the tank's live barrel tip; `target_kind` limits hits to `ground`
+  fires from the tank's live barrel tip (a number names one barrel, the flame
+  thrower's nozzle); `flight_anim` plays the sprite clip once over the level's
+  `range` instead of on the clock; `ricochet` false drops the ricochet off a
+  target that survives; `target_kind` limits hits to `ground`
   or `air`.
-- Player range 640 px unless the weapon sets `range`.
+- Player range 640 px unless the weapon or its level sets `range`.
 - Projectiles carry `owner`. Homing steers at capped `turn_rate`.
 - Player ammo: `seed_ammo`, `has_ammo`, `consume_ammo`, `add_ammo`; gated in
   `GameplayBase:fire_for`. All spawning goes through `combat:fire`.
@@ -518,7 +530,7 @@ replay header `player.N.skin` / `player.N.tank`).
   `data/audio.json` maps them to clip, bus, gain, pitch, pitch_var, cooldown,
   min/max distance, max_voices, priority, group over `defaults`. `clips` picks
   one clip at random per play; `<event>.<vehicle>` is a per-vehicle variant
-  (the tank's `napalm` is the flame thrower). `weapon.<name>` and
+  (the tank's own `voice.phase_start`). `weapon.<name>` and
   `explosion.<size>` are derived. Unmapped events are silent.
 - The mapping follows the original's own use of each file: fire sounds per
   weapon, `kzexp` for every explosion (`size_pitch` sets sizes apart, EXTRA
@@ -612,7 +624,7 @@ galleries, debug mission picker, headless checks.
 
 | File | Contents |
 |------|----------|
-| `data/weapons.json` | Player and enemy weapons: `proj_sprite` (a list picks the first clip the pack has), `enemy_damage` (EASY / MEDIUM / HARD damage to the player when an enemy fires it), levels (`damage` in toughness units, `fire_rate`, `swing_deg`, flame `angles` / `offsets`), `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit); `air_strike`: target distance, radius, delay, incoming call, marker blink, per level pattern (`strike`, impacts or craft / rounds / lanes, window, impact radius and toughness damage, explosion) and craft visuals. |
+| `data/weapons.json` | Player and enemy weapons: `proj_sprite` (a list picks the first clip the pack has), `enemy_damage` (EASY / MEDIUM / HARD damage to the player when an enemy fires it), levels (`damage` in toughness units, `fire_rate`, `swing_deg`, `range`, flame `angles` / `offsets`), `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow`, `proj_color_missions` (bullet color per mission digit); `air_strike`: target distance, radius, delay, incoming call, marker blink, per level pattern (`strike`, impacts or craft / rounds / lanes, window, impact radius and toughness damage, explosion) and craft visuals. |
 | `data/entity_types.json` | Per kind: hit radius, explosion, `armed`, detection / attack radius, `solid`, `collision_radius`, sprite fallbacks, `dead_frame_offset`, `turret_explosion`, `ride_linger`. |
 | `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `explosion`, `drop`. Empty at present. |
 | `data/enemy_weapons.json` | Enemy fire in the original's units (`tick_rate` 70): `turret` (settle, turn, arc), `homing` (bearing refresh per level, radar penalty), the 20 `routines`, `soldier`, `mine`, `helicopter`. |
@@ -628,7 +640,7 @@ galleries, debug mission picker, headless checks.
 | `data/postfx.json` | `look` (100% values), `missions` (per mission digit, look fields that differ, e.g. the cold grade of mission 1) and `presets`. |
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius); `low_armor` (armor threshold, floor, fade, edge color and strength, pulse share and rate range, desaturation, edge radii, hit flash time and strength). |
-| `data/powerups.json` | Power-ups in the original's units (`tick_rate` 70): `lifetime` per pickup level, `blink`, `reach`, `medal_flip`, the drop table (`table_size`, `ammo_share`, `low` / `critical` fuel fraction and armor), `fuel_gain`, `armor_gain`, `ammo_cap`, PICKUPS `frames` and `ammo_frames` per weapon (per vehicle for napalm), `find` (chance, ammo share and call-out frames of a weapon find). |
+| `data/powerups.json` | Power-ups in the original's units (`tick_rate` 70): `lifetime` per pickup level, `blink`, `reach`, `medal_flip`, the drop table (`table_size`, `ammo_share`, `low` / `critical` fuel fraction and armor), `fuel_gain`, `armor_gain`, `ammo_cap`, PICKUPS `frames` and `ammo_frames` per weapon, `find` (chance, ammo share and call-out frames of a weapon find). |
 | `data/detail_fx.json` | `recoil` (weapons, kick, time, muzzle smoke), `casings` (weapons, color, size, speed, drag, lifetime), `tread_dust` (speed threshold, interval, puff size and lifetime, color per mission digit), `wreck_smoke` (time and interval per explosion size, wind, tint, thinning), `pickup_glint` (period, sweep time, band width, strength, screen angle). |
 | `data/crash_fx.json` | Crash picture effects: `entrance` (flash, static time), `glitch` (cue events and burst time, tear, band, static mix, scanlines, rate), `haze` (amplitude, wavelength, speed), `smoke` (cap, prewarm, fade-in), `cause` (font, delay, pace, position, verbs, labels, lines), `stats` (order, labels, optional rows, the game-over `panel` layout), `respawn` (hold and fade-out of the picture before a respawn), `preview` (the overview preview's cause), and per picture `smoke` emitters, `fire` glows with embers and `haze` ellipses, all in art pixels. |
 | `data/tracks.json` | Tank tread marks: lifetime and fade (s), alpha, color, spacing and mark length (world units), gauge and tread width (fractions of hull width), mark cap. |

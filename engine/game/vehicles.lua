@@ -18,7 +18,7 @@ local Vehicles = {}
 Vehicles.WEAPONS = {
     chopper = { "chaingun", "napalm", "rockets", "mega_missile", "air_to_ground", "air_to_air", "bomb",
                 "super_napalm", "air_strike" },
-    tank    = { "chaingun", "shells", "power_shell", "ground_to_air", "mine", "air_strike" },
+    tank    = { "chaingun", "shells", "flame_thrower", "power_shell", "ground_to_air", "mine", "air_strike" },
 }
 
 -- Equip-screen catalogue, matching the original screens: the numbered bays
@@ -28,7 +28,7 @@ Vehicles.WEAPONS = {
 Vehicles.BAY_COUNT = { chopper = 6, tank = 4 }
 Vehicles.BAY_WEAPONS = {
     chopper = { "chaingun", "rockets", "air_to_ground", "air_to_air", "napalm", "air_strike" },
-    tank    = { "chaingun", "shells", "napalm", "air_strike" },
+    tank    = { "chaingun", "shells", "flame_thrower", "air_strike" },
 }
 Vehicles.SPECIAL_WEAPONS = {
     chopper = { "mega_missile", "super_napalm", "bomb" },

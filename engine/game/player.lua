@@ -174,7 +174,8 @@ function Player:tank_hull_size()
     return w * k, h * k
 end
 
--- World position of the next barrel's muzzle, advancing the barrel cycle. Barrel
+-- World position of a barrel's muzzle: the given barrel (the flame thrower's
+-- nozzle), else the next in turn, advancing the barrel cycle. Barrel
 -- tips come from the variant, in turret art space (barrels point north) as
 -- { lateral, forward } from the turret pivot. The
 -- turret sprite is drawn screen-fixed (sprite_scale px per art px), so an art
@@ -182,10 +183,15 @@ end
 -- gameplay reference, not the live camera: where a shell leaves the barrel is
 -- simulation, and must not change when the player zooms. Only meaningful for the
 -- tank.
-function Player:tank_muzzle()
-    local barrels    = self:tank_variant().barrels
-    self.tank_barrel = (self.tank_barrel % #barrels) + 1
-    local tip  = barrels[self.tank_barrel]
+function Player:tank_muzzle(barrel)
+    local barrels = self:tank_variant().barrels
+    local tip
+    if barrel then
+        tip = barrels[math.min(barrel, #barrels)]
+    else
+        self.tank_barrel = (self.tank_barrel % #barrels) + 1
+        tip = barrels[self.tank_barrel]
+    end
     local base = Camera.game_zoom()
     local k    = self.sprite_scale / base
     local fwd  = tip[2] * k
