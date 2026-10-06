@@ -9,7 +9,7 @@ decoded from the user's own copy of the game and are never distributed.
 | Path | Contents |
 |------|----------|
 | `main.lua` | Entry point: game data check, shared `app` context, scene registration, `love.*` callbacks. |
-| `conf.lua` | Window configuration. |
+| `conf.lua` | Window configuration; the window icon `content/icon/openseek.png` (not on Windows, where the exe carries the icon, nor on the web). |
 | `engine/core/` | No game knowledge: class, config, input, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, flic, mathx, log. |
 | `engine/game/` | Simulation and gameplay presentation systems. |
 | `engine/ui/` | Screens and widgets. |
@@ -17,7 +17,7 @@ decoded from the user's own copy of the game and are never distributed.
 | `engine/dev/` | Debug panel, determinism self-test, photo mode. |
 | `lib/` | Vendored `json.lua`. Excluded from lint. |
 | `data/` | Hand-maintained JSON tunables. |
-| `content/` | Original artwork shipped with the engine. |
+| `content/` | Original artwork shipped with the engine, including the icon (`content/icon/openseek.svg`, rendered to `openseek.png`). |
 | `assets/` | Game data pack decoded from the original files. Not tracked. |
 | `tools/` | Python decoders and exporters for the `assets/` pack. |
 | `screenshots/` | F12 captures (`seek-<timestamp>.png`), ignored except the `seek_*.png` README images. Fused, web and mobile builds write to `screenshots/` in the save directory. |
@@ -51,8 +51,9 @@ decoded from the user's own copy of the game and are never distributed.
   converter runs in a `love.thread` through `io.popen`; its `download N%`,
   `unpack N%` and `[i/n]` step lines drive one bar split equally between the
   phases that run, and `DONE` restarts LOVE (`love.event.quit("restart")`). Converter
-  lookup: `openseek-setup.exe` (Windows) or `openseek-setup.pyz` next to the
-  game, else `tools/build_pack.py` in an unfused source checkout. Web and mobile
+  lookup: `openseek-setup.pyz` next to the game, run by `python/python.exe`
+  beside it on Windows when present (the Windows download ships it), else by
+  `py -3` / `python3`; else `tools/build_pack.py` in an unfused source checkout. Web and mobile
   only show the label. `--selftest` exits with code 1.
 - The number of missions offered follows the stages present
   (`World:mission_count()`): the campaign ends after the last stage and the
@@ -224,6 +225,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/flic` | FLI / FLC player: decodes one frame per `next_frame` into an index buffer and an RGBA `image` (COLOR_256 / 64, DELTA_FLC / FLI, BYTE_RUN, BLACK, COPY); the caller sets the pace. |
 | `core/mathx` | `atan2` shim, `heading_deg`. |
 | `core/log` | Timestamped, tagged console lines (`info`, `warn`). |
+| `core/version` | Build identity from `build.json` (`version`, `commit`, `dirty`). `string()` for the startup log line; `draw()` puts the build tag in the bottom-right corner of the title, the main menu and the mission select: `OPENSEEK <version>` in the gold CHARS font (`OPENSEEK DEV` without a release tag) and, on a packaged build, the commit under it in grey (`+` when built with uncommitted changes). |
 | `game/world` | Stage load, entities, ground colour, collision (`blocked`), objectives, shrapnel, dust, `world.time`, `world.rng`, `world.params`. |
 | `game/entity` | HP, state machine, damage smoke, hit effects, crater. |
 | `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. `Player.draw_tank_variant` is shared with the select screen. |
@@ -658,9 +660,38 @@ point:
   `DONE DIR`.
 
 `build_setup.py` packages the converter: `build/openseek-setup.pyz` (zipapp)
-and, with `--pyinstaller` on Windows, `build/openseek-setup.exe`. Both bundle
-`data/entity_types.json` and `content/fonts/main_synth/`, read through
-`gamedata.read_resource`.
+and, with `--pyinstaller`, a one-file executable for a platform without Python
+(built on that platform). Both bundle `data/entity_types.json` and
+`content/fonts/main_synth/`, read through `gamedata.read_resource`.
+
+`build_release.py` builds the downloads into `build/`: `openseek.love` (the
+files git lists under `main.lua`, `conf.lua`, `engine`, `lib`, `data`,
+`content`, plus `build.json`), the converter zipapp and, with `--windows`,
+`openseek-<id>-win64.zip`. `build.json` is the version stamp: `commit` (short
+hash), `dirty` (uncommitted changes under those paths) and `version`, the git
+tag on `HEAD` when there is one; `<id>` is the tag, else the commit. The tag
+format is free. `--love PATH` writes the `.love` alone.
+
+The Windows zip is built without a Windows machine, from two official
+downloads fetched once into `build/cache` and checked against pinned SHA-256
+hashes:
+
+| In the zip | From |
+|------------|------|
+| `openseek.exe` | `love.exe` of `love-11.5-win64.zip` with the game icon, then `openseek.love` appended |
+| `*.dll`, `LOVE-LICENSE.txt` | `love-11.5-win64.zip` |
+| `openseek-setup.pyz` | `build_setup.py` |
+| `python/` | `python-3.12.7-embed-amd64.zip`, unchanged; runs the converter |
+| `LICENSE.txt`, `README.md` | the repo |
+
+The exe icon: `love.exe` holds the six bitmaps of its `love.ico` verbatim
+(256, 128, 64, 48, 32 and 16 pixels, 32-bit uncompressed). Each is overwritten
+in place with `content/icon/openseek.png` scaled to that size (area average),
+so the file keeps its layout and no resource table is rewritten. The build
+stops if a bitmap is not found exactly once.
+
+Every text file of a pack is written with LF line endings, so a pack is the
+same bytes on every platform.
 
 | Tool | Output |
 |------|--------|

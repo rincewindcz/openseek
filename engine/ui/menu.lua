@@ -8,6 +8,7 @@ local Pointer  = require "engine.ui.pointer"
 local Audio    = require "engine.core.audio"
 local Log      = require "engine.core.log"
 local Assets   = require "engine.core.assets"
+local Version  = require "engine.core.version"
 
 -- Main menu, styled after the original MAINP.BIN screen (NEW GAME / RESUME /
 -- OPTIONS / CREDITS / HIGH SCORES / LOAD / ADVANCED / EXIT, FULLSCREEN on the
@@ -104,11 +105,10 @@ function Menu:init(entries)
     end
     self.arrow_y = self.entries[1] and self.entries[1].mid_y or ROW_Y0
 
-    -- Bottom-right build tag, drawn in the in-game CHARS font (truecolor gold).
-    self.version_font = Font.get("chars")
-    self.version_text = "OPENSEEK 0.9"
-    -- Which original data the pack was built from, above the build tag. A pack
-    -- exported by hand has no manifest and shows none.
+    -- Which original data the pack was built from, above the bottom-right build
+    -- tag, in the in-game CHARS font (truecolor gold). A pack exported by hand
+    -- has no manifest and shows none.
+    self.edition_font = Font.get("chars")
     local manifest    = Assets.manifest()
     self.edition_text = manifest and EDITION_LABELS[manifest.edition] or nil
 
@@ -367,12 +367,10 @@ function Menu:draw()
     -- the menu. CHARS is truecolor (no alpha tint), so only show it once the
     -- menu is fully up rather than leaving gold text over the fade-to-black.
     if fade >= 1 then
-        local font = self.version_font
-        local vw   = font:width(self.version_text)
-        local vy   = screen_h - font.line_height - 3
-        font:print(self.version_text, screen_w - vw - 4, vy)
+        local vy = Version.draw(screen_w, screen_h, 1)
         if self.edition_text then
-            local ew = font:width(self.edition_text)
+            local font = self.edition_font
+            local ew   = font:width(self.edition_text)
             font:print(self.edition_text, screen_w - ew - 4, vy - font.line_height - 2)
         end
     end

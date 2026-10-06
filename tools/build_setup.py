@@ -3,10 +3,11 @@
 Package the game data converter (build_pack.py) for release, next to the game:
 
   build/openseek-setup.pyz   Python zipapp, runs on any python3 >= 3.8 with no
-                             third-party packages (Linux, macOS; Windows with
-                             the py launcher)
-  build/openseek-setup.exe   PyInstaller one-file console build (--pyinstaller;
-                             run on Windows, PyInstaller does not cross-compile)
+                             third-party packages (Linux, macOS; the Windows
+                             download runs it with the Python it ships)
+  build/openseek-setup[.exe] PyInstaller one-file console build (--pyinstaller),
+                             for a platform without Python; run it on that
+                             platform, PyInstaller does not cross-compile
 
 Both carry the converter modules plus the repo files the exporters read
 (RESOURCES), resolved at run time by gamedata.read_resource.

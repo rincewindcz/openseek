@@ -40,7 +40,7 @@ openSEEK converts the original game files on your machine on first launch:
 * **DOWNLOAD SHAREWARE** fetches the freely distributable Seek & Destroy v1.0 shareware release (missions 1 and 2) and converts it.
 * **USE MY COPY** converts your own DOS installation (the folder with `DATA.JAM`, or the files already unpacked) or a release `.zip`. Type or paste the path, or drop the folder onto the window. The full version unlocks all five missions.
 
-The converter ships next to the game (`openseek-setup.exe` on Windows, `openseek-setup.pyz` elsewhere, which needs Python 3.8+ and nothing else). The converted data lives in the LOVE save directory, not in the game folder.
+The converter ships next to the game as `openseek-setup.pyz`. The Windows download brings the Python that runs it; elsewhere it needs Python 3.8+ and nothing else. The converted data lives in the LOVE save directory, not in the game folder.
 
 From a source checkout the same converter runs directly:
 

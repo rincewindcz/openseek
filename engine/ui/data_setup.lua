@@ -6,8 +6,8 @@ local Class = require "engine.core.class"
 -- First-run screen shown when the game data pack is missing or outdated. It
 -- runs before anything from the pack loads, so it draws only the engine intro
 -- card and the shipped TTF. On desktop it offers to build the pack with the
--- converter (tools/build_pack.py, shipped as openseek-setup.exe or
--- openseek-setup.pyz next to the game) from the downloaded shareware release or
+-- converter (tools/build_pack.py, shipped as openseek-setup.pyz next to the
+-- game) from the downloaded shareware release or
 -- the user's own copy, then restarts LOVE into the game. Elsewhere (web,
 -- mobile) it only reports the missing data.
 local DataSetup = Class()
@@ -53,14 +53,14 @@ local function quote(s)
 end
 
 -- The converter invocation, or nil when none ships with this build: the
--- Windows executable, the Python zipapp, or the repo script when running from
--- a source checkout.
+-- Python zipapp, or the repo script when running from a source checkout. The
+-- Windows download carries its own Python next to the game.
 local function converter()
     local base   = love.filesystem.getSourceBaseDirectory()
     local source = love.filesystem.getSource()
     local python = windows() and "py -3" or "python3"
-    if windows() and file_exists(base .. "/openseek-setup.exe") then
-        return quote(base .. "/openseek-setup.exe")
+    if windows() and file_exists(base .. "/python/python.exe") then
+        python = quote(base .. "/python/python.exe")
     end
     if file_exists(base .. "/openseek-setup.pyz") then
         return python .. " " .. quote(base .. "/openseek-setup.pyz")

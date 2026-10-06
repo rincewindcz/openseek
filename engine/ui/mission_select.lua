@@ -6,6 +6,7 @@ local Font    = require "engine.core.font"
 local Pointer = require "engine.ui.pointer"
 local Layout  = require "engine.ui.layout"
 local Log     = require "engine.core.log"
+local Version = require "engine.core.version"
 
 -- Debug mission-select screen: pick any mission/phase and drop into it. Over the
 -- main-menu MAINP backdrop (breathing zoom, subtly tinted toward the selected
@@ -94,8 +95,6 @@ function MissionSelect:init()
     self.bump_l, self.bump_r = 0, 0
 
     self.title_font   = Font.get("mainmen")
-    self.version_font = Font.get("chars")   -- bottom-right build tag, as on the main menu
-    self.version_text = "OPENSEEK 0.9"
     self.focus = img("assets/hud/selfocus_f01.png")
     self.arrow = img("assets/mainmen/arrow.png")
 
@@ -445,11 +444,7 @@ function MissionSelect:draw()
 
     -- Build tag, bottom-right, in raw window pixels like the main menu (CHARS is
     -- truecolor gold, so only show it once the screen is fully up).
-    if fade >= 1 then
-        local vw = self.version_font:width(self.version_text)
-        self.version_font:print(self.version_text, screen_w - vw - 4,
-            screen_h - self.version_font.line_height - 3)
-    end
+    if fade >= 1 then Version.draw(screen_w, screen_h, 1) end
 
     g.setColor(1, 1, 1, 1)
 end

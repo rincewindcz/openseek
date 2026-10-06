@@ -111,8 +111,8 @@ openSEEK game engine; released under MIT license
 
 function love.load(args)
     print(BANNER)
-    Log.info("app", "starting (LOVE %s, %s, %s)", love.getVersion and select(4, love.getVersion()) or "?",
-        _VERSION, love.system.getOS())
+    Log.info("app", "starting %s (LOVE %s, %s, %s)", require("engine.core.version").string(),
+        love.getVersion and select(4, love.getVersion()) or "?", _VERSION, love.system.getOS())
     love.graphics.setDefaultFilter("nearest", "nearest")
     Config.load()   -- overlay persisted advanced settings onto the defaults
     -- A named difficulty preset always carries its current values; CUSTOM keeps

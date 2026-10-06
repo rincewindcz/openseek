@@ -1,12 +1,12 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class  = require "engine.core.class"
-local Font   = require "engine.core.font"
-local Log    = require "engine.core.log"
-local Assets = require "engine.core.assets"
-local Audio  = require "engine.core.audio"
-local Config = require "engine.core.config"
+local Class   = require "engine.core.class"
+local Log     = require "engine.core.log"
+local Assets  = require "engine.core.assets"
+local Audio   = require "engine.core.audio"
+local Config  = require "engine.core.config"
+local Version = require "engine.core.version"
 
 -- Fullscreen image overlay with fade-in / hold / fade-out phases, used for the
 -- title card, the per-mission briefing picture, and the crash end screen.
@@ -40,7 +40,7 @@ function Screen:_img(name)
 end
 
 -- opts: fade_in, hold, fade_out (seconds); wait_key (hold until a key dismisses
--- it instead of timing out); tag (small bottom-right build-tag text drawn at the
+-- it instead of timing out); build_tag (draw the bottom-right build tag at the
 -- overlay's alpha); skippable (Enter / Space cancel it like Esc, in any phase);
 -- on_done (called once fully faded out); on_cancel (called when the overlay is
 -- cancelled, so the shower decides where Esc goes); cues (a data/audio.json
@@ -61,7 +61,7 @@ function Screen:show(name, opts)
         wait_key  = opts.wait_key or false,
         skippable = opts.skippable or false,
         timeout   = opts.timeout,   -- wait_key overlays: auto-advance after this many seconds
-        tag       = opts.tag,
+        build_tag = opts.build_tag or false,
         on_done   = opts.on_done,
         on_cancel = opts.on_cancel,
         cues      = opts.cues and Audio.sequence(opts.cues),
@@ -182,12 +182,7 @@ function Screen:draw()
             g.draw(overlay.img, x, y, 0, scale, scale)
         end
     end
-    if overlay.tag then
-        self.tag_font = self.tag_font or Font.get("chars")
-        local vw = self.tag_font:width(overlay.tag)
-        self.tag_font:print(overlay.tag, screen_w - vw - 4,
-            screen_h - self.tag_font.line_height - 3, { color = { 1, 1, 1, alpha } })
-    end
+    if overlay.build_tag then Version.draw(screen_w, screen_h, alpha) end
     g.setColor(1, 1, 1)
 end
 
