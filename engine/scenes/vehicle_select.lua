@@ -60,6 +60,7 @@ local CARD_H    = 60
 local BOX_W     = 61
 local BODY_PAD  = 4
 local ARROW_W   = 12
+local SQUEEZE   = 2     -- px a name's letters may close up by to fit between the arrows
 local INFO_Y    = 178
 local DEVICE_Y  = 193
 local HINT_Y    = { 212, 224 }
@@ -397,9 +398,9 @@ end
 
 -- draw
 
-local function shadow_print(font, text, x, y, color)
-    font:print(text, x + 1, y + 1, { color = { 0, 0, 0, 0.8 * (color[4] or 1) } })
-    font:print(text, x, y, { color = color })
+local function shadow_print(font, text, x, y, color, tracking)
+    font:print(text, x + 1, y + 1, { color = { 0, 0, 0, 0.8 * (color[4] or 1) }, tracking = tracking })
+    font:print(text, x, y, { color = color, tracking = tracking })
 end
 
 -- The turntable preview, centered in a preview box: the chopper's level-flight
@@ -491,14 +492,19 @@ function VehicleSelect:_draw_card(c, fade, scale, ox, oy)
     end
 
     -- The active name uses the baked gold credits font; it carries its own outline.
-    local font = active and self.gold_font or self.name_font
-    if font:width(v.name) > b.w - 2 * ARROW_W - 4 then font = self.small_font end
-    local name_x = math.floor(b.x + (b.w - font:width(v.name)) / 2)
+    -- A name wider than the gap between the arrows (the co-op columns are narrow)
+    -- closes its letters up; only one that still does not fit drops to the small font.
+    local font     = active and self.gold_font or self.name_font
+    local room     = b.w - 2 * ARROW_W
+    local tracking = 0
+    while font:width(v.name, 1, tracking) > room and tracking > -SQUEEZE do tracking = tracking - 1 end
+    if font:width(v.name, 1, tracking) > room then font, tracking = self.small_font, 0 end
+    local name_x = math.floor(b.x + (b.w - font:width(v.name, 1, tracking)) / 2)
     if font.truecolor then
-        font:print(v.name, name_x, b.y + 18, { color = { 1, 1, 1, fade } })
+        font:print(v.name, name_x, b.y + 18, { color = { 1, 1, 1, fade }, tracking = tracking })
     else
         local name_col = active and { GOLD[1], GOLD[2], GOLD[3], fade } or { 1, 1, 1, 0.5 * fade }
-        shadow_print(font, v.name, name_x, b.y + 18, name_col)
+        shadow_print(font, v.name, name_x, b.y + 18, name_col, tracking)
     end
 
     -- One pip per variant, the current one lit.
