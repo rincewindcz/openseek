@@ -61,6 +61,7 @@ PACK_SCHEMA = 4
 SHAREWARE_ZIP = "seeksw1.zip"
 SHAREWARE_MD5 = "0bf3fa0359bbc3186d6041f1cab8b524"
 MIRRORS = [
+    "https://genserek.net/seek/seeksw1.zip",
     "https://archive.org/download/SeekAndDestroy_837/seeksw1.zip",
 ]
 
