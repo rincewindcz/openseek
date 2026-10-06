@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class = require "engine.core.class"
+local Class   = require "engine.core.class"
+local Gamepad = require "engine.core.gamepad"
 
 -- Base class for scenes managed by engine/core/scene_manager.lua. Every hook
 -- is an overridable no-op so scenes only implement what they use. Update,
@@ -40,6 +41,14 @@ function Scene:keypressed(_key) end
 -- True while the scene wants every key raw (a rebind prompt), so global
 -- shortcuts stand aside.
 function Scene:captures_keys() return false end
+-- A gamepad button (or a trigger, or the left stick tipped into a direction:
+-- from_stick, reported as the d-pad button). pad is the pad number. A menu
+-- scene takes it as the key the button stands for; the gameplay scenes
+-- override this with their bound actions.
+function Scene:padpressed(_pad, button, _from_stick)
+    local key = Gamepad.MENU_KEYS[button]
+    if key then self:keypressed(key) end
+end
 function Scene:wheelmoved(_dx, _dy) end
 function Scene:mousemoved(_x, _y, _dx, _dy) end
 function Scene:mousepressed(_x, _y, _button) end

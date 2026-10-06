@@ -14,6 +14,8 @@ local Config       = require "engine.core.config"
 local Camera       = require "engine.core.camera"
 local InputFrame   = require "engine.core.input_frame"
 local TouchControls = require "engine.ui.touch_controls"
+local Gamepad      = require "engine.core.gamepad"
+local MouseStick   = require "engine.core.mouse_stick"
 local CrashFX      = require "engine.ui.crash_fx"
 local Log          = require "engine.core.log"
 
@@ -21,6 +23,9 @@ local Log          = require "engine.core.log"
 -- won / takeoff timers, the pause flag, and the in-game keys. Esc pushes the
 -- main menu over the running game (RESUME pops back).
 local Gameplay = Class(GameplayBase)
+
+-- Whether Config.mouse_control applies; the sandbox keeps the pointer for its panel.
+Gameplay.mouse_steering = true
 
 -- Ticks between spending a life and the vehicle being back on the pad. Counted in
 -- simulation ticks, not by the crash picture's fade: the respawn has to land on
@@ -37,6 +42,8 @@ function Gameplay:enter()
     self.pending_takeoff = false
     self.touch           = self.touch or TouchControls:new()
     self.touch:reset()
+    self.pad             = self.pad or Gamepad:new()
+    self.mouse           = self.mouse or MouseStick:new(app.camera)
     app.renderer.in_game = true
     app.camera:set_zoom(Camera.GAME_ZOOM_INDEX)
     self:enter_weather()
@@ -149,7 +156,7 @@ function Gameplay:spawn_player(carry)
     end
     player:seed_ammo(combat.weapons, loadout and loadout.counts)
     self:apply_replay_player(player, 1)   -- playback: the recorded loadout wins
-    self:begin_input("single", { player }, { Input.map }, self.touch)
+    self:begin_input("single", { player }, { Input.map }, { { self.touch, self.pad, self.mouse } })
     self:sync_weapon_icon()
     camera:set_game_focus()
     app.hud.player     = player
@@ -311,6 +318,7 @@ function Gameplay:update(dt)
         return
     end
     self:begin_tick()
+    self.mouse.blocked = not self.mouse_steering or app.debug_panel.enabled
     local frame = self:apply_input(player, self.source)
     player:update(dt)
     if not player.death then app.combat:crush_units(player) end
@@ -499,6 +507,43 @@ end
 function Gameplay:keypressed(key)
     if self:debug_keys(key) then return end
     self:game_keys(key)
+end
+
+-- Gamepad buttons: the bound edge actions, and START for the menu. The held
+-- actions (fire, strafe, the d-pad) are sampled by the input source instead.
+function Gameplay:padpressed(_pad, button, from_stick)
+    local app = self.app
+    if from_stick then return end
+    if app.end_stats:is_active() then self:end_stats_keypressed(button); return end
+    if Input.pressed("pause", button, "pad") then self.paused = not self.paused; return end
+    if Input.pressed("radar_zoom", button, "pad") then app.hud:toggle_radar_zoom(self.player); return end
+    if self.playback then
+        if button == Gamepad.MENU_BUTTON then self:finish_playback("stopped") end
+        return
+    end
+    if Input.pressed("takeoff", button, "pad") then self.source:queue("takeoff"); return end
+    if Input.pressed("weapon", button, "pad")  then self.source:queue("weapon"); return end
+    if button == Gamepad.MENU_BUTTON then app.scenes:push("main_menu") end
+end
+
+-- True while the mouse stick is driving the vehicle.
+function Gameplay:_mouse_live()
+    return self.mouse_steering and self.mouse:active() and not self.playback and not self.paused
+        and not self.app.end_stats:is_active()
+end
+
+-- Mouse steering: the middle button takes off and lands, the wheel cycles the
+-- weapon instead of zooming the view.
+function Gameplay:mousepressed(_x, _y, button)
+    if button == MouseStick.TAKEOFF_BUTTON and self:_mouse_live() then self.source:queue("takeoff") end
+end
+
+function Gameplay:wheelmoved(dx, dy)
+    if not self:_mouse_live() then
+        GameplayBase.wheelmoved(self, dx, dy)
+    elseif dy ~= 0 then
+        self.source:queue("weapon")
+    end
 end
 
 -- Touch controls take a touch unless the stats screen or a playback owns the

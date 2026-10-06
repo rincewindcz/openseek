@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class = require "engine.core.class"
+local Class   = require "engine.core.class"
+local Gamepad = require "engine.core.gamepad"
 
 -- First-run screen shown when the game data pack is missing or outdated. It
 -- runs before anything from the pack loads, so it draws only the engine intro
@@ -422,6 +423,12 @@ function DataSetup:install()
     love.update           = function(dt) self:update(dt) end
     love.draw             = function() self:draw() end
     love.keypressed       = function(key) self:keypressed(key) end
+    -- A gamepad steps the menu as the keys its buttons stand for.
+    love.gamepadaxis      = nil
+    love.gamepadpressed   = function(_, button)
+        local key = Gamepad.MENU_KEYS[button]
+        if key then self:keypressed(key) end
+    end
     love.textinput        = function(text) self:textinput(text) end
     love.mousereleased    = function(x, y) self:mousereleased(x, y) end
     love.mousemoved       = function(x, y) self:mousemoved(x, y) end

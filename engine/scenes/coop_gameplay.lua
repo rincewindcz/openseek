@@ -14,10 +14,14 @@ local Score        = require "engine.game.score"
 local PlayerTag    = require "engine.ui.player_tag"
 local CrashFX      = require "engine.ui.crash_fx"
 local Log          = require "engine.core.log"
+local Config       = require "engine.core.config"
+local Input        = require "engine.core.input"
+local Gamepad      = require "engine.core.gamepad"
 
 -- Split-screen two-player co-op (extra mode, not in the original game): two
--- players, two cameras, one keyboard. Each half renders the full world stack
--- through its own camera with the teammate projected in.
+-- players, two cameras, one keyboard and a gamepad for whoever was given one.
+-- Each half renders the full world stack through its own camera with the
+-- teammate projected in.
 --
 -- Free play (F7) uses the full weapon lists and the setup screen's god / friendly
 -- fire toggles. A co-op campaign (NEW GAME > LOCAL COOP) plays each player's
@@ -217,9 +221,18 @@ function CoopGameplay:enter()
     end
 
     local coop = app.settings.coop
-    local bindings = {}
-    for slot, p in ipairs(self.players) do bindings[slot] = p.controls end
-    self:begin_input("coop", self.players, bindings)
+    -- Each player keeps their keyboard set; one given a pad (the setup screen's
+    -- CONTROLS choice) is driven by it as well.
+    local pads = Gamepad.assign({ Config.coop_device_1, Config.coop_device_2 })
+    local bindings, devices = {}, {}
+    self.pad_slot = {}   -- pad number -> player slot
+    for slot, p in ipairs(self.players) do
+        local pad = pads[p.number]
+        bindings[slot] = p.controls
+        devices[slot]  = pad and { Gamepad:new(pad) } or {}
+        if pad then self.pad_slot[pad] = slot end
+    end
+    self:begin_input("coop", self.players, bindings, devices)
     for _, p in ipairs(self.players) do p.index = p.number end   -- HUD label follows the player
     combat.players       = self.players
     combat.player        = self.players[1]
@@ -639,6 +652,26 @@ function CoopGameplay:keypressed(key)
         if key == p.controls.weapon then self.sources[i]:queue("weapon") end
         if key == p.controls.action then self.sources[i]:queue("takeoff") end
     end
+end
+
+-- Gamepad buttons: START and the pause button act for everyone, the bound edge
+-- actions for the player holding that pad.
+function CoopGameplay:padpressed(pad, button, from_stick)
+    local app = self.app
+    if from_stick then return end
+    if app.end_stats:is_active() then self:end_stats_keypressed(button); return end
+    if button == Gamepad.MENU_BUTTON then
+        if self.playback then self:finish_playback("stopped") else app.scenes:push("main_menu") end
+        return
+    end
+    if Input.pressed("pause", button, "pad") then self.paused = not self.paused; return end
+    local slot = self.pad_slot[pad]
+    local p    = slot and self.players[slot]
+    if not p then return end
+    if Input.pressed("radar_zoom", button, "pad") then app.hud:toggle_radar_zoom(p); return end
+    if self.playback then return end
+    if Input.pressed("weapon", button, "pad")  then self.sources[slot]:queue("weapon") end
+    if Input.pressed("takeoff", button, "pad") then self.sources[slot]:queue("takeoff") end
 end
 
 return CoopGameplay

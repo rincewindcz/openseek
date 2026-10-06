@@ -10,21 +10,25 @@ local InputFrame = require "engine.core.input_frame"
 -- live play into playback, and is where a network peer will plug in.
 local InputSource = {}
 
--- Live keyboard. bindings maps an action to a key name or a list of key names
+-- Live input. bindings maps an action to a key name or a list of key names
 -- (any held counts), so it takes either the rebindable single-player map
--- (engine/core/input.lua) or a co-op player's fixed key set. touch, when given,
--- is anything answering held(action) and turn() (engine/ui/touch_controls.lua).
+-- (engine/core/input.lua) or a co-op player's fixed key set. devices lists what
+-- else drives the player, each answering held(action) and turn(): the touch
+-- controls (engine/ui/touch_controls.lua), a gamepad (engine/core/gamepad.lua),
+-- the mouse stick (engine/core/mouse_stick.lua).
 local LocalSource = Class()
 InputSource.Local = LocalSource
 
-function LocalSource:init(bindings, touch)
+function LocalSource:init(bindings, devices)
     self.bindings = bindings or {}
-    self.touch    = touch
+    self.devices  = devices or {}
     self.pending  = {}   -- edge actions queued by keypressed, drained next tick
 end
 
 function LocalSource:_down(action)
-    if self.touch and self.touch:held(action) then return true end
+    for _, device in ipairs(self.devices) do
+        if device:held(action) then return true end
+    end
     local binding = self.bindings[action]
     if not binding then return false end
     if type(binding) == "table" then
@@ -47,9 +51,14 @@ function LocalSource:frame(_tick)
     for _, action in ipairs(InputFrame.HELD) do
         if self:_down(action) then mask = mask + InputFrame.BIT[action] end
     end
+    -- The first device steering by an analog amount sets the turn rate.
+    local turn
+    for _, device in ipairs(self.devices) do
+        turn = turn or device:turn()
+    end
     local events = self.pending
     self.pending = {}
-    return InputFrame.new(mask, events, self.touch and self.touch:turn() or nil)
+    return InputFrame.new(mask, events, turn)
 end
 
 -- Recorded input. provider is anything answering frame_for(tick, slot), i.e. a

@@ -227,6 +227,19 @@ local Config = {
     touch_stick_scale  = 1.0,
     touch_left_handed  = false,
 
+    -- Input devices beyond the keyboard (engine/core/gamepad.lua,
+    -- engine/core/mouse_stick.lua), set on the CONTROLS page. pad_dead_zone is
+    -- the stick deflection a gamepad ignores. mouse_control turns the pointer
+    -- into the original's virtual stick in single-player phases;
+    -- mouse_sensitivity shortens the pointer travel to full deflection.
+    -- coop_device_1 / _2 give a co-op player a pad: "auto" (one pad goes to
+    -- player 2, two pads one each), "keys", "pad1" or "pad2".
+    pad_dead_zone     = 0.2,
+    mouse_control     = false,
+    mouse_sensitivity = 1.0,
+    coop_device_1     = "auto",
+    coop_device_2     = "auto",
+
     -- Play the short openSEEK engine card before the TITLE card on every launch
     -- (engine/scenes/title.lua). Independent of this key, the card plays once on
     -- the first launch (no saved settings yet) and whenever the game data is missing.
@@ -259,6 +272,7 @@ local PERSISTED = {
     "fullscreen", "vsync", "window_size", "show_fps",
     "touch_color", "touch_opacity", "touch_button_scale", "touch_stick_scale",
     "touch_left_handed",
+    "pad_dead_zone", "mouse_control", "mouse_sensitivity", "coop_device_1", "coop_device_2",
 }
 
 -- Overlay any saved values onto the shipped defaults. Called once at startup.

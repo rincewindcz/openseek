@@ -19,5 +19,4 @@ function love.conf(t)
     -- post-processing shaders assume units are pixels.
     t.window.usedpiscale = false
     t.modules.physics = false
-    t.modules.joystick = false
 end

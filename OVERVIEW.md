@@ -10,7 +10,7 @@ decoded from the user's own copy of the game and are never distributed.
 |------|----------|
 | `main.lua` | Entry point: game data check, shared `app` context, scene registration, `love.*` callbacks. |
 | `conf.lua` | Window configuration; the window icon `content/icon/openseek.png` (not on Windows, where the exe carries the icon, nor on the web). |
-| `engine/core/` | No game knowledge: class, config, input, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, flic, mathx, log. |
+| `engine/core/` | No game knowledge: class, config, input, gamepad, mouse stick, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, flic, mathx, log. |
 | `engine/game/` | Simulation and gameplay presentation systems. |
 | `engine/ui/` | Screens and widgets. |
 | `engine/scenes/` | One scene per top-level mode. |
@@ -181,6 +181,13 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 - Touch goes to the scene's `touchpressed/touchmoved/touchreleased` first; a hook
   returning false passes it on to the mouse handlers. Mouse events synthesized
   from touches (`istouch`) are ignored.
+- A gamepad button reaches the top scene as `padpressed(pad, button,
+  from_stick)`; a trigger pulled and the left stick tipped into a direction
+  arrive the same way (`Gamepad.axis_pressed`, the stick as the d-pad button
+  with `from_stick`). The base scene turns it into the key it stands for
+  (`Gamepad.MENU_KEYS`: d-pad arrows, A / START Enter, B / BACK Esc), which is
+  what drives every menu; the gameplay scenes take their bound actions instead.
+  The `Screen` overlay is advanced or cancelled (B) first, as by a key.
 - An unhandled error ends in `ui/error_screen` (`love.errorhandler`).
 
 | Scene | Role |
@@ -189,10 +196,10 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT, or FULLSCREEN on the web); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. |
 | `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
-| `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews; the active card names its variant in the gold `credchars` font. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. |
+| `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews; the active card names its variant in the gold `credchars` font. Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. Two players: a CONTROLS line per column (`1` / `2` or a click cycles AUTO, KEYS, PAD 1, PAD 2 into `coop_device_1` / `_2`, showing what AUTO resolves to and a named pad that is missing); a pad steps the column of the player holding it. |
 | `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3. Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, preview, keep_music, on_done }`; `alternate` types VIC3's alternate ending, `preview` falls back to `data/ending.json` `preview` without a record (overview F11), `keep_music` leaves the end music playing into the credits (`Campaign.complete`). EXTRA `ending_stats` adds the run record under FIN01..03. |
 | `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name); `enter(on_exit)` replaces EXIT's return to the menu (the ending passes the high scores). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry, one per qualifying player after a co-op run. |
-| `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, MOBILE UI, GAMEPLAY, DIFFICULTY, EXTRAS. MOBILE UI only where `TouchControls.available` (web, Android, iOS, `--touch`); the web build drops DISPLAY's FULLSCREEN and WINDOW SIZE. The sidebar packs tighter when it holds more than nine entries. Rows scroll when a category holds more than `MAX_ROWS` (9); CONTROLS rows carry two key columns. |
+| `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, MOBILE UI, GAMEPLAY, DIFFICULTY, EXTRAS. MOBILE UI only where `TouchControls.available` (web, Android, iOS, `--touch`); the web build drops DISPLAY's FULLSCREEN and WINDOW SIZE. The sidebar packs tighter when it holds more than nine entries. Rows scroll when a category holds more than `MAX_ROWS` (9). CONTROLS: a DEVICE row switches the action rows between KEYBOARD and GAMEPAD, each with two binding columns (Enter captures the next key or pad button, Del clears a slot), RESET TO DEFAULTS restores the shown device, then STICK DEAD ZONE, MOUSE STEERING and MOUSE SPEED. |
 | `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. Rewrites the autosave on every open in a campaign run. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
 | `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. Co-op: once per player (tagged), EXIT steps back a player. |
@@ -214,9 +221,11 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/camera` | Zoom, pan, world rotation, culling, wrap tiles, fixed `game_zoom`. |
 | `core/config` | Tuning and compatibility flags; `PERSISTED` keys saved to `data/settings.json`. |
 | `core/display` | Window size, fullscreen, vsync, mobile `view_scale`. |
-| `core/input` | Rebindable single-player key map (`data/keybinds.json`); two key slots per action (`MAX_KEYS`), short column labels via `key_label`. |
+| `core/input` | Rebindable action maps per device (`data/keybinds.json`): `Input.map` for the keyboard (single player), `Input.pad_map` for gamepad buttons (single player and co-op; stored under `"pad"`, an action may be empty). Two slots per action (`MAX_KEYS`), short column labels via `key_label`. |
 | `core/input_frame` | Per-player tick input: held bitmask + edge events + optional analog turn (`TURN_STEPS` 32). Bit order is replay format. |
-| `core/input_source` | `Local` (keyboard per tick), `Replay`, `Remote` (stub). |
+| `core/input_source` | `Local` (keyboard per tick, plus a list of devices answering `held(action)` and `turn()`: touch controls, gamepad, mouse stick; the first analog `turn()` wins), `Replay`, `Remote` (stub). |
+| `core/gamepad` | Gamepads (SDL-mapped controllers only, numbered in connection order, refreshed on `joystickadded` / `joystickremoved`). `Gamepad:new(n)` reads pad n, `Gamepad:new()` every pad. Left stick: sideways is the analog turn past `pad_dead_zone`, forward / back beyond 0.5 drives. Right stick sideways: STRAFE (modifier) with an analog rate, winning over the left stick. Buttons from `Input.pad_map`, the triggers as `triggerleft` / `triggerright`. `axis_pressed` turns trigger pulls and stick tips into button presses, `MENU_KEYS` maps buttons to menu keys, `MENU_BUTTON` (START) opens the in-game menu, `assign` shares the pads among co-op players. |
+| `core/mouse_stick` | `mouse_control`: the pointer's offset from the vehicle on screen as a stick, full deflection at 0.25 window heights divided by `mouse_sensitivity`; dead zone 0.1, drives beyond 0.4. Left button fires, right is STRAFE. Single player only, blocked in the sandbox and while the F2 panel is open. |
 | `core/rng` | Seeded per-phase RNG with draw counter. |
 | `core/animation` | `AnimClip` from `data/animations.json`, per-instance `AnimState`. |
 | `core/assets` | Path resolution and pack check (section 2). |
@@ -751,6 +760,8 @@ same bytes on every platform.
 | Overview: C, [ ] | Axis-aligned pickups, `speed_scale` |
 | Overview: S | Save `data/entity_types.json` |
 | Esc | Back (menu in game) |
+| Gamepad | Left stick or d-pad: drive (stick turn is analog). Right stick: strafe / turret. A or RT fire, LB or LT strafe, B take off / land, Y or RB weapon, X radar zoom, BACK pause, START menu. Buttons rebindable (CONTROLS, DEVICE GAMEPAD); the sticks and START are fixed. Menus: d-pad or left stick, A / START confirm, B / BACK back. Co-op: per player, see `vehicle_select`. |
+| Mouse (`mouse_control`) | Pointer offset from the vehicle is the stick: sideways turns, ahead drives, behind reverses. Left button fire, right strafe, middle take off / land, wheel next weapon (instead of the view zoom). Single player. |
 | Touch | Stick: drive. Buttons: FIRE, STRAFE (modifier), LAND, WEAPON, MENU. Tap commits a high-score name. Desktop test with `love . --touch`: left mouse is the finger, `Z` holds FIRE. |
 
 On the web build (`love.system.getOS() == "Web"`) the window is not resizable;

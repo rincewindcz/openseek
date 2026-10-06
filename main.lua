@@ -20,6 +20,7 @@ local DetailFX        = require "engine.game.detail_fx"
 local PostFX          = require "engine.game.postfx"
 local Config          = require "engine.core.config"
 local Input           = require "engine.core.input"
+local Gamepad         = require "engine.core.gamepad"
 local Screenshot      = require "engine.core.screenshot"
 local Display         = require "engine.core.display"
 local Font            = require "engine.core.font"
@@ -405,6 +406,45 @@ function love.keyreleased(key)
     if touch_emulation and key == TOUCH_FIRE_KEY then
         app.scenes:dispatch("touchreleased", FIRE_TOUCH_ID)
     end
+end
+
+-- Gamepads. A button goes the way of a key: to a fullscreen overlay first (B
+-- cancels it, anything else advances it), else to the top scene's padpressed.
+-- A trigger pulled and the left stick tipped arrive as buttons too
+-- (Gamepad.axis_pressed), so a stick steps a menu like the d-pad.
+local function pad_pressed(joystick, button, from_stick)
+    local pad = Gamepad.index_of(joystick)
+    if not pad then return end
+    if app.photo and app.photo:engaged() then return end
+    local top = app.scenes:top()
+    local capturing = top and top:captures_keys()
+    if not capturing and not from_stick and Input.pressed("screenshot", button, "pad") then
+        Screenshot.capture()
+        return
+    end
+    if app.screen:is_active() then
+        if from_stick then return end
+        local key = Gamepad.MENU_KEYS[button]
+        if key == "escape" then
+            app.screen:cancel()
+        else
+            app.screen:keypressed(key or button)
+        end
+        return
+    end
+    app.scenes:dispatch("padpressed", pad, button, from_stick)
+end
+
+function love.joystickadded()   Gamepad.refresh() end
+function love.joystickremoved() Gamepad.refresh() end
+
+function love.gamepadpressed(joystick, button)
+    pad_pressed(joystick, button, false)
+end
+
+function love.gamepadaxis(joystick, axis, value)
+    local button, from_stick = Gamepad.axis_pressed(joystick, axis, value)
+    if button then pad_pressed(joystick, button, from_stick) end
 end
 
 function love.wheelmoved(dx, dy)

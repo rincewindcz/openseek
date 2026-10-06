@@ -35,6 +35,16 @@ function InputFrame.new(mask, events, turn)
     return { mask = mask or 0, events = events or {}, turn = turn }
 end
 
+-- The analog turn for a stick deflection x in [-1, 1]: zero up to dead_zone,
+-- then linear to full. nil when the stick is not steering.
+function InputFrame.turn_steps(x, dead_zone)
+    local reach = math.abs(x)
+    if reach <= dead_zone then return nil end
+    local step = math.floor(math.min(1, (reach - dead_zone) / (1 - dead_zone)) * InputFrame.TURN_STEPS + 0.5)
+    if step == 0 then return nil end
+    return x < 0 and -step or step
+end
+
 -- Signed turn rate in [-1, 1] for an analog frame, nil for a digital one.
 function InputFrame.turn(frame)
     if not (frame and frame.turn) then return nil end

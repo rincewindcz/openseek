@@ -22,8 +22,9 @@ local TouchControls = require "engine.ui.touch_controls"
 -- selected category's option rows on the right,
 -- over the pulsating main-menu backdrop. Reached from the main menu's OPTIONS
 -- entry. Toggles/ranges edit engine/core/config live; CONTROLS rebinds the central
--- key map (engine/core/input). Config and bindings are written to the save
--- directory on exit.
+-- maps (engine/core/input) of the device its DEVICE row shows, keyboard or
+-- gamepad, and holds the stick and mouse options. Config and bindings are
+-- written to the save directory on exit.
 local AdvancedSettings = Class(Scene)
 
 AdvancedSettings.ui_pointer = true
@@ -172,6 +173,8 @@ local CATEGORIES = {
     { title = "EXIT", kind = "exit" },
 }
 
+local DEVICE_LABELS = { keys = "KEYBOARD", pad = "GAMEPAD" }
+
 local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 
 function AdvancedSettings:init(app)
@@ -185,15 +188,24 @@ function AdvancedSettings:init(app)
     self.scroll    = 0        -- rows scrolled off the top of the panel
     self.key_col   = 1        -- focused keybind column (1 primary, 2 secondary)
     self.focus     = "menu"   -- "menu" (sidebar) or "panel" (option rows)
-    self.capturing = nil      -- { action, slot } awaiting a key press, or nil
+    self.capturing = nil      -- { action, slot, device } awaiting a key or button, or nil
+    self.device    = 1        -- index into Input.DEVICES: whose bindings CONTROLS shows
     self.t         = 0
 
-    -- CONTROLS rows, built once from the rebindable actions plus a reset action.
-    self.control_opts = {}
+    -- CONTROLS rows, built once: the device switch, the rebindable actions, a
+    -- reset of the shown device, and the stick and mouse options.
+    self.control_opts = { { label = "DEVICE", kind = "device" } }
     for _, a in ipairs(Input.ACTIONS) do
         self.control_opts[#self.control_opts + 1] = { label = a.label, action = a.key, kind = "keybind" }
     end
-    self.control_opts[#self.control_opts + 1] = { label = "RESET TO DEFAULTS", kind = "reset" }
+    for _, opt in ipairs({
+        { label = "RESET TO DEFAULTS", kind = "reset" },
+        { key = "pad_dead_zone",     label = "STICK DEAD ZONE", kind = "range", min = 0.05, max = 0.5, step = 0.05 },
+        { key = "mouse_control",     label = "MOUSE STEERING",  kind = "toggle" },
+        { key = "mouse_sensitivity", label = "MOUSE SPEED",     kind = "range", min = 0.5, max = 2.0, step = 0.1 },
+    }) do
+        self.control_opts[#self.control_opts + 1] = opt
+    end
 
     local web   = love.system.getOS() == "Web"
     local touch = TouchControls.available(app)
@@ -224,6 +236,9 @@ function AdvancedSettings:enter()
 end
 
 function AdvancedSettings:_category() return self.categories[self.cat] end
+
+-- The device ("keys" / "pad") whose bindings the CONTROLS rows show.
+function AdvancedSettings:_device() return Input.DEVICES[self.device] end
 
 function AdvancedSettings:_options()
     local cat = self:_category()
@@ -295,9 +310,11 @@ function AdvancedSettings:_activate(dir)
     -- the mixer, so the level the row just set is what the player hears.
     Audio.play_event("ui.confirm")
     if opt.kind == "keybind" then
-        self.capturing = { action = opt.action, slot = self.key_col }
+        self.capturing = { action = opt.action, slot = self.key_col, device = self:_device() }
+    elseif opt.kind == "device" then
+        self.device = ((self.device - 1 + dir) % #Input.DEVICES) + 1
     elseif opt.kind == "reset" then
-        Input.reset()
+        Input.reset(self:_device())
     elseif opt.kind == "toggle" then
         Config[opt.key] = not Config[opt.key]
         if opt.on_change then opt.on_change() end
@@ -324,10 +341,17 @@ function AdvancedSettings:captures_keys()
     return self.capturing ~= nil
 end
 
+-- A capture takes the next key, or on the gamepad page the next button
+-- (padpressed); Esc cancels either.
 function AdvancedSettings:keypressed(key)
-    if self.capturing then
-        if key ~= "escape" then Input.rebind(self.capturing.action, key, self.capturing.slot) end
-        self.capturing = nil
+    local capturing = self.capturing
+    if capturing then
+        if key == "escape" then
+            self.capturing = nil
+        elseif capturing.device == "keys" then
+            Input.rebind(capturing.action, key, capturing.slot, "keys")
+            self.capturing = nil
+        end
         return
     end
     if self.focus == "menu" then
@@ -346,14 +370,26 @@ function AdvancedSettings:keypressed(key)
         elseif key == "right" then if keybind then self:_move_key_col(1)  else self:_activate(1)  end
         elseif key == "return" or key == "space" or key == "kpenter" then self:_activate(1)
         elseif keybind and (key == "delete" or key == "backspace") then
-            if Input.clear(opt.action, self.key_col) then Audio.play_event("ui.confirm") end
+            if Input.clear(opt.action, self.key_col, self:_device()) then Audio.play_event("ui.confirm") end
         elseif key == "escape" then self.focus = "menu"; Audio.play_event("ui.back") end
+    end
+end
+
+function AdvancedSettings:padpressed(pad, button, from_stick)
+    local capturing = self.capturing
+    if not capturing then
+        Scene.padpressed(self, pad, button, from_stick)
+    elseif capturing.device == "pad" and not from_stick then
+        Input.rebind(capturing.action, button, capturing.slot, "pad")
+        self.capturing = nil
     end
 end
 
 function AdvancedSettings:_value_text(opt)
     if opt.kind == "reset" then
         return ""
+    elseif opt.kind == "device" then
+        return DEVICE_LABELS[self:_device()]
     elseif opt.kind == "toggle" then
         return Config[opt.key] and "ON" or "OFF"
     elseif opt.kind == "choice" then
@@ -439,7 +475,8 @@ function AdvancedSettings:_draw_keybind(opt, y, sel, a, fade)
     for slot, rx in ipairs({ KEY1_RX, KEY2_RX }) do
         local capturing = self.capturing
             and self.capturing.action == opt.action and self.capturing.slot == slot
-        local text = capturing and "PRESS" or Input.key_label(Input.key_at(opt.action, slot))
+        local text = capturing and "PRESS"
+            or Input.key_label(Input.key_at(opt.action, slot, self:_device()))
         local w    = self.font:width(text)
         local col  = capturing and { 1, 0.9, 0.4, fade } or { 1, 1, 1, a }
         self.font:print(text, rx - w, y, { color = col })
@@ -551,7 +588,7 @@ function AdvancedSettings:draw()
     local hint
     local row = not menu_focus and self:_options()[self.cursor] or nil
     if self.capturing then
-        hint = "PRESS A KEY   {ESC} CANCELS"
+        hint = (self.capturing.device == "pad" and "PRESS A BUTTON" or "PRESS A KEY") .. "   {ESC} CANCELS"
     elseif menu_focus then
         hint = "{UP/DOWN} SELECT   {ENTER} OPEN   {ESC} EXIT"
     elseif row and row.kind == "keybind" then

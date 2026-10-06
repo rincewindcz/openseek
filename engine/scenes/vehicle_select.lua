@@ -7,6 +7,7 @@ local Font      = require "engine.core.font"
 local Animation = require "engine.core.animation"
 local Audio     = require "engine.core.audio"
 local Config    = require "engine.core.config"
+local Gamepad   = require "engine.core.gamepad"
 local Log       = require "engine.core.log"
 local Layout    = require "engine.ui.layout"
 local Pointer   = require "engine.ui.pointer"
@@ -29,7 +30,10 @@ local Player    = require "engine.game.player"
 --     player drives, and G / F toggle god mode and friendly fire. START drops
 --     into split-screen co-op on the current stage.
 -- Two players drive their own card column with their own keys (P1 W/S/A/D, P2
--- arrows); a single player uses either set. Enter starts, Esc goes back.
+-- arrows); a single player uses either set. Enter starts, Esc goes back. With
+-- two players each column also has a CONTROLS line (keys 1 / 2, or a click):
+-- AUTO, KEYS or a gamepad on top of the player's keys (Config.coop_device_1 /
+-- _2, shared out by Gamepad.assign). A pad drives its player's column.
 local VehicleSelect = Class(Scene)
 
 VehicleSelect.ui_pointer = true
@@ -57,6 +61,7 @@ local BOX_W     = 61
 local BODY_PAD  = 4
 local ARROW_W   = 12
 local INFO_Y    = 178
+local DEVICE_Y  = 193
 local HINT_Y    = { 212, 224 }
 local START_XY  = { x = 234, y = 223 }
 local EXIT_XY   = { x = 273, y = 222 }
@@ -75,6 +80,11 @@ local KEYS = {
     { up = "w",  down = "s",    left = "a",    right = "d" },
     { up = "up", down = "down", left = "left", right = "right" },
 }
+
+-- CONTROLS choices per co-op player, in cycle order, and the key that cycles
+-- each player's.
+local DEVICES     = { "auto", "keys", "pad1", "pad2" }
+local DEVICE_KEYS = { ["1"] = 1, kp1 = 1, ["2"] = 2, kp2 = 2 }
 
 function VehicleSelect:init(app)
     Scene.init(self, app)
@@ -149,6 +159,36 @@ function VehicleSelect:_step(i, kind, dir)
     Audio.play_event("ui.move")
 end
 
+local function device_key(i)
+    return "coop_device_" .. i
+end
+
+-- Step player i's CONTROLS choice to the next one.
+function VehicleSelect:_cycle_device(i)
+    local idx = 1
+    for k, choice in ipairs(DEVICES) do
+        if choice == Config[device_key(i)] then idx = k; break end
+    end
+    Config[device_key(i)] = DEVICES[idx % #DEVICES + 1]
+    Audio.play_event("ui.move")
+end
+
+-- Player i's CONTROLS line: the choice, with what AUTO resolves to right now
+-- and a named pad that is not there called out.
+function VehicleSelect:_device_text(i)
+    local choice = Config[device_key(i)]
+    local pad    = Gamepad.assign({ Config.coop_device_1, Config.coop_device_2 })[i]
+    local label
+    if choice == "auto" then
+        label = "AUTO (" .. (pad and ("PAD " .. pad) or "KEYS") .. ")"
+    elseif choice == "keys" then
+        label = "KEYS"
+    else
+        label = "PAD " .. choice:sub(-1) .. (pad and "" or " MISSING")
+    end
+    return ("{%d} CONTROLS: %s"):format(i, label)
+end
+
 function VehicleSelect:_back()
     Audio.play_event("ui.back")
     if self.free then
@@ -172,6 +212,7 @@ function VehicleSelect:_start()
             coop.tank_skin[i]    = sel.tank
             coop.vehicle[i]      = sel.focus
         end
+        Config.save()   -- the CONTROLS choices
     end
 
     if self.free then
@@ -232,12 +273,22 @@ function VehicleSelect:_toggle_zones()
     }
 end
 
+-- One CONTROLS line per player column (two players only).
+function VehicleSelect:_device_zones()
+    local zones = {}
+    if self.players ~= 2 then return zones end
+    for i, col in ipairs(COLUMNS[2]) do
+        zones[i] = { player = i, x = col.x, y = DEVICE_Y - 2, w = col.w, h = 12 }
+    end
+    return zones
+end
+
 local function inside(r, x, y)
     return x >= r.x and x < r.x + r.w and y >= r.y and y < r.y + r.h
 end
 
 -- What sits under a design-space point: { kind = "arrow" | "card" | "button" |
--- "toggle", ... } or nil.
+-- "toggle" | "device", ... } or nil.
 function VehicleSelect:_hit(x, y)
     if inside({ x = START_XY.x, y = START_XY.y, w = OK_PLATE[3], h = OK_PLATE[4] }, x, y) then
         return { kind = "button", id = "start" }
@@ -247,6 +298,9 @@ function VehicleSelect:_hit(x, y)
     end
     for _, z in ipairs(self:_toggle_zones()) do
         if inside(z, x, y) then return { kind = "toggle", id = z.id } end
+    end
+    for _, z in ipairs(self:_device_zones()) do
+        if inside(z, x, y) then return { kind = "device", player = z.player } end
     end
     for i = 1, self.players do
         for _, kind in ipairs(KINDS) do
@@ -269,6 +323,8 @@ function VehicleSelect:_activate(hit)
         if hit.id == "start" then self:_start() else self:_back() end
     elseif hit.kind == "toggle" then
         self:_toggle(hit.id)
+    elseif hit.kind == "device" then
+        self:_cycle_device(hit.player)
     elseif hit.kind == "arrow" then
         self:_step(hit.player, hit.card, hit.dir)
     elseif hit.kind == "card" then
@@ -288,6 +344,7 @@ function VehicleSelect:keypressed(key)
     if key == "escape" then self:_back(); return end
     if key == "return" or key == "kpenter" or key == "space" then self:_start(); return end
     if self.free and (key == "g" or key == "f") then self:_toggle(key == "g" and "god" or "ff"); return end
+    if self.players == 2 and DEVICE_KEYS[key] then self:_cycle_device(DEVICE_KEYS[key]); return end
     for k, keys in ipairs(KEYS) do
         local i = (self.players == 1) and 1 or k
         local sel = self.sel[i]
@@ -299,6 +356,20 @@ function VehicleSelect:keypressed(key)
             return
         end
     end
+end
+
+-- A pad acts as the keys its buttons stand for; with two players its
+-- directions go to the column of the player holding it.
+function VehicleSelect:padpressed(pad, button)
+    local key = Gamepad.MENU_KEYS[button]
+    if not key then return end
+    if self.players == 2 then
+        local owners = Gamepad.assign({ Config.coop_device_1, Config.coop_device_2 })
+        for i, keys in ipairs(KEYS) do
+            if owners[i] == pad then key = keys[key] or key end
+        end
+    end
+    self:keypressed(key)
 end
 
 function VehicleSelect:mousemoved(x, y)
@@ -504,6 +575,12 @@ function VehicleSelect:draw()
         local lit = self.hover and self.hover.kind == "toggle"
         local col = lit and { GOLD[1], GOLD[2], GOLD[3], fade } or { 1, 1, 1, 0.8 * fade }
         shadow_print(self.hint_font, info, math.floor((DESIGN_W - self.hint_font:width(info)) / 2), INFO_Y, col)
+    end
+
+    for _, z in ipairs(self:_device_zones()) do
+        local lit = self.hover and self.hover.kind == "device" and self.hover.player == z.player
+        Hint.print(self.hint_font, self:_device_text(z.player), z.x + 2, DEVICE_Y,
+            { alpha = fade * (lit and 1.4 or 1), shadow = true })
     end
 
     local hints
