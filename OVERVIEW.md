@@ -181,6 +181,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 - Touch goes to the scene's `touchpressed/touchmoved/touchreleased` first; a hook
   returning false passes it on to the mouse handlers. Mouse events synthesized
   from touches (`istouch`) are ignored.
+- An unhandled error ends in `ui/error_screen` (`love.errorhandler`).
 
 | Scene | Role |
 |-------|------|
@@ -224,7 +225,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/screen` | Fullscreen image fade in / hold / out, with an optional `fx` object animating the picture (`update`, `cue`, `draw`; `cut` skips the fade-in). `is_closing` reports the fade-out. |
 | `core/flic` | FLI / FLC player: decodes one frame per `next_frame` into an index buffer and an RGBA `image` (COLOR_256 / 64, DELTA_FLC / FLI, BYTE_RUN, BLACK, COPY); the caller sets the pace. |
 | `core/mathx` | `atan2` shim, `heading_deg`. |
-| `core/log` | Timestamped, tagged console lines (`info`, `warn`). |
+| `core/log` | Timestamped, tagged console lines (`info`, `warn`); `recent()` keeps the last 80 for the crash report. |
 | `core/version` | Build identity from `build.json` (`version`, `commit`, `dirty`). `string()` for the startup log line; `draw()` puts the build tag in the bottom-right corner of the title, the main menu and the mission select: `OPENSEEK <version>` in the gold CHARS font (`OPENSEEK DEV` without a release tag) and, on a packaged build, the commit under it in grey (`+` when built with uncommitted changes). |
 | `game/world` | Stage load, entities, ground colour, collision (`blocked`), objectives, shrapnel, dust, `world.time`, `world.rng`, `world.params`. |
 | `game/entity` | HP, state machine, damage smoke, hit effects, crater. |
@@ -264,6 +265,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. |
 | `ui/mission_select` | `STAGE0X_MPIC` carousel over the missions present, phase buttons. |
 | `ui/data_setup` | First-run screen without a usable pack: runs the converter, restarts into the game (section 2). |
+| `ui/error_screen` | `love.errorhandler`: writes `crashes/crash_<date>_<time>.txt` into the save directory (error, traceback, build, LOVE, OS, renderer, window, pack status and edition, the last log lines) and shows the error, the report path and the first traceback lines over the dimmed engine intro card, in the shipped TTF, so it works without the pack. `C` copies the report, `O` opens the folder, `R` (pad A) restarts, Esc (pad B) quits; a tap copies on touch builds. Under `--selftest` it prints and exits with status 1 instead. |
 | `ui/info_screen` | CREDITS / HIGH SCORES shell. |
 | `ui/pointer` | Mouse / touch pointer in 320x240 design space. |
 | `ui/layout` | 320x240 design space, letterbox `fit`. |

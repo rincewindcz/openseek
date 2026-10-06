@@ -30,6 +30,7 @@ local EndStats        = require "engine.ui.end_stats"
 local Pointer         = require "engine.ui.pointer"
 local TouchControls   = require "engine.ui.touch_controls"
 local DataSetup       = require "engine.ui.data_setup"
+local ErrorScreen     = require "engine.ui.error_screen"
 local SceneManager    = require "engine.core.scene_manager"
 local Audio           = require "engine.core.audio"
 local Assets          = require "engine.core.assets"
@@ -61,6 +62,9 @@ local ReplaySelect    = require "engine.scenes.replay_select"
 local AdvancedMenu    = require "engine.scenes.advanced_menu"
 local Saves           = require "engine.scenes.saves"
 local Selftest        = require "engine.dev.selftest"
+
+-- An unhandled error anywhere past this point ends in the crash report screen.
+love.errorhandler = ErrorScreen.handler(Title.ENGINE_INTRO)
 
 -- FPS counter (Config.show_fps): the in-game CHARS font, placed clear of the
 -- HUD score readout above it.
