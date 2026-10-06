@@ -987,12 +987,17 @@ function Player:draw_shadow(soft)
     local shadow_offset = Shadow.OFFSET * s * alt
     local w, h = body:getDimensions()
     local sx, sy = cx + dx * shadow_offset, cy + dy * shadow_offset
-    Shadow.draw(body, sx, sy, 0, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
+    -- Photo mode turns the view away from the upright body: the camera angle
+    -- above already carries that turn, the silhouette takes it here.
+    local rot = (self.camera and self.camera.subject_rot) or 0
+    Shadow.draw(body, sx, sy, rot, s, s, w / 2, h / 2, Shadow.ALPHA * alt)
     local rotor = soft and self:_rotor_image()
     if rotor then
         local rw, rh = rotor:getDimensions()
         local rs     = s * (ROTOR_MIN_SCALE + (1 - ROTOR_MIN_SCALE) * alt)
-        Shadow.draw(rotor, sx, sy + self.rotor_y_offset, 0, rs, rs, rw / 2, rh / 2, Shadow.ROTOR_ALPHA * alt)
+        local ry     = self.rotor_y_offset
+        Shadow.draw(rotor, sx - math.sin(rot) * ry, sy + math.cos(rot) * ry, rot, rs, rs, rw / 2, rh / 2,
+            Shadow.ROTOR_ALPHA * alt)
     end
     g.setColor(1, 1, 1)
 end
@@ -1035,6 +1040,15 @@ function Player:draw()
     local s = self.sprite_scale
     if self.camera then s = s * self.camera:zoom_ratio() end
 
+    -- The vehicle is drawn upright, the world turned around it. Photo mode turns
+    -- the view further, so the upright drawing turns with it about the focus.
+    local rot = self.camera and self.camera.subject_rot
+    if rot then
+        g.push()
+        g.translate(cx, cy)
+        g.rotate(rot)
+        g.translate(-cx, -cy)
+    end
     g.setColor(1, 1, 1)
     if self.death then
         self:_draw_death(g, cx, cy, s)
@@ -1044,6 +1058,7 @@ function Player:draw()
         self:_draw_chopper(g, cx, cy, s)
     end
     g.setColor(1, 1, 1)
+    if rot then g.pop() end
 end
 
 function Player:_draw_death(g, cx, cy, s)
@@ -1096,7 +1111,7 @@ end
 function Player:draw_remote(g, cam, color)
     if self.death then return end
     local sx, sy = cam:project(self.x, self.y)
-    local s      = self.sprite_scale
+    local s      = self.sprite_scale * cam:zoom_ratio()
     local base   = self.angle * math.pi / 180 + (cam.angle or 0)
 
     g.setColor(1, 1, 1)
@@ -1142,7 +1157,7 @@ function Player:draw_remote_shadow(g, cam, soft)
     if not body then return end
 
     local sx, sy = cam:project(self.x, self.y)
-    local s      = self.sprite_scale
+    local s      = self.sprite_scale * cam:zoom_ratio()
     local base   = self.angle * math.pi / 180 + (cam.angle or 0)
     local a  = cam.angle or 0
     local dx = Shadow.DIR_X * math.cos(a) - Shadow.DIR_Y * math.sin(a)

@@ -148,12 +148,15 @@ function love.load(args)
     end
 
     -- Command line: `love . stage12` opens a stage, `love . --selftest [ticks]
-    -- [stage]` runs the determinism self-test (below). Flags and the tick count
-    -- are skipped when looking for the stage name.
-    local stage_arg, selftest_ticks, selftest = nil, nil, false
+    -- [stage]` runs the determinism self-test (below), `love . --photo` enables
+    -- photo mode (engine/dev/photo_mode.lua). Flags and the tick count are
+    -- skipped when looking for the stage name.
+    local stage_arg, selftest_ticks, selftest, photo = nil, nil, false, false
     for _, a in ipairs(args or {}) do
         if a == "--selftest" then
             selftest = true
+        elseif a == "--photo" then
+            photo = true
         elseif a == "--touch" then
             touch_emulation = true
         elseif tonumber(a) then
@@ -263,6 +266,8 @@ function love.load(args)
     scenes:register("replay_select",    ReplaySelect:new(app))
     scenes:register("advanced_menu",    AdvancedMenu:new(app))
     scenes:register("saves",            Saves:new(app))
+    -- Required in place, like the ending: love.load is out of upvalues.
+    if photo then app.photo = require("engine.dev.photo_mode"):new(app) end
     scenes:switch("title")
 
     -- Run one scripted phase twice and compare the simulation tick by tick, then
@@ -295,6 +300,16 @@ function love.update(dt)
     app.hud:update(dt) -- rolling score readout: presentation, on frame time
     Audio.update(dt)   -- mixer housekeeping (duck release, music fades): real time, not ticks
     local top = app.scenes:top()
+    -- Photo mode holds the scene like a pause; only the ticks it steps run.
+    local photo = app.photo
+    if photo and photo:engaged() then
+        accumulator = 0
+        for _ = 1, photo:update(dt) do
+            app.scenes:dispatch("update", TICK)
+            if app.scenes:top() ~= top then break end
+        end
+        return
+    end
     if not (top and top.fixed_step) then
         accumulator = 0
         app.scenes:dispatch("update", dt)
@@ -331,7 +346,11 @@ function love.draw()
         love.mouse.setVisible(not ui)
     end
 
-    app.scenes:dispatch("draw")
+    if app.photo and app.photo:engaged() then
+        app.photo:draw()   -- the scene's world alone, under the photo view
+    else
+        app.scenes:dispatch("draw")
+    end
     app.screen:draw()   -- the fade overlay composes above everything
 
     -- The pointer sprite: over the menu scenes (unless a passive image overlay
@@ -350,6 +369,7 @@ function love.draw()
 end
 
 function love.keypressed(key)
+    if app.photo and app.photo:keypressed(key) then return end
     local top = app.scenes:top()
     if Input.pressed("screenshot", key) and not (top and top:captures_keys()) then
         Screenshot.capture()
@@ -384,6 +404,7 @@ function love.keyreleased(key)
 end
 
 function love.wheelmoved(dx, dy)
+    if app.photo and app.photo:wheelmoved(dy) then return end
     app.scenes:dispatch("wheelmoved", dx, dy)
 end
 
@@ -415,6 +436,7 @@ function love.mousemoved(x, y, dx, dy, istouch)
         return
     end
     Pointer.moved(x, y, false)
+    if app.photo and app.photo:mousemoved(dx, dy) then return end
     app.scenes:dispatch("mousemoved", x, y, dx, dy)
 end
 
@@ -425,6 +447,7 @@ function love.mousepressed(x, y, button, istouch)
         love.touchpressed(MOUSE_TOUCH_ID, x, y)
         return
     end
+    if app.photo and app.photo:engaged() then return end   -- its drags are read in mousemoved
     app.debug_panel:mousepressed(x, y, button)
     if button == 1 then
         Pointer.moved(x, y, false)
@@ -443,6 +466,7 @@ function love.mousereleased(x, y, button, istouch)
         end
         return
     end
+    if app.photo and app.photo:engaged() then return end
     if button == 1 then
         Pointer.moved(x, y, false)
         pointer_released(x, y)

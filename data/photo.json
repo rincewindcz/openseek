@@ -1,0 +1,16 @@
+{
+  "outputs": [
+    { "label": "WINDOW" },
+    { "label": "1080P",       "w": 1920, "h": 1080 },
+    { "label": "4K",          "w": 3840, "h": 2160 },
+    { "label": "ITCH COVER",  "w": 2520, "h": 2000 },
+    { "label": "ITCH BANNER", "w": 3840, "h": 1200 },
+    { "label": "SQUARE",      "w": 2048, "h": 2048 }
+  ],
+  "zoom_min": 0.1,
+  "zoom_max": 12,
+  "zoom_step": 1.1,
+  "turn_step": 15,
+  "turn_drag": 0.25,
+  "slow_motion": 0.25
+}

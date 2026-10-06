@@ -479,13 +479,103 @@ function CoopGameplay:on_stats_done()
 end
 
 -- One vehicle in a view: the view's own player is drawn centered by its camera,
--- the teammate is projected into it and ringed with its colour.
-function CoopGameplay:_draw_vehicle(pl, local_p, cam)
+-- the teammate is projected into it and ringed with its colour (no ring in a
+-- plain view).
+function CoopGameplay:_draw_vehicle(pl, local_p, cam, plain)
     if pl == local_p then
         pl:draw()
     else
-        pl:draw_remote(love.graphics, cam, PlayerTag.color(pl.number))
+        pl:draw_remote(love.graphics, cam, not plain and PlayerTag.color(pl.number) or nil)
     end
+end
+
+-- Player i's view of the world into the viewport at vx, vw wide and vh tall.
+-- plain leaves out the HUD, the status line and the teammate ring (photo mode).
+function CoopGameplay:_draw_view(i, vx, vw, vh, plain)
+    local app   = self.app
+    local g     = love.graphics
+    local p     = self.players[i]
+    local cam   = self.cameras[i]
+    local other = self.players[3 - i]
+    cam.vw, cam.vh      = vw, vh
+    cam.shake_x, cam.shake_y = app.impactfx:shake_offset(cam.x, cam.y)
+    app.renderer.camera = cam
+    app.combat.camera   = cam
+    app.powerups.camera = cam
+    g.push()
+    g.translate(vx, 0)
+    g.setScissor(vx, 0, vw, vh)
+    local ground, air = draw_layers(p, other)
+    app.postfx:begin_world(app.impactfx:low_armor(p))
+    app.renderer:draw_ground()   -- terrain, decals, craters
+    if #ground > 0 then
+        app.renderer:draw_objects("under")   -- flat clutter the vehicles sit on
+        app.rescue:draw()                    -- land pads + walking POWs
+        app.saboteur:draw_ground()           -- saboteur pads + walking saboteurs
+        for _, pl in ipairs(ground) do
+            if pl == p then p:draw_world() end   -- smoke behind the local vehicle
+            self:_draw_vehicle(pl, p, cam, plain)
+            if pl == p then p:draw_world_front() end
+        end
+        app.renderer:draw_objects("over")    -- trees/buildings + objective markers
+    else
+        app.renderer:draw_objects()          -- nothing on the ground to split around
+        app.rescue:draw()
+        app.saboteur:draw_ground()
+    end
+    app.saboteur:draw_markers()  -- target reticles
+    app.powerups:draw()
+    app.renderer:draw_explosions()   -- building blasts over the pickups they drop
+    local soft = app.postfx:soft_shadows_active()
+    app.postfx:begin_shadows()
+    app.helis:draw_shadows(soft) -- aircraft ground shadows, under the flyers
+    app.combat.air_strike:draw_shadows(soft)   -- EXTRA (air_strike_fx)
+    p:draw_shadow(soft)
+    if other then other:draw_remote_shadow(g, cam, soft) end
+    if soft then
+        p:draw_smoke_shadows()
+        app.combat:draw_shadows()
+    end
+    app.postfx:end_shadows()
+    if p:is_airborne() then p:draw_world() end
+    app.combat:draw()
+    app.renderer:draw_detail_air()   -- muzzle and wreck smoke
+    app.renderer:draw_debris()   -- shrapnel above the explosion effects
+    app.helis:draw()             -- airborne enemy helicopters
+    app.combat.air_strike:draw() -- EXTRA (air_strike_fx): friendly craft and their rounds
+    for _, pl in ipairs(air) do self:_draw_vehicle(pl, p, cam, plain) end
+    if p:is_airborne() then p:draw_world_front() end
+    -- Night light map and flash layer per half, from this half's camera; the
+    -- headlight follows the player it belongs to and cuts on destruction.
+    app.lightfx.headlight_on = not p.death
+    app.lightfx:draw_night(cam)
+    app.lightfx:draw_additive(cam)
+    app.combat:draw_aim_laser(p)   -- EXTRA (aim_laser)
+    app.postfx:end_world(vx, 0, vw, vh)
+    if not plain then
+        app.hud.player         = p
+        app.hud.coplayer       = other
+        app.hud.coplayer_color = other and PlayerTag.color(other.number) or nil
+        app.hud.view_w, app.hud.view_h = vw, vh
+        app.hud:draw()
+        self:_draw_half_status(i, p, vw, vh)
+    end
+    g.setScissor()
+    g.pop()
+end
+
+-- The camera photo mode (engine/dev/photo_mode.lua) takes over: the first
+-- player's, which then fills the window instead of its half.
+function CoopGameplay:photo_camera()
+    return self.cameras[1]
+end
+
+-- The world alone, as one full-window view from the first player's camera with
+-- the teammate in it. Photo mode draws only this.
+function CoopGameplay:draw_world()
+    local w, h = love.graphics.getDimensions()
+    self:_draw_view(1, 0, w, h, true)
+    self.app.weather:draw()
 end
 
 function CoopGameplay:draw()
@@ -494,74 +584,9 @@ function CoopGameplay:draw()
     local W, H   = g.getDimensions()
     local n      = #self.players
     local half_w = math.floor(W / math.max(1, n))
-    for i, p in ipairs(self.players) do
-        local vx    = (i - 1) * half_w
-        local vw    = (i == n) and (W - vx) or half_w
-        local cam   = self.cameras[i]
-        local other = self.players[3 - i]
-        cam.vw, cam.vh      = vw, H
-        cam.shake_x, cam.shake_y = app.impactfx:shake_offset(cam.x, cam.y)
-        app.renderer.camera = cam
-        app.combat.camera   = cam
-        app.powerups.camera = cam
-        g.push()
-        g.translate(vx, 0)
-        g.setScissor(vx, 0, vw, H)
-        local ground, air = draw_layers(p, other)
-        app.postfx:begin_world(app.impactfx:low_armor(p))
-        app.renderer:draw_ground()   -- terrain, decals, craters
-        if #ground > 0 then
-            app.renderer:draw_objects("under")   -- flat clutter the vehicles sit on
-            app.rescue:draw()                    -- land pads + walking POWs
-            app.saboteur:draw_ground()           -- saboteur pads + walking saboteurs
-            for _, pl in ipairs(ground) do
-                if pl == p then p:draw_world() end   -- smoke behind the local vehicle
-                self:_draw_vehicle(pl, p, cam)
-                if pl == p then p:draw_world_front() end
-            end
-            app.renderer:draw_objects("over")    -- trees/buildings + objective markers
-        else
-            app.renderer:draw_objects()          -- nothing on the ground to split around
-            app.rescue:draw()
-            app.saboteur:draw_ground()
-        end
-        app.saboteur:draw_markers()  -- target reticles
-        app.powerups:draw()
-        app.renderer:draw_explosions()   -- building blasts over the pickups they drop
-        local soft = app.postfx:soft_shadows_active()
-        app.postfx:begin_shadows()
-        app.helis:draw_shadows(soft) -- aircraft ground shadows, under the flyers
-        app.combat.air_strike:draw_shadows(soft)   -- EXTRA (air_strike_fx)
-        p:draw_shadow(soft)
-        if other then other:draw_remote_shadow(g, cam, soft) end
-        if soft then
-            p:draw_smoke_shadows()
-            app.combat:draw_shadows()
-        end
-        app.postfx:end_shadows()
-        if p:is_airborne() then p:draw_world() end
-        app.combat:draw()
-        app.renderer:draw_detail_air()   -- muzzle and wreck smoke
-    app.renderer:draw_debris()   -- shrapnel above the explosion effects
-        app.helis:draw()             -- airborne enemy helicopters
-        app.combat.air_strike:draw() -- EXTRA (air_strike_fx): friendly craft and their rounds
-        for _, pl in ipairs(air) do self:_draw_vehicle(pl, p, cam) end
-        if p:is_airborne() then p:draw_world_front() end
-        -- Night light map and flash layer per half, from this half's camera; the
-        -- headlight follows the player it belongs to and cuts on destruction.
-        app.lightfx.headlight_on = not p.death
-        app.lightfx:draw_night(cam)
-        app.lightfx:draw_additive(cam)
-        app.combat:draw_aim_laser(p)   -- EXTRA (aim_laser)
-        app.postfx:end_world(vx, 0, vw, H)
-        app.hud.player         = p
-        app.hud.coplayer       = other
-        app.hud.coplayer_color = other and PlayerTag.color(other.number) or nil
-        app.hud.view_w, app.hud.view_h = vw, H
-        app.hud:draw()
-        self:_draw_half_status(i, p, vw, H)
-        g.setScissor()
-        g.pop()
+    for i = 1, n do
+        local vx = (i - 1) * half_w
+        self:_draw_view(i, vx, (i == n) and (W - vx) or half_w, H)
     end
     app.weather:draw()   -- full-window overlay across both halves
     if n > 1 then

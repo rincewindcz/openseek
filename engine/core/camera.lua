@@ -16,15 +16,20 @@ local Camera = Class()
 Camera.GAME_ZOOM_INDEX = GAME_ZOOM_INDEX
 
 function Camera:init(world_size)
-    self.world_size = world_size or 4096
-    self.x          = self.world_size / 2
-    self.y          = self.world_size / 2
-    self.zoom_index = 4     -- index into ZOOMS; default 1x
-    self.angle      = nil   -- radians; nil = no rotation (viewer mode)
-    self.view_oy    = 0     -- screen-space vertical offset of the focus point (px)
-    self.vw         = nil   -- viewport size; nil = full window (split screen sets these)
-    self.vh         = nil
-    self.zoom_anim  = nil   -- continuous-scale tween for the level-start zoom-in
+    self.world_size  = world_size or 4096
+    self.x           = self.world_size / 2
+    self.y           = self.world_size / 2
+    self.zoom_index  = 4     -- index into ZOOMS; default 1x
+    self.angle       = nil   -- radians; nil = no rotation (viewer mode)
+    self.view_ox     = 0     -- screen-space offset of the focus point from the viewport center (px)
+    self.view_oy     = 0
+    self.vw          = nil   -- viewport size; nil = full window (split screen sets these)
+    self.vh          = nil
+    self.zoom_anim   = nil   -- continuous-scale tween for the level-start zoom-in
+    -- Set only by photo mode (engine/dev/photo_mode.lua) while it draws:
+    self.zoom_scale  = nil   -- continuous multiplier on the zoom
+    self.subject_rot = nil   -- radians the view is turned away from the vehicle's upright frame
+    self.cull_margin = nil   -- extra world units of culling for a focus panned far off center
 end
 
 -- Viewport size this camera renders into: the full window, unless a split-screen
@@ -47,19 +52,24 @@ end
 -- sits below center so more of the world ahead is visible.
 function Camera:screen_center()
     local w, h = self:dims()
-    return w / 2, h / 2 + self.view_oy
+    return w / 2 + self.view_ox, h / 2 + self.view_oy
+end
+
+-- The display's view scale (Display.view_scale), times photo mode's multiplier.
+function Camera:_scale()
+    return Display.view_scale() * (self.zoom_scale or 1)
 end
 
 -- Live screen pixels per world unit: the discrete zoom (or the intro tween)
--- times the display's view scale (Display.view_scale).
+-- times the view scale.
 function Camera:zoom()
     local za = self.zoom_anim
     if za then
         local k = math.min(1, za.t / za.dur)
         k = 1 - (1 - k) * (1 - k) * (1 - k)   -- ease-out cubic
-        return (za.from + (za.to - za.from) * k) * Display.view_scale()
+        return (za.from + (za.to - za.from) * k) * self:_scale()
     end
-    return ZOOMS[self.zoom_index] * Display.view_scale()
+    return ZOOMS[self.zoom_index] * self:_scale()
 end
 
 -- The fixed gameplay zoom, independent of any camera instance and of what the
@@ -73,7 +83,7 @@ end
 -- Used where a value must stay fixed across the smooth zoom (e.g. the weather
 -- field's tile size, so the lattice does not reflow while the intro animates).
 function Camera:base_zoom()
-    return ZOOMS[self.zoom_index] * Display.view_scale()
+    return ZOOMS[self.zoom_index] * self:_scale()
 end
 
 -- Ratio of the live zoom to the bare discrete target zoom: the view scale in
@@ -178,6 +188,7 @@ function Camera:viewport(margin)
         local diag = math.sqrt(w * w + h * h) / 2 / z
         margin = math.max(margin, diag)
     end
+    margin = margin + (self.cull_margin or 0)
     return {
         x0 = self.x - w / 2 / z - margin,
         x1 = self.x + w / 2 / z + margin,

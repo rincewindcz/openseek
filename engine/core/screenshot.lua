@@ -38,18 +38,23 @@ local function write_save(name, data)
     return love.filesystem.getSaveDirectory() .. "/" .. rel
 end
 
+-- Writes an image out as a PNG named after the current time. Returns the path
+-- written, or nil.
+function Screenshot.save(image)
+    local data = image:encode("png"):getString()
+    local name = unique_name()
+    local path = write_source(name, data) or write_save(name, data)
+    if path then
+        Log.info("screenshot", "saved %s", path)
+    else
+        Log.warn("screenshot", "write failed")
+    end
+    return path
+end
+
 -- Captures the frame being presented; the file is written once it is done.
 function Screenshot.capture()
-    love.graphics.captureScreenshot(function(image)
-        local data = image:encode("png"):getString()
-        local name = unique_name()
-        local path = write_source(name, data) or write_save(name, data)
-        if path then
-            Log.info("screenshot", "saved %s", path)
-        else
-            Log.warn("screenshot", "write failed")
-        end
-    end)
+    love.graphics.captureScreenshot(Screenshot.save)
 end
 
 return Screenshot

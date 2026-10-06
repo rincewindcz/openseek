@@ -375,10 +375,15 @@ function Gameplay:update(dt)
     self:tick_replay({ player })
 end
 
-function Gameplay:draw()
-    local app     = self.app
-    local mission = self.mission
-    app.renderer.highlight = app.debug_panel:highlight_entity()
+-- The camera photo mode (engine/dev/photo_mode.lua) takes over.
+function Gameplay:photo_camera()
+    return self.app.camera
+end
+
+-- The world view alone, up to the post-processing composite: no HUD, overlay
+-- text or debug panel. Photo mode draws only this.
+function Gameplay:draw_world()
+    local app = self.app
     app.camera.shake_x, app.camera.shake_y = app.impactfx:shake_offset(app.camera.x, app.camera.y)
     local alarm = app.impactfx:low_armor(self.player)   -- EXTRA (low_armor_fx, damage_flash)
     app.postfx:begin_world(alarm)   -- world view only; the HUD and overlays stay unfiltered
@@ -430,6 +435,13 @@ function Gameplay:draw()
     app.lightfx:draw_additive(app.camera)
     app.combat:draw_aim_laser(self.player)   -- EXTRA (aim_laser)
     app.postfx:end_world(0, 0, love.graphics.getDimensions())
+end
+
+function Gameplay:draw()
+    local app     = self.app
+    local mission = self.mission
+    app.renderer.highlight = app.debug_panel:highlight_entity()
+    self:draw_world()
     app.hud:draw()
     if mission and mission.state == "return_to_base" then self:draw_return_prompt() end
     if mission and mission.state == "won" and not app.end_stats:is_active() then

@@ -14,7 +14,7 @@ decoded from the user's own copy of the game and are never distributed.
 | `engine/game/` | Simulation and gameplay presentation systems. |
 | `engine/ui/` | Screens and widgets. |
 | `engine/scenes/` | One scene per top-level mode. |
-| `engine/dev/` | Debug panel, determinism self-test. |
+| `engine/dev/` | Debug panel, determinism self-test, photo mode. |
 | `lib/` | Vendored `json.lua`. Excluded from lint. |
 | `data/` | Hand-maintained JSON tunables. |
 | `content/` | Original artwork shipped with the engine. |
@@ -121,6 +121,7 @@ luacheck .                    # zero warnings required
 love . --selftest [ticks] [stage]
 love . [stageMP]
 love . --touch                # phone controls on a desktop (see below)
+love . --photo [stageMP]      # developer photo mode (see below)
 ```
 
 `--touch` turns the left mouse button into a single touch (the pointer moves
@@ -128,6 +129,32 @@ only while it is held, as a finger would) and makes `Z` hold the on-screen FIRE
 button as a second touch, so the stick and FIRE work together. The controls show
 from the start and OPTIONS gains the MOBILE UI page. The OS cursor stays
 visible. Other mouse buttons and the keyboard behave as usual.
+
+`--photo` enables photo mode (`dev/photo_mode`), a developer tool for
+promotional stills; without the flag the module is never loaded. `F8` in
+gameplay, co-op or the overview opens it (the overview's animation gallery key
+is taken while the flag is on): the simulation holds as in a pause, the HUD and
+every overlay are left out, and the view is free.
+
+| Input | Action |
+|-------|--------|
+| Left drag | Move the view |
+| Wheel | Zoom about the mouse |
+| Right drag, `[` / `]` | Turn the view (`turn_step` degrees per key press) |
+| `0` | Back to the scene's own framing |
+| `V` | Pin the stage view: the stage data's `photo_view` (`x`, `y` at the window center, `scale` in window pixels per world pixel, `turn` in degrees), else the world center, north up, at the game zoom. The same picture in every stage and scene wherever the vehicle is, until the view is moved |
+| `O` | Next output size (`outputs` in `data/photo.json`); the frame guide marks what a capture covers |
+| `.` | Simulate one tick; held, the scene runs at `slow_motion` speed. Live input still drives the vehicle |
+| `Enter`, `F12` | Capture into `screenshots/` |
+| `C` | Copy the world position under the mouse to the clipboard |
+| `Tab` | Hide the key help |
+| `F8`, `Esc` | Leave |
+
+A capture draws the world again into a canvas of the output size, so it can be
+larger than the window and of another shape. Texel-sized post-processing steps
+(bloom spread, soft shadow blur, sharpen) come out finer in a capture larger
+than the window, and precipitation is rolled again for it. Co-op is drawn as
+one full-window view from the first player's camera.
 
 | Check | Run after touching |
 |-------|--------------------|
@@ -242,6 +269,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Buttons draw their white icon from `content/mobileui/icon_<id>.png` (label when missing), tinted gold or white. MOBILE UI options: `touch_color`, `touch_opacity` (multiplies every alpha), `touch_button_scale`, `touch_stick_scale`, `touch_left_handed` (buttons measured from the left edge, stick on the right half). Drawn while the last input was touch (from the start under `--touch`). |
 | `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay. |
 | `dev/selftest` | Scripted phase run three ways, compared per tick. |
+| `dev/photo_mode` | `--photo` only: holds the scene, puts a free view (focus offset, zoom multiplier, turn) on the scene's camera for the length of a draw, and captures the scene's `draw_world()` into a canvas of the output size (`data/photo.json`). Presentation only; steps whole ticks through the scene's update. |
 
 ## 6. World and coordinates
 
@@ -583,6 +611,7 @@ galleries, debug mission picker, headless checks.
 | `data/animations.json` | Named animation clips. |
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. |
 | `data/audio.json` | Sound events (`defaults`, `events` with clip or `clips`, per-vehicle variants, `size_pitch`, `group`), `callouts` (armor / fuel thresholds, warning period, selection guard, finish-him mark, follow-up lines) and `sequences` (timed screen cues). |
+| `data/photo.json` | Photo mode (`--photo`): `outputs` (label, `w`, `h`; an entry without a size is the window), zoom limits and wheel step, turn step (degrees) and drag rate (degrees per pixel), slow motion speed. |
 | `data/postfx.json` | `look` (100% values), `missions` (per mission digit, look fields that differ, e.g. the cold grade of mission 1) and `presets`. |
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius); `low_armor` (armor threshold, floor, fade, edge color and strength, pulse share and rate range, desaturation, edge radii, hit flash time and strength). |

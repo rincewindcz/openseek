@@ -216,6 +216,16 @@ function LightFX:_headlight(camera)
     local radius   = h.radius * z
     local apex_y   = cy - h.gap * z
 
+    -- Photo mode turns the view away from the upright vehicle; the beam turns
+    -- with it about the focus.
+    local rot = camera.subject_rot
+    if rot then
+        love.graphics.push()
+        love.graphics.translate(cx, cy)
+        love.graphics.rotate(rot)
+        love.graphics.translate(-cx, -cy)
+    end
+
     -- Cone bridging the lamp to the pool.
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(self.cone, cx, apex_y, 0, radius * 1.15, (reach + radius) * flick)
@@ -223,6 +233,7 @@ function LightFX:_headlight(camera)
     -- Bright pool ahead of the vehicle.
     self:_stamp(cx, cy - reach, radius, h.color[1], h.color[2], h.color[3],
                 h.intensity * flick)
+    if rot then love.graphics.pop() end
 end
 
 -- Pass A: build and composite the multiplicative night light map. Call only on

@@ -111,6 +111,21 @@ function Overview:mousemoved(_x, _y, dx, dy)
     camera:clamp()
 end
 
+-- The camera photo mode (engine/dev/photo_mode.lua) takes over.
+function Overview:photo_camera()
+    return self.app.camera
+end
+
+-- The world view alone, without the panels and pickers. Photo mode draws only this.
+function Overview:draw_world()
+    local app = self.app
+    app.renderer:draw_ground()
+    app.renderer:draw_objects()
+    app.renderer:draw_explosions()
+    app.combat:draw()            -- projectiles/effects from the editor FIRE action
+    app.renderer:draw_debris()   -- shrapnel above any explosion (e.g. F2 kills)
+end
+
 function Overview:draw()
     local app = self.app
     app.renderer.highlight = app.debug_panel:highlight_entity()
