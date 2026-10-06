@@ -365,7 +365,7 @@ def main(argv=None):
         save_canvas(fit_track(track[21], TRACK_W), pal, out / "slider_track.png")
         print("  slider_track.png")
 
-    (out / "layout.json").write_text(json.dumps(layout, indent=2) + "\n")
+    gamedata.write_text(out / "layout.json", json.dumps(layout, indent=2) + "\n")
     print("  layout.json")
 
 

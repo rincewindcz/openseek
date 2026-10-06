@@ -132,7 +132,7 @@ def export_weapon_info(game_dir, out_dir):
             print(f"  skip {name}: not found")
             continue
         info[vehicle] = parse_weapon_info(src, categories)
-    (out_dir / "weapon_info.json").write_text(json.dumps(info, indent=2))
+    gamedata.write_text(out_dir / "weapon_info.json", json.dumps(info, indent=2))
     print("  WINF/WINFT -> assets/pow/weapon_info.json")
 
 

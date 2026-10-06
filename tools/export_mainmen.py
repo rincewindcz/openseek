@@ -173,7 +173,7 @@ def pack_font_atlas(glyphs, out_png, out_json):
     for img, px, py in placements:
         atlas.paste(img, (px, py))
     atlas.save(out_png)
-    out_json.write_text(json.dumps(
+    gamedata.write_text(out_json, json.dumps(
         {"line_height": FONT_H, "mode": "truecolor", "glyphs": meta}, indent=1) + "\n")
     print(f"  font atlas: {len(glyphs)} glyphs -> {out_png}")
 

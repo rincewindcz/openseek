@@ -164,7 +164,7 @@ def export_stage(game_dir: Path, mission: int, phase: int) -> None:
                         dimg.save(sprite_dir / f"{stem}_f{dframe}.png")
                     rendered[dkey] = bool(dimg)
 
-    out_json.write_text(json.dumps(level, indent=2))
+    gamedata.write_text(out_json, json.dumps(level, indent=2))
     print(f"{tag}: {ok} class frames, {len(level['entities'])} entities "
           f"-> {out_json}")
     for name, why in failed:

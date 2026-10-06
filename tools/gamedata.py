@@ -25,6 +25,13 @@ def _zipapp():
     return TOOLS_DIR if zipfile.is_zipfile(TOOLS_DIR) else None
 
 
+def write_text(path, text):
+    """Write a pack text file with LF line endings on every platform, so a pack
+    is the same bytes wherever it is built."""
+    with open(path, "w", newline="\n") as f:
+        f.write(text)
+
+
 def read_resource(rel):
     """Bytes of a shipped repo file (data/..., content/...), from the source
     tree, the PyInstaller bundle or the zipapp."""

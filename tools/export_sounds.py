@@ -178,9 +178,7 @@ def main(argv=None):
         if items:
             catalog.append({"name": key, "title": titles[key], "items": items})
 
-    with open(catalog_path, "w") as f:
-        json.dump(catalog, f, indent=2)
-        f.write("\n")
+    gamedata.write_text(catalog_path, json.dumps(catalog, indent=2) + "\n")
 
     print("converted %d sound(s) to %s" % (converted, out_dir))
     for cat in catalog:

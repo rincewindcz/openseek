@@ -229,7 +229,7 @@ def export_font(name, cfg, game_dir, palette=None):
         "charmap": cfg.get("charmap", None),
         "word": cfg.get("word", False),
     }
-    (out_dir / f"{name}.json").write_text(json.dumps(meta, indent=2))
+    gamedata.write_text(out_dir / f"{name}.json", json.dumps(meta, indent=2))
     print(f"  {name}: {len(glyphs_out)} glyphs, atlas "
           f"{atlas.width}x{atlas.height}, line {line_height}px ({cfg['mode']})")
 

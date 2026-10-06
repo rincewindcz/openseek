@@ -318,7 +318,7 @@ def build(source, out, origin, force=False):
         "failed":   failed,
         "source":   origin,
     }
-    (new / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    gamedata.write_text(new / "manifest.json", json.dumps(manifest, indent=2) + "\n")
 
     old = out.with_name(out.name + ".old")
     shutil.rmtree(old, ignore_errors=True)

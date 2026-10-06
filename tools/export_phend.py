@@ -210,7 +210,7 @@ def main(argv=None):
     })
     print("  label_total5.png  label_totalscore.png")
 
-    (out / "layout.json").write_text(json.dumps(layout, indent=2) + "\n")
+    gamedata.write_text(out / "layout.json", json.dumps(layout, indent=2) + "\n")
     print("  layout.json")
 
 

@@ -133,7 +133,7 @@ def main(argv=None):
     out_dir = gamedata.ASSETS / "ending"
     out_dir.mkdir(parents=True, exist_ok=True)
     data = build(exe)
-    (out_dir / "ending.json").write_text(json.dumps(data, indent=2) + "\n")
+    gamedata.write_text(out_dir / "ending.json", json.dumps(data, indent=2) + "\n")
     print(f"  ending.json: {len(data['slides'])} slides")
 
     flc = find_file(game_dir, "REGANIM.FLC")

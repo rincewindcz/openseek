@@ -78,7 +78,7 @@ def main(argv=None):
             slots = ",".join(str(p["slot"]) for p in paras)
             print(f"  {key}: {len(paras)} para(s) slots[{slots}]  \"{head}...\"")
 
-    out_path.write_text(json.dumps(result, indent=2) + "\n")
+    gamedata.write_text(out_path, json.dumps(result, indent=2) + "\n")
     print(f"\nGame dir: {game_dir}\nWrote:    {out_path} ({len(result)} stages)")
 
 
