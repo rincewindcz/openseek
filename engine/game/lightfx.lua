@@ -32,6 +32,8 @@ local EXPLOSIONS = {
                burst = 95, ttl = 0.45, flash = { 0.10, { 1.0, 0.78, 0.5 } } },
     medium = { radius = 88,  intensity = 1.1, color = { 1.0, 0.72, 0.40 },
                burst = 62, ttl = 0.35 },
+    small  = { radius = 72,  intensity = 1.0, color = { 1.0, 0.74, 0.44 },
+               burst = 50, ttl = 0.32 },
     flak   = { radius = 62,  intensity = 0.9, color = { 1.0, 0.86, 0.55 },
                burst = 42, ttl = 0.30 },
 }

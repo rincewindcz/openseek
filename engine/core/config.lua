@@ -159,6 +159,21 @@ local Config = {
     -- that blows by itself after its fuse and spares the player. Replay parameter.
     remote_mine = true,
 
+    -- Flame momentum (engine/game/combat.lua, data/weapons.json momentum): a
+    -- flame keeps the tank's speed along the aim, so the stream reaches its
+    -- range ahead of a driving tank. Off, the flames fly at their own speed
+    -- only, as in the original, and a tank at speed nearly catches them up.
+    -- Replay parameter.
+    flame_momentum = true,
+
+    -- Shard amount (engine/game/debris.lua, data/debris.json): multiplier on
+    -- the pieces an explosion throws. 1.0 is the original's count (four iron
+    -- pieces and eight bits off a wreck). lying_shards leaves a landed piece
+    -- on the ground for a while (`lie`) instead of removing it with its dust
+    -- puff. Presentation only.
+    shard_amount = 1.5,
+    lying_shards = true,
+
     -- Weapon finds (engine/game/powerups.lua, data/powerups.json find): a drop
     -- is now and then a weapon the vehicle does not carry, and picking it up
     -- adds the weapon for the rest of the phase. Off, a drop is only ever ammo
@@ -263,6 +278,7 @@ local PERSISTED = {
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
     "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx", "remote_mine",
+    "flame_momentum", "shard_amount", "lying_shards",
     "explosion_pitch", "ending_stats", "crash_fx", "crash_cause", "crash_stats",
     "difficulty", "enemy_damage_level", "enemy_damage", "enemy_fire_level", "enemy_fire_rate",
     "enemy_aggression", "pickup_level", "weapon_finds",

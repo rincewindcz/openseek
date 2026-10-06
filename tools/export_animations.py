@@ -19,12 +19,13 @@ import gamedata
 import image
 
 
-# (BIN stem, output prefix, fps, loop)
+# (BIN stem, output prefix, fps, loop). The explosions play at the original's
+# rate: its per-tick frame step (0x80, flak 0x48, of 512) at 70 ticks a second.
 ANIMATIONS = [
-    ("EXPLO32",  "explo32",  14, False),
-    ("EXPLO64",  "explo64",  10, False),
-    ("RDNEXPD",  "rdnexpd",  12, False),
-    ("FLAKANI",  "flakani",  12, False),
+    ("EXPLO32",  "explo32",  17.5, False),
+    ("EXPLO64",  "explo64",  17.5, False),
+    ("RDNEXPD",  "rdnexpd",  17.5, False),
+    ("FLAKANI",  "flakani",  9.84, False),
     ("FIRE",     "fire",      8, True),
     ("SMOKE",    "smoke",     8, False),
     ("SMOKE2",   "smoke2",    8, False),
@@ -67,10 +68,17 @@ def export_anim(game_dir, out_dir, bin_stem, prefix, palette):
 # axis-aligned walk cycle the engine rotates at runtime). Each (stem, mission)
 # pair becomes a clip "{prefix}{m}" with files {prefix}{m}_f{NN}.png.
 MISSION_ANIMATIONS = [
-    ("DUST",    "dust",    12, False, None),
+    ("DUST",    "dust",    17.5, False, None),
     ("MINE",    "mine",    12, False, None),
     ("POW",     "pow",     12, True,  range(0, 16)),
     ("NEWDUDE", "newdude", 12, True,  range(0, 16)),
+    # The building blast of missions 1, 2 and 4, each only in its own STAGE0{m}
+    # and drawn for that mission's palette (missions 0 and 3 use RDNEXPD above).
+    # Clips rdnexp1 / 2 / 4, named by the `missions` table of explosion_medium
+    # in data/animations.json.
+    ("RDNEXPS", "rdnexp",  17.5, False, None),
+    ("RDNEXPJ", "rdnexp",  17.5, False, None),
+    ("RDNEXPR", "rdnexp",  17.5, False, None),
 ]
 
 
@@ -144,8 +152,9 @@ def main(argv=None):
     # One-shot alias of FIRE used as a small-entity death explosion. The engine
     # plays death effects as "explosion_<type>", so exposing the FIRE frames under
     # explosion_fire (non-looping) makes "fire" a valid explosion in the editor.
+    # It plays at the original's rate for that puff (step 0x100).
     if results.get("fire"):
-        results["explosion_fire"] = (results["fire"][0], results["fire"][1], False)
+        results["explosion_fire"] = (results["fire"][0], 35, False)
 
     print()
     print("Per-mission animations:")

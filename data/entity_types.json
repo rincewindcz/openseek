@@ -19,7 +19,7 @@
   },
   "mine": {
     "detection_radius": 0,
-    "explosion": "medium",
+    "explosion": "large",
     "hit_radius": 0,
     "speed": 0
   },

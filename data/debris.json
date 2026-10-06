@@ -1,0 +1,99 @@
+{
+  "max": 900,
+  "max_lying": 600,
+  "lie_fade": 1.5,
+  "lie_tint": 0.82,
+  "kinds": {
+    "iron": {
+      "clips": ["ironsz", "iron2sz"],
+      "frames": 16,
+      "sizes": 3,
+      "speed": [140, 157],
+      "rest": 0.91,
+      "height": 4,
+      "fall": [1.1, 2.05],
+      "spin": [17.5, 26],
+      "trail": { "chance": 0.25, "time": 0.87, "interval": 0.057, "clip": "missile_smoke" },
+      "dust": true,
+      "lie": [8, 14]
+    },
+    "bit": {
+      "clips": ["metal8"],
+      "frames": 8,
+      "variants": 2,
+      "speed": [35, 52],
+      "height": 4,
+      "fall": [1.1, 2.05],
+      "spin": [17.5, 17.5],
+      "dust": true,
+      "lie": [4, 8]
+    },
+    "drift": {
+      "clips": ["metal8"],
+      "frames": 8,
+      "variants": 2,
+      "speed": [35, 52],
+      "rest": 1.83,
+      "life": [1.4, 1.83],
+      "fade": 0.25,
+      "spin": [17.5, 17.5]
+    },
+    "plate": {
+      "clips": ["metalrt"],
+      "frames": 17,
+      "variants": 2,
+      "speed": [280, 280],
+      "rest": 0.46,
+      "life": [0.4, 0.46],
+      "fade": 0.12,
+      "spin": [35, 35],
+      "reverse": 0.5
+    },
+    "chunk": {
+      "clips": ["metalsz"],
+      "frames": 14,
+      "sizes": 3,
+      "variants": 2,
+      "speed": [87, 105],
+      "rest": 1.14,
+      "height": 5,
+      "fall": [1.1, 2.05],
+      "spin": [17.5, 26],
+      "reverse": 0.5,
+      "trail": { "chance": 1, "time": 0.2, "interval": 0.057, "clip": "missile_smoke" },
+      "dust": true,
+      "lie": [8, 14]
+    },
+    "spark": {
+      "clips": ["metal8"],
+      "frames": 8,
+      "variants": 2,
+      "speed": [280, 460],
+      "rest": 1.0,
+      "life": [0.5, 0.85],
+      "fade": 0.22,
+      "spin": [18, 18],
+      "cone": 0.5
+    }
+  },
+  "bursts": {
+    "scrap":    [ { "kind": "bit", "count": 1 }, { "kind": "drift", "count": 1 } ],
+    "wreck":    [ { "kind": "iron", "count": 4 }, { "kind": "bit", "count": 4 }, { "kind": "drift", "count": 4 } ],
+    "building": [ { "kind": "iron", "count": 6 }, { "kind": "bit", "count": 6 }, { "kind": "drift", "count": 6 } ],
+    "blast":    [
+      { "kind": "plate", "count": 4, "ring": 0,  "jitter": 0.05, "fixed": true },
+      { "kind": "chunk", "count": 4, "ring": 45, "jitter": 0.18, "fixed": true },
+      { "kind": "bit", "count": 4 },
+      { "kind": "drift", "count": 4 }
+    ],
+    "player":   [
+      { "kind": "plate", "count": 4, "ring": 0,  "jitter": 0.05, "fixed": true },
+      { "kind": "chunk", "count": 8, "ring": 22, "jitter": 0.3,  "fixed": true },
+      { "kind": "iron", "count": 8 },
+      { "kind": "bit", "count": 8 },
+      { "kind": "drift", "count": 8 }
+    ],
+    "strike":   [ { "kind": "iron", "count": 2 }, { "kind": "bit", "count": 2 }, { "kind": "drift", "count": 2 } ],
+    "ffr":      [ { "kind": "spark", "count": 1, "fixed": true } ]
+  }
+}

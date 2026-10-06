@@ -97,7 +97,7 @@ def parse_class(rec: bytes, index: int) -> dict:
         # see research/LEVELS.md "Class fields copied at spawn".
         "pows": f[6],             # +0x0c POWs held inside (entity +0x30)
         "toughness": f[16],       # +0x20 damage capacity (entity +0x66/+0x68)
-        "explosion_size": f[18],  # +0x24 size passed to the explosion spawner (entity +0x70)
+        "height": f[18],          # +0x24 height above the ground, px (entity +0x70)
         "armed": f[19],           # +0x26 4 on armed units (entity +0xa4), meaning unconfirmed
         "field_28": f[20],        # +0x28 4 on POW markers / civilians (entity +0xa5)
         "field_2a": f[21],        # +0x2a always 0 in retail stages (entity +0xa6)

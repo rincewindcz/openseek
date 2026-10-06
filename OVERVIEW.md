@@ -236,7 +236,8 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/mathx` | `atan2` shim, `heading_deg`. |
 | `core/log` | Timestamped, tagged console lines (`info`, `warn`); `recent()` keeps the last 80 for the crash report. |
 | `core/version` | Build identity from `build.json` (`version`, `commit`, `dirty`). `string()` for the startup log line; `draw()` puts the build tag in the bottom-right corner of the title, the main menu and the mission select: `OPENSEEK <version>` in the gold CHARS font (`OPENSEEK DEV` without a release tag) and, on a packaged build, the commit under it in grey (`+` when built with uncommitted changes). |
-| `game/world` | Stage load, entities, ground colour, collision (`blocked`), objectives, shrapnel, dust, `world.time`, `world.rng`, `world.params`. |
+| `game/world` | Stage load, entities, ground colour, collision (`blocked`), objectives, ground dust, `world.time`, `world.rng`, `world.params`. |
+| `game/debris` | Explosion shards (`data/debris.json`), owned by the world as `world.debris`: `burst(name, x, y, opts)` throws the named burst, `update` flies the pieces (linear slow-down to rest, sinking through the size rows of their clip, smoke trail puffs, dust puff on landing through `World:add_ground_dust`, then lying on the ground with EXTRA `lying_shards`). Presentation only: fed through the one-way `World:spawn_debris`, random numbers from `math.random`, never read by the simulation. Flying pieces and puffs are drawn by `Renderer:draw_debris`, lying ones in the ground pass over the tread marks. |
 | `game/entity` | HP, state machine, damage smoke, hit effects, crater. |
 | `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. `Player.draw_tank_variant` is shared with the select screen. |
 | `game/enemy_heli` | Enemy helicopter spawn, flight AI, fire, death (`world.air_units`). |
@@ -329,7 +330,9 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   of them, `Vehicles.WEAPONS`). The flame thrower (`flame_thrower`) spends one
   of its 300 units per flame, each a `fire` puff that blooms and thins out
   over its flight and deals 1 toughness to the first ground or air target it
-  touches; level 3 fires two, from either side of the nozzle.
+  touches; level 3 fires two, from either side of the nozzle. EXTRA
+  `flame_momentum`: a flame also keeps the tank's speed along the aim, outside
+  its range count, so the reach holds ahead of a driving tank.
 - Player armor is the original's scale: max armor `floor((slider + 5) *
   armor_base / 15)`, the slider being the equip armor 0..1 as 0..29 (chopper
   6..45, tank 13..90, 25 / 50 at the default). An armor pickup restores half
@@ -348,7 +351,10 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   `lock_arc` widens the lock cone (ground-to-air 180, all around); `barrel`
   fires from the tank's live barrel tip (a number names one barrel, the flame
   thrower's nozzle); `flight_anim` plays the sprite clip once over the level's
-  `range` instead of on the clock; `ricochet` false drops the ricochet off a
+  `range` instead of on the clock; `momentum` is the share of the shooting
+  player's speed along the aim a round keeps (`Player:velocity`, carried as
+  `Projectile.carry_vx` / `carry_vy` and not counted into `traveled`; EXTRA
+  `flame_momentum`); `ricochet` false drops the ricochet off a
   target that survives; `target_kind` limits hits to `ground`
   or `air`.
 - Player range 640 px unless the weapon or its level sets `range`.
@@ -398,11 +404,41 @@ there in ticks of 1/70 s, three values = EASY / MEDIUM / HARD picked by
 - `enemy_fire_rate` and `enemy_aggression` are extra scales on every reload
   and on both radii, 1.0 in every preset.
 - Structures take their power-up drop and explosion from the exported class
-  fields (`drop`, `behaviour`, `explosion_size`), as the original: no drop
+  fields (`drop`, `behaviour`, `is_target`), as the original: no drop
   entry never drops, behaviour 1 always drops a medal, the rest drop a random
-  pickup 7 times in 8. Destroy targets, forced-drop classes and explosion size
-  2 get the large blast. Stage exports without the fields fall back to the
-  size rule (large buildings drop 7 in 8).
+  pickup 7 times in 8. Destroy targets and forced-drop classes get the ring
+  blast (`medium`, RDNEXP), classes with a drop entry the small one (`small`,
+  EXPLO32), the rest the fire puff (`fire`); in the data that follows the size
+  of the building (`research/LEVELS.md`, "Effect spawner"). Stage exports
+  without the fields fall back to the kind's `explosion` and the size rule
+  (large buildings drop 7 in 8).
+- Explosion clips play at the original's rates (`data/animations.json`: 17.5
+  fps, the fire puff and the dust puff 35 and 17.5, the flak burst 9.84);
+  mines, helicopters and bombs are `large` (EXPLO64) as there. A clip's
+  `missions` table names the clip drawn instead in
+  a mission (`World:explosion_clip`): the ring blast is RDNEXPS / RDNEXPJ /
+  RDNEXPR in missions 1 / 2 / 4, when the pack has them. The size also keys
+  the explosion light (`game/lightfx`), the shake (`data/impact_fx.json`), the
+  wreck smoke (`data/detail_fx.json`) and the `explosion.<size>` sound.
+- Armed units keep openSEEK's larger blasts instead of the original's
+  EXPLO32: flak turrets and tank turrets the ring blast, tank hulls EXPLO64
+  (`data/entity_types.json`).
+- Shards follow the original's spawners (`game/debris`, `data/debris.json`):
+  a destroyed tank hull, tank turret, flak turret or building
+  throws the `wreck` burst (four iron pieces, eight METAL8 bits; `building`,
+  with half as many again, off a building large enough for a crater), a
+  fire-puff prop `scrap` (two bits), a bomb, a mine, an enemy mine or a
+  crashed helicopter `blast`
+  (a cross of four METALRT plates, four METALSZ chunks on the diagonals,
+  eight bits), an air strike round the weapon's `debris` burst, an FFR hit
+  `ffr` sparks along its flight. Iron pieces and chunks shrink through their
+  three size rows as they sink and land in the mission's dust puff; one iron
+  piece in four and every chunk trails `missile_smoke`. A destroyed player
+  vehicle throws the larger `player` burst (the original throws the blast's
+  shards there). EXTRA `shard_amount` scales the counts of every part not
+  marked `fixed`; `max` caps the flying pieces. EXTRA `lying_shards`: a landed
+  piece of a kind with `lie` stays on the ground for that many seconds,
+  fading over `lie_fade`, the oldest removed past `max_lying`.
 - `data/overrides.json` fixes single sprites where the data is wrong or
   missing: `assets` (sprite file -> fields, every stage) and `stages` (stage
   -> sprite file -> fields); a stage entry wins field by field. Fields:
@@ -583,6 +619,9 @@ Toggleable extras (EXTRAS page):
 | `pickup_glint` | off | A light sweep runs across each pickup now and then (`game/detail_fx`). |
 | `air_strike_fx` | on | Air strike sight on a pending target, radar blip, friendly craft with their rockets and bombs (`game/air_strike`, `ui/hud`). |
 | `remote_mine` | on | The tank's mine waits for a fresh fire press and its blast also hits players inside it; off, the original's 1.4 s fuse that spares the player. Replay parameter. |
+| `shard_amount` | 1.5 | Multiplier on the pieces an explosion throws; 1.0 is the original's count (`game/debris`). Presentation only. |
+| `lying_shards` | on | Landed shards stay on the ground for a few seconds and fade, instead of vanishing in their dust puff (`game/debris`, `lie` in `data/debris.json`). Presentation only. |
+| `flame_momentum` | on | Flame thrower flames keep the tank's speed along the aim, so the stream holds its reach while driving; off, the original's fixed 140 px/s. Replay parameter. |
 | `weapon_finds` | on | A drop is now and then a weapon the vehicle does not carry; taking it adds the weapon for the rest of the phase (`game/powerups`). Off, drops are only ammo for carried weapons, as the original. Replay parameter. |
 | `explosion_pitch` | on | The one explosion sound pitched by blast size (`core/audio`, `size_pitch`). |
 | `ending_stats` | on | The run record typed under the ending's FIN01..03 story (`scenes/ending`, `data/ending.json` `stats`). |
@@ -641,6 +680,7 @@ galleries, debug mission picker, headless checks.
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius); `low_armor` (armor threshold, floor, fade, edge color and strength, pulse share and rate range, desaturation, edge radii, hit flash time and strength). |
 | `data/powerups.json` | Power-ups in the original's units (`tick_rate` 70): `lifetime` per pickup level, `blink`, `reach`, `medal_flip`, the drop table (`table_size`, `ammo_share`, `low` / `critical` fuel fraction and armor), `fuel_gain`, `armor_gain`, `ammo_cap`, PICKUPS `frames` and `ammo_frames` per weapon, `find` (chance, ammo share and call-out frames of a weapon find). |
+| `data/debris.json` | Explosion shards: `kinds` (clips, `frames` per tumble, `sizes` rows, `variants`, `speed` and `rest` time, `height` and `fall` or `life` and `fade`, `spin`, `reverse` share, `trail`, `dust`, `cone`), `bursts` (parts of `kind` and `count`, `ring` angle and `jitter` for an even spread, `fixed` to ignore `shard_amount`), `lie` seconds on the ground per kind with `lie_fade`, `lie_tint` and `max_lying`, `max` flying pieces. |
 | `data/detail_fx.json` | `recoil` (weapons, kick, time, muzzle smoke), `casings` (weapons, color, size, speed, drag, lifetime), `tread_dust` (speed threshold, interval, puff size and lifetime, color per mission digit), `wreck_smoke` (time and interval per explosion size, wind, tint, thinning), `pickup_glint` (period, sweep time, band width, strength, screen angle). |
 | `data/crash_fx.json` | Crash picture effects: `entrance` (flash, static time), `glitch` (cue events and burst time, tear, band, static mix, scanlines, rate), `haze` (amplitude, wavelength, speed), `smoke` (cap, prewarm, fade-in), `cause` (font, delay, pace, position, verbs, labels, lines), `stats` (order, labels, optional rows, the game-over `panel` layout), `respawn` (hold and fade-out of the picture before a respawn), `preview` (the overview preview's cause), and per picture `smoke` emitters, `fire` glows with embers and `haze` ellipses, all in art pixels. |
 | `data/tracks.json` | Tank tread marks: lifetime and fade (s), alpha, color, spacing and mark length (world units), gauge and tread width (fractions of hull width), mark cap. |
@@ -648,7 +688,7 @@ galleries, debug mission picker, headless checks.
 | `data/settings.json`, `data/keybinds.json`, `data/highscores.json` | Defaults; written to the save directory. |
 | `saves/save-<timestamp>-<n>.json` | One campaign save slot each, written to the save directory only (`game/savegame.lua`). |
 | `autosave.json` | The campaign run in progress at its last briefing, for the main menu's RESUME; written to the save directory only, removed when the run ends (`game/savegame.lua`). |
-| `assets/stageMP.json`, `assets/stageMP/*.png` | Stages; one frame-0 PNG per class, `render` offsets, `objectives`, `is_target`, class fields (`toughness`, `explosion_size`, `behaviour`, `drop`, `pows`, ...). |
+| `assets/stageMP.json`, `assets/stageMP/*.png` | Stages; one frame-0 PNG per class, `render` offsets, `objectives`, `is_target`, class fields (`toughness`, `height`, `behaviour`, `drop`, `pows`, ...). |
 | `assets/sounds.json`, `assets/sounds/*.wav` | Clip catalog (categories of `{name, file, label, rate}`), mono 8-bit WAV. |
 | `assets/mission_text.json` | `stage<M><P>` -> `paragraphs`. |
 | `assets/ending/ending.json`, `assets/ending/reganim.flc` | Ending: `prompt` and `slides` (`picture`, `lines` of `{text, x, y}` with tabs, VIC3 `alternate_lines`, `prompt` position); the CD's animation. Registered release only. |

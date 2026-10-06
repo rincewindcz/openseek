@@ -22,6 +22,8 @@ function Projectile:init(p)
     self.y          = p.y
     self.vx         = p.vx
     self.vy         = p.vy
+    self.carry_vx   = p.carry_vx or 0  -- the shooter's motion, kept on top of its own
+    self.carry_vy   = p.carry_vy or 0
     self.damage     = p.damage
     self.aoe        = p.aoe  or 0
     self.owner      = p.owner
@@ -99,8 +101,10 @@ function Projectile:update(dt)
     local sdt = dt * Config.speed_scale
     local dx = self.vx * sdt
     local dy = self.vy * sdt
-    self.x = self.x + dx
-    self.y = self.y + dy
+    -- The carried motion moves the round without using up its range, so the
+    -- reach is measured from the moving shooter.
+    self.x = self.x + dx + self.carry_vx * sdt
+    self.y = self.y + dy + self.carry_vy * sdt
     local step = math.sqrt(dx * dx + dy * dy)
     self.traveled = self.traveled + step
     if self.trail then self._trail_dist = self._trail_dist + step end
@@ -177,11 +181,11 @@ end
 -- would otherwise emit (false silences it).
 function CombatSystem:add_effect(clip_name, x, y, opts)
     opts = opts or {}
-    local anim = Animation.new(clip_name)
-    if anim:is_done() then return end
     -- Explosion clips (explosion_<size>) light the scene, pop a bright burst and
-    -- sound off.
+    -- sound off, and are drawn with the mission's own variant.
     local size = clip_name:match("^explosion_(%a+)")
+    local anim = Animation.new(size and self.world:explosion_clip(size) or clip_name)
+    if anim:is_done() then return end
     if size then
         self.world:explosion_light(x, y, size)
         if opts.sound ~= false then
@@ -341,6 +345,16 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
         if not target then homing = false end
     end
 
+    -- EXTRA (flame_momentum): the round keeps the weapon's `momentum` share of
+    -- its shooter's speed along the aim, so a stream does not shorten ahead of
+    -- a driving tank.
+    local carry_vx, carry_vy = 0, 0
+    if Config.flame_momentum and weapon_def.momentum and shooter and shooter.velocity then
+        local vx, vy = shooter:velocity()
+        local along  = (vx * fwd_x + vy * fwd_y) * weapon_def.momentum
+        carry_vx, carry_vy = fwd_x * along, fwd_y * along
+    end
+
     for i = 1, total do
         -- Angular spread offset
         local angle_off = swing_off
@@ -374,6 +388,8 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             y          = y + oy,
             vx         = math.cos(fire_rad) * speed,
             vy         = math.sin(fire_rad) * speed,
+            carry_vx   = carry_vx,
+            carry_vy   = carry_vy,
             damage     = damage,
             aoe        = weapon_def.aoe    or 0,
             owner      = owner,
@@ -752,7 +768,8 @@ function CombatSystem:_ffr_shrapnel(projectile)
     if projectile.weapon_def.proj_sprite ~= "ffr" then return end
     local n = self.world.rng:random(0, 2)
     if n > 0 then
-        self.world:spawn_directional_debris(projectile.x, projectile.y, projectile.vx, projectile.vy, n, "metal8")
+        self.world:spawn_debris(projectile.x, projectile.y, "ffr",
+            { dx = projectile.vx, dy = projectile.vy, count = n })
     end
 end
 
@@ -997,8 +1014,7 @@ end
 function CombatSystem:_detonate(projectile)
     self:add_effect(projectile.weapon_def.explosion or "explosion_large", projectile.x, projectile.y,
         { scale = 1.5, sound = "explosion.bomb" })
-    -- Same flying iron/metal shrapnel (and the dust it leaves) as a building blast.
-    self.world:spawn_debris(projectile.x, projectile.y, 5 + self.world.rng:random(0, 3), 1.4)
+    self.world:spawn_debris(projectile.x, projectile.y, "blast")
     local r = projectile.aoe > 0 and projectile.aoe or 120
     for _, e in ipairs(self.world.hittable) do
         if e:is_alive() and not e.hide_shielded then

@@ -126,11 +126,12 @@ function Entity:_destroy_turret()
     local Animation = require "engine.core.animation"
     self.turret_alive = false
     local ex = (self.type_data and self.type_data.turret_explosion) or "medium"
-    local fx = Animation.new("explosion_" .. ex)
+    local fx = Animation.new(self.world and self.world:explosion_clip(ex) or "explosion_" .. ex)
     self.turret_fx = (not fx:is_done()) and fx or nil
     if self.world then
         self.world:explosion_light(self.x, self.y, ex)
         self.world:sound("explosion." .. ex, self.x, self.y)
+        self.world:spawn_debris(self.x, self.y, "wreck")
     end
 end
 
@@ -161,16 +162,29 @@ function Entity:play_anim(clip_name)
     if self.world then self.world:wake(self) end
 end
 
+-- Burst of data/debris.json a death with this explosion throws, after the
+-- original's death handler (research/LEVELS.md): the mine a bomb's blast, a
+-- fire puff two bits, everything else a wreck's iron and bits, with more of
+-- them off a large building.
+function Entity:_debris_burst(explosion)
+    if explosion == "none" then return nil end
+    if self.mine then return "blast" end
+    if explosion == "fire" then return "scrap" end
+    return self.crater_eligible and "building" or "wreck"
+end
+
 function Entity:_start_death(dx, dy)
     local Animation = require "engine.core.animation"
     local explosion = self.explosion or (self.type_data and self.type_data.explosion) or "none"
-    self.anim  = Animation.new("explosion_" .. explosion)
+    self.anim  = Animation.new(self.world and self.world:explosion_clip(explosion) or "explosion_" .. explosion)
     self.state = self.anim:is_done() and "dead" or "exploding"
     if self.world then self.world:wake(self) end
     if self.world then
         self.world:explosion_light(self.x, self.y, explosion)
         self.world:sound("explosion." .. explosion, self.x, self.y)
         self.world:wreck(self.x, self.y, explosion)
+        local burst = self:_debris_burst(explosion)
+        if burst then self.world:spawn_debris(self.x, self.y, burst) end
         -- A lost radar or radio tower loosens the enemy missiles' tracking.
         if self.homing_jam then
             self.world.homing_jam[self.homing_jam] = self.world.homing_jam[self.homing_jam] + 1
@@ -186,10 +200,7 @@ function Entity:_start_death(dx, dy)
     end
     -- Only large static buildings leave a crater. The per-mission crater sprite is
     -- assigned to the entity at load (crater_src); reveal it now that it has died.
-    if self.crater_eligible then
-        self.crater_img = self.crater_src
-        if self.world then self.world:spawn_debris(self.x, self.y) end
-    end
+    if self.crater_eligible then self.crater_img = self.crater_src end
     -- Power-up drop: a forced kind always drops (e.g. bunker -> medal); a class
     -- with a drop entry drops a random pickup most of the time; without class
     -- data, large buildings do. The player's own base never drops anything.

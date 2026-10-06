@@ -14,6 +14,7 @@ local AnimClip = Class()
 function AnimClip:init(def, image_cache)
     self.fps   = def.fps or 12
     self.loop  = def.loop ~= false   -- default true unless explicitly false
+    self.missions = def.missions     -- mission digit -> clip drawn instead in that mission
     self.frames = {}
     self.frame_paths = {}   -- parallel to frames; source path for lazy anchor calc
     self.anchors = {}       -- lazily filled art-center anchors keyed by frame index

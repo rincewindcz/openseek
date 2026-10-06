@@ -21,7 +21,7 @@
       "effects/explo32_f12.png",
       "effects/explo32_f13.png"
     ],
-    "fps": 14,
+    "fps": 17.5,
     "loop": false
   },
   "explosion_medium": {
@@ -40,7 +40,65 @@
       "effects/rdnexpd_f11.png",
       "effects/rdnexpd_f12.png"
     ],
-    "fps": 12,
+    "fps": 17.5,
+    "loop": false,
+    "missions": { "1": "rdnexp1", "2": "rdnexp2", "4": "rdnexp4" }
+  },
+  "rdnexp1": {
+    "frames": [
+      "effects/rdnexp1_f00.png",
+      "effects/rdnexp1_f01.png",
+      "effects/rdnexp1_f02.png",
+      "effects/rdnexp1_f03.png",
+      "effects/rdnexp1_f04.png",
+      "effects/rdnexp1_f05.png",
+      "effects/rdnexp1_f06.png",
+      "effects/rdnexp1_f07.png",
+      "effects/rdnexp1_f08.png",
+      "effects/rdnexp1_f09.png",
+      "effects/rdnexp1_f10.png",
+      "effects/rdnexp1_f11.png",
+      "effects/rdnexp1_f12.png"
+    ],
+    "fps": 17.5,
+    "loop": false
+  },
+  "rdnexp2": {
+    "frames": [
+      "effects/rdnexp2_f00.png",
+      "effects/rdnexp2_f01.png",
+      "effects/rdnexp2_f02.png",
+      "effects/rdnexp2_f03.png",
+      "effects/rdnexp2_f04.png",
+      "effects/rdnexp2_f05.png",
+      "effects/rdnexp2_f06.png",
+      "effects/rdnexp2_f07.png",
+      "effects/rdnexp2_f08.png",
+      "effects/rdnexp2_f09.png",
+      "effects/rdnexp2_f10.png",
+      "effects/rdnexp2_f11.png",
+      "effects/rdnexp2_f12.png"
+    ],
+    "fps": 17.5,
+    "loop": false
+  },
+  "rdnexp4": {
+    "frames": [
+      "effects/rdnexp4_f00.png",
+      "effects/rdnexp4_f01.png",
+      "effects/rdnexp4_f02.png",
+      "effects/rdnexp4_f03.png",
+      "effects/rdnexp4_f04.png",
+      "effects/rdnexp4_f05.png",
+      "effects/rdnexp4_f06.png",
+      "effects/rdnexp4_f07.png",
+      "effects/rdnexp4_f08.png",
+      "effects/rdnexp4_f09.png",
+      "effects/rdnexp4_f10.png",
+      "effects/rdnexp4_f11.png",
+      "effects/rdnexp4_f12.png"
+    ],
+    "fps": 17.5,
     "loop": false
   },
   "explosion_large": {
@@ -61,7 +119,7 @@
       "effects/explo64_f13.png",
       "effects/explo64_f14.png"
     ],
-    "fps": 10,
+    "fps": 17.5,
     "loop": false
   },
   "explosion_flak": {
@@ -75,7 +133,7 @@
       "effects/flakani_f06.png",
       "effects/flakani_f07.png"
     ],
-    "fps": 12,
+    "fps": 9.84,
     "loop": false
   },
   "explosion_fire": {
@@ -95,7 +153,7 @@
       "effects/fire_f12.png",
       "effects/fire_f13.png"
     ],
-    "fps": 8,
+    "fps": 35,
     "loop": false
   },
   "bullet": {
@@ -1157,7 +1215,7 @@
       "effects/dust0_f05.png",
       "effects/dust0_f06.png"
     ],
-    "fps": 12,
+    "fps": 17.5,
     "loop": false
   },
   "dust1": {
@@ -1170,7 +1228,7 @@
       "effects/dust1_f05.png",
       "effects/dust1_f06.png"
     ],
-    "fps": 12,
+    "fps": 17.5,
     "loop": false
   },
   "dust2": {
@@ -1183,7 +1241,7 @@
       "effects/dust2_f05.png",
       "effects/dust2_f06.png"
     ],
-    "fps": 12,
+    "fps": 17.5,
     "loop": false
   },
   "mine0": {

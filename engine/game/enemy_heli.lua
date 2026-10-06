@@ -260,7 +260,7 @@ function HeliSystem:_update_dying(heli, dt)
     end
     if heli.die_t >= DYING_TIME then
         self.combat:add_effect("explosion_large", heli.x, heli.y, {})
-        self.world:spawn_debris(heli.x, heli.y, 5 + self.world.rng:random(0, 3), 1.3)
+        self.world:spawn_debris(heli.x, heli.y, "blast")
         self:_blast(heli)
         heli.state = "removed"
         self.timer = math.min(self.timer, SPAWN_DELAY)

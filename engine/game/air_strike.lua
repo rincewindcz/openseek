@@ -165,7 +165,7 @@ function AirStrike:_detonate(strike, impact)
     local x    = (strike.x + fx * impact.along + rx * impact.across) % size
     local y    = (strike.y + fy * impact.along + ry * impact.across) % size
     self.combat:add_effect(spec.explosion, x, y, { scale = spec.explosion_scale or 1 })
-    if spec.debris then self.world:spawn_debris(x, y, spec.debris, 1.2) end
+    if spec.debris then self.world:spawn_debris(x, y, spec.debris) end
     local r2 = spec.impact_radius ^ 2
     for _, e in ipairs(self.world.hittable) do
         if e:is_alive() and not e.hide_shielded then

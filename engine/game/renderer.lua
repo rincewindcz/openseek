@@ -152,6 +152,7 @@ function Renderer:_draw_ground_layers(vp)
     self:_draw_entities(w.decals, w.decal_index, vp)
     if self.tracks then self.tracks:draw() end   -- EXTRA (tank_tracks)
     if self.detailfx then self.detailfx:draw_ground() end   -- EXTRA (shell_casings, tread_dust)
+    self:_draw_lying_debris(vp)
 
     if self.show_segments then
         g.setLineStyle("rough")
@@ -345,12 +346,27 @@ function Renderer:_draw_ground_fx(vp)
     end
 end
 
+-- Shards that came to lie on the ground, fading out at the end of their stay.
+function Renderer:_draw_lying_debris(vp)
+    local g      = love.graphics
+    local debris = self.world.debris
+    local tint   = debris.data.lie_tint or 1
+    for _, d in ipairs(debris.lying) do
+        if d.image and d.x >= vp.x0 and d.x <= vp.x1 and d.y >= vp.y0 and d.y <= vp.y1 then
+            local iw, ih = d.image:getDimensions()
+            g.setColor(tint, tint, tint, d.alpha)
+            g.draw(d.image, d.x, d.y, 0, 1, 1, iw / 2, ih / 2)
+        end
+    end
+    g.setColor(1, 1, 1)
+end
+
 -- Flying iron/metal shrapnel from explosions (buildings and bombs). Drawn as its
 -- own overlay (after the explosion effects) so the chunks stay visible on top of
 -- the blast; tiled like the world so it wraps at the seam.
 function Renderer:draw_debris()
     local w = self.world
-    if #w.debris == 0 then return end
+    if #w.debris.pieces == 0 and #w.debris.puffs == 0 then return end
     local g  = love.graphics
     local vp = self.camera:viewport()
     g.push()
@@ -369,12 +385,22 @@ end
 
 function Renderer:_draw_debris(vp)
     local g = love.graphics
-    for _, d in ipairs(self.world.debris) do
-        if d.x >= vp.x0 and d.x <= vp.x1 and d.y >= vp.y0 and d.y <= vp.y1 then
-            local img = d.anim:current_image()
+    g.setColor(1, 1, 1)
+    for _, puff in ipairs(self.world.debris.puffs) do
+        if puff.x >= vp.x0 and puff.x <= vp.x1 and puff.y >= vp.y0 and puff.y <= vp.y1 then
+            local img = puff.anim:current_image()
             if img then
                 local iw, ih = img:getDimensions()
-                g.setColor(1, 1, 1, d.alpha or 1)
+                g.draw(img, puff.x, puff.y, 0, 1, 1, iw / 2, ih / 2)
+            end
+        end
+    end
+    for _, d in ipairs(self.world.debris.pieces) do
+        if d.x >= vp.x0 and d.x <= vp.x1 and d.y >= vp.y0 and d.y <= vp.y1 then
+            local img = d.image
+            if img then
+                local iw, ih = img:getDimensions()
+                g.setColor(1, 1, 1, d.alpha)
                 g.draw(img, d.x, d.y, 0, 1, 1, iw / 2, ih / 2)
             end
         end

@@ -7,11 +7,9 @@ local Entity    = require "engine.game.entity"
 local Animation = require "engine.core.animation"
 local Mathx     = require "engine.core.mathx"
 local Rng       = require "engine.core.rng"
+local Debris    = require "engine.game.debris"
 local Log       = require "engine.core.log"
 
--- Tumbling iron/metal shrapnel flung out by an explosion (buildings and bombs).
--- The clips loop, so each piece is bounded by its own lifetime. When a piece lands a
--- dust puff is left on the ground.
 -- Class flag bit of the player's own base buildings (tested at spawn by the
 -- original, 0x1f64e4). The player's fire cannot harm them (see Entity:take_damage).
 local BASE_FLAG       = 0x40
@@ -23,8 +21,9 @@ local TOWER_FLAG      = 0x20
 -- Stage class behaviour of a soldier-kind class that is a proximity mine.
 local MINE_BEHAVIOUR  = 2
 
-local DEBRIS_CLIPS = { "ironsz", "iron2sz", "metal8", "metalrt", "metalsz" }
-local DUST_CLIPS   = { "dust0", "dust1", "dust2" }
+-- Dust puff a landing shard leaves, per mission digit (DUST.BIN of that
+-- mission); missions without their own use mission 0's.
+local DUST_CLIP    = "dust"
 
 -- Ground fill colors per mission (palette entry 49 of STAGE0M/PAL1.BIN, 6-bit DAC to 8-bit).
 local MISSION_GROUND = {
@@ -112,6 +111,7 @@ function World:init()
     self.stage_name  = nil
     self.time        = 0     -- simulation clock: accumulated fixed dt since the stage loaded
     self.rng         = Rng:new(0)   -- simulation randomness; reseeded per phase
+    self.debris      = Debris:new(self)   -- explosion shards (presentation, engine/game/debris.lua)
     self.stages      = {}    -- sorted list of available stage names
     self.stage_index = 1
     self.images      = {}    -- class index+1 -> {img, ox, oy} or nil
@@ -157,11 +157,14 @@ function World:_class_drop(cls)
     return cls.drop >= 0
 end
 
--- The original gives destroy targets and forced-drop structures the large blast
--- and sizes the rest by the class explosion size. nil keeps the kind's default.
+-- The original's blast for a structure class (death handler 0x1fea54,
+-- research/LEVELS.md): the ring blast for destroy targets and forced-drop
+-- classes, the small one for a class with a drop entry, the fire puff for the
+-- rest. nil for other kinds and for stage exports that predate the class fields.
 function World:_class_explosion(cls)
-    if cls.kind_name ~= "structure" or cls.explosion_size == nil then return nil end
-    if cls.is_target or cls.behaviour == 1 or cls.explosion_size >= 2 then return "large" end
+    if cls.kind_name ~= "structure" or cls.drop == nil then return nil end
+    if cls.is_target or cls.behaviour == 1 then return "medium" end
+    return cls.drop >= 0 and "small" or "fire"
 end
 
 function World:_discover()
@@ -284,8 +287,8 @@ function World:load(name)
     self.land_zones    = {}   -- rescue landing pads next to a POWHERE marker (owned by RescueSystem)
     self.saboteur_pads = {}   -- landhere.bin drop pads with no POWHERE nearby (owned by SaboteurSystem)
     self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
-    self.debris        = {}   -- flying explosion shrapnel {anim, x, y, vx, vy, age, lifetime}
-    self.ground_fx     = {}   -- dust left on the ground when shrapnel lands {anim, x, y}
+    self.debris:reset()
+    self.ground_fx     = {}   -- dust left on the ground when a shard lands {anim, x, y}
     self.heli_spawns   = {}   -- {x, y, behaviour} spawn markers for enemy helicopters (not drawn)
     self.air_units     = {}   -- live enemy helicopters (owned by the heli system)
 
@@ -696,51 +699,20 @@ function World:crush_tree(e)
     if self.lightfx then self.lightfx:explosion(e.x, e.y, "flak") end
 end
 
--- Fling a burst of tumbling iron/metal shrapnel from (x, y), e.g. a building or
--- bomb blowing up. spread scales the scatter radius (default tight).
-function World:spawn_debris(x, y, n, spread)
-    n = n or (4 + self.rng:random(0, 3))
-    spread = spread or 1
-    for _ = 1, n do
-        local anim = Animation.new(DEBRIS_CLIPS[self.rng:random(#DEBRIS_CLIPS)])
-        if not anim:is_done() then
-            local a  = self.rng:random() * 2 * math.pi
-            local sp = (40 + self.rng:random() * 80) * spread
-            self.debris[#self.debris + 1] = {
-                anim = anim, x = x, y = y,
-                vx = math.cos(a) * sp, vy = math.sin(a) * sp,
-                age = 0, lifetime = 0.6 + self.rng:random() * 0.6,
-            }
-        end
-    end
+-- Throw a burst of shards from (x, y): `burst` names an entry of
+-- data/debris.json (a wreck, a building, a bomb blast, ...). opts.dx / opts.dy
+-- aim a directional burst, opts.count sets its piece count. A one-way
+-- forwarder like the lights: the shards are presentation and draw no numbers
+-- from world.rng.
+function World:spawn_debris(x, y, burst, opts)
+    self.debris:burst(burst, x, y, opts)
 end
 
--- Fast shrapnel flung along a heading (e.g. METAL8 pieces thrown by an FFR rocket
--- impact, in the missile's travel direction). Unlike spawn_debris these fly fast,
--- fade out over their final frames, and vanish in the air instead of kicking up
--- ground dust.
-function World:spawn_directional_debris(x, y, dx, dy, n, clip)
-    local len = math.sqrt(dx * dx + dy * dy)
-    if len == 0 then dx, dy = 0, -1 else dx, dy = dx / len, dy / len end
-    local base = Mathx.atan2(dy, dx)
-    for _ = 1, n do
-        local anim = Animation.new(clip or "metal8")
-        if not anim:is_done() then
-            local a  = base + (self.rng:random() - 0.5) * 0.5
-            local sp = 280 + self.rng:random() * 180
-            self.debris[#self.debris + 1] = {
-                anim = anim, x = x, y = y,
-                vx = math.cos(a) * sp, vy = math.sin(a) * sp,
-                age = 0, lifetime = 0.5 + self.rng:random() * 0.35,
-                fade = true, fade_time = 0.22, alpha = 1,
-            }
-        end
-    end
-end
-
--- A dust puff settling on the ground where a shrapnel piece landed.
+-- A dust puff settling on the ground where a shard landed.
 function World:add_ground_dust(x, y)
-    local anim = Animation.new(DUST_CLIPS[self.rng:random(#DUST_CLIPS)])
+    local m    = self.stage_name and self.stage_name:match("^stage(%d)")
+    local anim = Animation.new(DUST_CLIP .. (m or "0"))
+    if anim:is_done() then anim = Animation.new(DUST_CLIP .. "0") end
     if anim:is_done() then return end
     self.ground_fx[#self.ground_fx + 1] = { anim = anim, x = x, y = y }
 end
@@ -776,27 +748,7 @@ function World:update(dt)
         self.awake = still
     end
 
-    -- Shrapnel flies on, decelerating; when a piece's life ends it kicks up dust.
-    if #self.debris > 0 then
-        local live = {}
-        for _, d in ipairs(self.debris) do
-            d.age = d.age + dt
-            d.x   = d.x + d.vx * dt
-            d.y   = d.y + d.vy * dt
-            local damp = math.max(0, 1 - dt * 2)
-            d.vx, d.vy = d.vx * damp, d.vy * damp
-            d.anim:update(dt)
-            if d.fade then
-                d.alpha = math.min(1, (d.lifetime - d.age) / d.fade_time)
-            end
-            if d.age < d.lifetime then
-                live[#live + 1] = d
-            elseif not d.fade then
-                self:add_ground_dust(d.x, d.y)
-            end
-        end
-        self.debris = live
-    end
+    self.debris:update(dt)
 
     -- Ground dust plays once then clears.
     if #self.ground_fx > 0 then
@@ -807,6 +759,19 @@ function World:update(dt)
         end
         self.ground_fx = live
     end
+end
+
+-- Clip of an explosion size on this stage: the clip's own variant for the
+-- mission when the pack has it (the building blast is drawn per mission, see
+-- `missions` in data/animations.json), else the shared clip.
+function World:explosion_clip(size)
+    local name = "explosion_" .. size
+    local clip = Animation.clip(name)
+    local m    = self.stage_name and self.stage_name:match("^stage(%d)")
+    local own  = clip and clip.missions and clip.missions[m]
+    local alt  = own and Animation.clip(own)
+    if alt and not alt:is_empty() then return own end
+    return name
 end
 
 function World:ground_color()

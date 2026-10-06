@@ -152,6 +152,14 @@ function Player:is_airborne()
     return self:is_flyer() and self.altitude > 0
 end
 
+-- Commanded velocity in px/s, before speed_scale: drive along the hull plus strafe.
+function Player:velocity()
+    local rad        = (self.angle - 90) * math.pi / 180
+    local strafe_rad = rad + math.pi / 2
+    return math.cos(rad) * self.speed + math.cos(strafe_rad) * self.strafe,
+           math.sin(rad) * self.speed + math.sin(strafe_rad) * self.strafe
+end
+
 -- Heading projectiles travel along: the turret for tanks, the hull otherwise.
 function Player:fire_angle()
     if self.vehicle == "tank" then return self.angle + self.turret_offset end
@@ -384,11 +392,8 @@ function Player:_update_damage_smoke(dt)
             -- Puffs drift along the vehicle's heading at a fraction of its current
             -- speed so the trail streams out behind a moving vehicle instead of
             -- hanging stationary in the air.
-            local rad        = (self.angle - 90) * math.pi / 180
-            local strafe_rad = rad + math.pi / 2
-            local vx         = math.cos(rad) * self.speed + math.cos(strafe_rad) * self.strafe
-            local vy         = math.sin(rad) * self.speed + math.sin(strafe_rad) * self.strafe
-            local drift      = 0.25 + self.world.rng:random() * 0.5
+            local vx, vy = self:velocity()
+            local drift  = 0.25 + self.world.rng:random() * 0.5
             self._smoke_puffs[#self._smoke_puffs + 1] = {
                 x     = self.x + (self.world.rng:random() - 0.5) * 30,
                 y     = self.y + (self.world.rng:random() - 0.5) * 30,
@@ -585,6 +590,7 @@ function Player:_update_death_chopper(dt, d)
             d.boom  = Animation.new("explosion_large")
             self:_death_blast()
             if self.world then
+                self.world:spawn_debris(self.x, self.y, "player")
                 self.world:player_death_light(self.x, self.y)
                 self.world:sound("explosion.bomb", self.x, self.y)
             end
@@ -629,6 +635,7 @@ function Player:_tank_blow(d)
     d.fx[#d.fx + 1] = { anim = Animation.new("explosion_large"), ox = 0, oy = -4 }
     self:_death_blast()
     if self.world then
+        self.world:spawn_debris(self.x, self.y, "player")
         self.world:player_death_light(self.x, self.y)
         self.world:sound("explosion.bomb", self.x, self.y)
     end
@@ -795,11 +802,10 @@ function Player:_solid_at(x, y, r)
 end
 
 function Player:_move(dt)
-    local sdt        = dt * Config.speed_scale
-    local rad        = (self.angle - 90) * math.pi / 180
-    local strafe_rad = rad + math.pi / 2
-    local dx         = (math.cos(rad) * self.speed + math.cos(strafe_rad) * self.strafe) * sdt
-    local dy         = (math.sin(rad) * self.speed + math.sin(strafe_rad) * self.strafe) * sdt
+    local sdt    = dt * Config.speed_scale
+    local vx, vy = self:velocity()
+    local dx     = vx * sdt
+    local dy     = vy * sdt
 
     if self.world and not self:is_flyer() then
         -- Axis-separated so the tank slides along obstacles instead of sticking.
