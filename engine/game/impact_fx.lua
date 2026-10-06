@@ -11,7 +11,7 @@ local Config = require "engine.core.config"
 -- low_armor_fx, damage_flash; drawn by PostFX). The simulation reaches it one
 -- way through the World forwarders (World:hit_flash, :explosion_light,
 -- :player_hit, :player_death_light, :weapon_fired) and never reads it back, like
--- LightFX and audio (DETERMINISM.md D2). Timings and strengths are data/impact_fx.json.
+-- LightFX and audio. Timings and strengths are data/impact_fx.json.
 --
 -- A hit flash redraws the damaged sprite as a white silhouette that fades over
 -- hit_flash.time. A shake source sits at a world position and fades with time

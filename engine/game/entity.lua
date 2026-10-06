@@ -163,7 +163,7 @@ function Entity:play_anim(clip_name)
 end
 
 -- Burst of data/debris.json a death with this explosion throws, after the
--- original's death handler (research/LEVELS.md): the mine a bomb's blast, a
+-- original's death handler: the mine a bomb's blast, a
 -- fire puff two bits, everything else a wreck's iron and bits, with more of
 -- them off a large building.
 function Entity:_debris_burst(explosion)

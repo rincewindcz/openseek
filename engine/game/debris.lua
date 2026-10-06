@@ -7,15 +7,15 @@ local Animation = require "engine.core.animation"
 local Config    = require "engine.core.config"
 local Mathx     = require "engine.core.mathx"
 
--- Shards thrown by explosions, after the original's spawners (research/LEVELS.md,
--- "Effect spawner"). data/debris.json names the kinds of piece and the bursts
--- that throw them. A piece flies out and slows to rest; one with a `fall` sinks
--- from its height, drawn from a smaller row of its clip as it drops, and lands
--- in a dust puff, where a kind with `lie` stays on the ground for a while; the
--- others last for their `life`. Some trail smoke.
+-- Shards thrown by explosions, after the original's effect spawners.
+-- data/debris.json names the kinds of piece and the bursts that throw them. A
+-- piece flies out and slows to rest; one with a `fall` sinks from its height,
+-- drawn from a smaller row of its clip as it drops, and lands in a dust puff,
+-- where a kind with `lie` stays on the ground for a while; the others last for
+-- their `life`. Some trail smoke.
 -- Presentation only: fed by the one-way World:spawn_debris, advanced with the
--- world and never read back by the simulation (DETERMINISM.md D2), so it draws
--- its random numbers from math.random and leaves world.rng alone.
+-- world and never read back by the simulation, so it draws its random numbers
+-- from math.random and leaves world.rng alone.
 
 local Debris = Class()
 

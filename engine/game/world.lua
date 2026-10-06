@@ -147,20 +147,20 @@ function World:_override(asset_file, field)
     if entry then return entry[field] end
 end
 
--- The original's power-up drop for a structure class (death handler 0x1fea2f,
--- research/LEVELS.md): "medal" for the forced drop (behaviour 1), false when
--- the class has no drop entry, else true (a random pickup). nil for other kinds
--- and for stage exports that predate the class fields.
+-- The original's power-up drop for a structure class (death handler 0x1fea2f):
+-- "medal" for the forced drop (behaviour 1), false when the class has no drop
+-- entry, else true (a random pickup). nil for other kinds and for stage exports
+-- that predate the class fields.
 function World:_class_drop(cls)
     if cls.kind_name ~= "structure" or cls.drop == nil then return nil end
     if cls.behaviour == 1 then return "medal" end
     return cls.drop >= 0
 end
 
--- The original's blast for a structure class (death handler 0x1fea54,
--- research/LEVELS.md): the ring blast for destroy targets and forced-drop
--- classes, the small one for a class with a drop entry, the fire puff for the
--- rest. nil for other kinds and for stage exports that predate the class fields.
+-- The original's blast for a structure class (death handler 0x1fea54): the
+-- ring blast for destroy targets and forced-drop classes, the small one for a
+-- class with a drop entry, the fire puff for the rest. nil for other kinds and
+-- for stage exports that predate the class fields.
 function World:_class_explosion(cls)
     if cls.kind_name ~= "structure" or cls.drop == nil then return nil end
     if cls.is_target or cls.behaviour == 1 then return "medium" end

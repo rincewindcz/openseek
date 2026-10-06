@@ -93,8 +93,7 @@ def parse_class(rec: bytes, index: int) -> dict:
         "kind": f[11],            # +0x16 entity behaviour class (init switch)
         "frame_shift": struct.unpack_from("<h", rec, 0x1c)[0],  # angle >> shift
         "parent_class": struct.unpack_from("<h", rec, 0x30)[0], # entity linking
-        # Fields the spawn code (0x1f5d5a..0x1f5dfe) copies into the entity;
-        # see research/LEVELS.md "Class fields copied at spawn".
+        # Fields the spawn code (0x1f5d5a..0x1f5dfe) copies into the entity.
         "pows": f[6],             # +0x0c POWs held inside (entity +0x30)
         "toughness": f[16],       # +0x20 damage capacity (entity +0x66/+0x68)
         "height": f[18],          # +0x24 height above the ground, px (entity +0x70)

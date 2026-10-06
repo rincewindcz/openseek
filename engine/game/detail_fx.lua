@@ -15,8 +15,7 @@ local Animation = require "engine.core.animation"
 --   pickup_glint  a light sweep runs across each pickup now and then
 --   target_glint  the same sweep across every live mission objective
 -- Fed one way by the World forwarders (:weapon_fired, :projectile_impact, :wreck)
--- and by the players
--- read after each tick; never read back by the simulation (DETERMINISM.md D2).
+-- and by the players read after each tick; never read back by the simulation.
 -- Tuning is data/detail_fx.json.
 local DetailFX = Class()
 
