@@ -31,6 +31,14 @@ function Renderer:_glow(img, x, y, rot, sx, sy, ox, oy)
     g.setColor(1, 1, 1)
 end
 
+-- EXTRA (target_glint): the light sweep across a mission objective's sprite,
+-- just drawn at (x, y) with rotation rot and origin (ox, oy).
+function Renderer:_glint(img, x, y, rot, ox, oy)
+    if not self.detailfx then return end
+    self.detailfx:draw_glint("target_glint", img, x, y, rot, ox, oy,
+        rot + (self.camera.angle or 0), self.world.time)
+end
+
 -- Called after a stage load to rebuild the kind list.
 function Renderer:refresh_kinds()
     local counts = {}
@@ -129,7 +137,7 @@ end
 -- Object pass. mode selects which objects to draw relative to a vehicle on the
 -- ground: "under" draws only flat ground clutter (non-solid scenery, decals, foot
 -- units) that a tank drives over; "over" draws the solid props (trees, buildings,
--- turrets) that stand above it, plus the objective markers; nil draws everything
+-- turrets) that stand above it; nil draws everything
 -- (the normal path when no vehicle is on the ground to split around).
 function Renderer:draw_objects(mode)
     self:_world_pass(function(_, vp) self:_draw_object_layers(vp, mode) end)
@@ -172,8 +180,7 @@ function Renderer:_draw_object_layers(vp, mode)
     local w = self.world
 
     self:_draw_entities(w.objects, w.object_index, vp, mode)
-    if mode == "under" then return end   -- objectives/grid ride with the "over" pass
-    self:_draw_objectives(vp)
+    if mode == "under" then return end   -- the grid rides with the "over" pass
 
     if self.show_grid then
         g.setColor(0, 0, 0, 0.2)
@@ -234,6 +241,7 @@ function Renderer:_draw_entity(e, vp, mode)
             -- EXTRA (hit_flash)
             local impactfx = self.world.impactfx
             if impactfx then impactfx:draw_flash(e, r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy) end
+            if e.objective then self:_glint(r.img, e.x, e.y, rot, -r.ox, -r.oy) end
             if e == self.highlight then
                 self:_glow(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
             end
@@ -448,64 +456,12 @@ function Renderer:_draw_unit(e)
         local iw, ih = img:getDimensions()
         g.setColor(1, 1, 1)
         g.draw(img, x, y, rot, 1, 1, iw / 2, ih / 2)
+        if e.objective and e:is_alive() then self:_glint(img, x, y, rot, iw / 2, ih / 2) end
         if e == self.highlight then
             self:_glow(img, x, y, rot, 1, 1, iw / 2, ih / 2)
         end
     end
     if e:is_alive() then self:_draw_smokes(e) end
-end
-
--- Four L-shaped corners forming a target reticle around (cx, cy).
-function Renderer:_corner_box(cx, cy, hw, hh)
-    local g = love.graphics
-    local l = math.max(3, math.min(hw, hh) * 0.5)
-    local x0, y0, x1, y1 = cx - hw, cy - hh, cx + hw, cy + hh
-    g.line(x0, y0, x0 + l, y0); g.line(x0, y0, x0, y0 + l)
-    g.line(x1, y0, x1 - l, y0); g.line(x1, y0, x1, y0 + l)
-    g.line(x0, y1, x0 + l, y1); g.line(x0, y1, x0, y1 - l)
-    g.line(x1, y1, x1 - l, y1); g.line(x1, y1, x1, y1 - l)
-end
-
--- Objective overlay (world space): bracket every live destroy-target and ring
--- the POW landing zones / civilians on rescue phases. The entity lists come
--- from the stage JSON objectives block (collected in World:load).
-function Renderer:_draw_objectives(vp)
-    local w   = self.world
-    local obj = w.stage.objectives
-    if not obj then return end
-    local g = love.graphics
-    g.setLineWidth(2 / self.camera:zoom())
-
-    if obj.destroy then
-        g.setColor(1, 0.3, 0.2, 0.7 + 0.3 * math.sin(love.timer.getTime() * 5))
-        for _, e in ipairs(w.targets) do
-            if e:is_alive() and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
-                local hw, hh, cx, cy = 9, 9, e.x, e.y
-                local r = w.images[e.class_idx + 1]
-                if r and r.img then
-                    local iw, ih = r.img:getDimensions()
-                    hw, hh = iw / 2 + 4, ih / 2 + 4
-                    cx, cy = e.x + r.ox + iw / 2, e.y + r.oy + ih / 2
-                end
-                self:_corner_box(cx, cy, hw, hh)
-            end
-        end
-    end
-
-    if obj.rescue then
-        -- POWHERE buildings are marked in-world by their own sprite and land pad (the
-        -- RescueSystem), so only loose civilians get a world reticle here.
-        local pulse = 0.6 + 0.4 * math.sin(love.timer.getTime() * 4)
-        g.setColor(0.55, 0.9, 1, pulse)
-        for _, e in ipairs(w.rescue_people) do
-            if e:is_alive() and e.x >= vp.x0 and e.x <= vp.x1 and e.y >= vp.y0 and e.y <= vp.y1 then
-                g.polygon("line", e.x, e.y - 7, e.x + 7, e.y, e.x, e.y + 7, e.x - 7, e.y)
-            end
-        end
-    end
-
-    g.setColor(1, 1, 1)
-    g.setLineWidth(1)
 end
 
 -- One-line objective summary (screen space, top-center) with live counts. Shown

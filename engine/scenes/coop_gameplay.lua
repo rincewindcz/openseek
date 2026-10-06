@@ -530,13 +530,12 @@ function CoopGameplay:_draw_view(i, vx, vw, vh, plain)
             self:_draw_vehicle(pl, p, cam, plain)
             if pl == p then p:draw_world_front() end
         end
-        app.renderer:draw_objects("over")    -- trees/buildings + objective markers
+        app.renderer:draw_objects("over")    -- trees/buildings
     else
         app.renderer:draw_objects()          -- nothing on the ground to split around
         app.rescue:draw()
         app.saboteur:draw_ground()
     end
-    app.saboteur:draw_markers()  -- target reticles
     app.powerups:draw()
     app.renderer:draw_explosions()   -- building blasts over the pickups they drop
     local soft = app.postfx:soft_shadows_active()

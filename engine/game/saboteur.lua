@@ -311,17 +311,6 @@ end
 
 -- draw
 
--- Four L-shaped corners forming a target reticle around (cx, cy).
-function SaboteurSystem:_corner_box(cx, cy, hw, hh)
-    local g = love.graphics
-    local l = math.max(3, math.min(hw, hh) * 0.5)
-    local x0, y0, x1, y1 = cx - hw, cy - hh, cx + hw, cy + hh
-    g.line(x0, y0, x0 + l, y0); g.line(x0, y0, x0, y0 + l)
-    g.line(x1, y0, x1 - l, y0); g.line(x1, y0, x1, y0 + l)
-    g.line(x0, y1, x0 + l, y1); g.line(x0, y1, x0, y1 - l)
-    g.line(x1, y1, x1 - l, y1); g.line(x1, y1, x1, y1 - l)
-end
-
 -- Run fn(self) once per wrapped tile inside the camera transform.
 function SaboteurSystem:_draw_tiles(fn)
     local g   = love.graphics
@@ -342,12 +331,6 @@ end
 function SaboteurSystem:draw_ground()
     if not self.active then return end
     self:_draw_tiles(self._draw_ground_tile)
-end
-
--- Target reticles, over everything in the world.
-function SaboteurSystem:draw_markers()
-    if not self.active then return end
-    self:_draw_tiles(self._draw_markers_tile)
 end
 
 function SaboteurSystem:_draw_ground_tile(cam)
@@ -377,27 +360,6 @@ function SaboteurSystem:_draw_ground_tile(cam)
             end
         end
     end
-end
-
--- Reticle every live target building so the player can find them.
-function SaboteurSystem:_draw_markers_tile(cam)
-    local g = love.graphics
-    g.setLineWidth(2 / cam:zoom())
-    g.setColor(1, 0.5, 0.2, 0.7 + 0.3 * math.sin(love.timer.getTime() * 5))
-    for _, site in ipairs(self.sites) do
-        local b = site.building
-        if not site.detonated and b:is_alive() then
-            local hw, hh, cx, cy = 9, 9, b.x, b.y
-            local r = self.world.images[b.class_idx + 1]
-            if r and r.img then
-                local iw, ih = r.img:getDimensions()
-                hw, hh = iw / 2 + 4, ih / 2 + 4
-                cx, cy = b.x + r.ox + iw / 2, b.y + r.oy + ih / 2
-            end
-            self:_corner_box(cx, cy, hw, hh)
-        end
-    end
-    g.setLineWidth(1)
 end
 
 return SaboteurSystem

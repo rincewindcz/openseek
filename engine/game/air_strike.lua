@@ -258,7 +258,7 @@ function AirStrike:_draw_world(fn)
 end
 
 -- EXTRA (air_strike_fx): craft ground shadows, cast altitude world units toward
--- the fixed sun like the helicopters'. soft adds the rotor disc.
+-- the fixed sun like the helicopters'. soft adds the rotor disc and the rounds.
 function AirStrike:draw_shadows(soft)
     if not self.world:shadows_enabled() then return end
     self:_draw_world(function(strike)
@@ -279,22 +279,29 @@ function AirStrike:draw_shadows(soft)
                     rw / 2, rh / 2, Shadow.ROTOR_ALPHA)
             end
         end)
+        if soft then
+            -- A round's shadow closes in on it as it comes down on its impact.
+            self:_each_munition(strike, function(img, x, y, scale, p)
+                local drop   = spec.altitude * (1 - p)
+                local iw, ih = img:getDimensions()
+                Shadow.draw(img, x + Shadow.DIR_X * drop, y + Shadow.DIR_Y * drop, rot, scale, scale,
+                    iw / 2, ih / 2, Shadow.ALPHA)
+            end)
+        end
     end)
 end
 
 -- Rockets (chopper level) and bombs (jet level) on their way to the impacts not
 -- yet landed: each leaves its craft lead seconds before its impact and ends
--- exactly on it. A bomb shrinks as it falls away from the camera.
-function AirStrike:_draw_munitions(strike)
+-- exactly on it. A bomb shrinks as it falls away from the camera. Calls
+-- fn(img, x, y, scale, p) per round in flight, p its 0..1 progress.
+function AirStrike:_each_munition(strike, fn)
     local def, spec = strike.def, strike.spec
     local clip = self:_clip(spec.munition_clip)
     if not clip then return end
-    local img    = clip.frames[1]
-    local iw, ih = img:getDimensions()
-    local lead   = spec.munition_time
-    local rot    = strike.angle * math.pi / 180
-    local tau    = self.world.time - strike.t0 - def.delay
-    local g      = love.graphics
+    local img  = clip.frames[1]
+    local lead = spec.munition_time
+    local tau  = self.world.time - strike.t0 - def.delay
     for i = strike.next, #strike.impacts do
         local impact = strike.impacts[i]
         local p      = (tau - (impact.t - lead)) / lead
@@ -303,10 +310,19 @@ function AirStrike:_draw_munitions(strike)
             local x0, y0 = strike_point(strike, from, lane_of(spec, impact.craft))
             local x1, y1 = strike_point(strike, impact.along, impact.across)
             local scale  = 1 - (1 - (spec.munition_min_scale or 1)) * p * p
-            g.setColor(1, 1, 1)
-            g.draw(img, x0 + (x1 - x0) * p, y0 + (y1 - y0) * p, rot, scale, scale, iw / 2, ih / 2)
+            fn(img, x0 + (x1 - x0) * p, y0 + (y1 - y0) * p, scale, p)
         end
     end
+end
+
+function AirStrike:_draw_munitions(strike)
+    local rot = strike.angle * math.pi / 180
+    local g   = love.graphics
+    self:_each_munition(strike, function(img, x, y, scale)
+        local iw, ih = img:getDimensions()
+        g.setColor(1, 1, 1)
+        g.draw(img, x, y, rot, scale, scale, iw / 2, ih / 2)
+    end)
 end
 
 -- EXTRA (air_strike_fx): the craft and their rounds, drawn over the enemy

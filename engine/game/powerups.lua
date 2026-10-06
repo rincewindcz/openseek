@@ -16,7 +16,8 @@ local Difficulty = require "engine.game.difficulty"
 -- level, blinks before it goes, and is taken inside a small box around the
 -- vehicle. Tuning is data/powerups.json, times in ticks of 1 / tick_rate s.
 -- EXTRA (weapon_finds): now and then the drop is a weapon the player does not
--- carry; taking it adds the weapon for the rest of the phase.
+-- carry; taking it adds the weapon for the rest of the phase. Such a pickup
+-- lies in a pulsing halo (find.glow) and the HUD names it once taken.
 local Powerups = Class()
 
 local DATA_PATH = "data/powerups.json"
@@ -33,6 +34,7 @@ function Powerups:init(world, camera, weapons)
     -- landing rules (Config.land_for_medals / land_for_supplies) say.
     self.easy_mode = false
     self._frames   = nil
+    self._halo     = nil
     local raw = love.filesystem.read(DATA_PATH)
     if not raw then error("powerups: missing " .. DATA_PATH) end
     self.data = json.decode(raw)
@@ -265,6 +267,9 @@ function Powerups:_grant(weapon, p)
         p.ammo[weapon] = math.max(1, math.floor(def.ammo_max * share + 0.5))
     end
     self.tables[p] = self:_build_table(p)
+    -- Read by the HUD notice only, never by the simulation.
+    p.found_weapon = weapon
+    p.found_time   = self.world.time
     return true
 end
 
@@ -299,6 +304,34 @@ function Powerups:_frame(pu)
     return pu.frame
 end
 
+-- Round halo, opaque at the centre and gone at the rim, falling off slowly at
+-- first so it still shows around the sprite lying on it. One texel per art
+-- pixel and unfiltered, so it stays as blocky as the sprites.
+local function make_halo(size)
+    local data = love.image.newImageData(size, size)
+    local r    = size / 2
+    data:mapPixel(function(x, y)
+        local dx, dy = (x + 0.5 - r) / r, (y + 0.5 - r) / r
+        return 1, 1, 1, math.max(0, 1 - (dx * dx + dy * dy))
+    end)
+    local img = love.graphics.newImage(data)
+    img:setFilter("nearest", "nearest")
+    return img
+end
+
+-- EXTRA (weapon_finds): the halo under a found weapon, so it stands out of a
+-- fight. Pulsing between alpha * (1 - pulse) and alpha. Alpha blended, not
+-- additive: an additive gold burns out to white on snow.
+function Powerups:_draw_glow(pu)
+    local spec = self.data.find and self.data.find.glow
+    if not spec then return end
+    self._halo = self._halo or make_halo(spec.size)
+    local wave = 0.5 + 0.5 * math.sin(pu.age * spec.pulse_hz * 2 * math.pi)
+    local c    = spec.color
+    love.graphics.setColor(c[1], c[2], c[3], spec.alpha * (1 - spec.pulse * wave))
+    love.graphics.draw(self._halo, pu.x, pu.y, 0, 1, 1, spec.size / 2, spec.size / 2)
+end
+
 function Powerups:draw()
     if #self.list == 0 then return end
     local frames = self:_pickup_frames()
@@ -319,10 +352,11 @@ function Powerups:draw()
             local img     = visible and frames[self:_frame(pu) + 1]
             if img then
                 local iw, ih = img:getDimensions()
+                if pu.find then self:_draw_glow(pu) end
                 g.setColor(1, 1, 1)
                 g.draw(img, pu.x, pu.y, rot, 1, 1, iw / 2, ih / 2)
                 if detailfx and not self:expiring(pu) then   -- EXTRA (pickup_glint)
-                    detailfx:draw_glint(img, pu.x, pu.y, rot, screen_rot, pu.age)
+                    detailfx:draw_glint("pickup_glint", img, pu.x, pu.y, rot, iw / 2, ih / 2, screen_rot, pu.age)
                 end
             end
         end

@@ -409,13 +409,12 @@ function Gameplay:draw_world()
         self.player:draw_world()
         self.player:draw()
         self.player:draw_world_front()
-        app.renderer:draw_objects("over")    -- trees/buildings + objective markers
+        app.renderer:draw_objects("over")    -- trees/buildings
     else
         app.renderer:draw_objects()          -- everything, airborne player drawn later
         app.rescue:draw()
         app.saboteur:draw_ground()
     end
-    app.saboteur:draw_markers()  -- target reticles
     app.powerups:draw()
     app.renderer:draw_explosions()   -- building blasts over the pickups they drop
     local soft = app.postfx:soft_shadows_active()

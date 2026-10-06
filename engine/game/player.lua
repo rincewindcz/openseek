@@ -58,6 +58,8 @@ function Player:init(x, y)
     self.lives           = Score.START_LIVES      -- spare vehicles
     self.death           = nil     -- death sequence state (set by start_death)
     self.damage_cause    = nil     -- what last cost armor (weapons.json key or a named cause); crash picture only
+    self.found_weapon    = nil     -- weapon last found as a pickup and world.time then (EXTRA weapon_finds); HUD notice only
+    self.found_time      = 0
 
     self.badges          = 0    -- OK badges earned this phase (debriefing line 5)
     self.streak          = 0    -- chained kills so far, see register_kill

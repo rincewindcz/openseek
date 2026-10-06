@@ -202,7 +202,7 @@ function CombatSystem:add_effect(clip_name, x, y, opts)
         radius   = opts.radius or 0,
         lifetime = opts.lifetime,
         delay    = opts.delay or 0,   -- seconds before the effect ignites (napalm wave)
-        shadow   = opts.shadow,       -- airborne puff (a missile trail) that casts a ground shadow
+        shadow   = opts.shadow,       -- airborne puff (a missile trail) that casts a ground shadow (the weapon's flag)
         age      = 0,
         hit      = false,
     }
@@ -1058,10 +1058,18 @@ function CombatSystem:_apply_aoe(projectile)
     end
 end
 
+-- Share of the full flying height a weapon's `shadow` flag casts from: true is
+-- the whole of it, a number that share (rounds fired along the ground).
+local function shadow_height(flag)
+    if not flag then return nil end
+    return flag == true and 1 or flag
+end
+
 -- Ground shadows of airborne shots: the sprite and trail puffs of every weapon
--- flagged `shadow` (missiles), cast at full flying height in the fixed world
--- bottom-right like the heli shadows. Presentation extra, drawn by the gameplay
--- scenes inside the soft-shadow pass (engine/game/postfx.lua).
+-- flagged `shadow`, cast from the flag's height in the fixed world bottom-right
+-- like the heli shadows. A falling bomb closes in on its shadow as it drops.
+-- Presentation extra, drawn by the gameplay scenes inside the soft-shadow pass
+-- (engine/game/postfx.lua).
 function CombatSystem:draw_shadows()
     if #self.projectiles == 0 and #self.effects == 0 then return end
     if not self.world:shadows_enabled() then return end
@@ -1074,22 +1082,27 @@ function CombatSystem:draw_shadows()
         g.push()
         g.translate(t.ox, t.oy)
         for _, effect in ipairs(self.effects) do
-            local img = effect.shadow and effect.age >= effect.delay and effect.anim:current_image() or nil
+            local height = shadow_height(effect.shadow)
+            local img    = height and effect.age >= effect.delay and effect.anim:current_image() or nil
             if img then
                 local iw, ih = img:getDimensions()
-                Shadow.draw(img, effect.x + dx, effect.y + dy, effect.rot, effect.scale, effect.scale,
-                    iw / 2, ih / 2, Shadow.SMOKE_ALPHA)
+                Shadow.draw(img, effect.x + dx * height, effect.y + dy * height, effect.rot,
+                    effect.scale, effect.scale, iw / 2, ih / 2, Shadow.SMOKE_ALPHA)
             end
         end
         for _, projectile in ipairs(self.projectiles) do
             local weapon_def = projectile.weapon_def
-            local img = weapon_def.shadow and weapon_def.proj_type ~= "bullet" and projectile:get_image() or nil
+            local height     = shadow_height(weapon_def.shadow)
+            local img = height and weapon_def.proj_type ~= "bullet" and projectile:get_image() or nil
             if img then
                 local extra  = (weapon_def.proj_sprite_rot or 0) * math.pi / 180
                 local ax, ay = projectile:get_anchor()
                 local scale  = projectile.scale or 1
-                Shadow.draw(img, projectile.x + dx, projectile.y + dy, projectile.angle_rad + extra,
-                    scale, scale, ax, ay, Shadow.ALPHA)
+                if projectile.bomb_phase then
+                    height = height * math.max(0, 1 - projectile.bomb_t / (weapon_def.fall_time or 0.6))
+                end
+                Shadow.draw(img, projectile.x + dx * height, projectile.y + dy * height,
+                    projectile.angle_rad + extra, scale, scale, ax, ay, Shadow.ALPHA)
             end
         end
         g.pop()

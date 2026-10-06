@@ -147,6 +147,11 @@ local Config = {
     -- data/detail_fx.json pickup_glint). Presentation only.
     pickup_glint = false,
 
+    -- The same sweep across every live mission objective, whatever the radar
+    -- marks with an objective blip (data/detail_fx.json target_glint).
+    -- Presentation only.
+    target_glint = false,
+
     -- Air strike visuals (engine/game/air_strike.lua, engine/ui/hud.lua): the
     -- sight left on a pending strike's target, its radar blip, and the friendly
     -- craft with their rounds. Presentation only; the strike lands the same
@@ -277,7 +282,7 @@ local PERSISTED = {
     "radar_zoom_grow", "radar_backdrop", "engine_intro", "aim_laser",
     "aim_laser_color", "aim_laser_alpha", "tank_tracks",
     "tank_recoil", "shell_casings", "tread_dust", "wreck_smoke", "shell_impact",
-    "low_armor_fx", "damage_flash", "pickup_glint", "air_strike_fx", "remote_mine",
+    "low_armor_fx", "damage_flash", "pickup_glint", "target_glint", "air_strike_fx", "remote_mine",
     "flame_momentum", "shard_amount", "lying_shards",
     "explosion_pitch", "ending_stats", "crash_fx", "crash_cause", "crash_stats",
     "difficulty", "enemy_damage_level", "enemy_damage", "enemy_fire_level", "enemy_fire_rate",

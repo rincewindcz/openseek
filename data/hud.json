@@ -129,6 +129,18 @@
       "pad": 0.1,
       "lerp": 8,
       "scale": 3
+    },
+    {
+      "id": "notice",
+      "type": "notice",
+      "text": "ACQUIRED %s!",
+      "font": "chars",
+      "time": 2.2,
+      "fade_in": 0.1,
+      "fade_out": 0.5,
+      "anchor": "center",
+      "offset": [0, -100],
+      "scale": 2
     }
   ]
 }

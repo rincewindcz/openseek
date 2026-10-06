@@ -31,5 +31,10 @@
     "power_shell":   17
   },
 
-  "find": { "chance": 0.08, "ammo": 0.15, "frames": [6, 7] }
+  "find": {
+    "chance": 0.08,
+    "ammo":   0.15,
+    "frames": [6, 7],
+    "glow":   { "color": [1.0, 0.72, 0.1], "size": 48, "alpha": 0.85, "pulse": 0.5, "pulse_hz": 1.4 }
+  }
 }

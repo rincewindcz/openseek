@@ -401,7 +401,7 @@ function World:load(name)
             list[#list + 1] = entity
             if target_class[raw.class] then
                 self.targets[#self.targets + 1] = entity
-                entity.objective = true   -- white dot on the radar, reticle in the world
+                entity.objective = true   -- white dot on the radar, glint in the world
             end
             if rescue_zone_class[raw.class] then
                 self.rescue_zones[#self.rescue_zones + 1] = entity
@@ -596,7 +596,7 @@ function World:asset_file(class_idx)
 end
 
 -- The phase objective block exported into the stage JSON, or nil. Drives the
--- on-map markers and the objective banner (see Renderer:_draw_objectives).
+-- objective banner (see Renderer:objective_status).
 function World:objectives()
     return self.stage and self.stage.objectives
 end

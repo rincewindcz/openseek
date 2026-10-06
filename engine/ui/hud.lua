@@ -273,6 +273,7 @@ function Hud:draw()
         elseif t == "radar"  then self:_draw_radar(g, item, x, y, s)
         elseif t == "number" then self:_draw_number(g, item, x, y, s)
         elseif t == "sight"  then self:_draw_sight(g, item, s)
+        elseif t == "notice" then self:_draw_notice(item, x, y, s)
         end
     end
     self:_draw_overkill(g, screen_w, screen_h, hud_scale)
@@ -365,6 +366,23 @@ function Hud:_draw_overkill(_g, screen_w, screen_h, hud_scale)
     local s    = 4 * hud_scale
     local w    = font:word_width(s)
     font:print_word((screen_w - w) / 2, screen_h * 0.28, { scale = s })
+end
+
+-- EXTRA (weapon_finds): names the weapon a player just found (Powerups:_grant
+-- stamps found_weapon / found_time), centred on the item's anchor and faded in
+-- and out over the item's time.
+function Hud:_draw_notice(item, x, y, s)
+    local p = self.player
+    if not (p.found_weapon and self.world) then return end
+    local age  = self.world.time - p.found_time
+    local time = item.time or 2
+    if age < 0 or age >= time then return end
+    local def   = self.combat and self.combat.weapons[p.found_weapon]
+    local name  = def and def.name or p.found_weapon:upper():gsub("_", " ")
+    local text  = string.format(item.text or "%s", name)
+    local font  = Font.get(item.font or "chars")
+    local alpha = math.min(1, age / (item.fade_in or 0.1), (time - age) / (item.fade_out or 0.5))
+    font:print(text, math.floor(x - font:width(text, s) / 2), y, { scale = s, color = { 1, 1, 1, alpha } })
 end
 
 -- gauge

@@ -2,7 +2,7 @@
 -- Copyright (c) 2026 Michal Genserek
 
 -- Ground shadows of aircraft (and, with soft shadows on, their rotors, damage
--- smoke, and missiles with their trails). The sun is fixed at the top-left of the unrotated
+-- smoke, and projectiles with their trails). The sun is fixed at the top-left of the unrotated
 -- world, so shadows fall toward the bottom-right; because the world rotates in
 -- game mode the shadow swings around the aircraft as the player turns. A shadow
 -- is the aircraft body sprite drawn as a flat black silhouette (its own alpha as

@@ -45,6 +45,14 @@
     "strength": 0.6,
     "angle_deg": 45
   },
+  "target_glint": {
+    "period": 3.0,
+    "sweep": 0.5,
+    "width": 0.22,
+    "strength": 0.55,
+    "angle_deg": 45,
+    "color": [1.0, 0.86, 0.5]
+  },
   "impact": {
     "weapons": { "shells": "explosion_medium", "power_shell": "explosion_medium" },
     "scale": 1

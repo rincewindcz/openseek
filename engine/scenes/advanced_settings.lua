@@ -161,6 +161,7 @@ local CATEGORIES = {
         { key = "low_armor_fx",        label = "LOW ARMOR FX",    kind = "toggle" },
         { key = "damage_flash",        label = "DAMAGE FLASH",    kind = "toggle" },
         { key = "pickup_glint",        label = "PICKUP GLINT",    kind = "toggle" },
+        { key = "target_glint",        label = "TARGET GLINT",    kind = "toggle" },
         { key = "air_strike_fx",       label = "AIR STRIKE FX",   kind = "toggle" },
         { key = "remote_mine",         label = "REMOTE MINE",     kind = "toggle" },
         { key = "flame_momentum",      label = "FLAME MOMENTUM",  kind = "toggle" },
