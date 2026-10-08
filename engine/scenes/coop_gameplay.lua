@@ -240,9 +240,7 @@ function CoopGameplay:enter()
     combat:reset_phase()
     app.helis:reset()
     app.powerups:set_players(self.players)
-    app.rescue.pow_counts = Mission.rescue_counts(world.stage_name)
     app.rescue:reset()
-    app.saboteur.spec = Mission.sabotage_spec(world.stage_name)
     app.saboteur:reset()
     -- One shared objective, built by the same rules as single player (the stage's
     -- missions.json def, else its decoded objectives); both players contribute.
@@ -318,8 +316,10 @@ end
 function CoopGameplay:_update_down(idx, p, dt)
     if self.out[idx] or not p:death_done() then return end
     -- Objectives were finished as the vehicle went down: the stats screen is
-    -- taking over, so no life is spent (single player does the same).
-    if self.mission and self.mission.state == "won" then return end
+    -- taking over, so no life is spent (single player does the same). A failed
+    -- phase spends its vehicles in on_phase_failed.
+    local state = self.mission and self.mission.state
+    if state == "won" or state == "phase_failed" then return end
     local t = (self.death_timers[idx] or RESPAWN_DELAY) - dt
     self.death_timers[idx] = t
     if t > 0 then return end
@@ -408,7 +408,9 @@ function CoopGameplay:update(dt)
             -- Going down on the way home with every objective already met still
             -- completes the phase, as in single player, but only once this was
             -- the last vehicle that could have flown home: while a teammate is
-            -- still up, the phase waits for them.
+            -- still up, the phase waits for them. Not when the people the phase
+            -- was about went down with it (Mission:vehicle_lost).
+            if self.mission then self.mission:vehicle_lost(p) end
             if self.mission and self.mission.state == "return_to_base" and self:_last_in_play(i) then
                 self.mission.state = "won"
             end
@@ -428,6 +430,7 @@ function CoopGameplay:update(dt)
     app.saboteur:update(dt)
     if self.mission then self.mission:update(dt) end
     self:update_won(dt)
+    if self:update_phase_failed(dt) then return end
     self:_sync_lives()   -- bonus vehicles earned this tick join a shared pool
     if self.run and not self.game_over and self:_all_out() then self:_game_over() end
     app.world:update(dt)
@@ -448,9 +451,34 @@ function CoopGameplay:_biases()
     return (#self.players > 1) and SPLIT_BIAS or nil
 end
 
+-- An objective was lost for good: the failed phase costs a vehicle (each
+-- player's own, or one of the shared pool) and starts over with whoever still
+-- has one. Free play just starts it over.
+function CoopGameplay:on_phase_failed()
+    local app = self.app
+    if self.run then
+        if self.lives_mode == "shared" then
+            local p = self.players[1]
+            p.lives = math.max(0, p.lives - 1)
+            self:_sync_lives()
+        end
+        for i, p in ipairs(self.players) do
+            if not self.out[i] then
+                if self.lives_mode ~= "shared" then p.lives = math.max(0, p.lives - 1) end
+                if self:_vehicles_left(i, p) <= 0 then self.out[i] = true end
+            end
+        end
+        if self:_all_out() then self:_game_over(); return end
+        self:_carry_run(true)
+    end
+    Log.info("game", "phase failed, restart %s", app.world.stage_name)
+    app.scenes:switch("coop_gameplay")
+end
+
 -- Fold the phase into the run: scores, lives and thresholds, the medals picked
--- up into each purse, and who is out for the rest of it.
-function CoopGameplay:_carry_run()
+-- up into each purse, and who is out for the rest of it. A failed phase keeps
+-- its medals out of the purses, since it is played again.
+function CoopGameplay:_carry_run(failed)
     local run = self.run
     self:_sync_lives()   -- the stats screen's phase bonus may have earned vehicles
     for slot, p in ipairs(self.players) do
@@ -459,7 +487,7 @@ function CoopGameplay:_carry_run()
         state.lives      = p.lives or 0
         state.bonus_life = p.next_bonus_life or Score.BONUS_LIFE_STEP
         state.out        = self.out[slot] or false
-        state.loadout.medals = state.loadout.medals + (p.medals or 0)
+        if not failed then state.loadout.medals = state.loadout.medals + (p.medals or 0) end
     end
     if self.lives_mode == "shared" then
         run.pool = self.pool
@@ -521,21 +549,17 @@ function CoopGameplay:_draw_view(i, vx, vw, vh, plain)
     local ground, air = draw_layers(p, other)
     app.postfx:begin_world(app.impactfx:low_armor(p))
     app.renderer:draw_ground()   -- terrain, decals, craters
-    if #ground > 0 then
-        app.renderer:draw_objects("under")   -- flat clutter the vehicles sit on
-        app.rescue:draw()                    -- land pads + walking POWs
-        app.saboteur:draw_ground()           -- saboteur pads + walking saboteurs
-        for _, pl in ipairs(ground) do
-            if pl == p then p:draw_world() end   -- smoke behind the local vehicle
-            self:_draw_vehicle(pl, p, cam, plain)
-            if pl == p then p:draw_world_front() end
-        end
-        app.renderer:draw_objects("over")    -- trees/buildings
-    else
-        app.renderer:draw_objects()          -- nothing on the ground to split around
-        app.rescue:draw()
-        app.saboteur:draw_ground()
+    -- People on foot are on the ground with the grounded vehicles, under the
+    -- roofs: they come out of a building and go into one.
+    app.renderer:draw_objects("under")   -- flat clutter the vehicles sit on
+    app.rescue:draw()                    -- land pads + walking POWs
+    app.saboteur:draw_ground()           -- agent pads + walking agents
+    for _, pl in ipairs(ground) do
+        if pl == p then p:draw_world() end   -- smoke behind the local vehicle
+        self:_draw_vehicle(pl, p, cam, plain)
+        if pl == p then p:draw_world_front() end
     end
+    app.renderer:draw_objects("over")    -- trees/buildings
     app.powerups:draw()
     app.renderer:draw_explosions()   -- building blasts over the pickups they drop
     local soft = app.postfx:soft_shadows_active()
@@ -612,8 +636,12 @@ function CoopGameplay:draw()
     elseif self.mission then
         if self.mission.state == "won" then
             self:draw_overlay_text("MISSION COMPLETE")
+        elseif self.mission.state == "phase_failed" then
+            self:draw_phase_failed(self.mission.fail_lines)
         elseif self.mission.state == "failed" then
             self:draw_overlay_text("MISSION FAILED")
+        elseif self.mission.notice then
+            self:draw_notice(self.mission.notice)
         end
     end
     self:draw_replay_tag()

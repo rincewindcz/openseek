@@ -165,9 +165,7 @@ function Gameplay:spawn_player(carry)
     combat:reset_phase()
     app.helis:reset()
     app.powerups:reset(player)
-    app.rescue.pow_counts = Mission.rescue_counts(world.stage_name)
     app.rescue:reset()
-    app.saboteur.spec = Mission.sabotage_spec(world.stage_name)
     app.saboteur:reset()
     self.mission = Mission.for_stage(world, { player }, world.stage_name)
     camera.x, camera.y = player.x, player.y
@@ -200,7 +198,9 @@ function Gameplay:on_vehicle_lost()
     local player = self.player
     -- Objectives were finished as the vehicle went down: the stats screen is
     -- already taking over (see the death handler), so no life is spent here.
-    if self.mission and self.mission.state == "won" then return end
+    -- A phase failed with the vehicle spends its one life in on_phase_failed.
+    local state = self.mission and self.mission.state
+    if state == "won" or state == "phase_failed" then return end
     player.lives = math.max(0, (player.lives or 0) - 1)
     if player.lives > 0 then
         Log.info("game", "vehicle lost, %d left", player.lives)
@@ -214,17 +214,36 @@ function Gameplay:on_vehicle_lost()
             self.crash_hold = CrashFX.show(app.screen, player, false, { stats = self:crash_stats() }) ~= nil
         end
     else
-        Log.info("game", "game over, score %d", player.score or 0)
-        if self.playback then self:finish_playback("game over"); return end
-        local score = player.score or 0
-        if app.campaign then app.run_score = score end
-        -- Out of lives: the run is over.
-        local function finish()
-            if app.campaign then Campaign.finish(app) else app.scenes:switch("hiscores", score) end
-        end
-        CrashFX.show(app.screen, player, true,
-            { on_done = finish, on_cancel = finish, stats = self:crash_stats() })
+        self:game_over()
     end
+end
+
+-- Out of lives: the run is over, and the final score goes to the high-score
+-- screen behind the game-over picture.
+function Gameplay:game_over()
+    local app    = self.app
+    local player = self.player
+    Log.info("game", "game over, score %d", player.score or 0)
+    if self.playback then self:finish_playback("game over"); return end
+    local score = player.score or 0
+    if app.campaign then app.run_score = score end
+    local function finish()
+        if app.campaign then Campaign.finish(app) else app.scenes:switch("hiscores", score) end
+    end
+    CrashFX.show(app.screen, player, true,
+        { on_done = finish, on_cancel = finish, stats = self:crash_stats() })
+end
+
+-- An objective was lost for good. As in the original the failed phase costs a
+-- vehicle (0x20d595) and, with one to spare, is played again from the start.
+function Gameplay:on_phase_failed()
+    local player = self.player
+    if self.app.settings.death_enabled then
+        player.lives = math.max(0, (player.lives or 0) - 1)
+        if player.lives <= 0 then self:game_over(); return end
+    end
+    Log.info("game", "phase failed, %d left", player.lives or 0)
+    self:restart(true)
 end
 
 -- Respawn at the home base after a crash without reloading the stage, so the
@@ -326,6 +345,8 @@ function Gameplay:update(dt)
         -- Crashing on the way home with every objective already done still counts
         -- as a mission complete: flip to won now (before the death sets the mission
         -- to failed) so the stats screen takes over instead of costing a life.
+        -- Unless the people the phase was about were aboard (Mission:vehicle_lost).
+        if self.mission then self.mission:vehicle_lost(player) end
         if self.mission and self.mission.state == "return_to_base" then
             self.mission.state = "won"
         end
@@ -363,6 +384,7 @@ function Gameplay:update(dt)
     app.saboteur:update(dt)
     if self.mission then self.mission:update(dt) end
     self:update_won(dt)
+    if self:update_phase_failed(dt) then return end
     app.camera.x     = player.x
     app.camera.y     = player.y
     app.camera.angle = player:camera_angle()
@@ -400,21 +422,18 @@ function Gameplay:draw_world()
     -- dunes, decals) but under the solid props (trees, buildings) that stand taller
     -- than it, and under the enemy flyers. A tank is always down there; a chopper
     -- joins it the moment it touches down and leaves again on takeoff. Airborne, it
-    -- keeps its slot on top of it all.
+    -- keeps its slot on top of it all. People on foot share that ground slot, so
+    -- a roof hides whoever is under it: they come out of a building and go into one.
     local grounded = not self.player:is_airborne()
+    app.renderer:draw_objects("under")   -- flat clutter the vehicle sits on
+    app.rescue:draw()                    -- land pads + walking POWs
+    app.saboteur:draw_ground()           -- agent pads + walking agents
     if grounded then
-        app.renderer:draw_objects("under")   -- flat clutter the vehicle sits on
-        app.rescue:draw()                    -- land pads + walking POWs
-        app.saboteur:draw_ground()           -- saboteur pads + walking saboteurs
         self.player:draw_world()
         self.player:draw()
         self.player:draw_world_front()
-        app.renderer:draw_objects("over")    -- trees/buildings
-    else
-        app.renderer:draw_objects()          -- everything, airborne player drawn later
-        app.rescue:draw()
-        app.saboteur:draw_ground()
     end
+    app.renderer:draw_objects("over")    -- trees/buildings
     app.powerups:draw()
     app.renderer:draw_explosions()   -- building blasts over the pickups they drop
     local soft = app.postfx:soft_shadows_active()
@@ -454,6 +473,8 @@ function Gameplay:draw()
     if mission and mission.state == "won" and not app.end_stats:is_active() then
         self:draw_overlay_text("MISSION COMPLETE")
     end
+    if mission and mission.notice then self:draw_notice(mission.notice) end
+    if mission and mission.state == "phase_failed" then self:draw_phase_failed(mission.fail_lines) end
     if mission and mission.state == "failed" then
         if self.terminal_death then
             self:draw_overlay_text("GAME OVER")

@@ -137,6 +137,7 @@ local CATEGORIES = {
             { label = "LONG", value = "easy" }, { label = "MEDIUM", value = "medium" }, { label = "SHORT", value = "hard" } } },
         { key = "land_for_medals",    label = "LAND: MEDALS", kind = "toggle", on_change = match_difficulty },
         { key = "land_for_supplies",  label = "LAND: SUPPLY", kind = "toggle", on_change = match_difficulty },
+        { key = "enemy_hunts_people", label = "HUNT PEOPLE",  kind = "toggle" },
     } },
     { title = "EXTRAS", options = {
         { key = "explosive_trees",     label = "EXPLOSIVE TREES", kind = "toggle" },

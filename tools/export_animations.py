@@ -15,6 +15,8 @@ THIS_DIR = Path(__file__).resolve().parent
 
 sys.path.insert(0, str(THIS_DIR))
 import decode_blitter as db
+import decode_level
+import export_love2d
 import gamedata
 import image
 
@@ -64,14 +66,11 @@ def export_anim(game_dir, out_dir, bin_stem, prefix, palette):
 
 # Per-mission unit / effect animations: these live in STAGE0{m}/ (not only
 # STAGE00) and are rendered with that mission's own palette. `keep` limits the
-# frame range (POW/NEWDUDE are multi-direction walk sheets; frames 0-15 are the
-# axis-aligned walk cycle the engine rotates at runtime). Each (stem, mission)
-# pair becomes a clip "{prefix}{m}" with files {prefix}{m}_f{NN}.png.
+# frame range. Each (stem, mission) pair becomes a clip "{prefix}{m}" with files
+# {prefix}{m}_f{NN}.png.
 MISSION_ANIMATIONS = [
     ("DUST",    "dust",    17.5, False, None),
     ("MINE",    "mine",    12, False, None),
-    ("POW",     "pow",     12, True,  range(0, 16)),
-    ("NEWDUDE", "newdude", 12, True,  range(0, 16)),
     # The building blast of missions 1, 2 and 4, each only in its own STAGE0{m}
     # and drawn for that mission's palette (missions 0 and 3 use RDNEXPD above).
     # Clips rdnexp1 / 2 / 4, named by the `missions` table of explosion_medium
@@ -82,15 +81,31 @@ MISSION_ANIMATIONS = [
 ]
 
 
+# The class the people on foot are spawned from in every stage (0x203b80), the
+# class of the body one leaves when shot (0x2039e0), and the length of the walk
+# cycle: the first pose of the sheet's rotation arc, which the engine rotates
+# at runtime. The cycle advances half a frame a tick (0x203e8a), 35 a second.
+WALKER_CLASS = 20
+BODY_CLASS   = 35
+WALK_FRAMES  = 16
+WALK_FPS     = 35
+
+
 def export_mission_anim(game_dir, out_dir, bin_stem, prefix, mission, keep):
-    """Render a STAGE0{m} animation on a shared canvas so a sequence (e.g. a walk
-    cycle) keeps its frame-to-frame alignment. Returns the written file names."""
+    """Render a STAGE0{m} animation. Returns the written file names."""
     src      = game_dir / f"STAGE0{mission}" / (bin_stem + ".BIN")
     pal_path = game_dir / f"STAGE0{mission}" / "PAL.BIN"
     if not src.exists() or not pal_path.exists():
         return []
-    palette = pal_path.read_bytes()
-    data    = src.read_bytes()
+    names = render_sequence(src.read_bytes(), pal_path.read_bytes(), keep, out_dir, f"{prefix}{mission}")
+    print(f"  STAGE0{mission}/{bin_stem}: {len(names)} frames -> {prefix}{mission}")
+    return names
+
+
+def render_sequence(data, palette, keep, out_dir, name):
+    """Render frames of a sprite sheet on a shared canvas so a sequence (e.g. a
+    walk cycle) keeps its frame-to-frame alignment. `keep` limits the frame
+    range. Writes {name}_f{NN}.png and returns the file names."""
     offs    = db.read_frames(data)
     idxs    = [i for i in (keep if keep is not None else range(len(offs))) if i < len(offs)]
     canvases = []
@@ -109,11 +124,39 @@ def export_mission_anim(game_dir, out_dir, bin_stem, prefix, mission, keep):
         for (x, y), p in cv.items():
             r, g, b = palette[p * 3] * 4, palette[p * 3 + 1] * 4, palette[p * 3 + 2] * 4
             img.putpixel((x - x0, y - y0), (r, g, b, 255))
-        fname = f"{prefix}{mission}_f{len(names):02d}.png"
+        fname = f"{name}_f{len(names):02d}.png"
         img.save(out_dir / fname)
         names.append(fname)
-    print(f"  STAGE0{mission}/{bin_stem}: {len(names)} frames -> {prefix}{mission}")
     return names
+
+
+def export_walkers(game_dir, out_dir):
+    """The people on foot (POWs, crews, agents) of each mission: the sheet its
+    stages name in the walker class, in the mission's palette. Clips "{stem}{m}"
+    (walk cycle) and "{stem}{m}_dead" (the body, first frame of its spin)."""
+    results = {}
+    for m in gamedata.missions(game_dir):
+        stage    = decode_level.parse_stage((game_dir / "data" / f"STAGE{m}0.BIN").read_bytes())
+        pal_path = game_dir / f"STAGE0{m}" / "PAL.BIN"
+        if not pal_path.exists():
+            pal_path = game_dir / f"STAGE0{m}" / "PAL1.BIN"
+        palette = pal_path.read_bytes()
+        stem    = None
+        for cls_index, suffix, count, fps, loop in (
+                (WALKER_CLASS, "", WALK_FRAMES, WALK_FPS, True),
+                (BODY_CLASS, "_dead", 1, 1, False)):
+            cls   = stage["classes"][cls_index]
+            asset = stage["assets"][cls["asset"]]
+            src   = export_love2d.find_bin(game_dir, asset["file"], asset["source_dir"], m)
+            stem  = stem or Path(asset["file"]).stem.lower()
+            if src:
+                base  = max(0, cls["frame_base"])
+                name  = f"{stem}{m}{suffix}"
+                names = render_sequence(src.read_bytes(), palette, range(base, base + count), out_dir, name)
+                if names:
+                    results[name] = (names, fps, loop)
+                    print(f"  {src.parent.name}/{src.name}: {len(names)} frames -> {name}")
+    return results
 
 
 def export_all_mission_anims(game_dir, out_dir):
@@ -159,6 +202,7 @@ def main(argv=None):
     print()
     print("Per-mission animations:")
     results.update(export_all_mission_anims(game_dir, out_dir))
+    results.update(export_walkers(game_dir, out_dir))
 
     print()
     print("animations.json entries:")

@@ -49,21 +49,38 @@ function GameplayBase:draw_overlay_text(title, dim)
     g.setColor(1, 1, 1)
 end
 
+-- Centered lines in the score font (CHARS), stacked down from y.
+local function print_lines(lines, s, y)
+    local screen_w = love.graphics.getWidth()
+    local font     = Font.get("chars")
+    for _, ln in ipairs(lines) do
+        font:print(ln, (screen_w - font:width(ln, s)) / 2, y, { scale = s })
+        y = y + font.line_height * s + 10
+    end
+end
+
 -- Slow-blinking "MISSION COMPLETE / RETURN TO BASE" once every objective is
 -- met and the player only has to fly home (mission state "return_to_base").
 -- Uses the score font (CHARS), not the menu ENDCHARS face.
 function GameplayBase:draw_return_prompt()
     if math.floor(love.timer.getTime() * 1.5) % 2 ~= 0 then return end
+    print_lines({ "MISSION COMPLETE", "RETURN TO BASE" }, 4, love.graphics.getHeight() / 2 - 70)
+end
+
+-- An objective was lost for good (mission state "phase_failed"): the original's
+-- message over a dimmed screen, until the phase starts over.
+function GameplayBase:draw_phase_failed(lines)
     local g = love.graphics
     local screen_w, screen_h = g.getDimensions()
-    local font  = Font.get("chars")
-    local s     = 4
-    local lines = { "MISSION COMPLETE", "RETURN TO BASE" }
-    local y     = screen_h / 2 - 70
-    for _, ln in ipairs(lines) do
-        font:print(ln, (screen_w - font:width(ln, s)) / 2, y, { scale = s })
-        y = y + font.line_height * s + 10
-    end
+    g.setColor(0, 0, 0, 0.55)
+    g.rectangle("fill", 0, 0, screen_w, screen_h)
+    g.setColor(1, 1, 1)
+    print_lines(lines, 4, screen_h / 2 - 70)
+end
+
+-- A standing order of the mission (mission.notice), kept on screen.
+function GameplayBase:draw_notice(text)
+    print_lines({ text }, 3, love.graphics.getHeight() * 0.2)
 end
 
 -- Fire p's current weapon if its reload is up and it has ammo. owner stays the
@@ -242,8 +259,9 @@ end
 
 -- replay: recording, playback and divergence checking
 
-local CHECK_INTERVAL = 60   -- ticks between state checksums (one per simulated second)
-local VERIFY_SCALE   = 20   -- simulated ticks per real tick while verifying a replay
+local CHECK_INTERVAL  = 60   -- ticks between state checksums (one per simulated second)
+local VERIFY_SCALE    = 20   -- simulated ticks per real tick while verifying a replay
+local PHASE_FAIL_HOLD = 3.0  -- seconds the phase-failed message stays before the phase restarts
 
 -- A phase always starts from a pristine stage. Re-entering the game should not
 -- inherit the previous run's damage, and a recording is only reproducible if the
@@ -524,7 +542,27 @@ function GameplayBase:update_won(dt)
     end
 end
 
+-- Phase failed: hold the message, then hand over to the subclass's
+-- on_phase_failed() (a vehicle spent and the phase over again, or game over).
+-- Returns true on the tick it hands over: the scene may have started the phase
+-- again, so the caller drops the rest of its update.
+function GameplayBase:update_phase_failed(dt)
+    local mission = self.mission
+    if not (mission and mission.state == "phase_failed") or self.phase_fail_handled then return false end
+    self.fail_timer = (self.fail_timer or PHASE_FAIL_HOLD) - dt
+    if self.fail_timer > 0 then return false end
+    self.phase_fail_handled = true
+    if self.playback then
+        self:finish_playback("phase failed")
+    else
+        self:on_phase_failed()
+    end
+    return true
+end
+
 function GameplayBase:reset_end_stats()
+    self.fail_timer           = nil
+    self.phase_fail_handled   = false
     self.won_timer            = nil
     self.end_stats_started    = false
     self.phase_stats          = nil

@@ -340,7 +340,8 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
             target = self:player_lock_target(x, y, angle_deg, max_range, weapon_def.target_kind,
                 weapon_def.lock_arc)
         else
-            target = self:_nearest_player(x, y)
+            -- A gun that has turned on a person sends its missile after them.
+            target = (type(owner) == "table" and owner.person_target) or self:_nearest_player(x, y)
         end
         if not target then homing = false end
     end
@@ -420,6 +421,8 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
                 projectile.refresh_t = 0
             end
         end
+        -- A round from a gun that has turned on a person is meant for them.
+        if type(owner) == "table" then projectile.person = owner.person_target end
         if weapon_def.proj_type == "mine" then
             -- EXTRA (remote_mine): the mine waits for the trigger instead of its fuse.
             projectile.mine   = true
@@ -648,6 +651,9 @@ end
 -- and the two co-op halves disagreed with single player).
 local DEFAULT_PLAYER_RANGE = 640
 
+-- Guns this close to a person stepping into the open turn on them (0x1fe432).
+local PERSON_ALERT_RADIUS = 200
+
 function CombatSystem:player_range(weapon_def)
     return (weapon_def and weapon_def.range) or DEFAULT_PLAYER_RANGE
 end
@@ -660,6 +666,7 @@ function CombatSystem:_steer_homing(projectile, dt)
     if not tgt then return end
     local lost
     if tgt.is_alive then lost = not tgt:is_alive()              -- world entity
+    elseif tgt.on_foot then lost = tgt.done == true             -- person in the open
     elseif tgt.state ~= nil then lost = tgt.state ~= "alive"    -- enemy helicopter
     else lost = (tgt.armor or 0) <= 0 or tgt.death ~= nil end   -- player
     if lost then projectile.target = nil; return end
@@ -689,6 +696,20 @@ function CombatSystem:_steer_homing(projectile, dt)
     projectile.angle_rad = new_angle + math.pi / 2   -- sprite points north at frame 0; align to travel
 end
 
+-- A person stepped into the open: a POW leaving a building, an agent leaving
+-- the vehicle or a building. As in the original (0x1fe3e0) every gun within
+-- PERSON_ALERT_RADIUS turns on them, and stays on them until they are aboard,
+-- inside or dead. Difficulty option enemy_hunts_people.
+function CombatSystem:person_out(person)
+    if not Config.enemy_hunts_people then return end
+    for _, e in ipairs(self.world.combatants) do
+        if e.fire_routine and e:is_alive() then
+            local dx, dy = self.world:delta(person.x, person.y, e.x, e.y)
+            if dx * dx + dy * dy < PERSON_ALERT_RADIUS * PERSON_ALERT_RADIUS then e.person_target = person end
+        end
+    end
+end
+
 -- Drive enemy aiming and firing: each combatant within its active radius of the
 -- nearest player turns on it and fires by the original's rules (EnemyFire), a
 -- gun through its stage's firing routine, a soldier with its own weapon. Mines
@@ -708,7 +729,15 @@ function CombatSystem:_update_ai(dt)
                     -- it has ridden clear of the hut.
                     local can_fire = ((not e.has_turret) or e.turret_alive)
                         and not (e.hideable and e.hidden)
-                    fire:turret(e, dx, dy, d2, dt, can_fire)
+                    local person = e.person_target
+                    if person and person.done then person, e.person_target = nil, nil end
+                    if person then
+                        -- No range limit on a person; that one is the player's (0x201c67).
+                        local px, py = self.world:delta(person.x, person.y, e.x, e.y)
+                        fire:turret(e, px, py, 0, dt, can_fire)
+                    else
+                        fire:turret(e, dx, dy, d2, dt, can_fire)
+                    end
                 elseif e.fire_mode then
                     fire:soldier(e, dx, dy, dt)
                 end
@@ -924,10 +953,10 @@ function CombatSystem:_check_hit(projectile)
             end
         end
         -- The player's own fire can kill a walking POW / saboteur when that option is on.
-        if self.world.rescue and self.world.rescue:projectile_hit(projectile.x, projectile.y, projectile.radius, true) then
+        if self.world.rescue and self.world.rescue:projectile_hit(projectile.x, projectile.y, projectile.radius, true, projectile.vx, projectile.vy) then
             return true
         end
-        if self.world.saboteur and self.world.saboteur:projectile_hit(projectile.x, projectile.y, projectile.radius, true) then
+        if self.world.saboteur and self.world.saboteur:projectile_hit(projectile.x, projectile.y, projectile.radius, true, projectile.vx, projectile.vy) then
             return true
         end
         -- Friendly fire (co-op option): a player round can hit the other player.
@@ -963,12 +992,16 @@ function CombatSystem:_check_hit(projectile)
                 end
             end
         end
-        -- Enemy rounds always cut down a walking POW / saboteur caught in the open.
-        if self.world.rescue and self.world.rescue:projectile_hit(projectile.x, projectile.y, projectile.radius, false) then
-            return true
-        end
-        if self.world.saboteur and self.world.saboteur:projectile_hit(projectile.x, projectile.y, projectile.radius, false) then
-            return true
+        -- An enemy round hits what it was fired at and nothing else (0x1f86e0):
+        -- it kills a person only when its gun had turned on them (person_out).
+        local person = projectile.person
+        if person and not person.done then
+            if self.world.rescue and self.world.rescue:projectile_hit(projectile.x, projectile.y, projectile.radius, false, projectile.vx, projectile.vy, person) then
+                return true
+            end
+            if self.world.saboteur and self.world.saboteur:projectile_hit(projectile.x, projectile.y, projectile.radius, false, projectile.vx, projectile.vy, person) then
+                return true
+            end
         end
     end
     return false

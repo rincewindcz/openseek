@@ -6,119 +6,70 @@ local Animation = require "engine.core.animation"
 local Config    = require "engine.core.config"
 local Mathx     = require "engine.core.mathx"
 
--- Saboteur / demolition objective (mission 1 phases). Each landhere.bin pad is
--- paired with the nearest target building (asset set from missions.json). The
--- building is shielded from weapons; the only way to destroy it is to land a
--- vehicle on the pad, which sends a friendly saboteur (effects/pow1) walking from
--- the vehicle into the building to plant a charge. Two detonation styles, chosen
--- per stage:
---   * "individual" - the building self-detonates a fixed time after its own charge
---     is planted; the saboteur walks back out to the pad meanwhile (stage11).
---   * "all"        - every building holds until every charge is planted, then they
---     all blow at once and the agents run back out to their pads (stage13).
--- The saboteur waits on its pad to be picked up. A site clears once its building is
--- destroyed and its saboteur recovered; the objective completes when every site is
--- cleared. On "killable" stages an agent cut down in the open fails the mission.
+-- Agent drop-off, on the original's rules (building update 0x1fefb0, person
+-- update 0x203c90, one tick = 1/70 s). Every drop pad (World.saboteur_pads) is
+-- tied to one building. A vehicle on the ground at the pad sends an agent from
+-- the vehicle into the building (under its roof: the scenes draw the people
+-- below the solid objects), and the pad goes away. The agent comes back
+-- out after a moment, or, on a stage whose data asks for it, only once every
+-- building has its agent inside. The pad returns, the agent walks to it and
+-- waits there to be picked up by a vehicle landing on it again.
+--
+-- The buildings cannot be shot. One an agent has left loses toughness by the
+-- tick and blows up when that runs out; a class of behaviour 5 (the downed
+-- helicopters) never does. The phase is done when every agent is back aboard,
+-- and failed the moment one of them is killed.
 local SaboteurSystem = Class()
 
-local SABOTEUR_CLIP = "pow1"
-local DWELL_TIME    = 1.0   -- seconds a vehicle must hold the pad before the saboteur emerges
-local WALK_SPEED    = 26    -- px/s the saboteur walks
-local LAND_RADIUS   = 40    -- vehicle must be stationary within this of the pad
-local REACH_RADIUS  = 6     -- distance at which the saboteur reaches the door / pad
-local INSIDE_TIME   = 5.0   -- (individual) seconds the saboteur stays inside planting the charge
-local DETONATE_TIME = 10.0  -- (individual) seconds from charge planted until the building blows
-local LH_FADE       = 0.2   -- seconds for the pad to fade out/in under a vehicle
-local ZONE_FADE     = 0.3   -- seconds for the pad to fade out once its site is cleared
-local EXIT_GAP      = 4     -- px the saboteur stands off the building edge
-local POW_ROT       = 0     -- rest-pose facing offset (deg) added to the walk heading
-local HIT_RADIUS    = 6     -- an exposed saboteur's collision radius when shot
+local TICK          = 1 / 70
+local WALK_SPEED    = 35          -- px/s: half a pixel a tick
+local LAND_RADIUS   = 24          -- a vehicle on the ground this close to the pad counts as landed on it
+local ENTER_RADIUS  = 4           -- distance to the building's middle at which the agent is inside
+local PAD_RADIUS    = 20          -- distance from the pad at which the agent stops to wait
+local BOARD_RADIUS  = 10          -- distance to the vehicle at which the agent is aboard
+local INSIDE_TIME   = 60 * TICK   -- the agent's stay inside
+local BURN_RATE     = 2 * 70      -- toughness a building loses per second once its agent is out
+local PAD_FADE      = 0.2         -- seconds for the pad to fade out / in
+local HIT_RADIUS    = 6           -- an agent's collision radius when shot
+
+-- Stage global 5 (0x290e7c) at this value holds every agent inside until all
+-- are in (0x1ff0fb); the original then waits for a count of 3, the number of
+-- pads on the one stage that uses it.
+local HOLD_ALL       = 65535
+local NO_BLAST_CLASS = 5
 
 function SaboteurSystem:init(world, combat)
-    self.world    = world
-    self.combat   = combat
-    self.sites    = {}
-    self.active   = false
-    self.spec     = nil    -- the missions.json sabotage objective spec (set before reset)
-    self.blown    = false  -- ("all" mode) the synchronized detonation has fired
-    self.failed   = false  -- a saboteur was killed on a "killable" stage
+    self.world     = world
+    self.combat    = combat
+    self.sites     = {}
+    self.active    = false
+    self.failed    = false   -- an agent was killed
     world.saboteur = self
 end
 
-function SaboteurSystem:_nearest_building(pad, taken, buildings)
-    local best, best_dist
-    for _, b in ipairs(buildings) do
-        if not taken[b] then
-            local dx, dy = self.world:delta(b.x, b.y, pad.ent.x, pad.ent.y)
-            local d = dx * dx + dy * dy
-            if not best_dist or d < best_dist then best, best_dist = b, d end
-        end
-    end
-    return best
-end
-
--- A point just outside the building's edge on the side facing the pad, so the
--- saboteur appears next to the door rather than on top of the building.
-function SaboteurSystem:_exit_point(building, px, py)
-    local radius = 12
-    local r = self.world.images[building.class_idx + 1]
-    if r and r.img then
-        local iw, ih = r.img:getDimensions()
-        radius = math.max(iw, ih) / 2
-    end
-    local ddx, ddy = self.world:delta(px, py, building.x, building.y)   -- building toward pad
-    local dist = math.sqrt(ddx * ddx + ddy * ddy)
-    if dist <= 0 then return building.x, building.y end
-    local offset = math.max(8, math.min(radius + EXIT_GAP, dist - 8))
-    return building.x + ddx / dist * offset, building.y + ddy / dist * offset
-end
-
 function SaboteurSystem:reset()
-    self.sites  = {}
-    self.blown  = false
-    self.failed = false
-    local spec = self.spec
-    self.mode          = (spec and spec.detonate) or "individual"
-    self.killable      = spec and spec.killable or false
-    self.inside_time   = spec and spec.inside_time or INSIDE_TIME
-    self.detonate_time = spec and spec.detonate_time or DETONATE_TIME
-    self.active = spec ~= nil and spec.target ~= nil and #self.world.saboteur_pads > 0
-    if not self.active then return end
-
-    local buildings = {}
-    for _, e in ipairs(self.world.objects) do
-        if e.asset_file == spec.target then buildings[#buildings + 1] = e end
-    end
-
-    local taken = {}
+    self.sites    = {}
+    self.failed   = false
+    self.hold_all = (self.world.stage.globals or {})[5] == HOLD_ALL
+    self.clip     = self.world:walker_clip()
     for _, pad in ipairs(self.world.saboteur_pads) do
-        local b = self:_nearest_building(pad, taken, buildings)
-        if b then
-            taken[b]    = true
-            b.protected = true
-            b.objective = true               -- white dot on the radar
-            pad.ent.sabotage_hidden = true   -- the system draws this pad now, not the renderer
-            local ex, ey = self:_exit_point(b, pad.ent.x, pad.ent.y)
-            self.sites[#self.sites + 1] = {
-                pad        = pad,
-                building   = b,
-                px         = pad.ent.x,
-                py         = pad.ent.y,
-                ex         = ex,    -- the building door the saboteur enters / exits
-                ey         = ey,
-                state      = "idle",     -- idle -> dispatched
-                dwell      = 0,
-                lh_alpha   = 1,          -- pad opacity (fades out while a vehicle holds it)
-                saboteur   = nil,        -- the walking unit once dispatched
-                planted    = false,      -- charge set (saboteur reached the building)
-                armed      = false,      -- (individual) detonation counting down
-                detonate_t = 0,
-                detonated  = false,
-                recovered  = false,
-                cleared    = false,
-                lost       = false,      -- saboteur killed in the open
-            }
-        end
+        local b   = pad.building
+        local cls = self.world.stage.classes[b.class_idx + 1]
+        b.protected = true
+        b.objective = true               -- white dot on the radar
+        pad.ent.sabotage_hidden = true   -- the system draws this pad now, not the renderer
+        self.sites[#self.sites + 1] = {
+            pad       = pad.ent,
+            building  = b,
+            blasts    = cls.behaviour ~= NO_BLAST_CLASS,
+            px        = pad.ent.x,
+            py        = pad.ent.y,
+            agent     = nil,     -- the walking agent once dispatched
+            phase     = "idle",  -- idle -> to_building -> inside -> to_pad -> waiting -> aboard
+            inside_t  = 0,
+            burning   = false,   -- the building is on its way to blowing up
+            pad_alpha = 1,
+        }
     end
     self.active = #self.sites > 0
 end
@@ -126,161 +77,127 @@ end
 function SaboteurSystem:clear()
     self.sites  = {}
     self.active = false
-    self.blown  = false
     self.failed = false
 end
 
-function SaboteurSystem:_landed_on_pad(p, site)
-    if not p:is_stationary() then return false end
-    local dx, dy = self.world:delta(p.x, p.y, site.px, site.py)
-    return dx * dx + dy * dy <= LAND_RADIUS * LAND_RADIUS
+function SaboteurSystem:_lander(site)
+    for _, p in ipairs(self.combat.players or {}) do
+        if p and not p.death and not p:is_airborne() then
+            local dx, dy = self.world:delta(p.x, p.y, site.px, site.py)
+            if dx * dx + dy * dy <= LAND_RADIUS * LAND_RADIUS then return p end
+        end
+    end
 end
 
-function SaboteurSystem:_dispatch(site, lander)
-    site.saboteur = {
-        x        = lander.x,
-        y        = lander.y,
-        heading  = 0,
-        phase    = "to_building",
-        inside_t = 0,
-        anim     = Animation.new(SABOTEUR_CLIP),
-    }
-    site.state = "dispatched"
-end
-
--- Walk the saboteur toward (gx, gy); returns true on arrival.
-function SaboteurSystem:_walk_to(sab, gx, gy, reach, dt)
-    local dx, dy = self.world:delta(gx, gy, sab.x, sab.y)
+-- Step the agent toward (gx, gy); true once within reach.
+function SaboteurSystem:_walk(agent, gx, gy, reach, dt)
+    local dx, dy = self.world:delta(gx, gy, agent.x, agent.y)
     local d = math.sqrt(dx * dx + dy * dy)
     if d <= reach then return true end
-    sab.heading = Mathx.heading_deg(dx, dy)
+    agent.anim:update(dt)
+    agent.heading = Mathx.heading_deg(dx, dy)
     local step = WALK_SPEED * dt * Config.speed_scale
     local s    = self.world.stage.world_size
-    sab.x = (sab.x + dx / d * step) % s
-    sab.y = (sab.y + dy / d * step) % s
+    agent.x = (agent.x + dx / d * step) % s
+    agent.y = (agent.y + dy / d * step) % s
     return false
 end
 
-function SaboteurSystem:_blow_building(site)
-    local b = site.building
-    b.protected = false
-    if b:is_alive() then
-        local dx, dy = self.world:delta(b.x, b.y, site.ex, site.ey)
-        b:take_damage((b.hp or 1) + 1, dx, dy)
-    end
-    self.combat:add_effect("explosion_large", b.x, b.y, { scale = 1.5 })
-    site.detonated = true
+-- An agent stepping into the open at (x, y), which the guns nearby notice.
+function SaboteurSystem:_agent(x, y)
+    local agent = { x = x, y = y, heading = 0, anim = Animation.new(self.clip), on_foot = true }
+    self.combat:person_out(agent)
+    return agent
 end
 
-function SaboteurSystem:_all_planted()
+function SaboteurSystem:_all_inside()
     for _, site in ipairs(self.sites) do
-        if not site.planted then return false end
+        if site.phase ~= "inside" then return false end
     end
     return true
 end
 
-function SaboteurSystem:_update_saboteur(site, dt, lander)
-    local sab = site.saboteur
-    sab.anim:update(dt)
-    if sab.phase == "to_building" then
-        if self:_walk_to(sab, site.ex, site.ey, REACH_RADIUS, dt) then
-            site.planted = true
-            sab.phase    = "inside"
-            if self.mode == "individual" then
-                sab.inside_t    = self.inside_time
-                site.armed      = true
-                site.detonate_t = self.detonate_time
-            end
+function SaboteurSystem:_blow_building(site)
+    local b = site.building
+    site.burning = false
+    b.protected  = false
+    if b:is_alive() then
+        local dx, dy = self.world:delta(b.x, b.y, site.px, site.py)
+        b:take_damage(b.hp + 1, dx, dy)
+    end
+end
+
+function SaboteurSystem:_update_site(site, dt, release)
+    local lander = self:_lander(site)
+    local agent  = site.agent
+    if site.phase == "idle" then
+        if lander and site.building:is_alive() then
+            site.agent = self:_agent(lander.x, lander.y)
+            site.phase = "to_building"
         end
-    elseif sab.phase == "inside" then
-        -- "individual": step back out on the charge timer. "all": wait inside until
-        -- the synchronized blast releases every agent at once.
-        if self.mode == "individual" then
-            sab.inside_t = sab.inside_t - dt
-            if sab.inside_t <= 0 then
-                sab.x, sab.y = site.ex, site.ey
-                sab.phase = "to_pad"
-            end
+    elseif site.phase == "to_building" then
+        if self:_walk(agent, site.building.x, site.building.y, ENTER_RADIUS, dt) then
+            agent.done    = true   -- out of sight: the guns let go
+            site.phase    = "inside"
+            site.inside_t = INSIDE_TIME
         end
-    elseif sab.phase == "to_pad" then
-        if self:_walk_to(sab, site.px, site.py, REACH_RADIUS, dt) then
-            sab.phase = "pickup"
+    elseif site.phase == "inside" then
+        site.inside_t = math.max(0, site.inside_t - dt)
+        if release or (not self.hold_all and site.inside_t <= 0) then
+            site.agent   = self:_agent(site.building.x, site.building.y)
+            site.phase   = "to_pad"
+            site.burning = site.blasts
         end
-    elseif sab.phase == "pickup" then
-        if lander then
-            site.recovered = true
-            lander.pows  = (lander.pows or 0) + 1
+    elseif site.phase == "to_pad" then
+        if self:_walk(agent, site.px, site.py, PAD_RADIUS, dt) then site.phase = "waiting" end
+    elseif site.phase == "waiting" then
+        if lander and self:_walk(agent, lander.x, lander.y, BOARD_RADIUS, dt) then
+            agent.done = true
+            site.agent = nil
+            site.phase = "aboard"
+            site.building.objective = nil   -- off the radar
         end
     end
+
+    if site.burning then
+        local b = site.building
+        b.hp = b.hp - BURN_RATE * dt
+        if b.hp < 1 then self:_blow_building(site) end
+    end
+
+    -- The pad is gone while the agent is on the way in or inside, and for good
+    -- once the agent is back aboard.
+    local shown = site.phase == "idle" or site.phase == "to_pad" or site.phase == "waiting"
+    local fade  = dt / PAD_FADE
+    site.pad_alpha = shown and math.min(1, site.pad_alpha + fade) or math.max(0, site.pad_alpha - fade)
 end
 
 function SaboteurSystem:update(dt)
     if not self.active then return end
-    local players = self.combat.players or {}
-
-    -- "all" mode: once every charge is planted the whole set blows at once and the
-    -- agents step out of the rubble to run home.
-    if self.mode == "all" and not self.blown and self:_all_planted() then
-        for _, site in ipairs(self.sites) do
-            self:_blow_building(site)
-            local sab = site.saboteur
-            if sab then sab.x, sab.y = site.ex, site.ey; sab.phase = "to_pad" end
-        end
-        self.blown = true
-    end
-
-    for _, site in ipairs(self.sites) do
-        if site.cleared then
-            if site.lh_alpha > 0 then
-                site.lh_alpha = math.max(0, site.lh_alpha - dt / ZONE_FADE)
-            end
-        else
-            local lander
-            for _, p in ipairs(players) do
-                if p and not p.death and self:_landed_on_pad(p, site) then lander = p; break end
-            end
-
-            -- The pad fades out while a vehicle sits on it, back in when it leaves.
-            local target = lander and 0 or 1
-            local fade   = dt / LH_FADE
-            site.lh_alpha = (site.lh_alpha < target)
-                and math.min(target, site.lh_alpha + fade)
-                or  math.max(target, site.lh_alpha - fade)
-
-            if site.state == "idle" then
-                if lander then site.dwell = site.dwell + dt else site.dwell = 0 end
-                if site.dwell >= DWELL_TIME then self:_dispatch(site, lander) end
-            elseif site.saboteur then
-                self:_update_saboteur(site, dt, lander)
-            end
-
-            -- "individual" mode: each building blows on its own charge timer.
-            if self.mode == "individual" and site.armed and not site.detonated then
-                site.detonate_t = site.detonate_t - dt
-                if site.detonate_t <= 0 then self:_blow_building(site) end
-            end
-
-            if site.detonated and site.recovered then site.cleared = true end
-        end
-    end
+    local release = self.hold_all and self:_all_inside()
+    for _, site in ipairs(self.sites) do self:_update_site(site, dt, release) end
 end
 
--- A projectile passed (x, y); cut down any exposed saboteur it touches on a
--- killable stage, which fails the mission. Enemy rounds always kill; the player's
--- own rounds only when the friendly-fire option is on. Returns true on a hit.
-function SaboteurSystem:projectile_hit(x, y, radius, from_player)
-    if not self.active or not self.killable then return false end
+-- A projectile passed (x, y); cut down the agent it touches, which fails the
+-- phase. An enemy round only kills the one it was fired at (only); the
+-- player's own rounds any, when the friendly-fire option is on. Returns true
+-- on a hit.
+function SaboteurSystem:projectile_hit(x, y, radius, from_player, vx, vy, only)
+    if not self.active then return false end
     if from_player and not Config.friendly_fire_pows then return false end
     for _, site in ipairs(self.sites) do
-        local sab = site.saboteur
-        if sab and not site.lost and (sab.phase == "to_building" or sab.phase == "to_pad") then
-            local dx, dy = self.world:delta(sab.x, sab.y, x, y)
+        local agent = site.agent
+        if agent and site.phase ~= "inside" and (only == nil or only == agent) then
+            local dx, dy = self.world:delta(agent.x, agent.y, x, y)
             local rr = radius + HIT_RADIUS
             if dx * dx + dy * dy < rr * rr then
-                site.lost     = true
-                site.saboteur = nil
-                self.failed   = true
-                self.combat:add_effect("smoke2", x, y, {})
+                agent.done  = true
+                site.agent  = nil
+                site.phase  = "lost"
+                self.failed = true
+                if self.world.rescue then
+                    self.world.rescue:add_body(agent.x, agent.y, agent.heading, vx, vy)
+                end
                 return true
             end
         end
@@ -292,17 +209,14 @@ end
 
 function SaboteurSystem:cleared_count()
     local n = 0
-    for _, s in ipairs(self.sites) do
-        if s.cleared then n = n + 1 end
+    for _, site in ipairs(self.sites) do
+        if site.phase == "aboard" then n = n + 1 end
     end
     return n
 end
 
 function SaboteurSystem:all_cleared()
-    for _, s in ipairs(self.sites) do
-        if not s.cleared then return false end
-    end
-    return true
+    return self:cleared_count() == #self.sites
 end
 
 function SaboteurSystem:mission_failed()
@@ -327,7 +241,7 @@ function SaboteurSystem:_draw_tiles(fn)
     g.pop()
 end
 
--- Ground layer: drop pads and walking saboteurs, under a vehicle on the ground.
+-- Ground layer: drop pads and walking agents, under a vehicle on the ground.
 function SaboteurSystem:draw_ground()
     if not self.active then return end
     self:_draw_tiles(self._draw_ground_tile)
@@ -338,25 +252,23 @@ function SaboteurSystem:_draw_ground_tile(cam)
     -- Pads follow the pickups option: screen-upright (original) or world-rotated.
     local mrot = Config.axis_aligned_pickups and -(cam.angle or 0) or 0
     for _, site in ipairs(self.sites) do
-        if site.lh_alpha > 0.01 then
-            local r = self.world.images[site.pad.ent.class_idx + 1]
+        if site.pad_alpha > 0.01 then
+            local r = self.world.images[site.pad.class_idx + 1]
             if r and r.img then
                 local iw, ih = r.img:getDimensions()
-                g.setColor(1, 1, 1, site.lh_alpha)
-                g.draw(r.img, site.pad.ent.x + r.ox + iw / 2, site.pad.ent.y + r.oy + ih / 2,
-                    mrot, 1, 1, iw / 2, ih / 2)
+                g.setColor(1, 1, 1, site.pad_alpha)
+                g.draw(r.img, site.px + r.ox + iw / 2, site.py + r.oy + ih / 2, mrot, 1, 1, iw / 2, ih / 2)
             end
         end
     end
     for _, site in ipairs(self.sites) do
-        local sab = site.saboteur
-        if sab and sab.phase ~= "inside" then
-            local img = sab.anim:current_image()
+        local agent = site.agent
+        if agent and site.phase ~= "inside" then
+            local img = agent.anim:current_image()
             if img then
                 local iw, ih = img:getDimensions()
-                local rot = ((sab.heading or 0) + POW_ROT) * math.pi / 180
                 g.setColor(1, 1, 1)
-                g.draw(img, sab.x, sab.y, rot, 1, 1, iw / 2, ih / 2)
+                g.draw(img, agent.x, agent.y, agent.heading * math.pi / 180, 1, 1, iw / 2, ih / 2)
             end
         end
     end

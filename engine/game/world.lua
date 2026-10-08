@@ -101,10 +101,18 @@ local TURRET_DEFS = {
 -- shields it until the tank rides out to fire (see World:_link_hangar_tanks).
 local HIDE_TANK_HANGARS = { ["shut.bin"] = true }
 
--- A kind-14 landing pad within this of a POWHERE marker is a rescue pad; farther
--- (or on a stage with no POWHERE) it is a saboteur drop pad. Rescue pads sit
--- 38-64px from their marker; saboteur stages carry no POWHERE at all.
-local PAD_RESCUE_RADIUS = 80
+-- Stage class kinds of the people objectives (loader jump table 0x1f5818).
+local KIND_POW_MARKER = 9    -- powhere.bin flag over a building holding people
+local KIND_PERSON     = 11   -- a person placed on the stage (the crash-site crews)
+local KIND_PAD        = 14   -- lh.bin / landhere.bin landing pad
+
+-- Pad class behaviour: people run out of the linked building to the vehicle.
+-- Any other value makes it an agent drop pad (counted at 0x1f6501).
+local PAD_PICKUP = 1
+
+-- The class every walking person is spawned from (0x203b80), and the spinning
+-- body one leaves when shot (0x2039e0): the same sheet, from frame 128.
+local WALKER_CLASS = 20
 
 function World:init()
     self.stage       = nil   -- decoded JSON table
@@ -237,14 +245,13 @@ function World:load(name)
     local top_class  = {}   -- class index -> turret def
     local hull_class = {}   -- class index -> true
     -- Objective classes (see objectives block in the stage JSON): destroy targets
-    -- carry the is_target flag; rescue stages mark powhere.bin landing zones and
-    -- pow.bin / people.bin civilians by sprite.
+    -- carry the is_target flag; the people objectives go by class kind.
     local target_class        = {}
     local rescue_zone_class   = {}
     local rescue_people_class = {}
-    -- kind-14 "land here" pads (lh.bin / landhere.bin). A pad next to a POWHERE
-    -- marker is a rescue landing pad (POWs walk to it); a landhere pad with no
-    -- POWHERE nearby is a saboteur drop pad. Classified by position in pass two.
+    -- Landing pads. The class names the entity each one belongs to (parent_class,
+    -- an index into the stage's entity list, resolved by the original at 0x1f68f0)
+    -- and, by its behaviour, whether people are picked up or an agent dropped.
     local pad_class           = {}
     for _, c in ipairs(self.stage.classes) do
         local a     = c.asset and self.stage.assets[c.asset + 1]
@@ -259,16 +266,12 @@ function World:load(name)
             end
         end
         if c.is_target then target_class[c.index] = true end
-        if fname then
-            if c.kind == 9 and fname:match("powhere") then
-                rescue_zone_class[c.index] = true
-            end
-            if c.kind == 11 and (fname:match("^pow") or fname:match("people")) then
-                rescue_people_class[c.index] = true
-            end
-            if c.kind == 14 and (fname:match("^lh") or fname:match("^landhere")) then
-                pad_class[c.index] = true
-            end
+        if c.kind == KIND_POW_MARKER and fname and fname:match("powhere") then
+            rescue_zone_class[c.index] = true
+        elseif c.kind == KIND_PERSON then
+            rescue_people_class[c.index] = true
+        elseif c.kind == KIND_PAD then
+            pad_class[c.index] = true
         end
     end
 
@@ -282,10 +285,10 @@ function World:load(name)
     -- the simulation through World:count, never read back by it.
     self.tally         = { pixels = 0, shots = 0, hits = 0, rounds = 0, trees = 0, expired = 0 }
     self.targets       = {}   -- destroy-objective entities (class is_target)
-    self.rescue_zones  = {}   -- powhere.bin landing markers (kind 9)
-    self.rescue_people = {}   -- pow.bin / people.bin civilians to rescue (kind 11)
-    self.land_zones    = {}   -- rescue landing pads next to a POWHERE marker (owned by RescueSystem)
-    self.saboteur_pads = {}   -- landhere.bin drop pads with no POWHERE nearby (owned by SaboteurSystem)
+    self.rescue_zones  = {}   -- powhere.bin markers over the buildings holding people
+    self.rescue_people = {}   -- {ent, home}: people standing by the wreck they wait at
+    self.land_zones    = {}   -- {ent, building}: pickup pads (owned by RescueSystem)
+    self.saboteur_pads = {}   -- {ent, building}: agent drop pads (owned by SaboteurSystem)
     self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
     self.debris:reset()
     self.ground_fx     = {}   -- dust left on the ground when a shard lands {anim, x, y}
@@ -293,14 +296,15 @@ function World:load(name)
     self.air_units     = {}   -- live enemy helicopters (owned by the heli system)
 
     -- First pass: build every entity and index hulls by exact position.
-    local created     = {}
-    local hull_at     = {}
-    local powhere_pos = {}   -- POWHERE marker positions, to classify nearby pads
+    local created = {}
+    local hull_at = {}
     for id, raw in ipairs(self.stage.entities) do
         local cls    = self.stage.classes[raw.class + 1]
         local entity = Entity:new(id, raw, cls)
         entity.world         = self   -- backref so a dying building can spawn world shrapnel
         entity.kind_name     = cls.kind_name
+        -- People held inside (class +0x0c), walked out by the RescueSystem.
+        if cls.kind_name == "structure" and (cls.pows or 0) > 0 then entity.pows = cls.pows end
         entity.base_building = math.floor((cls.flags or 0) / BASE_FLAG) % 2 == 1
         -- The main base building ships with no toughness (it could never be
         -- hit); friendly fire makes it a sturdy target instead of a one-hit kill.
@@ -369,9 +373,13 @@ function World:load(name)
         if hull_class[raw.class] then
             hull_at[raw.x .. "," .. raw.y] = entity
         end
-        if rescue_zone_class[raw.class] then
-            powhere_pos[#powhere_pos + 1] = { x = raw.x, y = raw.y }
-        end
+    end
+
+    -- The structure a pad or a placed person belongs to, or nil when the class
+    -- names none (a stage built without the link leaves them plain scenery).
+    local function linked_structure(cls)
+        local e = created[(cls.parent_class or -1) + 1]
+        return e and e.kind_name == "structure" and e or nil
     end
 
     -- Second pass: fold each turret onto its co-located hull (dropping the turret
@@ -391,10 +399,9 @@ function World:load(name)
             -- Enemy helicopters are not placed units: each marks a spawn point for the
             -- airborne heli system and is never drawn or hit in place.
             self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y, behaviour = cls.behaviour }
-        elseif pad_class[raw.class] and self:_near_any(raw.x, raw.y, powhere_pos, PAD_RESCUE_RADIUS) then
-            -- A pad by a POWHERE marker is a rescue landing pad: drawn and removed by
-            -- the RescueSystem, not the world.
-            self.land_zones[#self.land_zones + 1] = { ent = entity }
+        elseif pad_class[raw.class] and cls.behaviour == PAD_PICKUP and linked_structure(cls) then
+            -- A pickup pad is drawn and removed by the RescueSystem, not the world.
+            self.land_zones[#self.land_zones + 1] = { ent = entity, building = linked_structure(cls) }
         else
             self.entities[#self.entities + 1] = entity
             local list = cls.kind == 15 and self.decals or self.objects
@@ -407,17 +414,19 @@ function World:load(name)
                 self.rescue_zones[#self.rescue_zones + 1] = entity
                 entity.objective   = true
                 entity.rescue_zone = true   -- the flag stands over its building (Renderer)
+                -- The marker is a child of the entity stored just before it (0x1f5fc7).
+                local building = created[id - 1]
+                if building and building.pows then building.pow_marker = entity end
             end
-            if rescue_people_class[raw.class] then
-                self.rescue_people[#self.rescue_people + 1] = entity
+            if rescue_people_class[raw.class] and linked_structure(cls) then
+                self.rescue_people[#self.rescue_people + 1] = { ent = entity, home = linked_structure(cls) }
                 entity.objective = true
             end
-            -- A landing pad reached here has no POWHERE nearby, so it is a saboteur drop
-            -- pad (lh.bin or landhere.bin). It stays an ordinary object (drawn by the
-            -- renderer) until the SaboteurSystem claims it, hiding and redrawing it with
-            -- a fade.
-            if pad_class[raw.class] then
-                self.saboteur_pads[#self.saboteur_pads + 1] = { ent = entity }
+            -- Any other linked pad is an agent drop pad. It stays an ordinary object
+            -- (drawn by the renderer) until the SaboteurSystem claims it, hiding and
+            -- redrawing it with a fade.
+            if pad_class[raw.class] and linked_structure(cls) then
+                self.saboteur_pads[#self.saboteur_pads + 1] = { ent = entity, building = linked_structure(cls) }
             end
             if entity:is_combatant() then
                 self.combatants[#self.combatants + 1] = entity
@@ -565,16 +574,6 @@ function World:load_index(idx)
     self:load(self.stages[idx])
 end
 
--- True if (x, y) lies within radius of any {x, y} point in the list (wrap-aware).
-function World:_near_any(x, y, points, radius)
-    local rr = radius * radius
-    for _, p in ipairs(points) do
-        local dx, dy = self:delta(x, y, p.x, p.y)
-        if dx * dx + dy * dy <= rr then return true end
-    end
-    return false
-end
-
 -- Shortest signed per-axis delta (a - b) on the seamlessly wrapped (toroidal)
 -- map, so distance checks keep working across the map edges. b (or a) may sit
 -- outside [0, world_size); the modulo folds it back.
@@ -593,6 +592,22 @@ function World:asset_file(class_idx)
     local cls = self.stage.classes[class_idx + 1]
     local a   = cls and cls.asset and self.stage.assets[cls.asset + 1]
     return a and a.file or nil
+end
+
+-- Clip of the people walking on this stage: the sheet of the stage's walker
+-- class in this mission's palette ("newdude3"), else that sheet from mission 0
+-- for a pack exported before the per-mission clips. suffix "_dead" names the
+-- body of one shot down.
+function World:walker_clip(suffix)
+    local file = self:asset_file(WALKER_CLASS)
+    local stem = file and file:lower():match("^(%w+)%.bin$") or "pow"
+    local m    = self.stage_name and self.stage_name:match("^stage(%d)") or "0"
+    suffix = suffix or ""
+    for _, name in ipairs({ stem .. m .. suffix, stem .. "0" .. suffix }) do
+        local clip = Animation.clip(name)
+        if clip and not clip:is_empty() then return name end
+    end
+    return stem .. m .. suffix
 end
 
 -- The phase objective block exported into the stage JSON, or nil. Drives the
@@ -626,7 +641,7 @@ function World:home_base()
 end
 
 local function blocks(world, e, x, y, radius, ignore)
-    if e == ignore or not e:is_alive() then return false end
+    if e == ignore or e.dormant or not e:is_alive() then return false end
     local td = e.type_data
     if not (td and td.solid) then return false end
     local dx, dy = world:delta(e.x, e.y, x, y)

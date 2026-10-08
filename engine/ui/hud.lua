@@ -732,7 +732,7 @@ function Hud:_draw_radar(g, item, x, y, s)
         if rx * rx + ry * ry <= r * r then bucket[#bucket + 1] = { rx, ry } end
     end
     for _, e in ipairs(self:_radar_entities()) do
-        if e:is_alive() then
+        if e:is_alive() and not e.dormant then
             local kind = classes[e.class_idx + 1].kind_name
             local bucket
             if     e.objective          then bucket = objectives

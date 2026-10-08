@@ -4,7 +4,6 @@
 local Class       = require "engine.core.class"
 local Scene       = require "engine.core.scene"
 local Loadout     = require "engine.game.loadout"
-local Mission     = require "engine.game.mission"
 local EquipScreen = require "engine.ui.equip_screen"
 local PlayerTag   = require "engine.ui.player_tag"
 local Campaign    = require "engine.game.campaign"
@@ -15,8 +14,8 @@ local Log         = require "engine.core.log"
 -- live game: pick the vehicle (TANK / CHOP button) and load its weapon bays
 -- (engine/ui/equip_screen.lua drives the widgets against app.loadout). OK
 -- starts the phase with the picked vehicle and loadout; EXIT returns to the
--- briefing. Weapons are bought on the shop screen and equipped here. Stages
--- with a forced vehicle (missions.json "vehicle") lock the screen to it.
+-- briefing. Weapons are bought on the shop screen and equipped here. Phases
+-- with a forced vehicle (Campaign.required_vehicle) lock the screen to it.
 -- Without exported equip art the briefing skips this scene. A co-op run
 -- equips each player in turn (enter's player number, tagged on screen), then
 -- starts the split-screen phase.
@@ -38,7 +37,7 @@ function Equip:enter(stage_name, player)
     -- pickups; a single mission (MISSION mode) equips the START_MEDALS-seeded
     -- inventory bought in the shop. Both share the run's Loadout.
     self.loadout = Loadout.active(app, self.player)
-    local required = Mission.required_vehicle(self.stage_name)
+    local required = Campaign.required_vehicle(app, self.stage_name)
     if required then self.loadout.vehicle = required end
     if not self.screen:open(self.loadout, app.combat.weapons,
         { lock_vehicle = required ~= nil }) then

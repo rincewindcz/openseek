@@ -1,101 +1,128 @@
 {
-  "stage02": {
-    "briefing": "Wipe out the chemical weapons plants.",
+  "stage00": {
+    "briefing": "Two defecting enemy scientists are waiting. Fly in and get them out.",
     "objectives": [
-      { "type": "destroy", "target": "deschem.bin", "count": "all", "label": "DESTROY CHEMICAL PLANTS" }
+      { "type": "rescue_people", "label": "RESCUE THE SCIENTISTS" }
+    ]
+  },
+  "stage01": {
+    "briefing": "Bring back as many of our captured lads as possible. They run to you once you stop or land on the correct spot.",
+    "objectives": [
+      { "type": "rescue_people", "label": "RESCUE CAPTURED SOLDIERS" }
+    ]
+  },
+  "stage02": {
+    "briefing": "Waste the enemy fuel storage facility.",
+    "objectives": [
+      { "type": "destroy", "target": "deschem.bin", "count": "all", "label": "DESTROY FUEL STORAGE" }
     ]
   },
   "stage03": {
-    "briefing": "Raze every enemy hut in the sector.",
+    "briefing": "Take out all the remaining POW holding huts.",
     "objectives": [
-      { "type": "destroy", "target": "powhut.bin", "count": "all", "label": "DESTROY ENEMY HUTS" }
+      { "type": "destroy", "target": "powhut.bin", "count": "all", "label": "DESTROY POW HUTS" }
     ]
   },
   "stage10": {
-    "briefing": "Destroy the arctic chemical plants.",
+    "briefing": "Take out the chemical weapons facility.",
     "objectives": [
-      { "type": "destroy", "target": "snowchem.bin", "count": "all", "label": "DESTROY CHEMICAL PLANTS" }
+      { "type": "destroy", "target": "snowchem.bin", "count": "all", "label": "DESTROY CHEMICAL WEAPONS" }
     ]
   },
   "stage11": {
-    "briefing": "Land your saboteurs at the marked buildings, then extract them.",
+    "briefing": "Land outside the marked buildings. Our soldiers run in, steal vital information and run back to be picked up. Do not let any of them die.",
+    "vehicle": "tank",
     "objectives": [
-      { "type": "sabotage", "target": "powhut.bin", "label": "SABOTAGE BUILDINGS" }
+      { "type": "sabotage", "label": "STEAL THE INFORMATION" }
     ]
   },
   "stage12": {
-    "briefing": "Take out the hidden missile silos. Rescue any POWs you find.",
+    "briefing": "Take out the nuclear missile silos. Rescue our captured troops if you have the chance.",
     "objectives": [
       { "type": "destroy", "target": "snuke.bin", "count": "all", "label": "DESTROY MISSILE SILOS" },
-      { "type": "rescue_people", "optional": true, "label": "RESCUE POWS" }
+      { "type": "rescue_people", "optional": true, "label": "RESCUE CAPTURED TROOPS" }
     ]
   },
   "stage13": {
-    "briefing": "Drop a saboteur at each enemy tent, then fly back and pick them all up. Do not let any of them get killed.",
+    "briefing": "Drop a saboteur off at each of the 3 tents. Once all are in, the tents explode and the agents run back to await pickup. Pick them all up and do not let any of them get killed.",
     "objectives": [
-      { "type": "sabotage", "target": "tentnew.bin", "detonate": "all", "killable": true, "label": "SABOTAGE TENTS" }
+      { "type": "sabotage", "label": "SABOTAGE TENTS" }
     ]
   },
   "stage20": {
-    "briefing": "Knock out the forward helipads.",
+    "briefing": "Take out the helicopter takeoff pads.",
     "objectives": [
       { "type": "destroy", "target": "helipad.bin", "count": "all", "label": "DESTROY HELIPADS" }
     ]
   },
   "stage21": {
-    "briefing": "Blind the enemy: destroy their radar stations.",
+    "briefing": "Take out the enemy radar systems.",
     "objectives": [
-      { "type": "destroy_targets", "label": "DESTROY RADAR STATIONS" }
+      { "type": "destroy_targets", "label": "DESTROY RADAR SYSTEMS" }
+    ]
+  },
+  "stage22": {
+    "briefing": "Two allied choppers are down but the crews are OK. Land in a clear spot near them and they will run to you.",
+    "objectives": [
+      { "type": "rescue_people", "label": "RESCUE THE CREWS" }
     ]
   },
   "stage23": {
-    "briefing": "Level the fortified road bunkers.",
+    "briefing": "Destroy the prototype four way firing installations.",
+    "vehicle": "tank",
     "objectives": [
-      { "type": "destroy", "target": "fourway.bin", "count": "all", "label": "DESTROY ROAD BUNKERS" }
+      { "type": "destroy", "target": "fourway.bin", "count": "all", "label": "DESTROY FOUR WAY GUNS" }
     ]
   },
   "stage30": {
-    "briefing": "Destroy the bunkers and stop the convoy.",
+    "briefing": "Disable the soldier camp: destroy all enemy trucks and their main barracks.",
     "objectives": [
-      { "type": "destroy", "target": "powhut.bin", "count": "all", "label": "DESTROY BUNKERS" },
-      { "type": "destroy", "target": "truck.bin",  "count": "all", "label": "DESTROY CONVOY" }
+      { "type": "destroy", "target": "powhut.bin", "count": "all", "label": "DESTROY BARRACKS" },
+      { "type": "destroy", "target": "truck.bin",  "count": "all", "label": "DESTROY TRUCKS" }
+    ]
+  },
+  "stage31": {
+    "briefing": "Collect our captured soldiers from the marked buildings.",
+    "objectives": [
+      { "type": "rescue_people", "label": "RESCUE CAPTURED SOLDIERS" }
     ]
   },
   "stage32": {
-    "briefing": "Sabotage the downed helicopters, then extract your agents before they are cut down.",
+    "briefing": "Two of our choppers went down holding vital intelligence. Land and let one of our troops collect it, then bring them back safely.",
+    "vehicle": "tank",
     "objectives": [
-      { "type": "sabotage", "target": "crshchop.bin", "killable": true, "label": "SABOTAGE CRASH SITES" }
+      { "type": "sabotage", "label": "COLLECT THE INFORMATION" }
     ]
   },
   "stage33": {
-    "briefing": "Demolish the enemy base structures.",
+    "briefing": "Take out the grounded enemy choppers.",
     "objectives": [
-      { "type": "destroy", "target": "badhsz1.bin", "count": "all", "label": "DESTROY ENEMY BASE" }
+      { "type": "destroy", "target": "badhsz1.bin", "count": "all", "label": "DESTROY GROUNDED CHOPPERS" }
     ]
   },
   "stage40": {
-    "briefing": "Destroy the jets before they scramble.",
+    "briefing": "Wipe out the enemy jet fighters.",
     "objectives": [
-      { "type": "destroy", "target": "jet.bin", "count": "all", "label": "DESTROY PARKED JETS" }
+      { "type": "destroy", "target": "jet.bin", "count": "all", "label": "DESTROY JET FIGHTERS" }
     ]
   },
   "stage41": {
-    "briefing": "Intercept and destroy the convoy.",
+    "briefing": "Take out the supply trucks heading for the enemy base.",
     "objectives": [
-      { "type": "destroy", "target": "truck.bin", "count": "all", "label": "DESTROY THE CONVOY" }
+      { "type": "destroy", "target": "truck.bin", "count": "all", "label": "DESTROY THE TRUCKS" }
     ]
   },
   "stage42": {
-    "briefing": "Flatten the enemy factories.",
+    "briefing": "Take out the enemy factories.",
     "objectives": [
       { "type": "destroy", "target": "factory.bin", "count": "all", "label": "DESTROY FACTORIES" }
     ]
   },
   "stage43": {
-    "briefing": "Eliminate all troops and destroy the commander HQ.",
+    "briefing": "Disperse the enemy troops, then find the commanders building and destroy it.",
     "objectives": [
       { "type": "destroy", "target": "enemy.bin",   "count": "all", "label": "ELIMINATE ALL TROOPS" },
-      { "type": "destroy", "target": "cmdrhut.bin", "count": "all", "label": "DESTROY COMMANDER HQ" }
+      { "type": "destroy", "target": "cmdrhut.bin", "count": "all", "label": "DESTROY THE COMMANDERS BUILDING" }
     ]
   }
 }

@@ -215,8 +215,9 @@ function Renderer:_draw_entity(e, vp, mode)
     if mode == "under" and is_occluder(e) then return end
     if mode == "over" and not is_occluder(e) then return end
     local cls = self.world.stage.classes[e.class_idx + 1]
-    -- Skip kinds the editor hid and emptied POW building markers (rescue_hidden).
-    if self.hidden_kinds[cls.kind_name] or e.rescue_hidden or e.sabotage_hidden then return end
+    -- Skip kinds the editor hid, emptied POW building markers (rescue_hidden) and
+    -- a building the mission holds back (dormant).
+    if self.hidden_kinds[cls.kind_name] or e.rescue_hidden or e.sabotage_hidden or e.dormant then return end
     local g      = love.graphics
     local images = self.world.images
     if e.type_data and e.type_data.sprite then

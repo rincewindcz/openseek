@@ -14,7 +14,6 @@ local Pointer   = require "engine.ui.pointer"
 local Hint      = require "engine.ui.hint"
 local PlayerTag = require "engine.ui.player_tag"
 local Vehicles  = require "engine.game.vehicles"
-local Mission   = require "engine.game.mission"
 local Campaign  = require "engine.game.campaign"
 local Player    = require "engine.game.player"
 
@@ -124,7 +123,6 @@ function VehicleSelect:enter(opts)
     self.t         = 0
     self.pressed   = nil
     self.hover     = nil
-    self.forced    = self.free and Mission.required_vehicle(app.world.stage_name) or nil
 
     local coop = app.settings.coop
     self.sel = {}
@@ -138,7 +136,7 @@ function VehicleSelect:enter(opts)
         self.sel[i] = {
             chopper = Vehicles.clamp_skin("chopper", chopper),
             tank    = Vehicles.clamp_skin("tank", tank),
-            focus   = self.forced or focus or "chopper",
+            focus   = focus or "chopper",
         }
     end
 end
@@ -147,13 +145,12 @@ end
 
 function VehicleSelect:_set_focus(i, kind)
     local sel = self.sel[i]
-    if sel.focus == kind or (self.forced and kind ~= self.forced) then return end
+    if sel.focus == kind then return end
     sel.focus = kind
     Audio.play_event("ui.move")
 end
 
 function VehicleSelect:_step(i, kind, dir)
-    if self.forced and kind ~= self.forced then return end
     local sel = self.sel[i]
     sel.focus = kind
     sel[kind] = Vehicles.step_skin(kind, sel[kind], dir)
@@ -453,9 +450,8 @@ function VehicleSelect:_draw_card(c, fade, scale, ox, oy)
     local row     = math.max(1, math.min(#CAMO_ROWS, v.camo or 1))
     local tint    = v.camo_tint or { 1, 1, 1 }
     local focused = sel.focus == c.kind
-    local locked  = self.forced and self.forced ~= c.kind
     -- In free play only the focused card is the vehicle being picked.
-    local active  = not locked and (focused or not self.free)
+    local active  = focused or not self.free
     local shade   = active and 1 or 0.45
     local b       = c.body
 
@@ -482,10 +478,7 @@ function VehicleSelect:_draw_card(c, fade, scale, ox, oy)
 
     local white = { 1, 1, 1, (active and 0.85 or 0.5) * fade }
     shadow_print(self.hint_font, (c.kind == "tank") and "TANK" or "CHOPPER", b.x + ARROW_W + 2, b.y + 4, white)
-    if locked then
-        shadow_print(self.hint_font, "LOCKED", b.x + b.w - ARROW_W - 2 - self.hint_font:width("LOCKED"),
-            b.y + 4, white)
-    elseif self.free and focused then
+    if self.free and focused then
         local tag = "SELECTED"
         shadow_print(self.hint_font, tag, b.x + b.w - ARROW_W - 2 - self.hint_font:width(tag), b.y + 4,
             { GOLD[1], GOLD[2], GOLD[3], fade })
@@ -518,7 +511,7 @@ function VehicleSelect:_draw_card(c, fade, scale, ox, oy)
         g.rectangle("fill", px + (k - 1) * pitch + 1, b.y + b.h - 8, 2, 2)
     end
 
-    if focused and not locked then
+    if focused then
         self:_draw_arrow(c.left, -1, fade)
         self:_draw_arrow(c.right, 1, fade)
         local pulse = 0.65 + 0.35 * math.sin(self.t * 4)
@@ -573,10 +566,6 @@ function VehicleSelect:draw()
     end
 
     local info = self:_info_text()
-    if self.forced then
-        info = "THIS PHASE IS " .. self.forced:upper() .. " ONLY"
-            .. (info and ("   " .. info) or "")
-    end
     if info then
         local lit = self.hover and self.hover.kind == "toggle"
         local col = lit and { GOLD[1], GOLD[2], GOLD[3], fade } or { 1, 1, 1, 0.8 * fade }

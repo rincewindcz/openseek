@@ -246,8 +246,8 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/enemy_fire` | Enemy firing rules as the original runs them (owned by `game/combat`, `data/enemy_weapons.json`): a gun's routine (volley, burst, reload per fire level), soldiers, proximity mines, the helicopters' weapon modes, and the homing missiles' bearing refresh with the radar / radio tower penalty. |
 | `game/air_strike` | Air strike (owned by `game/combat`): impact schedule drawn from `world.rng` at the call, detonated on `world.time`, damage in toughness units; EXTRA craft, rocket and bomb visuals with their shadows. |
 | `game/mission` | Objectives, progress, return to base. `Mission.for_stage(world, players, stage)`. |
-| `game/rescue` | POW rescue from `powhere.bin` buildings. |
-| `game/saboteur` | Sabotage objective. |
+| `game/rescue` | People to pick up: buildings holding POWs, the crash-site crews, walkers, flung bodies. |
+| `game/saboteur` | Agent drop-off and recovery at the linked buildings. |
 | `game/powerups` | Power-ups as the original runs them (`data/powerups.json`, times in ticks of 1/70 s). A dying building's drop is drawn from a 16-entry table built per player at phase start: armor and fuel alternating, then `ammo_share` 10 entries split evenly among the carried weapons that have a pickup frame (chain gun and air strike have none), so ammo only drops for what the player carries; free play carries everything. Every other entry turns to fuel or armor while the nearest player is below `low` (fuel 20 %, armor 5), and below `critical` (10 %, 2) the drop is always that supply, fuel first. Medals only come from forced-drop classes. Lifetime `lifetime` 1220 / 976 / 732 ticks by `pickup_level`, blinking the last `blink` 300, frozen while every player is down. Taken inside a `reach` 16 px box around the vehicle centre, by fly-over unless the difficulty says to land on it (medals, fuel / armor); `F6` forces fly-over for everything. Fuel and armor add half the maximum, ammo its `ammo_pickup` up to `ammo_cap` 999. EXTRA `weapon_finds`: a drop is with `find.chance` a weapon of the vehicle that the player does not carry (its icon alternating with the unused GET / ME frames, over the pulsing `find.glow` halo); taking it adds the weapon to the player's list for the rest of the phase with `find.ammo` 15 % of its starting load (at least one round), rebuilds the table and stamps `Player.found_weapon` / `found_time` for the HUD notice. |
 | `game/difficulty` | Difficulty presets over the difficulty Config keys (`data/difficulty.json`): choices, apply, match. |
 | `game/renderer` | Ground pass, object pass (y-sorted, culled), player layer by `is_airborne()`, shrapnel overlay. |
@@ -467,25 +467,30 @@ ticks, 2 a bullet every 31; 1 also turns twice as fast. Fires inside `range`
 ## 8. Missions
 
 - Each `assets/stageMP.json` has a decoded `objectives` block (`destroy`,
-  `rescue`, `special_end`, `target_classes`, `n_target_entities`) used for markers
-  and as fallback win condition.
-- `data/missions.json` overrides per stage. After all objectives the player lands
-  on the base pad (`basecirc.bin`, or `h.bin` in missions 0 and 3, or
-  `home_base_asset`).
+  `rescue`, `special_end`, `target_classes`, `n_target_entities`). The phase's
+  goals come from the stage data, as the original counts them at load
+  (`research/LEVELS.md`, "Phase objectives"): every `is_target` entity
+  destroyed, everybody on the stage picked up, every agent back aboard.
+- `data/missions.json` names them per stage (labels, or a narrower `destroy`
+  match); a stage without an entry gets the three above. After all objectives
+  the player lands on the base pad (`basecirc.bin`, or `h.bin` in missions 0
+  and 3, or `home_base_asset`): on the ground inside a box of `home_radius`
+  (24 px, 48 for a team) around it.
 
 ```jsonc
 {
   "stage01": {
     "briefing": "short in-game line",
-    "vehicle": "tank",              // optional, locks equip screen
-    "home_radius": 48,
+    "vehicle": "tank",              // optional, locks shop and equip in a solo campaign
+    "home_radius": 24,              // optional
     "home_base_asset": "lh.bin",    // optional
-    "rescue_pow_counts": [3, 2],    // optional, per powhere.bin in load order; default random 1-3
     "objectives": [
       { "type": "destroy", "target": "radar.bin", "count": "all" },
       { "type": "destroy", "kind": "structure", "min_size": 28, "count": 5, "label": "..." },
-      { "type": "rescue", "target": "pow.bin", "radius": 40, "count": 4 },
-      { "type": "sabotage", "target": "tentnew.bin", "detonate": "all", "killable": true }
+      { "type": "destroy_targets" },                 // every is_target entity
+      { "type": "rescue_people", "optional": true }, // RescueSystem; optional defaults to the stage flag
+      { "type": "sabotage" },                        // SaboteurSystem
+      { "type": "rescue", "target": "pow.bin", "radius": 40, "count": 4 }
     ]
   }
 }
@@ -493,11 +498,32 @@ ticks, 2 a bullet every 31; 1 also turns twice as fast. Fires inside `range`
 
 - Match fields: `target` (asset filename), `kind`, `min_size`; `optional: true`
   does not gate the win.
-- Rescue: `powhere.bin` buildings are shielded until empty. Landing 1.0 s on the
-  paired `lh.bin` pad walks POWs out; leaving sends them back. POWs die to enemy
-  fire, to player fire only with `friendly_fire_pows`. Loose `pow.bin` uses
-  fly-over or land-near pickup. The `powhere.bin` flag stays drawn over its
-  building until the site is emptied, then fades out.
+- People (`game/rescue`). A building holds the number its class names (`pows`:
+  stage00 1 + 1, stage01 3 + 3, stage12 3 + 3, stage31 2 + 2 + 2) and belongs to
+  the pickup pad whose class links it (`parent_class`, an entity index; pad
+  `behaviour` 1). A vehicle on the ground within 24 px of the pad calls them
+  out one at a time (the next after 120 ticks, or at once when one boards or
+  dies); they walk at 35 px/s and board within 16 px. If the vehicle leaves
+  they walk back in. They start and end at the building's middle and are
+  drawn in the ground slot below the solid objects (both gameplay scenes), so
+  the roof hides them: they come out of the building and go back into it.
+  The building cannot be damaged until the last one is aboard or dead; its
+  `powhere.bin` flag and its pad show only while somebody is inside. The
+  stage22 crews (kind 11) stand by their wreck and run over once a vehicle is
+  down within 50 px of it.
+- With `enemy_hunts_people` every gun within 200 px of a person stepping into
+  the open (out of a building, or an agent out of the vehicle) turns on them
+  until they are aboard, inside or dead (`CombatSystem:person_out`,
+  `Entity.person_target`), with no range limit. An enemy round kills only the
+  person it was fired at; the player's rounds kill people only with
+  `friendly_fire_pows`. The body is thrown clear, spinning, for 42 ticks.
+  People aboard die with the vehicle. The objective is done when nobody is left
+  to pick up; where the stage flags the rescue as the objective (`rescue`,
+  not stage12) the phase fails once all of them are dead.
+- Sprite: every person is the stage's class 20, `newdude.bin` in missions 0 and
+  3, `pow.bin` in the others, exported per mission palette as clips
+  `newdude0`, `pow1`, `pow2`, `newdude3`, `pow4` and `<clip>_dead`
+  (`World:walker_clip`).
 - Objectives show white on the radar until completed (destroyed, emptied or
   collected). The player's base shows black, as in the original: its buildings
   as normal blips and the home pad (`World.home_entity`) as a larger one
@@ -507,11 +533,29 @@ ticks, 2 a bullet every 31; 1 also turns twice as fast. Fires inside `range`
   destroyed but give no score, streak, stats or power-up drop. Those with no
   class toughness (`base1.bin`) get `base_hit_points` from the `structure`
   entry of `data/entity_types.json`.
-- Sabotage: `landhere.bin` pad pairs with the nearest target building (shielded).
-  Landing sends an agent to plant. `individual` detonates per building (stage11);
-  `all` waits for every charge (stage13). Site clears when destroyed and agent
-  recovered.
-- `special_end` (stage43) is a label only.
+- Agents (`game/saboteur`, stages 11, 13, 32). A drop pad (pad `behaviour` 0)
+  belongs to the building its class links, which weapons cannot damage. A
+  vehicle on the ground at the pad sends an agent in. It comes out after 60
+  ticks, or on stage13 (stage global 5 = 65535) when every building has its
+  agent inside, walks back to the pad and boards a vehicle that lands there
+  again; like the POWs it goes in and out under the roof. A building its
+  agent has left loses 2 toughness a tick and blows up
+  at 0 (stage11 tents 150 ticks, stage13 tents 3); class `behaviour` 5, the
+  stage32 wrecks, never does. The objective is every agent back aboard; an
+  agent killed fails the phase. Agents do not count as rescued.
+- A failed phase (`Mission.state == "phase_failed"`, `fail_lines`) shows
+  ALLIES EXTERMINATED or OBJECTIVE IMPOSSIBLE, PHASE FAILED for 3 s, costs a
+  vehicle and starts over (`on_phase_failed` in the gameplay scenes); out of
+  vehicles it is game over. Co-op spends one per player, or one of a shared
+  pool.
+- Tank-only phases (`"vehicle": "tank"`: stage11, stage23, stage32, where the
+  briefing grounds the chopper) lock the shop and equip screens to the tank in
+  a solo campaign only (`Campaign.required_vehicle`). A single mission, free
+  play and co-op keep the choice.
+- `special_end` (stage43): the commander building (target of class `behaviour`
+  2) is out of the world (`Entity.dormant`) until it is the only target left,
+  then appears with the standing order DESTROY THE COMMANDERS BUILDING
+  (`Mission.notice`). Destroying it wins the phase with no flight home.
 
 ## 9. Co-op
 
@@ -647,6 +691,7 @@ Options:
 | `score_count_up` | GAMEPLAY | HUD score rolls to new total (frame time, presentation). |
 | `shop_fx` | GAMEPLAY | Animated shop medal purse, unaffordable levels greyed with a red COST, sliding focus frame, hover frame, dimmed LOADED under a higher selection (presentation). |
 | `difficulty`, `enemy_damage_level`, `enemy_damage`, `enemy_fire_level`, `enemy_fire_rate`, `enemy_aggression`, `pickup_level`, `land_for_medals`, `land_for_supplies` | DIFFICULTY | The original's EASY / MEDIUM / HARD (`game/difficulty`, `data/difficulty.json`), each value also editable (preset then reads CUSTOM); a named preset is re-applied at startup. `enemy_damage_level` (ENEMY DAMAGE) picks the original's per-weapon enemy damage (`enemy_damage` tables in `data/weapons.json`, `Difficulty.damage_level`), `enemy_fire_level` (ENEMY FIRE) its enemy reloads, burst pauses and missile tracking (`data/enemy_weapons.json`, `Difficulty.fire_level`). Extra multipliers, 1.0 in every preset: that damage (DAMAGE SCALE), the enemy fire rate (FIRE SCALE), and aggression (detection and attack range). `pickup_level` (PICKUP TIME: LONG / MEDIUM / SHORT) is how long a power-up lies (17.4 / 13.9 / 10.5 s). MEDIUM needs a landing to collect medals, HARD also fuel and armor. Replay parameters; replays from before them apply HARD with no landing rules (`Replay.LEGACY_PARAMS`). |
+| `enemy_hunts_people` | DIFFICULTY | On (the original): guns near a POW or an agent stepping into the open turn on them. Off: the enemy cannot harm people on foot. Outside the presets. |
 | `chopper_skin`, `tank_skin` | GAMEPLAY | Solo chopper and tank variants (section 9a); also set by the vehicle select screen and the overview `V` cycle. Recorded in the replay header. |
 | `coop_lives` | GAMEPLAY | Co-op campaign lives: `separate` or `shared` pool (section 9). |
 | `master_volume`, `sfx_volume`, `engine_volume`, `voice_volume`, `ui_volume`, `music_volume` | AUDIO | Master and bus volumes. |

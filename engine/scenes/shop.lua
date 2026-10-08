@@ -4,7 +4,6 @@
 local Class      = require "engine.core.class"
 local Scene      = require "engine.core.scene"
 local Loadout    = require "engine.game.loadout"
-local Mission    = require "engine.game.mission"
 local ShopScreen = require "engine.ui.shop_screen"
 local PlayerTag  = require "engine.ui.player_tag"
 local Campaign   = require "engine.game.campaign"
@@ -31,7 +30,7 @@ function Shop:enter(stage_name, player)
     self.stage_name = stage_name or app.world.stage_name
     self.player     = Campaign.coop(app) and (player or Campaign.next_player(app)) or nil
     self.loadout    = Loadout.active(app, self.player)
-    local required  = Mission.required_vehicle(self.stage_name)
+    local required  = Campaign.required_vehicle(app, self.stage_name)
     if required then self.loadout.vehicle = required end
     self.screen:open(self.loadout, app.combat.weapons, { lock_vehicle = required ~= nil })
 end

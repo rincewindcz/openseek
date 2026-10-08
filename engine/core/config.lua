@@ -12,9 +12,9 @@ local Config = {
     -- rotate sprites), instead of rotating them with the world.
     axis_aligned_pickups = false,
 
-    -- Let the player's own fire kill walking POWs and saboteurs and destroy the
-    -- player's base buildings (for no score or pickups). Off by default, as the
-    -- original: only enemy fire harms POWs and the base cannot be damaged.
+    -- Let the player's own fire kill walking POWs and agents and destroy the
+    -- player's base buildings (for no score or pickups). Off by default: only
+    -- enemy fire harms them and the base cannot be damaged.
     friendly_fire_pows = false,
 
     -- Global multiplier on the on-screen HUD (gauges, weapon icon, accel box,
@@ -116,7 +116,10 @@ local Config = {
     -- is the original. pickup_level picks how long a power-up lies before it
     -- vanishes (data/powerups.json lifetime). land_for_medals /
     -- land_for_supplies make the chopper land on a medal / on fuel and armor to
-    -- collect it. Replay parameters, frozen at phase start.
+    -- collect it. enemy_hunts_people lets the guns near a POW or an agent
+    -- stepping into the open turn on them, as the original's do on every
+    -- level; off, the enemy cannot harm them at all, since a round only hits
+    -- what it was fired at. Replay parameters, frozen at phase start.
     difficulty         = "medium",
     enemy_damage_level = "medium",
     enemy_damage       = 1.0,
@@ -126,6 +129,7 @@ local Config = {
     pickup_level       = "medium",
     land_for_medals    = true,
     land_for_supplies  = false,
+    enemy_hunts_people = true,
 
     -- Presentation EXTRAs, off by default to keep the original's look
     -- (engine/game/impact_fx.lua, timings in data/impact_fx.json): hit_flash
@@ -287,7 +291,7 @@ local PERSISTED = {
     "explosion_pitch", "ending_stats", "crash_fx", "crash_cause", "crash_stats",
     "difficulty", "enemy_damage_level", "enemy_damage", "enemy_fire_level", "enemy_fire_rate",
     "enemy_aggression", "pickup_level", "weapon_finds",
-    "land_for_medals", "land_for_supplies",
+    "land_for_medals", "land_for_supplies", "enemy_hunts_people",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
     "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",
     "fullscreen", "vsync", "window_size", "show_fps",

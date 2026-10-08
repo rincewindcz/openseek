@@ -2,6 +2,7 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local Loadout  = require "engine.game.loadout"
+local Mission  = require "engine.game.mission"
 local Config   = require "engine.core.config"
 local Score    = require "engine.game.score"
 local Savegame = require "engine.game.savegame"
@@ -56,6 +57,14 @@ function Campaign.start(app, players)
         app.coop_run = run
     end
     Log.info("game", "new %s campaign", app.coop_run and "co-op" or "solo")
+end
+
+-- Vehicle a phase forces (missions.json "vehicle": the original grounds the
+-- chopper on some phases), or nil. Only a solo campaign is held to it; a single
+-- mission, free play and co-op leave the choice open.
+function Campaign.required_vehicle(app, stage_name)
+    if not app.campaign or app.coop_run then return nil end
+    return Mission.required_vehicle(stage_name)
 end
 
 -- The co-op run in progress, or nil for a solo run / no run.
