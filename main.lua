@@ -205,7 +205,7 @@ function love.load(args)
             -- Per player: the vehicle (free play; a campaign takes it from the
             -- equip screen), the variants, and the equip-screen loadout snapshot.
             coop = { vehicle = { "chopper", "tank" }, chopper_skin = { 1, 2 }, tank_skin = { 1, 2 },
-                     loadout = {}, god = false, ff = false },
+                     loadout = {}, god = false },
         },
     }
     -- A phone shows its controls from the first touch, which the menus already
@@ -368,7 +368,8 @@ function love.draw()
         -- In the HUD's own body font, on the HUD's pixel grid, below the score
         -- readout (top-left, 8 px tall at scale 3 from y = 6).
         local hud_scale = (Config.hud_scale or 1) * Display.view_scale()
-        Font.get(FPS_FONT):print("FPS " .. love.timer.getFPS(),
+        local font = (top and top.fixed_step) and app.hud:font(FPS_FONT) or Font.get(FPS_FONT)
+        font:print("FPS " .. love.timer.getFPS(),
             FPS_X * hud_scale, FPS_Y * hud_scale, { scale = FPS_SCALE * hud_scale })
     end
 end

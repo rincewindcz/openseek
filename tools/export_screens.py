@@ -16,7 +16,7 @@ palette:
   killicon   kill tank icon          PHASEPAL.BIN                  -> assets/hud/
   okbadge    OVERKILL badge          PHASEPAL.BIN                  -> assets/hud/
   burn/burn2 stage fire animation    STAGE00 palette               -> assets/effects/
-  phase1..4  objective briefing      each STAGE0{m} palette        -> assets/phase/
+  phase1..4  objective briefing      each STAGE0{m} MS.BIN palette -> assets/phase/
 
 CREDANIM ("CREDITS") and HIANIM ("HIGH SCORES") are the animated titles of
 the credits and high-score screens, drawn in those screens' fullscreen
@@ -79,8 +79,12 @@ JOBS = [
 ]
 
 
-def stage_palette(sdir):
-    for name in ("PAL.BIN", "PAL1.BIN"):
+def briefing_palette(sdir):
+    """The palette the phase cards are shown under: the briefing picture's own
+    (MS.BIN), which is on screen with them. The in-game palette agrees with it
+    on the cards' indices for missions 0 and 1, nearly for 2 and 4, and not at
+    all for the night mission, whose cards sit at 69..147."""
+    for name in ("MS.BIN", "PAL.BIN", "PAL1.BIN"):
         p = sdir / name
         if p.exists():
             return p
@@ -136,13 +140,13 @@ def main(argv=None):
         out_dir.mkdir(parents=True, exist_ok=True)
         export_sprite(src, prefix, out_dir, palette)
 
-    # Phase briefing cards: one objective list per phase, drawn in the stage's
-    # own in-game palette. STAGE0{m}/PHASE{n}.BIN -> assets/phase/.
+    # Phase briefing cards: one objective list per phase, drawn in the palette
+    # of the briefing picture they sit on. STAGE0{m}/PHASE{n}.BIN -> assets/phase/.
     out_dir = gamedata.ASSETS / "phase"
     print("\nPhase briefing cards -> assets/phase/")
     for m in range(5):
         sdir    = game_dir / f"STAGE0{m}"
-        pal_src = stage_palette(sdir)
+        pal_src = briefing_palette(sdir)
         if not sdir.exists() or pal_src is None:
             continue
         palette = pal_src.read_bytes()[:768]

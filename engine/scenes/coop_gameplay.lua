@@ -4,7 +4,6 @@
 local Class        = require "engine.core.class"
 local GameplayBase = require "engine.scenes.gameplay_base"
 local Camera       = require "engine.core.camera"
-local Font         = require "engine.core.font"
 local Player       = require "engine.game.player"
 local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
@@ -23,8 +22,9 @@ local Gamepad      = require "engine.core.gamepad"
 -- Each half renders the full world stack through its own camera with the
 -- teammate projected in.
 --
--- Free play (F7) uses the full weapon lists and the setup screen's god / friendly
--- fire toggles. A co-op campaign (NEW GAME > LOCAL COOP) plays each player's
+-- Free play (F7) uses the full weapon lists and the setup screen's god mode
+-- toggle. The players can hurt each other when the FRIENDLY FIRE option
+-- (Config.friendly_fire_pows) is on, in either mode. A co-op campaign (NEW GAME > LOCAL COOP) plays each player's
 -- equip loadout and carries score, lives and medals through the run
 -- (engine/game/campaign.lua); a player out of the run is not spawned, and a
 -- lone survivor gets the whole screen. Slots (input, replay) are numbered in
@@ -220,7 +220,6 @@ function CoopGameplay:enter()
         self:announce_start(p)
     end
 
-    local coop = app.settings.coop
     -- Each player keeps their keyboard set; one given a pad (the setup screen's
     -- CONTROLS choice) is driven by it as well.
     local pads = Gamepad.assign({ Config.coop_device_1, Config.coop_device_2 })
@@ -236,7 +235,7 @@ function CoopGameplay:enter()
     for _, p in ipairs(self.players) do p.index = p.number end   -- HUD label follows the player
     combat.players       = self.players
     combat.player        = self.players[1]
-    if not self.playback then combat.friendly_fire = (not self.run) and coop.ff or false end
+    if not self.playback then combat.friendly_fire = Config.friendly_fire_pows end
     combat:reset_phase()
     app.helis:reset()
     app.powerups:set_players(self.players)
@@ -351,7 +350,7 @@ function CoopGameplay:_half_text(vw, vh, lines, dim)
         g.setColor(0, 0, 0, dim)
         g.rectangle("fill", 0, 0, vw, vh)
     end
-    local font = Font.get("chars")
+    local font = self.app.hud:font()
     local s    = 3
     local y    = (vh - #lines * font.line_height * s) / 2
     for _, ln in ipairs(lines) do
@@ -548,6 +547,7 @@ function CoopGameplay:_draw_view(i, vx, vw, vh, plain)
     g.setScissor(vx, 0, vw, vh)
     local ground, air = draw_layers(p, other)
     app.postfx:begin_world(app.impactfx:low_armor(p))
+    app.lightfx:begin_scene()
     app.renderer:draw_ground()   -- terrain, decals, craters
     -- People on foot are on the ground with the grounded vehicles, under the
     -- roofs: they come out of a building and go into one.
@@ -581,9 +581,7 @@ function CoopGameplay:_draw_view(i, vx, vw, vh, plain)
     app.combat.air_strike:draw() -- EXTRA (air_strike_fx): friendly craft and their rounds
     for _, pl in ipairs(air) do self:_draw_vehicle(pl, p, cam, plain) end
     if p:is_airborne() then p:draw_world_front() end
-    -- Night light map and flash layer per half, from this half's camera; the
-    -- headlight follows the player it belongs to and cuts on destruction.
-    app.lightfx.headlight_on = not p.death
+    -- Night light map and flash layer per half, from this half's camera.
     app.lightfx:draw_night(cam)
     app.lightfx:draw_additive(cam)
     app.combat:draw_aim_laser(p)   -- EXTRA (aim_laser)

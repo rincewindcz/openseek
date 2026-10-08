@@ -197,7 +197,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT, or FULLSCREEN on the web); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. |
 | `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
-| `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews; the active card names its variant in the gold `credchars` font, its letters closed up by up to 2 px when the name is wider than the gap between the arrows (the co-op columns). Campaign: START begins the run. Free (F7): the focused card is the vehicle; G / F toggle god mode and friendly fire. Two players: a CONTROLS line per column (`1` / `2` or a click cycles AUTO, KEYS, PAD 1, PAD 2 into `coop_device_1` / `_2`, showing what AUTO resolves to and a named pad that is missing); a pad steps the column of the player holding it. |
+| `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews; the active card names its variant in the gold `credchars` font, its letters closed up by up to 2 px when the name is wider than the gap between the arrows (the co-op columns). Campaign: START begins the run. Free (F7): the focused card is the vehicle; G toggles god mode. Two players: a CONTROLS line per column (`1` / `2` or a click cycles AUTO, KEYS, PAD 1, PAD 2 into `coop_device_1` / `_2`, showing what AUTO resolves to and a named pad that is missing); a pad steps the column of the player holding it. |
 | `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3. Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, preview, keep_music, on_done }`; `alternate` types VIC3's alternate ending, `preview` falls back to `data/ending.json` `preview` without a record (overview F11), `keep_music` leaves the end music playing into the credits (`Campaign.complete`). EXTRA `ending_stats` adds the run record under FIN01..03. |
 | `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a gold `hichars` label in the small style (`credchars` heading, `chars` name); `enter(on_exit)` replaces EXIT's return to the menu (the ending passes the high scores). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry, one per qualifying player after a co-op run. |
 | `advanced_settings` | OPTIONS: DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, MOBILE UI, GAMEPLAY, DIFFICULTY, EXTRAS. MOBILE UI only where `TouchControls.available` (web, Android, iOS, `--touch`); the web build drops DISPLAY's FULLSCREEN and WINDOW SIZE. The sidebar packs tighter when it holds more than nine entries. Rows scroll when a category holds more than `MAX_ROWS` (9). CONTROLS: a DEVICE row switches the action rows between KEYBOARD and GAMEPAD, each with two binding columns (Enter captures the next key or pad button, Del clears a slot), RESET TO DEFAULTS restores the shown device, then STICK DEAD ZONE, MOUSE STEERING and MOUSE SPEED. |
@@ -231,7 +231,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/animation` | `AnimClip` from `data/animations.json`, per-instance `AnimState`. |
 | `core/assets` | Path resolution and pack check (section 2). |
 | `core/audio` | Clip catalog, event table (clip lists, per-vehicle variants, size pitch), callouts and sequences, voice pools, buses, ducking, music (`.ogg`, `.mp3`, `.med`; an `.ogg` / `.mp3` beats a `.med` of the same name). |
-| `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. `print` `cell` option draws fixed-pitch at each glyph's in-frame x offset. |
+| `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. `print` `cell` option draws fixed-pitch at each glyph's in-frame x offset. `for_mission(name, m)` returns the cut a mission ships for its own HUD palette (`chars3`), else the shared font. |
 | `core/screen` | Fullscreen image fade in / hold / out, with an optional `fx` object animating the picture (`update`, `cue`, `draw`; `cut` skips the fade-in). `is_closing` reports the fade-out. |
 | `core/flic` | FLI / FLC player: decodes one frame per `next_frame` into an index buffer and an RGBA `image` (COLOR_256 / 64, DELTA_FLC / FLI, BYTE_RUN, BLACK, COPY); the caller sets the pace. |
 | `core/mathx` | `atan2` shim, `heading_deg`. |
@@ -251,7 +251,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/powerups` | Power-ups as the original runs them (`data/powerups.json`, times in ticks of 1/70 s). A dying building's drop is drawn from a 16-entry table built per player at phase start: armor and fuel alternating, then `ammo_share` 10 entries split evenly among the carried weapons that have a pickup frame (chain gun and air strike have none), so ammo only drops for what the player carries; free play carries everything. Every other entry turns to fuel or armor while the nearest player is below `low` (fuel 20 %, armor 5), and below `critical` (10 %, 2) the drop is always that supply, fuel first. Medals only come from forced-drop classes. Lifetime `lifetime` 1220 / 976 / 732 ticks by `pickup_level`, blinking the last `blink` 300, frozen while every player is down. Taken inside a `reach` 16 px box around the vehicle centre, by fly-over unless the difficulty says to land on it (medals, fuel / armor); `F6` forces fly-over for everything. Fuel and armor add half the maximum, ammo its `ammo_pickup` up to `ammo_cap` 999. EXTRA `weapon_finds`: a drop is with `find.chance` a weapon of the vehicle that the player does not carry (its icon alternating with the unused GET / ME frames, over the pulsing `find.glow` halo); taking it adds the weapon to the player's list for the rest of the phase with `find.ammo` 15 % of its starting load (at least one round), rebuilds the table and stamps `Player.found_weapon` / `found_time` for the HUD notice. |
 | `game/difficulty` | Difficulty presets over the difficulty Config keys (`data/difficulty.json`): choices, apply, match. |
 | `game/renderer` | Ground pass, object pass (y-sorted, culled), player layer by `is_airborne()`, shrapnel overlay. |
-| `game/lightfx` | Night light map, additive flashes. |
+| `game/lightfx` | Night light map and additive flashes (`data/lightfx.json`). A night stage draws its world into a target of its own (`begin_scene`, after `PostFX:begin_world`) and `draw_night` lays it back multiplied by the light map: the mission's ambient tone, a headlight beam and pool per living player (world-anchored, so a split-screen half shows the teammate's), the timed lights of explosions and muzzle flashes, and the lights of live fire. The map holds up to 4 times the art's brightness (float target where the GPU has one), capped at the mission's `max_light`, so a lit pixel comes out brighter than its art. `draw_additive` adds the bursts, the glow of live fire and the screen washes on any stage. Live fire is read from the combat state each tick (`_collect_sources`): rounds in flight and ignited effects whose weapon or clip is listed. |
 | `game/postfx` | World-view post-processing and soft shadows (`data/postfx.json`); `enter(world)` picks the stage's mission look; `begin_world(alarm)` takes the view's low armor warning from `game/impact_fx`. |
 | `game/impact_fx` | EXTRA hit flash, camera shake and low armor warning (`data/impact_fx.json`), fed by the `World:hit_flash` / `:player_hit` / `:explosion_light` / `:player_death_light` / `:weapon_fired` forwarders and the players after each tick; the shake is a per-camera offset applied in `Camera:apply`, the warning is handed per view to `PostFX:begin_world`. |
 | `game/tracks` | EXTRA tank tread marks (`data/tracks.json`): laid from the players after each tick, faded out by age, drawn by the renderer's ground pass as one sprite batch. |
@@ -266,14 +266,14 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header, delta input, checksums, `.osr` files; hands each finished recording to the hosting page when the web build ships `build.json` with `replay_upload`. |
 | `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory, run record; co-op adds a `coop` table per player), one JSON file per slot in `saves/`, plus the `autosave.json` of the run in progress (written by each campaign briefing, removed by `Campaign.finish`). |
-| `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base, pickup and air strike blips), weapon sights (the air strike's rests on its target), counters, OVERKILL banner, weapon find notice, rolling score. |
+| `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base, pickup and air strike blips), weapon sights (the air strike's rests on its target), counters, OVERKILL banner, weapon find notice, rolling score. `set_mission` picks the mission's HUD art and `font()` its text font: the night mission's readouts, in-game messages and FPS counter draw in its green CHARS, as in the original. |
 | `ui/end_stats` | DESTRUCTION STATS screen: lines count up (icons filling), then wind back down as each pays its bonus into TOTAL SCORE; per-player columns in co-op. |
 | `ui/crash_fx` | EXTRA crash picture effects (`data/crash_fx.json`), the `fx` of the crash / game-over overlay: smoke, fire glow, embers and heat haze composed at the picture's resolution, flash and static entrance, static burst on a radio cue (`crash_fx`); the typed cause of the loss (`crash_cause`, from `Player.damage_cause`); the run's trivia (`crash_stats`, from `World.tally` and the campaign record via `GameplayBase:crash_stats`). `CrashFX.show` picks the picture and its timing for both gameplay scenes (the fx is nil with every extra off); `CrashFX.preview` is the overview's `Delete` key. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse, greys levels the purse cannot pay for (not the selected one, whose COST reads red), slides the focus frame, marks the hovered box and dims LOADED while a higher level is selected. |
 | `ui/menu` | Main menu over `MAINP`, `main` font (`mainmen` on a pack exported before `main` existed). Also drives the `new_game` and `advanced_menu` submenus. |
 | `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
-| `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. |
+| `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. The icon under the pointer lights up: its art is added onto itself by as much as lifts the card's mean brightness to `HOVER_TARGET` (the dark night cards about 2.5 times, a day card barely). |
 | `ui/mission_select` | `STAGE0X_MPIC` carousel over the missions present, phase buttons. |
 | `ui/data_setup` | First-run screen without a usable pack: runs the converter, restarts into the game (section 2). |
 | `ui/error_screen` | `love.errorhandler`: writes `crashes/crash_<date>_<time>.txt` into the save directory (error, traceback, build, LOVE, OS, renderer, window, pack status and edition, the last log lines) and shows the error, the report path and the first traceback lines over the dimmed engine intro card, in the shipped TTF, so it works without the pack. `C` copies the report, `O` opens the folder, `R` (pad A) restarts, Esc (pad B) quits; a tap copies on touch builds. Under `--selftest` it prints and exits with status 1 instead. |
@@ -598,8 +598,16 @@ ticks, 2 a bullet every 31; 1 also turns twice as fast. Fires inside `range`
   full screen when one is left. All out: crash picture, then a high-score
   entry per qualifying player.
 - F7 free play: vehicle select in free mode (the focused card is the vehicle, G
-  god mode, F friendly fire), full weapon lists, no briefing, shop or
-  progression, back to the menu after the stats.
+  god mode), full weapon lists, no briefing, shop or progression, back to the
+  menu after the stats.
+- Friendly fire between the players follows the `friendly_fire_pows` option in
+  the campaign and in free play (`combat.friendly_fire`, recorded in the replay
+  header). Every player weapon then hurts the other players and never its
+  shooter (`CombatSystem:_hurt_teammates`): a round striking the vehicle, the
+  splash of a hit at half damage, napalm fire, the square blast of a bomb or a
+  fused mine, an air strike's impacts. A hit plays the hit effects and sets
+  the cause `friendly_fire`. The remote mine hurts every player inside it,
+  its owner included, with or without the option.
 - Vertical split, camera and HUD per half, shared systems drawn per viewport.
   Same rules as single player via `Mission.for_stage`; either player completes
   any objective. The landing is the whole team's: once the objectives are done,
@@ -630,7 +638,8 @@ replay header `player.N.skin` / `player.N.tank`).
   art px from the turret pivot. Shells cycle through the variant's barrels
   (1 to 3), so they are simulation input.
 - Enemy hulls have one frame: no tread animation. No night sets for enemy
-  variants; they draw the day art at night.
+  variants; at night they draw the day art dimmed by the variant's
+  `night_tint` (`Player.draw_tank_variant`).
 - `camo` (1-4) is the VSELECT strip the select screen draws; `camo_tint`
   recolours it.
 
@@ -708,13 +717,13 @@ Options:
 
 | Keys | Page | Effect |
 |------|------|--------|
-| `night_lighting`, `night_brightness` | VIDEO | Night ambient, headlight cone, explosion and muzzle lights. |
-| `effects_flashes`, `flash_intensity` | VIDEO | Additive flashes and screen washes. |
+| `night_lighting`, `night_brightness` | VIDEO | Night ambient, headlight beam, explosion, muzzle and fire lights. |
+| `effects_flashes`, `flash_intensity` | VIDEO | Additive flashes, the glow of live fire and screen washes. |
 | `postfx_enabled`, `postfx_preset`, `postfx_grade`, `postfx_contrast`, `postfx_sharpen`, `postfx_bloom`, `postfx_vignette`, `postfx_grain`, `postfx_soft_shadows` | EFFECTS | World-view shader (HUD excluded). Presets NONE / MILD / FULL; soft shadows add rotor, smoke and projectile shadows. |
 | `speed_scale` | GAMEPLAY | Motion multiplier; animation unscaled. |
 | `hud_scale` | GAMEPLAY | HUD size and inset. |
 | `axis_aligned_pickups` | GAMEPLAY | Screen-upright pickups and pads, as the original. |
-| `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs and can destroy the player's base buildings (no score, stats or drops). |
+| `friendly_fire_pows` | GAMEPLAY | Player rounds kill POWs and saboteurs and can destroy the player's base buildings (no score, stats or drops); in co-op the players' weapons hurt each other. |
 | `score_count_up` | GAMEPLAY | HUD score rolls to new total (frame time, presentation). |
 | `shop_fx` | GAMEPLAY | Animated shop medal purse, unaffordable levels greyed with a red COST, sliding focus frame, hover frame, dimmed LOADED under a higher selection (presentation). |
 | `difficulty`, `enemy_damage_level`, `enemy_damage`, `enemy_fire_level`, `enemy_fire_rate`, `enemy_aggression`, `pickup_level`, `land_for_medals`, `land_for_supplies` | DIFFICULTY | The original's EASY / MEDIUM / HARD (`game/difficulty`, `data/difficulty.json`), each value also editable (preset then reads CUSTOM); a named preset is re-applied at startup. `enemy_damage_level` (ENEMY DAMAGE) picks the original's per-weapon enemy damage (`enemy_damage` tables in `data/weapons.json`, `Difficulty.damage_level`), `enemy_fire_level` (ENEMY FIRE) its enemy reloads, burst pauses and missile tracking (`data/enemy_weapons.json`, `Difficulty.fire_level`). Extra multipliers, 1.0 in every preset: that damage (DAMAGE SCALE), the enemy fire rate (FIRE SCALE), and aggression (detection and attack range). `pickup_level` (PICKUP TIME: LONG / MEDIUM / SHORT) is how long a power-up lies (17.4 / 13.9 / 10.5 s). MEDIUM needs a landing to collect medals, HARD also fuel and armor. Replay parameters; replays from before them apply HARD with no landing rules (`Replay.LEGACY_PARAMS`). |
@@ -749,9 +758,10 @@ galleries, debug mission picker, headless checks.
 | `data/credits.json` | Credits: `styles` (fonts, name offset, label colour) and positioned `entries` (`heading` / `name`, or a label `text`), 320x240 design space. |
 | `data/ending.json` | Ending timing (`char_time`, `tab_pause`, `hold`, fades, text `cell`), music track, `anim` (`frame_time`, `cues`: event -> frame list, `loops`: event, level, fade start and length in frames), `stats` (position, line height, columns, keys per picture, labels) and `preview` (the record and score F11 shows outside a run). |
 | `data/animations.json` | Named animation clips. |
-| `data/hud.json` | HUD layout; sprite paths through `core/assets`. The `notice` item is the weapon find line: `text` format, `font`, `time`, `fade_in`, `fade_out`. |
+| `data/hud.json` | HUD layout; sprite paths through `core/assets`. The `notice` item is the weapon find line: `text` format, `font`, `time`, `fade_in`, `fade_out`. `icon_color_mission` tints a mask icon per mission digit (the player label on the night HUD). |
 | `data/audio.json` | Sound events (`defaults`, `events` with clip or `clips`, per-vehicle variants, `size_pitch`, `group`), `callouts` (armor / fuel thresholds, warning period, selection guard, finish-him mark, follow-up lines) and `sequences` (timed screen cues). |
 | `data/photo.json` | Photo mode (`--photo`): `outputs` (label, `w`, `h`; an entry without a size is the window), zoom limits and wheel step, turn step (degrees) and drag rate (degrees per pixel), slow motion speed. |
+| `data/lightfx.json` | `night` per mission digit (or `default`): `ambient` floor colour, `max_light` cap, `headlight` (`color`, `gap` of the lamp ahead of the vehicle centre, beam `length` in world units, `spread_deg` half-angle and `intensity`, `pool_radius` / `pool_ahead` / `pool_intensity` of the pool around the vehicle). `weapons` (a round in flight) and `effects` (an ignited effect clip) carry a light: `radius`, `intensity` and `color` in the night light map, `flicker` depth, `fade` over the round's range, `glow` and `glow_radius` of the additive glow shown on any stage. Intensities are multiples of the art's brightness. |
 | `data/postfx.json` | `look` (100% values), `missions` (per mission digit, look fields that differ, e.g. the cold grade of mission 1) and `presets`. |
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius); `low_armor` (armor threshold, floor, fade, edge color and strength, pulse share and rate range, desaturation, edge radii, hit flash time and strength). |
@@ -866,9 +876,9 @@ same bytes on every platform.
 | `export_player.py` | `assets/player/`, plus `VARIANT_SPRITES` (the DESERT 2 turret in the day palette) |
 | `export_hud.py` | `assets/hud/` |
 | `export_animations.py` | `assets/effects/` |
-| `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its stage palette; `credchars`: HICHARS in the CREDITS palette) |
+| `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its stage palette; `chars3`: the night mission's own green CHARS in its `PAL1.BIN`; `credchars`: HICHARS in the CREDITS palette) |
 | `export_mainmen.py` | `assets/mainmen/` (words, generated arrow cursor), `assets/mainmen/font/`, `assets/fonts/mainmen.*`, `assets/fonts/main.*` (plus `content/fonts/main_synth/`); runtime menu palette in `MENU_PALETTE` |
-| `export_screens.py` | CREDANIM / HIANIM (CREDITS / HISCORE palette, fixed frame box via `menutitle.py`), POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards |
+| `export_screens.py` | CREDANIM / HIANIM (CREDITS / HISCORE palette, fixed frame box via `menutitle.py`), POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards (in the palette of the briefing picture `MS.BIN` they are shown on) |
 | `export_mission.py` | `assets/mission/` |
 | `export_mission_text.py` | `assets/mission_text.json` |
 | `export_sounds.py` | `assets/sounds/`, `assets/sounds.json` |

@@ -164,7 +164,7 @@ function CombatSystem:init(world, camera)
     self.player      = nil
     self.players     = {}   -- all controllable players (1 normally, 2 in split screen)
     self.heli_sys    = nil  -- enemy helicopter system (set by main); its helis are hittable
-    self.friendly_fire = false  -- co-op option: player rounds can hit the other player
+    self.friendly_fire = false  -- co-op: a player's weapons also hurt the other players
     self.projectiles = {}
     self.effects     = {}   -- transient world anims (missile trails, napalm fire)
     self.weapons     = {}
@@ -194,11 +194,13 @@ function CombatSystem:add_effect(clip_name, x, y, opts)
     end
     self.effects[#self.effects + 1] = {
         anim     = anim,
+        clip     = clip_name,
         x        = x,
         y        = y,
         rot      = opts.rot   or 0,
         scale    = opts.scale or 1,
         damage   = opts.damage,
+        shooter  = opts.shooter,      -- firing Player of a damage effect, for friendly fire
         radius   = opts.radius or 0,
         lifetime = opts.lifetime,
         delay    = opts.delay or 0,   -- seconds before the effect ignites (napalm wave)
@@ -286,7 +288,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     -- Napalm and similar: a widening cone of ground fire ahead, no projectiles.
     if weapon_def.proj_type == "flame" then
         self.world:count(tally)
-        return self:_fire_flame(x, y, fwd_x, fwd_y, rad, weapon_def, level)
+        return self:_fire_flame(x, y, fwd_x, fwd_y, rad, weapon_def, level, shooter)
     end
 
     -- Range cap: player shots carry the weapon's range so they cannot cross the
@@ -437,7 +439,7 @@ end
 -- offsets (px), lay a ray of `count` fire patches that ignite outward from the
 -- chopper (the wave). Level 1 = one tongue ahead, level 2 = three parallel
 -- tongues, level 3 = an 8-way ring.
-function CombatSystem:_fire_flame(x, y, _fwd_x, _fwd_y, rad, weapon_def, level)
+function CombatSystem:_fire_flame(x, y, _fwd_x, _fwd_y, rad, weapon_def, level, shooter)
     local angles   = level.angles  or { 0 }
     local offsets  = level.offsets or { 0 }
     local count    = level.count   or weapon_def.count   or 8
@@ -455,7 +457,8 @@ function CombatSystem:_fire_flame(x, y, _fwd_x, _fwd_y, rad, weapon_def, level)
             for i = 1, count do
                 local d = i * spacing
                 self:add_effect(weapon_def.effect or "fire", ox + cx * d, oy + cy * d,
-                    { damage = dmg, radius = radius, scale = scale, lifetime = lifetime, delay = (i - 1) * wave })
+                    { damage = dmg, radius = radius, scale = scale, lifetime = lifetime, delay = (i - 1) * wave,
+                      shooter = shooter })
             end
         end
     end
@@ -847,6 +850,9 @@ function CombatSystem:_update_effects(dt)
                         end
                     end
                 end
+                if effect.shooter then
+                    self:_hurt_teammates(effect.shooter, effect.x, effect.y, effect.radius or 0, effect.damage)
+                end
             end
         end
         local life    = effect.age - effect.delay
@@ -974,22 +980,9 @@ function CombatSystem:_check_hit(projectile)
         if self.world.saboteur and self.world.saboteur:projectile_hit(projectile.x, projectile.y, projectile.radius, true, projectile.vx, projectile.vy) then
             return true
         end
-        -- Friendly fire (co-op option): a player round can hit the other player.
-        if self.friendly_fire then
-            for _, p in ipairs(self.players) do
-                if p ~= projectile.shooter and p.armor > 0 and not p.death then
-                    local dx, dy = self.world:delta(p.x, p.y, projectile.x, projectile.y)
-                    local hit_range = (p.collision_radius or 12) + projectile.radius
-                    if dx * dx + dy * dy < hit_range * hit_range then
-                        if not p.unlimited then
-                            p.armor        = math.max(0, p.armor - projectile.damage)
-                            p.damage_cause = "friendly_fire"
-                            self.world:count("hits")
-                        end
-                        return true
-                    end
-                end
-            end
+        if self:_hurt_teammates(projectile.shooter, projectile.x, projectile.y, projectile.radius,
+                projectile.damage, "body") then
+            return true
         end
     else
         for _, p in ipairs(self.players) do
@@ -1020,6 +1013,38 @@ function CombatSystem:_check_hit(projectile)
         end
     end
     return false
+end
+
+-- Friendly fire (co-op): shooter's weapon hurts every other player it reaches
+-- at (x, y). shape "body" tests reach against the vehicle's own radius (a round
+-- striking it), "box" reach on both axes (the square blast of a bomb or mine),
+-- otherwise the vehicle's centre inside reach (splash, ground fire, a strike's
+-- impact). Returns true if somebody was hit.
+function CombatSystem:_hurt_teammates(shooter, x, y, reach, damage, shape)
+    if not self.friendly_fire then return false end
+    local hit = false
+    for _, p in ipairs(self.players) do
+        if p ~= shooter and p.armor > 0 and not p.death then
+            local dx, dy = self.world:delta(p.x, p.y, x, y)
+            local inside
+            if shape == "box" then
+                inside = math.abs(dx) < reach and math.abs(dy) < reach
+            else
+                local r = reach + (shape == "body" and (p.collision_radius or 12) or 0)
+                inside  = dx * dx + dy * dy < r * r
+            end
+            if inside then
+                if not p.unlimited then
+                    p.armor        = math.max(0, p.armor - damage)
+                    p.damage_cause = "friendly_fire"
+                    self.world:count("hits")
+                end
+                self:_player_hit_fx(p)
+                hit = true
+            end
+        end
+    end
+    return hit
 end
 
 -- A random scorch (fire / smoke) burst on the player's vehicle when it is hit.
@@ -1058,7 +1083,8 @@ end
 -- A landed bomb or a mine: a big explosion, a scatter of iron/metal shrapnel,
 -- and full damage to every ground entity within aoe px on both axes (the
 -- original's square blast, 0x1f88b0). A remote mine also hits the players
--- inside it (EXTRA remote_mine).
+-- inside it (EXTRA remote_mine); under friendly fire any player bomb or mine
+-- hits the other players inside it.
 function CombatSystem:_detonate(projectile)
     self:add_effect(projectile.weapon_def.explosion or "explosion_large", projectile.x, projectile.y,
         { scale = 1.5, sound = "explosion.bomb" })
@@ -1074,8 +1100,13 @@ function CombatSystem:_detonate(projectile)
             end
         end
     end
-    if not projectile.remote then return end
     local self_damage = projectile.weapon_def.self_damage or projectile.damage
+    if not projectile.remote then
+        if projectile.owner == "player" then
+            self:_hurt_teammates(projectile.shooter, projectile.x, projectile.y, r, self_damage, "box")
+        end
+        return
+    end
     for _, p in ipairs(self.players) do
         if p.armor > 0 and not p.death then
             local dx, dy = self.world:delta(p.x, p.y, projectile.x, projectile.y)
@@ -1093,6 +1124,7 @@ end
 
 -- Splash damage around a hit. Only hittable entities take it, like a direct hit:
 -- markers (the POWHERE flag), decals, trees and scenery have nothing to destroy.
+-- Under friendly fire the other players in it take it too.
 function CombatSystem:_apply_aoe(projectile)
     local r2 = projectile.aoe ^ 2
     for _, e in ipairs(self.world.hittable) do
@@ -1104,6 +1136,7 @@ function CombatSystem:_apply_aoe(projectile)
             end
         end
     end
+    self:_hurt_teammates(projectile.shooter, projectile.x, projectile.y, projectile.aoe, projectile.damage * 0.5)
 end
 
 -- Share of the full flying height a weapon's `shadow` flag casts from: true is

@@ -1212,11 +1212,16 @@ end
 -- anchor (else its image center) and shows tread frame opts.frame when the clip
 -- has one; the turret is axis-aligned frame 0 (barrels north), runtime-rotated
 -- about its anchor (else its art center) so it spins in place. opts.night picks
--- the "n" night clips where they exist; opts.turret false leaves the turret off.
+-- the "n" night clips where they exist, and dims a part that has none by the
+-- variant's night_tint: the camo sets taken from other missions come in day
+-- colours only. opts.turret false leaves the turret off.
 function Player.draw_tank_variant(g, v, x, y, s, hull_rot, turret_rot, opts)
     opts = opts or {}
+    local r, gr, b, a = g.getColor()
     local function clip_name(name)
-        if opts.night and Animation.clip(name .. "n") then return name .. "n" end
+        local tint = opts.night and v.night_tint
+        if opts.night and Animation.clip(name .. "n") then name, tint = name .. "n", nil end
+        if tint then g.setColor(r * tint[1], gr * tint[2], b * tint[3], a) else g.setColor(r, gr, b, a) end
         return name
     end
     local hull = Animation.clip(clip_name(v.hull))
@@ -1226,6 +1231,7 @@ function Player.draw_tank_variant(g, v, x, y, s, hull_rot, turret_rot, opts)
         local ha   = v.hull_anchor
         g.draw(body, x, y, hull_rot, s, s, ha and ha[1] or w / 2, ha and ha[2] or h / 2)
     end
+    g.setColor(r, gr, b, a)
     if opts.turret == false then return end
     local turret_clip = clip_name(v.turret)
     local top = Animation.clip(turret_clip)
@@ -1239,6 +1245,7 @@ function Player.draw_tank_variant(g, v, x, y, s, hull_rot, turret_rot, opts)
         end
         g.draw(img, x + (opts.turret_dx or 0), y + (opts.turret_dy or 0), turret_rot, s, s, ax, ay)
     end
+    g.setColor(r, gr, b, a)
 end
 
 return Player

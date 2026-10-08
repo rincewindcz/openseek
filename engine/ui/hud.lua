@@ -223,6 +223,7 @@ end
 -- Switch HUD art to mission m's overrides (assets/hud/stage{m}/) where present,
 -- per item, falling back to the shared set. Called on each stage load.
 function Hud:set_mission(m)
+    self.mission   = m
     local overkill = "overkill" .. tostring(m)
     self.overkill_font = love.filesystem.getInfo("assets/fonts/" .. overkill .. ".json")
         and overkill or "overkill0"
@@ -230,6 +231,12 @@ function Hud:set_mission(m)
     for _, item in ipairs(self.items) do
         self:_preload_item(item, prefix)
     end
+end
+
+-- An in-game text font in the active mission's cut: the original swaps CHARS
+-- for the night mission's green one along with that mission's HUD art.
+function Hud:font(name)
+    return Font.for_mission(name or "chars", self.mission)
 end
 
 function Hud:_img(path)
@@ -318,7 +325,7 @@ function Hud:_draw_number(g, item, x, y, s)
     local str    = string.format("%0" .. digits .. "d", math.max(0, math.min(val, cap)))
     if item.prefix then str = item.prefix .. str end
 
-    local font  = Font.get(item.font or "chars")
+    local font  = self:font(item.font)
     local icon  = self:_number_icon(item)
     local iconw = icon and (icon:getWidth() * s + (item.gap or 2) * s) or 0
     local left  = x
@@ -328,11 +335,13 @@ function Hud:_draw_number(g, item, x, y, s)
         local iy = y + (item.icon_dy or 0) * s
         -- icon_color marks a mask sprite (white on alpha): tint it and cast the
         -- same down-right black shadow the mask fonts get. Sprites decoded from
-        -- the original art carry their own palette and baked shadow.
+        -- the original art carry their own palette and baked shadow. A mission
+        -- whose HUD has its own palette names its tint in icon_color_mission.
         if item.icon_color then
+            local own = item.icon_color_mission and item.icon_color_mission[tostring(self.mission)]
             g.setColor(0, 0, 0)
             g.draw(icon, left + s, iy + s, 0, s, s)
-            g.setColor(item.icon_color)
+            g.setColor(own or item.icon_color)
         else
             g.setColor(1, 1, 1)
         end
@@ -380,7 +389,7 @@ function Hud:_draw_notice(item, x, y, s)
     local def   = self.combat and self.combat.weapons[p.found_weapon]
     local name  = def and def.name or p.found_weapon:upper():gsub("_", " ")
     local text  = string.format(item.text or "%s", name)
-    local font  = Font.get(item.font or "chars")
+    local font  = self:font(item.font)
     local alpha = math.min(1, age / (item.fade_in or 0.1), (time - age) / (item.fade_out or 0.5))
     font:print(text, math.floor(x - font:width(text, s) / 2), y, { scale = s, color = { 1, 1, 1, alpha } })
 end

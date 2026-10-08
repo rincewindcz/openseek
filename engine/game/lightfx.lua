@@ -3,26 +3,35 @@
 
 local Class  = require "engine.core.class"
 local Config = require "engine.core.config"
+local json   = require "lib.json"
 
 -- Screen lighting and flash effects. Two independent passes composited over the
 -- world (below the HUD):
 --
---   draw_night()    A multiplicative light map. On night stages the whole scene
---                   is dimmed to a per-mission ambient tone, then brightened by
---                   the vehicle headlight (a soft warm cone plus a lit pool ahead)
---                   and by transient point lights emitted at explosions / muzzle
---                   flashes. Built into an offscreen canvas and drawn back with a
---                   "multiply" blend.
+--   draw_night()    A light map applied to the whole world view of a night
+--                   stage. The map starts at a per-mission ambient tone and
+--                   gathers the vehicle headlights (a long soft beam plus a pool
+--                   around the vehicle), the transient point lights of
+--                   explosions and muzzle flashes, and the lights carried by
+--                   burning things. The world is drawn into a target of its own
+--                   (begin_scene) and multiplied by the map on the way back, so
+--                   a lit pixel can come out brighter than its art: the night
+--                   palette is dark to begin with, and the original's own night
+--                   spot doubled what it covered.
 --
---   draw_additive() Oversaturation bursts on top of everything: brief world-
---                   anchored bright circles at explosions and full-screen colour
---                   flashes for big detonations. Additive, so they blow past 1.0
---                   as bloom. Runs on any stage, night or day.
+--   draw_additive() Oversaturation over everything: brief world-anchored bright
+--                   circles at explosions, the glow of live fire and full-screen
+--                   colour flashes for big detonations. Additive, so it blows
+--                   past 1.0 as bloom. Runs on any stage, night or day.
 --
 -- Emitters (explosion / muzzle) are fed from the combat and entity code via the
 -- World forwarder, which no-ops when the effect system is disabled, so scenes
--- that never draw the passes do not accumulate state.
+-- that never draw the passes do not accumulate state. Fire needs no emitter:
+-- each tick the live rounds and effects are read for the ones that carry a
+-- light (data/lightfx.json "weapons" and "effects").
 local LightFX = Class()
+
+local DATA_PATH = "data/lightfx.json"
 
 -- Explosion size string (entity/weapon "explosion_<size>") -> light + burst, and
 -- a screen flash for the largest. Radii are in world units (scaled by the camera
@@ -38,75 +47,127 @@ local EXPLOSIONS = {
                burst = 42, ttl = 0.30 },
 }
 
--- Fallback night look when a mission defines no explicit params.
+-- Night look of a mission the data file does not list.
 local DEFAULT_NIGHT = {
-    ambient   = { 0.46, 0.49, 0.60 },
-    headlight = { reach = 40, radius = 36, spread = 0.6,
-                  color = { 1.0, 0.92, 0.72 }, intensity = 1.2, gap = 6 },
+    ambient   = { 0.84, 0.87, 1.0 },
+    max_light = 2.4,
+    headlight = { color = { 1.0, 0.93, 0.76 }, gap = 6, length = 300, spread_deg = 40,
+                  intensity = 1.4, pool_radius = 120, pool_ahead = 24, pool_intensity = 0.35 },
 }
 
 local SPOT_SIZE = 256   -- radial gradient sprite resolution
-local CONE_SEGS = 16    -- headlight cone fan resolution
+local BEAM_SIZE = 256   -- headlight beam sprite resolution
+
+-- The light map holds light / LIGHT_RANGE, so it can carry up to that many
+-- times the art's own brightness in a normalized target.
+local LIGHT_RANGE = 4
+
+-- How long a burning effect takes to reach and to leave its full light, as
+-- shares of its life.
+local EFFECT_FADE_IN  = 0.1
+local EFFECT_FADE_OUT = 0.4
+
+-- Lights that pile up (a blast inside the beam) stop at max_light times the
+-- art, short of burning every sprite under them to white.
+local LIGHT_SRC = [[
+uniform Image light_map;
+uniform float range;
+uniform float max_light;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
+    vec3 light = min(Texel(light_map, uv).rgb * range, vec3(max_light));
+    return vec4(Texel(tex, uv).rgb * light, 1.0);
+}
+]]
+
+local data
+
+local function load_data()
+    if data then return data end
+    local raw = love.filesystem.read(DATA_PATH)
+    local ok, decoded = pcall(json.decode, raw or "")
+    decoded = (ok and type(decoded) == "table") and decoded or {}
+    data = {
+        night   = decoded.night   or {},
+        weapons = decoded.weapons or {},
+        effects = decoded.effects or {},
+    }
+    return data
+end
+
+local function smoothstep(lo, hi, x)
+    local t = math.max(0, math.min(1, (x - lo) / (hi - lo)))
+    return t * t * (3 - 2 * t)
+end
 
 -- A radial gradient (white core -> transparent edge) used for every soft light.
 local function make_spot()
-    local data = love.image.newImageData(SPOT_SIZE, SPOT_SIZE)
-    local c    = (SPOT_SIZE - 1) / 2
-    data:mapPixel(function(x, y)
+    local image = love.image.newImageData(SPOT_SIZE, SPOT_SIZE)
+    local c     = (SPOT_SIZE - 1) / 2
+    image:mapPixel(function(x, y)
         local dx, dy = (x - c) / c, (y - c) / c
-        local r = math.sqrt(dx * dx + dy * dy)
-        local a = math.max(0, 1 - r)
-        a = a * a * (3 - 2 * a)          -- smoothstep falloff
-        return 1, 1, 1, a
+        return 1, 1, 1, smoothstep(0, 1, 1 - math.sqrt(dx * dx + dy * dy))
     end)
-    return love.graphics.newImage(data)
+    return love.graphics.newImage(image)
 end
 
--- Triangle-fan cone pointing straight up (screen -y), apex at the origin, rim at
--- radius 1. Apex carries the light, the rim fades to zero. Rebuilt per stage so
--- the beam spread can vary by mission.
-local function make_cone(spread, color, apex_a)
-    local verts = { { 0, 0, 0.5, 0.5, color[1], color[2], color[3], apex_a } }
-    for i = 0, CONE_SEGS do
-        local a  = -math.pi / 2 + (i / CONE_SEGS - 0.5) * spread * 2
-        verts[#verts + 1] = { math.cos(a), math.sin(a), 0, 0,
-                              color[1], color[2], color[3], 0 }
-    end
-    local mesh = love.graphics.newMesh(verts, "fan", "static")
-    return mesh
+-- The headlight beam, pointing up from the bottom centre of the sprite: a cone
+-- that opens from a narrow start, soft at its sides, brightest a little under
+-- halfway out and fading to nothing at its far end. Drawn stretched to the
+-- beam's length and spread.
+local function make_beam()
+    local image = love.image.newImageData(BEAM_SIZE, BEAM_SIZE)
+    local half  = (BEAM_SIZE - 1) / 2
+    image:mapPixel(function(x, y)
+        local along = 1 - y / (BEAM_SIZE - 1)
+        local side  = math.abs(x - half) / half / (0.12 + 0.88 * along)
+        local reach = smoothstep(0, 0.12, along) * (1 - smoothstep(0.5, 1, along))
+        return 1, 1, 1, reach * (1 - smoothstep(0, 1, side))
+    end)
+    return love.graphics.newImage(image)
 end
 
 function LightFX:init()
-    self.spot    = make_spot()
-    self.cone    = nil
-    self.enabled = false
-    self.night   = nil     -- active night params, or nil on day stages
-    self.lights  = {}      -- {x, y, radius, r, g, b, intensity, t, ttl}
-    self.bursts  = {}      -- {x, y, radius, r, g, b, t, dur}
-    self.flashes = {}      -- {r, g, b, a, t, dur}
-    self.canvas       = nil
+    self.spot         = make_spot()
+    self.beam         = make_beam()
+    self.shader       = love.graphics.newShader(LIGHT_SRC)
+    self.enabled      = false
+    self.world        = nil     -- the stage being lit, for its players and its fire
+    self.night        = nil     -- active night params, or nil on day stages
+    self.lights       = {}      -- {x, y, radius, r, g, b, intensity, t, ttl}
+    self.bursts       = {}      -- {x, y, radius, r, g, b, t, dur}
+    self.flashes      = {}      -- {r, g, b, a, t, dur}
+    self.sources      = {}      -- {x, y, spec, strength}: live fire, rebuilt each tick
+    self.source_count = 0
+    self.scene        = nil     -- the world view of a night stage, before lighting
+    self.map          = nil
     self.cw           = 0
     self.ch           = 0
-    self.headlight_on = true   -- cut when the player vehicle is destroyed
+    self.scene_on     = false
+    self.scene_prev   = nil
 end
 
--- Enable the system for a stage. Reads the world's per-mission night params (nil
--- on day stages) and rebuilds the headlight cone.
+-- Enable the system for a stage and pick its night look (nil on day stages).
 function LightFX:enter(world)
     self:reset()
     self.enabled = true
-    self.night   = world and world:night_params() or nil
-    local h      = (self.night and self.night.headlight) or DEFAULT_NIGHT.headlight
-    self.cone    = make_cone(h.spread, h.color, 0.22 * h.intensity)
+    self.world   = world
+    if world and world:is_night() then
+        local night = load_data().night
+        local m     = world.stage_name and world.stage_name:match("^stage(%d)")
+        self.night  = night[m] or night.default or DEFAULT_NIGHT
+    end
 end
 
 function LightFX:reset()
-    self.enabled = false
-    self.night   = nil
-    self.lights  = {}
-    self.bursts  = {}
-    self.flashes = {}
-    self.headlight_on = true
+    self.enabled      = false
+    self.world        = nil
+    self.night        = nil
+    self.lights       = {}
+    self.bursts       = {}
+    self.flashes      = {}
+    self.sources      = {}
+    self.source_count = 0
+    self.scene_on     = false
 end
 
 -- emitters
@@ -190,11 +251,54 @@ local function age(list, dt)
     return live
 end
 
+function LightFX:_add_source(x, y, spec, strength)
+    local n = self.source_count + 1
+    local s = self.sources[n]
+    if not s then
+        s = {}
+        self.sources[n] = s
+    end
+    s.x, s.y, s.spec, s.strength = x, y, spec, strength
+    self.source_count = n
+end
+
+-- The lights of everything burning this tick: rounds in flight whose weapon
+-- carries one (dimming over their range by the weapon's fade) and ignited
+-- effects whose clip does (rising and dying with the effect).
+function LightFX:_collect_sources()
+    self.source_count = 0
+    local combat = self.world and self.world.combat
+    if not combat then return end
+    local specs = load_data()
+    for _, projectile in ipairs(combat.projectiles) do
+        local spec = specs.weapons[projectile.weapon]
+        if spec and projectile.alive then
+            local strength = 1
+            if spec.fade and projectile.max_range then
+                strength = 1 - spec.fade * math.min(1, projectile.traveled / projectile.max_range)
+            end
+            self:_add_source(projectile.x, projectile.y, spec, strength)
+        end
+    end
+    for _, effect in ipairs(combat.effects) do
+        local spec = specs.effects[effect.clip]
+        local life = effect.age - effect.delay
+        if spec and life >= 0 then
+            local t = effect.lifetime and life / effect.lifetime or effect.anim:progress()
+            local strength = math.min(1, t / EFFECT_FADE_IN, (1 - t) / EFFECT_FADE_OUT)
+            if strength > 0 then
+                self:_add_source(effect.x, effect.y, spec, strength * (effect.scale or 1))
+            end
+        end
+    end
+end
+
 function LightFX:update(dt)
     if not self.enabled then return end
     self.lights  = age(self.lights, dt)
     self.bursts  = age(self.bursts, dt)
     self.flashes = age(self.flashes, dt)
+    self:_collect_sources()
 end
 
 -- draw
@@ -205,88 +309,123 @@ function LightFX:_stamp(sx, sy, screen_radius, r, g, b, a)
     love.graphics.draw(self.spot, sx, sy, 0, s, s, SPOT_SIZE / 2, SPOT_SIZE / 2)
 end
 
--- The vehicle headlight, in screen space. The world is drawn rotated so the
--- player always faces up, so the beam is a fixed shape above the focus point: a
--- warm cone from the vehicle widening into a soft lit pool ahead, with a faint
--- flicker.
-function LightFX:_headlight(camera)
-    local h        = self.night.headlight
-    local cx, cy   = camera:screen_center()
-    local z        = camera:zoom()
-    local flick    = 0.94 + 0.06 * math.sin(love.timer.getTime() * 21)
-    local reach    = h.reach * z
-    local radius   = h.radius * z
-    local apex_y   = cy - h.gap * z
-
-    -- Photo mode turns the view away from the upright vehicle; the beam turns
-    -- with it about the focus.
-    local rot = camera.subject_rot
-    if rot then
-        love.graphics.push()
-        love.graphics.translate(cx, cy)
-        love.graphics.rotate(rot)
-        love.graphics.translate(-cx, -cy)
-    end
-
-    -- Cone bridging the lamp to the pool.
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(self.cone, cx, apex_y, 0, radius * 1.15, (reach + radius) * flick)
-
-    -- Bright pool ahead of the vehicle.
-    self:_stamp(cx, cy - reach, radius, h.color[1], h.color[2], h.color[3],
-                h.intensity * flick)
-    if rot then love.graphics.pop() end
+-- Brightness of source i this frame: its strength under a flame's flicker, two
+-- sines out of step so it never settles into a pulse.
+local function flicker(source, i, now)
+    local depth = source.spec.flicker or 0
+    local wave  = 0.5 + 0.25 * (math.sin(now * 23 + i * 1.7) + math.sin(now * 37 + i * 2.9))
+    return source.strength * (1 - depth * wave)
 end
 
--- Pass A: build and composite the multiplicative night light map. Call only on
--- night stages, after the world/entities/effects have been drawn.
-function LightFX:draw_night(camera)
-    if not (self.enabled and self.night and Config.night_lighting) then return end
-    local g    = love.graphics
-    local w, h = g.getDimensions()
-    if not self.canvas or self.cw ~= w or self.ch ~= h then
-        self.canvas = g.newCanvas(w, h)
-        self.cw, self.ch = w, h
+-- The headlights of every vehicle still running, into the light map: a pool
+-- around the vehicle to see its surroundings by, and the beam ahead of it.
+function LightFX:_headlights(camera)
+    local combat = self.world and self.world.combat
+    if not combat then return end
+    local h      = self.night.headlight
+    local z      = camera:zoom()
+    local col    = h.color
+    local width  = 2 * h.length * math.tan(math.rad(h.spread_deg)) * z / BEAM_SIZE
+    local length = h.length * z / BEAM_SIZE
+    local beam   = h.intensity / LIGHT_RANGE
+    for _, p in ipairs(combat.players or {}) do
+        if not p.death then
+            local sx, sy = camera:project(p.x, p.y)
+            local rot    = math.rad(p.angle) + (camera.angle or 0)
+            local fx, fy = math.sin(rot), -math.cos(rot)
+            local ahead  = (h.pool_ahead or 0) * z
+            self:_stamp(sx + fx * ahead, sy + fy * ahead, h.pool_radius * z,
+                col[1], col[2], col[3], h.pool_intensity / LIGHT_RANGE)
+            love.graphics.setColor(col[1] * beam, col[2] * beam, col[3] * beam, 1)
+            love.graphics.draw(self.beam, sx + fx * h.gap * z, sy + fy * h.gap * z, rot,
+                width, length, BEAM_SIZE / 2, BEAM_SIZE)
+        end
     end
+end
 
-    -- The light map is built in viewport-local pixels (camera:project /
-    -- screen_center already are), so the canvas pass runs under an identity
-    -- transform with no scissor; the caller's translate and scissor apply when
-    -- the finished map is composited below. Split screen relies on this.
-    local prev = g.getCanvas()
+function LightFX:_ensure(w, h)
+    if self.scene and self.cw == w and self.ch == h then return end
+    local g = love.graphics
+    -- A float map keeps the dim end of the range smooth; without one the beam
+    -- shows faint bands.
+    local format = g.getCanvasFormats().rgba16f and "rgba16f" or "normal"
+    self.scene = g.newCanvas(w, h)
+    self.map   = g.newCanvas(w, h, { format = format })
+    self.cw, self.ch = w, h
+end
+
+-- Start of a world pass. A night stage draws into a target of its own until
+-- draw_night lights it; a day stage draws straight through. Keeps the caller's
+-- transform and scissor, and clears the whole target so split-screen halves
+-- never show each other's pixels.
+function LightFX:begin_scene()
+    self.scene_on = self.enabled and self.night ~= nil and Config.night_lighting
+    if not self.scene_on then return end
+    local g = love.graphics
+    self:_ensure(g.getDimensions())
+    self.scene_prev = g.getCanvas()
+    g.setCanvas(self.scene)
     local clip_x, clip_y, clip_w, clip_h = g.getScissor()
-    g.push()
-    g.origin()
     g.setScissor()
-    g.setCanvas(self.canvas)
+    g.clear(0, 0, 0, 1)
+    if clip_x then g.setScissor(clip_x, clip_y, clip_w, clip_h) end
+end
+
+-- Pass A: build the night light map and lay the lit world onto the target the
+-- pass started on. After the world, entities and effects have been drawn.
+function LightFX:draw_night(camera)
+    if not self.scene_on then return end
+    self.scene_on = false
+    local g = love.graphics
+
+    -- The light map is built under the caller's transform, like the world it
+    -- lights (a split-screen half is translated to its place), over the whole
+    -- target; the lit world is then laid down target for target, inside the
+    -- caller's scissor.
+    local clip_x, clip_y, clip_w, clip_h = g.getScissor()
+    g.setCanvas(self.scene_prev)
+    g.push("all")
+    g.setScissor()
+    g.setCanvas(self.map)
     local a  = self.night.ambient
-    local br = Config.night_brightness   -- lifts the floor toward daylight
-    g.clear(math.min(1, a[1] * br), math.min(1, a[2] * br), math.min(1, a[3] * br), 1)
+    local br = Config.night_brightness / LIGHT_RANGE   -- lifts the floor toward daylight
+    g.clear(a[1] * br, a[2] * br, a[3] * br, 1)
     g.setBlendMode("add")
-    if self.headlight_on then self:_headlight(camera) end
+    self:_headlights(camera)
     local z = camera:zoom()
     for _, l in ipairs(self.lights) do
         local sx, sy = camera:project(l.x, l.y)
         local fade   = 1 - l.t / l.ttl
-        self:_stamp(sx, sy, l.radius * z, l.r, l.g, l.b, l.intensity * fade)
+        self:_stamp(sx, sy, l.radius * z, l.r, l.g, l.b, l.intensity * fade / LIGHT_RANGE)
     end
-    g.setCanvas(prev)
-    g.pop()
-    if clip_x then g.setScissor(clip_x, clip_y, clip_w, clip_h) end
+    local now = love.timer.getTime()
+    for i = 1, self.source_count do
+        local s      = self.sources[i]
+        local spec   = s.spec
+        local sx, sy = camera:project(s.x, s.y)
+        self:_stamp(sx, sy, spec.radius * z, spec.color[1], spec.color[2], spec.color[3],
+            spec.intensity * flicker(s, i, now) / LIGHT_RANGE)
+    end
 
-    g.setBlendMode("multiply", "premultiplied")
+    g.origin()
+    g.setCanvas(self.scene_prev)
+    if clip_x then g.setScissor(clip_x, clip_y, clip_w, clip_h) end
+    g.setBlendMode("replace", "premultiplied")
     g.setColor(1, 1, 1, 1)
-    g.draw(self.canvas)
-    g.setBlendMode("alpha")
-    g.setColor(1, 1, 1, 1)
+    self.shader:send("light_map", self.map)
+    self.shader:send("range", LIGHT_RANGE)
+    self.shader:send("max_light", self.night.max_light or DEFAULT_NIGHT.max_light)
+    g.setShader(self.shader)
+    g.draw(self.scene)
+    g.pop()
 end
 
 -- Pass B: additive oversaturation over the composited scene (any stage). Bursts
--- are world-anchored; flashes wash the whole screen.
+-- and the glow of live fire are world-anchored; flashes wash the whole screen.
 function LightFX:draw_additive(camera)
     if not (self.enabled and Config.effects_flashes) then return end
     local g = love.graphics
-    if #self.bursts == 0 and #self.flashes == 0 then return end
+    if #self.bursts == 0 and #self.flashes == 0 and self.source_count == 0 then return end
     local fi = Config.flash_intensity   -- master brightness of the flash layer
     local z  = camera:zoom()
     g.setBlendMode("add")
@@ -294,6 +433,16 @@ function LightFX:draw_additive(camera)
         local sx, sy = camera:project(b.x, b.y)
         local k      = 1 - b.t / b.dur
         self:_stamp(sx, sy, b.radius * z, b.r, b.g, b.b, k * k * fi)
+    end
+    local now = love.timer.getTime()
+    for i = 1, self.source_count do
+        local s    = self.sources[i]
+        local spec = s.spec
+        if spec.glow then
+            local sx, sy = camera:project(s.x, s.y)
+            self:_stamp(sx, sy, (spec.glow_radius or spec.radius) * z,
+                spec.color[1], spec.color[2], spec.color[3], spec.glow * flicker(s, i, now) * fi)
+        end
     end
     local w, hgt = g.getDimensions()
     for _, f in ipairs(self.flashes) do

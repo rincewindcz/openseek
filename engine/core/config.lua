@@ -13,8 +13,9 @@ local Config = {
     axis_aligned_pickups = false,
 
     -- Let the player's own fire kill walking POWs and agents and destroy the
-    -- player's base buildings (for no score or pickups). Off by default: only
-    -- enemy fire harms them and the base cannot be damaged.
+    -- player's base buildings (for no score or pickups), and in co-op hurt the
+    -- other players. Off by default: only enemy fire harms them and the base
+    -- cannot be damaged.
     friendly_fire_pows = false,
 
     -- Global multiplier on the on-screen HUD (gauges, weapon icon, accel box,

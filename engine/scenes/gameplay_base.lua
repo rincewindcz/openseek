@@ -3,7 +3,6 @@
 
 local Class       = require "engine.core.class"
 local Scene       = require "engine.core.scene"
-local Font        = require "engine.core.font"
 local Vehicles    = require "engine.game.vehicles"
 local Rng         = require "engine.core.rng"
 local InputSource = require "engine.core.input_source"
@@ -42,7 +41,7 @@ function GameplayBase:draw_overlay_text(title, dim)
     local screen_w, screen_h = g.getDimensions()
     g.setColor(0, 0, 0, dim or 0.55)
     g.rectangle("fill", 0, 0, screen_w, screen_h)
-    local font = Font.get("chars")
+    local font = self.app.hud:font()
     local s    = 5
     font:print(title, (screen_w - font:width(title, s)) / 2,
         (screen_h - font.line_height * s) / 2, { scale = s })
@@ -50,9 +49,8 @@ function GameplayBase:draw_overlay_text(title, dim)
 end
 
 -- Centered lines in the score font (CHARS), stacked down from y.
-local function print_lines(lines, s, y)
+local function print_lines(font, lines, s, y)
     local screen_w = love.graphics.getWidth()
-    local font     = Font.get("chars")
     for _, ln in ipairs(lines) do
         font:print(ln, (screen_w - font:width(ln, s)) / 2, y, { scale = s })
         y = y + font.line_height * s + 10
@@ -64,7 +62,8 @@ end
 -- Uses the score font (CHARS), not the menu ENDCHARS face.
 function GameplayBase:draw_return_prompt()
     if math.floor(love.timer.getTime() * 1.5) % 2 ~= 0 then return end
-    print_lines({ "MISSION COMPLETE", "RETURN TO BASE" }, 4, love.graphics.getHeight() / 2 - 70)
+    print_lines(self.app.hud:font(), { "MISSION COMPLETE", "RETURN TO BASE" }, 4,
+        love.graphics.getHeight() / 2 - 70)
 end
 
 -- An objective was lost for good (mission state "phase_failed"): the original's
@@ -75,12 +74,12 @@ function GameplayBase:draw_phase_failed(lines)
     g.setColor(0, 0, 0, 0.55)
     g.rectangle("fill", 0, 0, screen_w, screen_h)
     g.setColor(1, 1, 1)
-    print_lines(lines, 4, screen_h / 2 - 70)
+    print_lines(self.app.hud:font(), lines, 4, screen_h / 2 - 70)
 end
 
 -- A standing order of the mission (mission.notice), kept on screen.
 function GameplayBase:draw_notice(text)
-    print_lines({ text }, 3, love.graphics.getHeight() * 0.2)
+    print_lines(self.app.hud:font(), { text }, 3, love.graphics.getHeight() * 0.2)
 end
 
 -- Fire p's current weapon if its reload is up and it has ammo. owner stays the

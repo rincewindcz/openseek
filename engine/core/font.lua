@@ -1,8 +1,9 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class = require "engine.core.class"
-local json  = require "lib.json"
+local Class  = require "engine.core.class"
+local Assets = require "engine.core.assets"
+local json   = require "lib.json"
 
 -- Bitmap fonts decoded from the original game's glyph containers
 -- (tools/export_fonts.py -> assets/fonts/<name>.{png,json}). Each glyph is a
@@ -24,7 +25,7 @@ local cache = {}
 -- Fonts shipped by the exporter, in a stable order for the gallery.
 Font.NAMES = {
     "phasenum", "gov", "gov2", "overkill0", "overkill1", "overkill2", "overkill3", "overkill4",
-    "chars", "charspow", "charstit", "hichars", "hichars2", "savechar", "endchars", "keysfont",
+    "chars", "chars3", "charspow", "charstit", "hichars", "hichars2", "savechar", "endchars", "keysfont",
     "mainmen", "main", "credchars", "endstory",
 }
 
@@ -34,6 +35,14 @@ function Font.get(name)
     f = Font:new(name)
     cache[name] = f
     return f
+end
+
+-- The cut of a font a mission ships for its own HUD palette (the night
+-- mission's green CHARS is "chars3"), else the shared font.
+function Font.for_mission(name, mission)
+    local own = name .. tostring(mission)
+    if mission and Assets.exists("fonts/" .. own .. ".json") then return Font.get(own) end
+    return Font.get(name)
 end
 
 function Font:init(name)

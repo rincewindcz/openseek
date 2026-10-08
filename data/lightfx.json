@@ -1,0 +1,32 @@
+{
+  "night": {
+    "3": {
+      "ambient": [0.84, 0.87, 1.0],
+      "max_light": 2.4,
+      "headlight": {
+        "color": [1.0, 0.93, 0.76],
+        "gap": 6,
+        "length": 300,
+        "spread_deg": 40,
+        "intensity": 1.4,
+        "pool_radius": 120,
+        "pool_ahead": 24,
+        "pool_intensity": 0.35
+      }
+    }
+  },
+  "weapons": {
+    "flame_thrower":     { "radius": 52, "intensity": 0.55, "color": [1.0, 0.62, 0.26], "flicker": 0.3, "fade": 0.5, "glow": 0.08, "glow_radius": 42 },
+    "rockets":           { "radius": 40, "intensity": 0.6,  "color": [1.0, 0.74, 0.42], "flicker": 0.2, "glow": 0.12, "glow_radius": 16 },
+    "mega_missile":      { "radius": 60, "intensity": 0.8,  "color": [1.0, 0.74, 0.42], "flicker": 0.2, "glow": 0.16, "glow_radius": 22 },
+    "air_to_ground":     { "radius": 46, "intensity": 0.65, "color": [1.0, 0.74, 0.42], "flicker": 0.2, "glow": 0.12, "glow_radius": 18 },
+    "air_to_air":        { "radius": 46, "intensity": 0.65, "color": [1.0, 0.74, 0.42], "flicker": 0.2, "glow": 0.12, "glow_radius": 18 },
+    "ground_to_air":     { "radius": 46, "intensity": 0.65, "color": [1.0, 0.74, 0.42], "flicker": 0.2, "glow": 0.12, "glow_radius": 18 },
+    "enemy_homing":      { "radius": 46, "intensity": 0.65, "color": [1.0, 0.74, 0.42], "flicker": 0.2, "glow": 0.12, "glow_radius": 18 },
+    "enemy_heli_homing": { "radius": 46, "intensity": 0.65, "color": [1.0, 0.74, 0.42], "flicker": 0.2, "glow": 0.12, "glow_radius": 18 },
+    "enemy_missile":     { "radius": 46, "intensity": 0.65, "color": [1.0, 0.74, 0.42], "flicker": 0.2, "glow": 0.12, "glow_radius": 18 }
+  },
+  "effects": {
+    "fire": { "radius": 60, "intensity": 0.7, "color": [1.0, 0.6, 0.24], "flicker": 0.3, "glow": 0.08, "glow_radius": 46 }
+  }
+}

@@ -22,6 +22,9 @@ local Log     = require "engine.core.log"
 --
 -- Widgets come from tools/export_mission.py (assets/mission/); the backdrop and
 -- objective-icon columns are the already-exported fullscreen / phase art.
+--
+-- The objective icon under the pointer lights up (not in the original): the
+-- night mission's cards are drawn in its dark palette and are hard to read.
 local MissionMenu = Class()
 
 local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
@@ -30,6 +33,7 @@ local TITLE_Y = 26
 local ICON_X, ICON_Y = 6, 52
 local TEXT_Y = 54          -- top of the first box slot's text
 local SLOT_PITCH = 54      -- vertical stride between box slots (matches the icon squares)
+local SLOT_H = 47          -- height of one box slot's art
 local TEXT_X0 = 82         -- text column start clearing a normal (65px) icon
 local TEXT_GAP = 5         -- px between wide slot art and the text on that row
 local TEXT_RIGHT = 6       -- right margin of the text column
@@ -37,6 +41,14 @@ local LINE_GAP = 1         -- 6 lines then fills exactly one 54px box slot
 local BTN_Y = 224
 local FOCUS_PAD = 2      -- design px the focus ring extends past the button
 local CONFIRM_TIME = 0.3 -- fade-through-black before the action fires
+
+-- Hovered icon: its art is added onto itself, by as much as lifts the card's
+-- mean brightness to HOVER_TARGET (a dark night card several times over, a day
+-- card barely), eased in and out over HOVER_TIME seconds.
+local HOVER_TARGET = 0.5
+local HOVER_MIN    = 0.2
+local HOVER_MAX    = 1.5
+local HOVER_TIME   = 0.12
 
 -- Buttons left to right, with their design-space x. Order is the nav order.
 local BUTTONS = {
@@ -84,8 +96,13 @@ function MissionMenu:init()
     local raw = love.filesystem.read("assets/mission_text.json")
     self.text = raw and json.decode(raw) or {}
 
+    self.icon_hover = nil          -- box slot (0-2) under the pointer
+    self.icon_light = { [0] = 0, [1] = 0, [2] = 0 }   -- eased hover amount per slot
+    self.icon_gain  = 0            -- brightness a full hover adds to the icon
+    self.icon_quads = {}           -- slot -> its strip of the icon column
+
     self._cache = {}       -- path -> image | false
-    self._edge_cache = {}  -- icon path -> { slot -> rightmost opaque x, or -1 }
+    self._edge_cache = {}  -- icon path -> { slot -> rightmost opaque x, or -1; light = mean brightness }
 end
 
 function MissionMenu:is_active() return self.active end
@@ -99,30 +116,34 @@ function MissionMenu:_img(path)
 end
 
 -- Rightmost opaque pixel x within each box slot's row band (slot * SLOT_PITCH ..
--- +46), or -1 if the slot is blank. Used to inset a paragraph past any extra art
--- carried beside its box (a few phase icons are wider than one square).
+-- + SLOT_H), or -1 if the slot is blank. Used to inset a paragraph past any extra
+-- art carried beside its box (a few phase icons are wider than one square).
+-- light is the mean brightness of the card's opaque pixels.
 function MissionMenu:_icon_slot_edges(path)
     local cached = self._edge_cache[path]
     if cached then return cached end
-    local edges = { [0] = -1, [1] = -1, [2] = -1 }
+    local edges = { [0] = -1, [1] = -1, [2] = -1, light = HOVER_TARGET }
     local ok, data = false, nil
     if love.filesystem.getInfo(path) then ok, data = pcall(love.image.newImageData, path) end
     if ok then
         local w, h = data:getWidth(), data:getHeight()
+        local sum, count = 0, 0
         for slot = 0, 2 do
             local y0 = slot * SLOT_PITCH
-            local y1 = math.min(y0 + 46, h - 1)
+            local y1 = math.min(y0 + SLOT_H - 1, h - 1)
             local right = -1
             for y = y0, y1 do
-                for x = w - 1, 0, -1 do
-                    if select(4, data:getPixel(x, y)) > 0.06 then
+                for x = 0, w - 1 do
+                    local r, g, b, a = data:getPixel(x, y)
+                    if a > 0.06 then
                         if x > right then right = x end
-                        break
+                        sum, count = sum + math.max(r, g, b), count + 1
                     end
                 end
             end
             edges[slot] = right
         end
+        if count > 0 then edges.light = sum / count end
     end
     self._edge_cache[path] = edges
     return edges
@@ -163,6 +184,18 @@ function MissionMenu:open(stage_name)
     -- so wide icons never overlap the text. A paragraph taller than a slot pushes
     -- the next one down so nothing overlaps. Already upper case to match CHARSTIT.
     local edges = self:_icon_slot_edges(icon_path)
+    self.icon_edges = edges
+    self.icon_gain  = math.max(HOVER_MIN, math.min(HOVER_MAX, HOVER_TARGET / edges.light - 1))
+    self.icon_hover = nil
+    self.icon_quads = {}
+    for slot = 0, 2 do
+        self.icon_light[slot] = 0
+        if self.icon and edges[slot] >= 0 then
+            local w, h = self.icon:getDimensions()
+            local y    = slot * SLOT_PITCH
+            self.icon_quads[slot] = love.graphics.newQuad(0, y, w, math.min(SLOT_H, h - y), w, h)
+        end
+    end
     self.paragraphs = {}
     local info = self.text[stage_name]
     if info and info.paragraphs then
@@ -214,10 +247,23 @@ end
 -- Mouse/touch, window coords. Hover moves focus; press arms a button; release
 -- over the same button confirms it (down-on-press, action on release). Input is
 -- ignored once a confirm fade is playing.
+-- Box slot (0-2) whose icon art is under a design-space point, or nil.
+function MissionMenu:_icon_at(dx, dy)
+    for slot, _ in pairs(self.icon_quads) do
+        local top = ICON_Y + slot * SLOT_PITCH
+        if dx >= ICON_X and dx <= ICON_X + self.icon_edges[slot] and dy >= top and dy < top + SLOT_H then
+            return slot
+        end
+    end
+    return nil
+end
+
 function MissionMenu:hover(x, y)
     if not self.active or self.confirming then return end
-    local i = self:_button_at(Pointer.to_design(x, y, DW, DH))
+    local dx, dy = Pointer.to_design(x, y, DW, DH)
+    local i = self:_button_at(dx, dy)
     if i then self.cursor = i end
+    self.icon_hover = self:_icon_at(dx, dy)
 end
 
 function MissionMenu:press(x, y)
@@ -250,6 +296,12 @@ function MissionMenu:keypressed(key)
 end
 
 function MissionMenu:update(dt)
+    local step = dt / HOVER_TIME
+    for slot = 0, 2 do
+        local to = (self.icon_hover == slot) and 1 or 0
+        local at = self.icon_light[slot]
+        self.icon_light[slot] = at < to and math.min(to, at + step) or math.max(to, at - step)
+    end
     if not self.confirming then return end
     self.confirm_t = self.confirm_t + dt
     if self.confirm_t >= CONFIRM_TIME then
@@ -291,6 +343,18 @@ function MissionMenu:draw()
     end
     if self.icon then
         g.draw(self.icon, ICON_X, ICON_Y)
+        g.setBlendMode("add")
+        for slot, quad in pairs(self.icon_quads) do
+            local amount = self.icon_gain * self.icon_light[slot] * fade
+            while amount > 0 do
+                local k = math.min(1, amount)
+                g.setColor(k, k, k, 1)
+                g.draw(self.icon, quad, ICON_X, ICON_Y + slot * SLOT_PITCH)
+                amount = amount - 1
+            end
+        end
+        g.setBlendMode("alpha")
+        g.setColor(1, 1, 1, fade)
     end
 
     local pitch = self.font.line_height + LINE_GAP

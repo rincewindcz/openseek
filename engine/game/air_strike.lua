@@ -177,6 +177,7 @@ function AirStrike:_detonate(strike, impact)
             end
         end
     end
+    self.combat:_hurt_teammates(strike.shooter, x, y, spec.impact_radius, spec.damage)
 end
 
 function AirStrike:update()

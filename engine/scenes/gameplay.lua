@@ -396,7 +396,6 @@ function Gameplay:update(dt)
     app.world:update(dt)
     self:update_audio({ player }, { app.camera }, nil, dt)
     app.weather:update(dt, app.camera)
-    app.lightfx.headlight_on = not player.death   -- vehicle lights cut on destruction
     app.lightfx:update(dt)
     app.impactfx:update(dt, { player })
     app.tracks:update(dt, { player })
@@ -417,6 +416,7 @@ function Gameplay:draw_world()
     app.camera.shake_x, app.camera.shake_y = app.impactfx:shake_offset(app.camera.x, app.camera.y)
     local alarm = app.impactfx:low_armor(self.player)   -- EXTRA (low_armor_fx, damage_flash)
     app.postfx:begin_world(alarm)   -- world view only; the HUD and overlays stay unfiltered
+    app.lightfx:begin_scene()
     app.renderer:draw_ground()   -- terrain, decals, craters
     -- A vehicle on the ground draws (with its smoke) over flat clutter (stones,
     -- dunes, decals) but under the solid props (trees, buildings) that stand taller

@@ -16,7 +16,9 @@ real in-file colors are exported truecolor instead: OVERKILL (one per mission,
 overkill0..overkill4, each in its mission's stage palette), and
 the in-game body fonts CHARS/CHARSPOW, whose glyphs hold a fixed gold-on-black
 ramp (idx 16 black outline, 23-26 gold) under GOVPAL.BIN that the original HUD
-draws untinted. A flat tint loses the baked outline and gradient. CHARSPOW is
+draws untinted. A flat tint loses the baked outline and gradient. The night
+mission swaps CHARS for its own green cut without an outline (STAGE03/CHARS.BIN,
+idx 160-165 of that mission's PAL1.BIN), exported as chars3. CHARSPOW is
 the shop's description font; export_shop.py re-exports it with the shop's
 runtime palette (yellow on a black shadow), so run it after this script.
 
@@ -62,6 +64,10 @@ BLIT_ORIGIN_Y = 100  # decode_frame anchors the blit at y0 = 100
 FONTS = {
     "chars":    {"src": "data/CHARS.BIN",     "mode": "truecolor",
                  "pal": "data/GOVPAL.BIN"},
+    # The original loads stage03\chars.bin in place of data\chars.bin on the
+    # night mission, next to that mission's own HUD art.
+    "chars3":   {"src": "STAGE03/CHARS.BIN",  "mode": "truecolor",
+                 "pal": "STAGE03/PAL1.BIN"},
     "charspow": {"src": "data/CHARSPOW.BIN",  "mode": "truecolor",
                  "pal": "data/GOVPAL.BIN"},
     "charstit": {"src": "data/CHARSTIT.BIN",  "mode": "truecolor",

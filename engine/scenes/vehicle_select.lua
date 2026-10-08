@@ -26,7 +26,7 @@ local Player    = require "engine.game.player"
 --   * campaign (NEW GAME): each player picks a chopper and a tank variant; the
 --     equip screen still picks the vehicle per phase. START begins the run.
 --   * free (overview F7, two players): the focused card is the vehicle the
---     player drives, and G / F toggle god mode and friendly fire. START drops
+--     player drives, and G toggles god mode. START drops
 --     into split-screen co-op on the current stage.
 -- Two players drive their own card column with their own keys (P1 W/S/A/D, P2
 -- arrows); a single player uses either set. Enter starts, Esc goes back. With
@@ -253,8 +253,7 @@ end
 
 function VehicleSelect:_info_text()
     if self.free then
-        return string.format("G  GOD MODE %s      F  FRIENDLY FIRE %s",
-            self.app.settings.coop.god and "ON" or "OFF", self.app.settings.coop.ff and "ON" or "OFF")
+        return "G  GOD MODE " .. (self.app.settings.coop.god and "ON" or "OFF")
     elseif self.players == 2 then
         return "COOP LIVES: " .. (Config.coop_lives == "shared" and "SHARED POOL" or "SEPARATE")
             .. "  (SET IN OPTIONS)"
@@ -262,12 +261,11 @@ function VehicleSelect:_info_text()
     return nil
 end
 
--- The G / F toggles share one centered info line; each half is one toggle.
+-- The G toggle is the centered info line.
 function VehicleSelect:_toggle_zones()
     if not self.free then return {} end
     return {
-        { id = "god", x = 0,             y = INFO_Y - 2, w = DESIGN_W / 2, h = 12 },
-        { id = "ff",  x = DESIGN_W / 2,  y = INFO_Y - 2, w = DESIGN_W / 2, h = 12 },
+        { id = "god", x = 0, y = INFO_Y - 2, w = DESIGN_W, h = 12 },
     }
 end
 
@@ -320,7 +318,7 @@ function VehicleSelect:_activate(hit)
     if hit.kind == "button" then
         if hit.id == "start" then self:_start() else self:_back() end
     elseif hit.kind == "toggle" then
-        self:_toggle(hit.id)
+        self:_toggle()
     elseif hit.kind == "device" then
         self:_cycle_device(hit.player)
     elseif hit.kind == "arrow" then
@@ -330,9 +328,9 @@ function VehicleSelect:_activate(hit)
     end
 end
 
-function VehicleSelect:_toggle(id)
+function VehicleSelect:_toggle()
     local coop = self.app.settings.coop
-    if id == "god" then coop.god = not coop.god else coop.ff = not coop.ff end
+    coop.god = not coop.god
     Audio.play_event("ui.move")
 end
 
@@ -341,7 +339,7 @@ end
 function VehicleSelect:keypressed(key)
     if key == "escape" then self:_back(); return end
     if key == "return" or key == "kpenter" or key == "space" then self:_start(); return end
-    if self.free and (key == "g" or key == "f") then self:_toggle(key == "g" and "god" or "ff"); return end
+    if self.free and key == "g" then self:_toggle(); return end
     if self.players == 2 and DEVICE_KEYS[key] then self:_cycle_device(DEVICE_KEYS[key]); return end
     for k, keys in ipairs(KEYS) do
         local i = (self.players == 1) and 1 or k
