@@ -35,7 +35,6 @@ local C = {
 local TYPE_STEP = {
     speed=5, attack_range=10, detection_radius=10, hit_radius=1,
     patrol_speed=5, patrol_turn=5, collision_radius=1, sprite_rot=15,
-    ride_linger=0.1,
 }
 
 -- lower number = picked first (before ground decals / scenery)

@@ -229,7 +229,7 @@ function Renderer:_draw_entity(e, vp, mode)
         if r then
             -- Two-part tanks keep a fixed hull (turret does the aiming) unless they
             -- patrol, in which case the hull faces its travel heading; a hangar tank
-            -- faces its fixed ride axis; everything else rotates its sprite to face.
+            -- keeps its fixed facing; everything else rotates its sprite to face.
             local rot
             if e.hide_angle then
                 rot = e.hide_angle * math.pi / 180

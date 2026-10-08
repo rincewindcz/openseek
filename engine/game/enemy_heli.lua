@@ -12,7 +12,10 @@ local Difficulty = require "engine.game.difficulty"
 -- A heli's weapon is its stage class behaviour, as in the original: homing
 -- missiles, or on some stages a fast gun (EnemyFire:heli_mode,
 -- data/enemy_weapons.json "helicopter"), fired whenever the nose is on the player
--- inside that table's range and cone.
+-- inside that table's range and cone. Each heli belongs to a post, the spot the
+-- stage places it at: it starts there, turns home once it is further than the
+-- class leash from it on either axis, and when shot down comes back after the
+-- class respawn delay at a random point away from every player (0x202499).
 local SPEED      = 110    -- forward cruise (px/s); slower than the player so it can be engaged
 local TURN_RATE  = 120    -- deg/s heading slew (scaled by the mode's turn_scale)
 local ORBIT_R    = 270    -- radius it tries to circle the player at
@@ -21,19 +24,11 @@ local FRONT_LIMIT = 90    -- deg; the orbit is kept within this bearing of the p
 local FIRE_FRONT  = 115   -- deg; a heli only fires within this bearing, never from the rear blind spot
 local HIT_RADIUS   = 13
 local MAX_HP       = 20    -- fallback toughness when the stage has no badheli class
-local SPAWN_DELAY  = 2.5 -- gap between spawns while below the cap
 local DYING_TIME   = 1.1 -- fall/burn time before the wreck blows, like the player heli
 local BLAST_RADIUS = 70
 local BLAST_DAMAGE = { 2, 3, 4 }   -- per difficulty level, like a tank shell
 local SPRITE_ROT   = 0   -- extra rotation if the badheli frame 0 is not nose-north
 local ROTOR_SPEED  = 15  -- rad/s the rotor disc spins (one blade frame, rotated)
--- World radius around the player a spawn marker must sit outside of, so a heli
--- always flies in from beyond the player's view. Fixed rather than measured from
--- the viewport: the simulation may not depend on the view, which used to make
--- spawn choice differ by window size and between the two co-op halves (the value
--- is what the old formula yielded at 1280x720 and the gameplay zoom, margin
--- included).
-local SPAWN_CLEAR_RADIUS = 235
 -- Fallback score value if the stage carries no badheli class to read it from.
 local DEFAULT_POINTS = 500
 
@@ -43,10 +38,8 @@ function HeliSystem:init(world, combat)
     self.world  = world
     self.combat = combat
     self.helis  = {}
-    self.spawns = {}
+    self.posts  = {}
     self.sprite = nil
-    self.max    = 0
-    self.timer  = SPAWN_DELAY
     self.rotor_img = nil
     self.rotor_ax, self.rotor_ay = 0, 0
     self.kills  = 0   -- enemy helicopters shot down (end-of-phase stats)
@@ -54,13 +47,11 @@ function HeliSystem:init(world, combat)
     self.max_hp = MAX_HP
 end
 
--- Read the stage's spawn markers and the badheli render image. Called on each
--- stage load / player spawn.
+-- Read the stage's posts and the badheli render image, and put a heli on every
+-- post. Called on each stage load / player spawn.
 function HeliSystem:reset()
     self.helis  = {}
-    self.spawns = self.world.heli_spawns or {}
-    self.max    = #self.spawns
-    self.timer  = SPAWN_DELAY
+    self.posts  = {}
     self.kills  = 0
     self.world.air_units = self.helis
     self.sprite = nil
@@ -83,40 +74,61 @@ function HeliSystem:reset()
         self.rotor_img = clip.frames[1]
         self.rotor_ax, self.rotor_ay = clip:anchor(1)
     end
+    if not self.sprite then return end
+    for _, s in ipairs(self.world.heli_spawns or {}) do
+        local post = { x = s.x, y = s.y, behaviour = s.behaviour, respawn = s.respawn, leash = s.leash }
+        self.posts[#self.posts + 1] = post
+        self:_launch(post, post.x, post.y)
+    end
 end
 
 function HeliSystem:clear()
     self.helis = {}
-    self.max   = 0
+    self.posts = {}
     self.world.air_units = self.helis
 end
 
-function HeliSystem:_spawn_one(player)
-    if #self.spawns == 0 or not self.sprite then return end
-    -- Prefer a marker currently out of view so the heli flies in from outside it.
-    local vr = SPAWN_CLEAR_RADIUS
-    local choices = {}
-    for _, s in ipairs(self.spawns) do
-        local dx, dy = self.world:delta(s.x, s.y, player.x, player.y)
-        if dx * dx + dy * dy > vr * vr then choices[#choices + 1] = s end
+-- Put post's heli in the air at (x, y), nose on the nearest player.
+function HeliSystem:_launch(post, x, y)
+    local rng     = self.world.rng
+    local p       = self.combat:_nearest_player(x, y)
+    local heading = 0
+    if p then
+        local dx, dy = self.world:delta(p.x, p.y, x, y)
+        heading = Mathx.heading_deg(dx, dy)
     end
-    if #choices == 0 then choices = self.spawns end
-    local s    = choices[self.world.rng:random(#choices)]
-    local dx, dy = self.world:delta(player.x, player.y, s.x, s.y)
-    local heli = {
-        x = s.x, y = s.y,
-        heading = Mathx.heading_deg(dx, dy),
+    self.helis[#self.helis + 1] = {
+        x = x, y = y, post = post,
+        heading = heading,
         hp = self.max_hp, max_hp = self.max_hp,
-        mode = self.combat.enemy_fire:heli_mode(s.behaviour),
-        dir = (self.world.rng:random() < 0.5) and 1 or -1,
-        phase = self.world.rng:random() * math.pi * 2,
+        mode = self.combat.enemy_fire:heli_mode(post.behaviour),
+        dir = (rng:random() < 0.5) and 1 or -1,
+        phase = rng:random() * math.pi * 2,
         reload = 0.8, alert_t = 0,
         smoke = {}, smoke_t = 0, hitfx = {},
-        rotor_spin = self.world.rng:random() * math.pi * 2,
+        rotor_spin = rng:random() * math.pi * 2,
         hit_radius = HIT_RADIUS,
         state = "alive",
     }
-    self.helis[#self.helis + 1] = heli
+end
+
+-- Bring post's downed heli back: a random point of the map, tried again next
+-- tick while a player is within the respawn clearance of it.
+function HeliSystem:_respawn(post)
+    local s     = self.world.stage.world_size
+    local x, y  = self.world.rng:random() * s, self.world.rng:random() * s
+    local clear = self.combat.enemy_fire.data.helicopter.respawn_clear
+    local live  = false
+    for _, p in ipairs(self.combat.players) do
+        if p and not p.death and (p.armor or 0) > 0 then
+            local dx, dy = self.world:delta(p.x, p.y, x, y)
+            if dx * dx + dy * dy <= clear * clear then return end
+            live = true
+        end
+    end
+    if not live then return end
+    post.wait = nil
+    self:_launch(post, x, y)
 end
 
 -- Player projectile landed on this heli (called from CombatSystem:_check_hit).
@@ -150,16 +162,12 @@ function HeliSystem:hit(heli, dmg, shooter)
 end
 
 function HeliSystem:update(dt)
-    if self.max == 0 then return end
+    if #self.posts == 0 then return end
 
-    local live = 0
-    for _, heli in ipairs(self.helis) do if heli.state ~= "removed" then live = live + 1 end end
-    self.timer = self.timer - dt
-    if live < self.max and self.timer <= 0 then
-        local p = self.combat.player
-        if p and not p.death and (p.armor or 0) > 0 then
-            self:_spawn_one(p)
-            self.timer = SPAWN_DELAY
+    for _, post in ipairs(self.posts) do
+        if post.wait then
+            post.wait = post.wait - dt
+            if post.wait <= 0 then self:_respawn(post) end
         end
     end
 
@@ -216,6 +224,15 @@ function HeliSystem:_update_heli(heli, dt)
         local offset = 55 + 50 * math.sin(heli.phase)   -- 5..105 deg off the player
         target = (toplayer + heli.dir * offset) % 360
     end
+    -- Past its leash the heli turns for its post instead; it still fires on a
+    -- player its nose crosses.
+    local post = heli.post
+    if (post.leash or 0) > 0 then
+        local hx, hy = self.world:delta(post.x, post.y, heli.x, heli.y)
+        if math.abs(hx) > post.leash or math.abs(hy) > post.leash then
+            target = Mathx.heading_deg(hx, hy)
+        end
+    end
 
     local diff = ((target - heli.heading + 180) % 360) - 180
     local step = TURN_RATE * (heli.mode.turn_scale or 1) * dt * Config.speed_scale
@@ -263,7 +280,10 @@ function HeliSystem:_update_dying(heli, dt)
         self.world:spawn_debris(heli.x, heli.y, "blast")
         self:_blast(heli)
         heli.state = "removed"
-        self.timer = math.min(self.timer, SPAWN_DELAY)
+        -- The respawn delay runs from the crash; a negative one never ends.
+        local fire  = self.combat.enemy_fire
+        local ticks = heli.post.respawn or fire.data.helicopter.respawn
+        if ticks >= 0 then heli.post.wait = ticks / fire.tick_rate end
     end
 end
 

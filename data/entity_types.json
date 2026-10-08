@@ -73,9 +73,8 @@
     "detection_radius": 300,
     "explosion": "large",
     "hit_radius": 18,
-    "patrol_speed": 28,
-    "patrol_turn": 70,
-    "ride_linger": 1.2,
+    "patrol_speed": 35,
+    "patrol_turn": 98.4,
     "solid": true,
     "speed": 0,
     "turret_explosion": "medium"
@@ -90,6 +89,18 @@
     "solid": true,
     "speed": 0,
     "turn_speed": 0
+  },
+  "truck": {
+    "attack_range": 0,
+    "collision_radius": 8,
+    "debris": false,
+    "detection_radius": 0,
+    "explosion": "small",
+    "hit_radius": 10,
+    "patrol_speed": 35,
+    "patrol_turn": 98.4,
+    "solid": true,
+    "speed": 0
   },
   "unknown_14": {
   }

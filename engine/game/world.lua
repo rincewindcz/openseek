@@ -5,7 +5,6 @@ local Class     = require "engine.core.class"
 local json      = require "lib.json"
 local Entity    = require "engine.game.entity"
 local Animation = require "engine.core.animation"
-local Mathx     = require "engine.core.mathx"
 local Rng       = require "engine.core.rng"
 local Debris    = require "engine.game.debris"
 local Log       = require "engine.core.log"
@@ -57,8 +56,8 @@ local World = Class()
 -- A stage holds thousands of static props, so per-tick scans go through these
 -- load-time lookups instead of the full entity lists.
 --
--- Decals and objects are y-sorted once at load and never re-sorted; only tanks
--- (patrol routes, hangar ride-outs) move afterwards. A y-range query therefore
+-- Decals and objects are y-sorted once at load and never re-sorted; only route
+-- units, hangar tanks and wandering soldiers move afterwards. A y-range query therefore
 -- binary-searches the load-time y of the static entries and checks the few
 -- mobile ones separately. ys[i] is list[i]'s load-time y; movers holds the
 -- ascending list indices of the mobile entries.
@@ -66,7 +65,7 @@ local function build_y_index(list)
     local ys, movers = {}, {}
     for i, e in ipairs(list) do
         ys[i] = e.y
-        e.mobile = (e.route_points or e.hideable) and true or false
+        e.mobile = (e.route_points or e.hideable or e.wanders) and true or false
         if e.mobile then movers[#movers + 1] = i end
     end
     return { ys = ys, movers = movers }
@@ -99,7 +98,7 @@ local TURRET_DEFS = {
 
 -- Hangar assets that hide a co-located tank: the hut renders above the tank and
 -- shields it until the tank rides out to fire (see World:_link_hangar_tanks).
-local HIDE_TANK_HANGARS = { ["shut.bin"] = true }
+local HIDE_TANK_HANGARS = { ["shut.bin"] = true, ["jhanger.bin"] = true }
 
 -- Stage class kinds of the people objectives (loader jump table 0x1f5818).
 local KIND_POW_MARKER = 9    -- powhere.bin flag over a building holding people
@@ -140,6 +139,10 @@ function World:init()
     self.overrides = raw and json.decode(raw) or {}
     self.overrides.assets = self.overrides.assets or {}
     self.overrides.stages = self.overrides.stages or {}
+    -- The original's enemy rules: firing (EnemyFire) and how its units move.
+    local rules = love.filesystem.read("data/enemy_weapons.json")
+    if not rules then error("missing data/enemy_weapons.json") end
+    self.enemy_rules = json.decode(rules)
     self:_discover()
 end
 
@@ -292,12 +295,16 @@ function World:load(name)
     self.home_entity   = nil  -- friendly base pad (basecirc.bin, or h.bin): spawn + return point
     self.debris:reset()
     self.ground_fx     = {}   -- dust left on the ground when a shard lands {anim, x, y}
-    self.heli_spawns   = {}   -- {x, y, behaviour} spawn markers for enemy helicopters (not drawn)
+    self.heli_spawns   = {}   -- {x, y, behaviour, respawn, leash} enemy helicopter posts (not drawn)
+    self.route_states  = {}   -- route index -> {halts, finished}, shared by the units on it
+    self.route_units   = {}   -- route units that give way to a player on the ground
     self.air_units     = {}   -- live enemy helicopters (owned by the heli system)
 
     -- First pass: build every entity and index hulls by exact position.
-    local created = {}
-    local hull_at = {}
+    local created  = {}
+    local hull_at  = {}
+    local movement = self.enemy_rules.movement
+    local wander   = self.enemy_rules.soldier.wander
     for id, raw in ipairs(self.stage.entities) do
         local cls    = self.stage.classes[raw.class + 1]
         local entity = Entity:new(id, raw, cls)
@@ -327,8 +334,12 @@ function World:load(name)
                 entity.type_data = Entity.type_for("mine")
             else
                 entity.fire_mode = cls.behaviour or 0
+                entity.wanders   = wander[tostring(entity.fire_mode)] ~= nil
             end
         end
+        -- For a hull or a truck the class behaviour is how it moves.
+        local modes = movement[cls.kind_name]
+        entity.move_mode = modes and modes[tostring(cls.behaviour or 0)] or nil
         -- Craters are for large static buildings only. Keying on kind "structure"
         -- excludes vehicles/turrets (tank, truck, flak), and the size gate excludes
         -- small machinery filed under "structure" (jeeps, ammo packs).
@@ -368,6 +379,11 @@ function World:load(name)
         if entity.route ~= nil and self.stage.routes then
             local route = self.stage.routes[entity.route + 1]
             entity.route_points = route and route.points or nil
+            if entity.route_points then
+                local state = self.route_states[entity.route] or { halts = 0, finished = false }
+                self.route_states[entity.route] = state
+                entity.route_state = state
+            end
         end
         created[id] = entity
         if hull_class[raw.class] then
@@ -398,7 +414,8 @@ function World:load(name)
         elseif cls.kind_name == "enemy_helicopter" then
             -- Enemy helicopters are not placed units: each marks a spawn point for the
             -- airborne heli system and is never drawn or hit in place.
-            self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y, behaviour = cls.behaviour }
+            self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y, behaviour = cls.behaviour,
+                respawn = cls.field_2c, leash = cls.field_2e }
         elseif pad_class[raw.class] and cls.behaviour == PAD_PICKUP and linked_structure(cls) then
             -- A pickup pad is drawn and removed by the RescueSystem, not the world.
             self.land_zones[#self.land_zones + 1] = { ent = entity, building = linked_structure(cls) }
@@ -432,9 +449,12 @@ function World:load(name)
                 self.combatants[#self.combatants + 1] = entity
             end
             if entity.mine then self.mines[#self.mines + 1] = entity end
+            if entity.route_points and entity.move_mode and entity.move_mode.yields then
+                self.route_units[#self.route_units + 1] = entity
+            end
         end
     end
-    -- Pair each hangar hut with the tank it hides before the draw order is fixed,
+    -- Pair each hangar tank with the hut over it before the draw order is fixed,
     -- so the hut's sort_bias can lift it above its tank.
     self:_link_hangar_tanks()
 
@@ -472,57 +492,49 @@ function World:load(name)
     Log.info("world", "loaded %s: %d entities", name, #self.entities)
 end
 
--- Link each hangar hut to the tank sharing its position: the tank rides out along
--- its track decal to fire and ducks back inside when the player looks its way,
--- shielded and drawn under the hut while hidden. The tank aim/fire and the hut's
--- own destructibility are unchanged; combat drives the ride-out (_update_hangar).
+-- Set up every hangar tank: a hull whose class behaviour is a ride
+-- (data/enemy_weapons.json "movement"). It slides out of its hut along a fixed
+-- heading and back in; combat drives the ride (_update_hangar). The hut over it
+-- shields the tank while it is inside and is drawn above it; the hut's own
+-- destructibility is unchanged.
 function World:_link_hangar_tanks()
-    local huts, tracks = {}, {}
-    for _, e in ipairs(self.entities) do
-        if e.asset_file and HIDE_TANK_HANGARS[e.asset_file] then huts[#huts + 1] = e end
-    end
-    for _, d in ipairs(self.decals) do
-        if d.asset_file == "tanktrak.bin" then tracks[#tracks + 1] = d end
-    end
-    for _, hut in ipairs(huts) do
-        local tank
-        for _, t in ipairs(self.entities) do
-            if t ~= hut and t.kind_name == "tank"
-            and math.abs(t.x - hut.x) < 24 and math.abs(t.y - hut.y) < 24 then
-                tank = t
-                break
+    for _, tank in ipairs(self.entities) do
+        local mode = tank.move_mode
+        if mode and mode.ride_heading then
+            local hut
+            for _, e in ipairs(self.entities) do
+                if e.asset_file and HIDE_TANK_HANGARS[e.asset_file]
+                and math.abs(e.x - tank.x) < 24 and math.abs(e.y - tank.y) < 24 then
+                    hut = e
+                    break
+                end
             end
+            self:_setup_hangar(tank, hut, mode)
         end
-        if tank then self:_setup_hangar(tank, hut, tracks) end
     end
 end
 
-function World:_setup_hangar(tank, hut, tracks)
-    tank.hideout   = hut
-    hut.hides      = tank
-    hut.is_hideout = true
-    -- Draw the hut just after (above) its tank at the same spot.
-    hut.sort_bias  = (tank.id - hut.id) + 0.5
-
-    -- Ride-out axis: toward the nearest track decal, else default west.
-    local ax, ay, best = -1, 0, nil
-    for _, tr in ipairs(tracks) do
-        local dx, dy = tr.x - tank.x, tr.y - tank.y
-        local d2 = dx * dx + dy * dy
-        if d2 > 1 and (not best or d2 < best) then best = d2; ax, ay = dx, dy end
+function World:_setup_hangar(tank, hut, mode)
+    local rules = self.enemy_rules
+    if hut then
+        tank.hideout  = hut
+        -- Draw the hut just after (above) its tank at the same spot.
+        hut.sort_bias = (tank.id - hut.id) + 0.5
     end
-    local len = math.sqrt(ax * ax + ay * ay)
-    if len > 0 then ax, ay = ax / len, ay / len end
 
-    -- Face the hull along its ride axis (toward the track) and keep it there: the
-    -- tank only slides out and back, it never turns. The turret still aims freely.
-    tank.hide_angle    = Mathx.heading_deg(ax, ay)
-    tank.hide_axis     = { x = ax, y = ay }
+    -- The hull keeps its facing: it only slides out and back, it never turns.
+    -- The gun is parked until the tank is half way out.
+    local rad = (mode.ride_heading - 90) * math.pi / 180
+    tank.hide_angle    = mode.ride_facing
+    tank.hide_axis     = { x = math.cos(rad), y = math.sin(rad) }
     tank.hide_home     = { x = tank.x, y = tank.y }
-    tank.hide_extend   = tank.type_data.ride_distance or 44
+    tank.hide_speed    = mode.ride_step * rules.tick_rate
+    tank.hide_extend   = mode.ride_step * rules.movement.ride.ticks
     tank.hide_pos      = 0
+    tank.ride_dir      = 0
+    tank.aim_angle     = rules.movement.ride.park
     tank.hidden        = true
-    tank.hide_shielded = true
+    tank.hide_shielded = hut ~= nil
     tank.hideable      = true
 end
 

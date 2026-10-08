@@ -37,6 +37,8 @@ function Entity:init(id, stage_ent, stage_cls)
     self.route        = stage_ent.route
     self.route_pt     = 1
     self.route_points = nil   -- resolved from the stage at load (patrol waypoints)
+    self.route_wait   = 0     -- seconds left of a stop on the route
+    self.halted       = false -- giving way to a player on the ground (CombatSystem:_update_routes)
     self.patrol_v     = 0     -- current patrol speed (eased for accel/decel)
     self.type_data    = Entity.type_for(stage_cls.kind_name)
     self.anim         = nil
@@ -167,7 +169,7 @@ end
 -- fire puff two bits, everything else a wreck's iron and bits, with more of
 -- them off a large building.
 function Entity:_debris_burst(explosion)
-    if explosion == "none" then return nil end
+    if explosion == "none" or self.type_data.debris == false then return nil end
     if self.mine then return "blast" end
     if explosion == "fire" then return "scrap" end
     return self.crater_eligible and "building" or "wreck"
@@ -297,15 +299,23 @@ function Entity:update(dt)
     end
 end
 
--- Patrol the assigned waypoint loop, driving like a tank: the hull eases its
--- speed up/down (slowing to a stop when about to fire, telegraphing the shot)
--- and turns toward the next waypoint gradually rather than snapping. The turret
--- (aim_angle) is steered independently by the combat AI.
+-- Drive the assigned waypoint route, a loop unless the unit's route mode ends
+-- it: the hull eases its speed up and turns toward the next waypoint gradually
+-- rather than snapping. The turret (aim_angle) is steered independently by the
+-- combat AI.
 function Entity:_patrol(dt)
     local pts  = self.route_points
     local td   = self.type_data
     local base = td and td.patrol_speed or 0
-    if not pts or #pts < 2 or base <= 0 then return end
+    if not pts or #pts < 2 or base <= 0 or self.route_done then return end
+    if self.halted then
+        self.patrol_v = 0
+        return
+    end
+    if self.route_wait > 0 then
+        self.route_wait = self.route_wait - dt
+        return
+    end
 
     -- Ease speed toward cruising: as in the original, a hull keeps driving while
     -- its turret fires.
@@ -320,8 +330,8 @@ function Entity:_patrol(dt)
     local tgt = pts[self.route_pt]
     if not tgt then self.route_pt = 1; return end
     local dx, dy = tgt.x - self.x, tgt.y - self.y
-    if dx * dx + dy * dy < 36 then           -- reached the waypoint (< 6 px)
-        self.route_pt = self.route_pt % #pts + 1
+    if dx * dx + dy * dy < 64 then           -- reached the waypoint (< 8 px, 0x201d01)
+        self:_reach_waypoint(#pts)
         return
     end
 
@@ -342,6 +352,25 @@ function Entity:_patrol(dt)
         self.x = self.x + math.cos(rad) * step
         self.y = self.y + math.sin(rad) * step
     end
+end
+
+-- The unit is at waypoint route_pt of count. Its route mode (the class
+-- behaviour, data/enemy_weapons.json "movement") may make it wait there and at
+-- the last one, or end the drive at the last one, which also stops everyone
+-- else on the route for good (0x200235, 0x2021c8).
+function Entity:_reach_waypoint(count)
+    local mode = self.move_mode or {}
+    local last = self.route_pt == count
+    if mode.pause and (last or self.route_pt == mode.pause_at) then
+        self.route_wait = mode.pause / self.world.enemy_rules.tick_rate
+        self.patrol_v   = 0
+    end
+    if mode.once and last then
+        self.route_done           = true
+        self.route_state.finished = true
+        return
+    end
+    self.route_pt = self.route_pt % count + 1
 end
 
 -- Rotation in radians for g.draw(). The canonical sprite is the axis-aligned

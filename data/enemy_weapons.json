@@ -82,7 +82,8 @@
     "turn":          787,
     "reload":        64,
     "reload_random": 255,
-    "weapons":       { "0": "enemy_bullet", "1": "enemy_homing", "3": "enemy_bullet" }
+    "weapons":       { "0": "enemy_bullet", "1": "enemy_homing", "3": "enemy_bullet" },
+    "wander":        { "3": { "leg": 180, "walk": 80, "face": 40, "reach": 31, "arrive": 8, "step": 0.5 } }
   },
 
   "mine": {
@@ -92,12 +93,29 @@
   },
 
   "helicopter": {
-    "range":     300,
-    "fire_cone": 11.25,
+    "range":         300,
+    "fire_cone":     11.25,
+    "respawn":       1200,
+    "respawn_clear": 500,
     "modes": {
       "0": { "weapon": "enemy_heli_homing", "reload": 30, "reload_random": 63 },
       "1": { "weapon": "enemy_heli_homing", "reload": 30, "reload_random": 63, "turn_scale": 2 },
       "2": { "weapon": "enemy_bullet",      "reload": 31 }
+    }
+  },
+
+  "movement": {
+    "yield": 100,
+    "ride":  { "ticks": 40, "near": 100, "cone": 45, "park": 270 },
+    "tank": {
+      "0": { "yields": true },
+      "1": { "ride_heading": 270, "ride_facing": 270, "ride_step": 1 },
+      "2": { "ride_heading": 180, "ride_facing": 0,   "ride_step": 1.125 },
+      "3": { "yields": true, "once": true }
+    },
+    "truck": {
+      "1": { "pause": 183, "pause_at": 8 },
+      "4": { "yields": true, "once": true }
     }
   }
 }

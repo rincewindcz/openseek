@@ -2,7 +2,6 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local Class      = require "engine.core.class"
-local json       = require "lib.json"
 local Config     = require "engine.core.config"
 local Mathx      = require "engine.core.mathx"
 local Difficulty = require "engine.game.difficulty"
@@ -14,17 +13,14 @@ local Difficulty = require "engine.game.difficulty"
 -- own rules. data/enemy_weapons.json holds all of it in the original's units:
 -- times in ticks of 1 / tick_rate seconds, three values meaning EASY / MEDIUM /
 -- HARD. The rounds themselves are the enemy_* entries of data/weapons.json.
--- Driven by CombatSystem:_update_ai; simulation code.
+-- The world reads the file (World.enemy_rules), as it also holds how the units
+-- move. Driven by CombatSystem:_update_ai; simulation code.
 local EnemyFire = Class()
 
-local DATA_PATH = "data/enemy_weapons.json"
-
 function EnemyFire:init(world, combat)
-    self.world  = world
-    self.combat = combat
-    local raw = love.filesystem.read(DATA_PATH)
-    if not raw then error("enemy_fire: missing " .. DATA_PATH) end
-    self.data      = json.decode(raw)
+    self.world     = world
+    self.combat    = combat
+    self.data      = world.enemy_rules
     self.tick_rate = self.data.tick_rate or 70
 end
 
@@ -135,17 +131,64 @@ function EnemyFire:turret(e, dx, dy, d2, dt, can_fire)
     end
 end
 
--- A soldier snaps round to the player and fires when facing it. fire_mode
--- (the class behaviour) picks the weapon: a bullet, or a homing missile.
-function EnemyFire:soldier(e, dx, dy, dt)
-    local spec = self.data.soldier
-    local off  = turn_toward(e, Mathx.heading_deg(dx, dy), spec.turn * dt * Config.speed_scale)
-    e.reload = math.max(0, e.reload - dt)
-    if off > 0 or e.reload > 0 then return end
+-- A hangar tank's gun while the hull is less than half way out of its hut: it
+-- swings to the park heading and holds its fire (0x201c1f).
+function EnemyFire:park(e, dt)
+    turn_toward(e, self.data.movement.ride.park, self.data.turret.turn * dt * Config.speed_scale)
+end
+
+function EnemyFire:_soldier_shot(e)
+    local spec   = self.data.soldier
     local weapon = spec.weapons[tostring(e.fire_mode or 0)] or spec.weapons["0"]
     self.combat:fire(e.x, e.y, e.aim_angle, weapon, e, 1)
     local ticks = spec.reload + self.world.rng:random(0, spec.reload_random or 0)
     e.reload = self:_seconds(ticks) / Config.enemy_fire_rate
+end
+
+-- A soldier snaps round to the player and fires when facing it. fire_mode
+-- (the class behaviour) picks the weapon: a bullet, or a homing missile. A
+-- mode listed under "wander" walks about its post between shots.
+function EnemyFire:soldier(e, dx, dy, dt)
+    local spec = self.data.soldier
+    local step = spec.turn * dt * Config.speed_scale
+    e.reload = math.max(0, e.reload - dt)
+    local walk = spec.wander[tostring(e.fire_mode or 0)]
+    if walk then return self:_wander(e, walk, dx, dy, step, dt) end
+    local off = turn_toward(e, Mathx.heading_deg(dx, dy), step)
+    if off > 0 or e.reload > 0 then return end
+    self:_soldier_shot(e)
+end
+
+-- A wandering soldier repeats a leg of walk.leg ticks (0x201dd8): it walks
+-- toward a random spot by its post for the first walk.walk of them, or until
+-- it is there, stands turning on the player for walk.face more, and for the
+-- rest fires the way it then faces.
+function EnemyFire:_wander(e, walk, dx, dy, step, dt)
+    if (e.leg or 0) <= 0 then
+        local rng = self.world.rng
+        e.post = e.post or { x = e.x, y = e.y }
+        e.spot = { x = e.post.x + rng:random(0, walk.reach), y = e.post.y + rng:random(0, walk.reach) }
+        e.leg  = self:_seconds(walk.leg)
+        return
+    end
+    local left = e.leg
+    e.leg = e.leg - dt
+    if left > self:_seconds(walk.leg - walk.walk) then
+        local sx, sy = e.spot.x - e.x, e.spot.y - e.y
+        if sx * sx + sy * sy > walk.arrive * walk.arrive then
+            turn_toward(e, Mathx.heading_deg(sx, sy), step)
+            local rad  = (e.aim_angle - 90) * math.pi / 180
+            local move = walk.step * self.tick_rate * dt * Config.speed_scale
+            e.x = e.x + math.cos(rad) * move
+            e.y = e.y + math.sin(rad) * move
+            return
+        end
+    end
+    if left > self:_seconds(walk.leg - walk.walk - walk.face) then
+        turn_toward(e, Mathx.heading_deg(dx, dy), step)
+    elseif e.reload <= 0 then
+        self:_soldier_shot(e)
+    end
 end
 
 -- A proximity mine: a player (p, the nearest live one or nil) coming within

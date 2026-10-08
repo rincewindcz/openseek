@@ -497,51 +497,65 @@ function CombatSystem:fire_entity(e)
     return true
 end
 
--- A hangar tank stays hidden while the player's facing is within this cone of the
--- hut (the player is "looking at it"); it rides out only when the player looks away.
-local FACE_DEG = 55
-
--- Drive a hangar tank's ride-out: it emerges along its track axis to fire when a
--- player is near but not facing the hut, and retreats inside (shielded, drawn
--- under the hut) when the player looks its way or leaves. Called before aiming so
--- the fire step below can gate on e.hidden.
+-- Drive a hangar tank's ride (0x200302). Standing inside, it rides out once a
+-- player has it within the ride cone of the vehicle's heading or is closer than
+-- the ride's near distance; standing outside, it rides back in once neither
+-- holds. A ride always runs to its end. Less than half way out the gun is
+-- parked (e.hidden); right inside, a standing hut shields the tank.
 function CombatSystem:_update_hangar(e, p, dt)
-    if not e.hide_home then return end
-    local td = e.type_data or {}
-
-    local emerge = false
-    if p then
+    local ride = self.world.enemy_rules.movement.ride
+    if e.ride_dir == 0 and p then
         local dx, dy = self.world:delta(e.x, e.y, p.x, p.y)   -- from player toward tank
-        local d2  = dx * dx + dy * dy
-        local det = (td.detection_radius or 0) * Config.enemy_aggression
-        if det > 0 and d2 <= det * det then
-            local to_tank = Mathx.heading_deg(dx, dy)
-            local diff    = ((to_tank - (p.angle or 0) + 180) % 360) - 180
-            emerge = math.abs(diff) > FACE_DEG   -- player not looking this way
+        local d2     = dx * dx + dy * dy
+        local radius = self.enemy_fire:active_radius(e)
+        if d2 <= radius * radius then
+            local diff = ((Mathx.heading_deg(dx, dy) - (p.angle or 0) + 180) % 360) - 180
+            local out  = math.abs(diff) < ride.cone or d2 < ride.near * ride.near
+            if out and e.hide_pos <= 0 then
+                e.ride_dir = 1
+            elseif not out and e.hide_pos >= e.hide_extend then
+                e.ride_dir = -1
+            end
         end
     end
-
-    -- Linger outside: while it wants to be out the timer stays topped up; once the
-    -- player looks its way (or leaves) it counts down, so the tank holds position a
-    -- moment before ducking back rather than snapping in the instant it is spotted.
-    if emerge then
-        e.hide_stay = td.ride_linger or 1.2
-    elseif (e.hide_stay or 0) > 0 then
-        e.hide_stay = e.hide_stay - dt
+    if e.ride_dir ~= 0 then
+        e.hide_pos = e.hide_pos + e.ride_dir * e.hide_speed * dt * Config.speed_scale
+        if e.hide_pos <= 0 or e.hide_pos >= e.hide_extend then
+            e.hide_pos = math.max(0, math.min(e.hide_extend, e.hide_pos))
+            e.ride_dir = 0
+        end
+        e.x = e.hide_home.x + e.hide_axis.x * e.hide_pos
+        e.y = e.hide_home.y + e.hide_axis.y * e.hide_pos
     end
-    local stay_out = emerge or (e.hide_stay or 0) > 0
+    e.hidden        = e.hide_pos < e.hide_extend / 2
+    e.hide_shielded = e.hide_pos < 4 and e.hideout ~= nil and e.hideout:is_alive()
+end
 
-    local want  = stay_out and e.hide_extend or 0
-    local speed = (td.patrol_speed or 24) * dt * Config.speed_scale
-    if e.hide_pos < want then
-        e.hide_pos = math.min(want, e.hide_pos + speed)
-    else
-        e.hide_pos = math.max(want, e.hide_pos - speed)
+-- Route units give way (0x200070): one stops while a player on the ground is
+-- within the yield distance on both axes, and with it everyone sharing its
+-- route. As in the original the stop only lifts while the nearest player is in
+-- the air, so a tank that came this close holds the route up for good. A route
+-- one of its units has finished stays stopped either way.
+function CombatSystem:_update_routes()
+    local reach = self.world.enemy_rules.movement.yield
+    for _, e in ipairs(self.world.route_units) do
+        if e:is_alive() then
+            local p     = self:_nearest_player(e.x, e.y)
+            local route = e.route_state
+            local stop  = false
+            if p then
+                local dx, dy = self.world:delta(p.x, p.y, e.x, e.y)
+                stop = math.abs(dx) < reach and math.abs(dy) < reach
+            end
+            if route.halts > 0 then stop = true end
+            if p and p:is_airborne() then stop = false end
+            if route.finished then stop = true end
+            if stop ~= e.halted then
+                e.halted    = stop
+                route.halts = route.halts + (stop and 1 or -1)
+            end
+        end
     end
-    e.x = e.hide_home.x + e.hide_axis.x * e.hide_pos
-    e.y = e.hide_home.y + e.hide_axis.y * e.hide_pos
-    e.hidden        = e.hide_pos < 4
-    e.hide_shielded = e.hidden and e.hideout and e.hideout:is_alive() or false
 end
 
 -- Nearest live player to a point, or nil if every player is down. Split screen
@@ -716,20 +730,21 @@ end
 -- wait for a player to come close.
 function CombatSystem:_update_ai(dt)
     local fire = self.enemy_fire
+    self:_update_routes()
     for _, e in ipairs(self.world.combatants) do
         local p = e:is_alive() and self:_nearest_player(e.x, e.y) or nil
-        if e.hideable then self:_update_hangar(e, p, dt) end
+        if e.hideable and e:is_alive() then self:_update_hangar(e, p, dt) end
         if p then
             local dx, dy = self.world:delta(p.x, p.y, e.x, e.y)
             local d2     = dx * dx + dy * dy
             local radius = fire:active_radius(e)
             if d2 <= radius * radius then
-                if e.fire_routine then
-                    -- A tank fires through its turret, and a hangar tank only once
-                    -- it has ridden clear of the hut.
-                    local can_fire = ((not e.has_turret) or e.turret_alive)
-                        and not (e.hideable and e.hidden)
-                    local person = e.person_target
+                if e.hideable and e.hidden then
+                    fire:park(e, dt)
+                elseif e.fire_routine then
+                    -- A tank fires through its turret.
+                    local can_fire = (not e.has_turret) or e.turret_alive
+                    local person   = e.person_target
                     if person and person.done then person, e.person_target = nil, nil end
                     if person then
                         -- No range limit on a person; that one is the player's (0x201c67).

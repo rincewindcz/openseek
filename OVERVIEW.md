@@ -241,9 +241,9 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/debris` | Explosion shards (`data/debris.json`), owned by the world as `world.debris`: `burst(name, x, y, opts)` throws the named burst, `update` flies the pieces (linear slow-down to rest, sinking through the size rows of their clip, smoke trail puffs, dust puff on landing through `World:add_ground_dust`, then lying on the ground with EXTRA `lying_shards`). Presentation only: fed through the one-way `World:spawn_debris`, random numbers from `math.random`, never read by the simulation. Flying pieces and puffs are drawn by `Renderer:draw_debris`, lying ones in the ground pass over the tread marks. |
 | `game/entity` | HP, state machine, damage smoke, hit effects, crater. |
 | `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. `Player.draw_tank_variant` is shared with the select screen. |
-| `game/enemy_heli` | Enemy helicopter spawn, flight AI, fire, death (`world.air_units`). |
+| `game/enemy_heli` | Enemy helicopter posts (leash, respawn), flight AI, fire, death (`world.air_units`). |
 | `game/combat` | Weapons, projectiles, firing geometry, hits, AoE, effects, ground enemy AI. |
-| `game/enemy_fire` | Enemy firing rules as the original runs them (owned by `game/combat`, `data/enemy_weapons.json`): a gun's routine (volley, burst, reload per fire level), soldiers, proximity mines, the helicopters' weapon modes, and the homing missiles' bearing refresh with the radar / radio tower penalty. |
+| `game/enemy_fire` | Enemy firing rules as the original runs them (owned by `game/combat`, `data/enemy_weapons.json`): a gun's routine (volley, burst, reload per fire level), soldiers and their wander, proximity mines, a hangar tank's parked gun, the helicopters' weapon modes, and the homing missiles' bearing refresh with the radar / radio tower penalty. |
 | `game/air_strike` | Air strike (owned by `game/combat`): impact schedule drawn from `world.rng` at the call, detonated on `world.time`, damage in toughness units; EXTRA craft, rocket and bomb visuals with their shadows. |
 | `game/mission` | Objectives, progress, return to base. `Mission.for_stage(world, players, stage)`. |
 | `game/rescue` | People to pick up: buildings holding POWs, the crash-site crews, walkers, flung bodies. |
@@ -301,8 +301,8 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
   - `world.droppers`: entities with `drop_kind` or `crater_eligible`. Power-up drops.
   - `world.decal_index` / `world.object_index`: load-time y of the y-sorted
     `decals` / `objects`. `World.each_in_y` (renderer passes, craters) and
-    `World:blocked` binary-search it and check `mobile` entities (patrol and
-    hangar tanks) separately, in list order.
+    `World:blocked` binary-search it and check `mobile` entities (route units,
+    hangar tanks, wandering soldiers) separately, in list order.
   - `world.updaters`: entities with hit points, a route or a turret. Other
     entities (`prop`) join `world.awake` through `World:wake` when an explosion,
     animation, hit smoke or corpse slide starts on them, and leave when it ends.
@@ -374,9 +374,10 @@ there in ticks of 1/70 s, three values = EASY / MEDIUM / HARD picked by
 | Kind | Fires | Detect | Attack | Moves |
 |------|-------|-------:|-------:|-------|
 | flak_turret | its class `behaviour` = one of 20 firing routines | 300 | 270 | no |
-| tank | the routine of its folded turret class | 300 | 270 | routes, 28 px/s |
-| soldier, soldier_aggressive | `behaviour` 0 / 3 a bullet, 1 a homing missile | 300 | - | no |
+| tank | the routine of its folded turret class | 300 | 270 | hull `behaviour`: 0 / 3 a route at 35 px/s, 1 / 2 a hangar ride |
+| soldier, soldier_aggressive | `behaviour` 0 / 3 a bullet, 1 a homing missile | 300 | - | `behaviour` 3 wanders |
 | mine (soldier class, `behaviour` 2) | proximity charge | - | - | no |
+| truck | unarmed | - | - | routes at 35 px/s |
 
 - A unit acts on the nearest live player inside `detection_radius` (the
   original runs a unit while it is on screen, which the simulation may not
@@ -449,13 +450,39 @@ there in ticks of 1/70 s, three values = EASY / MEDIUM / HARD picked by
 - Two-part units (tank + `*tanktop` / `tankt2`, radar + dish) fold at load
   (`TURRET_DEFS`). Turret absorbs damage and dies first; its hit points are
   its own class toughness.
-- Patrol tanks ease between waypoints and keep driving while they fire.
-- Hangar tanks (stage12): `shut.bin` hut + tank link (`World:_link_hangar_tanks`).
-  Tank rides out along `tanktrak`, lingers `ride_linger`, returns. Hidden tank is
-  untargetable and drawn under the hut.
+- Unit movement follows the original (`movement` in `data/enemy_weapons.json`,
+  keyed by kind and class `behaviour`; ticks and px per tick):
+  - Route units (tanks, trucks) ease between waypoints at `patrol_speed` 35 px/s,
+    turning `patrol_turn` 98.4 deg/s, and keep driving while they fire
+    (`Entity:_patrol`). A route loops unless the mode says `once`: stage41's
+    convoy trucks (4) and their escort tanks (3) stop at the last waypoint, and
+    the first to arrive stops everyone on that route. `pause` / `pause_at`: the
+    patrol jeep (1) waits 183 ticks at its 8th waypoint and at the last.
+  - `yields` (tank 0 / 3, truck 4; `CombatSystem:_update_routes`): a unit stops
+    while a player on the ground is within `yield` 100 px on both axes, and with
+    it everyone on its route. The stop only lifts while the nearest player is
+    airborne (the original's rule: a tank that came this close holds the route
+    up for good).
+  - Hangar tanks (tank 1: stage12 `shut.bin`, west; 2: stage21 `jhanger.bin`,
+    south; `World:_link_hangar_tanks`, `CombatSystem:_update_hangar`): the hull
+    slides `ride.ticks` 40 out of its hut and back without turning. It rides out
+    once a player has it within `ride.cone` 45 deg of the vehicle's heading or
+    is closer than `ride.near` 100 px, and back in once neither holds; a ride
+    runs to its end. Less than half way out the gun is parked at `ride.park` 270
+    and silent. Right inside, a standing hut shields the tank; it is drawn under
+    the hut.
+  - Wandering soldiers (`soldier.wander`, behaviour 3, stage43): legs of 180
+    ticks. 80 walking at 0.5 px per tick to a random spot within `reach` 31 px
+    of the post, 40 turning on the player, 60 firing the way they then face.
+- Trucks and jeeps (kind 10) are unarmed, hittable (`truck` in
+  `data/entity_types.json`) and blow up `small` without shards; a class of
+  toughness 0 dies to any hit. Stage41's four destroy targets are trucks.
 
-Enemy helicopters (`enemy_heli.lua`): spawned at off-screen `badheli` markers,
-one per `SPAWN_DELAY` 2.5 s, capped at marker count. `SPEED` 110, `TURN_RATE`
+Enemy helicopters (`enemy_heli.lua`): one per `badheli` entity, its post. A
+heli starts on its post; further than the class leash (`field_2e`, 300..5000
+px) from it on either axis it turns home. Shot down, it returns after the
+class respawn delay (`field_2c`, 600..1800 ticks; negative never) at a random
+point more than `respawn_clear` 500 px from every player. `SPEED` 110, `TURN_RATE`
 120, `ORBIT_R` 270, hit points from the `badheli` class toughness (`MAX_HP` 20 without one), `BLAST_RADIUS`
 70, `BLAST_DAMAGE` 2 / 3 / 4 by damage level, `REACTION_DELAY` 0.9, `FRONT_LIMIT` 90, `FIRE_FRONT` 115.
 Weapon from the marker's class `behaviour` (`helicopter.modes` in
@@ -713,9 +740,9 @@ galleries, debug mission picker, headless checks.
 | File | Contents |
 |------|----------|
 | `data/weapons.json` | Player and enemy weapons: `proj_sprite` (a list picks the first clip the pack has), `enemy_damage` (EASY / MEDIUM / HARD damage to the player when an enemy fires it), levels (`damage` in toughness units, `fire_rate`, `swing_deg`, `range`, flame `angles` / `offsets`), `short`, `icon`, `ammo_max`, `ammo_pickup`, `alternate_side`, `trail`, flame params, `range`, `shadow` (`true` or a share of the flying height), optional `name` (HUD notice; default the key in capitals), `proj_color_missions` (bullet color per mission digit); `air_strike`: target distance, radius, delay, incoming call, marker blink, per level pattern (`strike`, impacts or craft / rounds / lanes, window, impact radius and toughness damage, explosion) and craft visuals. |
-| `data/entity_types.json` | Per kind: hit radius, explosion, `armed`, detection / attack radius, `solid`, `collision_radius`, sprite fallbacks, `dead_frame_offset`, `turret_explosion`, `ride_linger`. |
+| `data/entity_types.json` | Per kind: hit radius, explosion, `armed`, detection / attack radius, `solid`, `collision_radius`, sprite fallbacks, `dead_frame_offset`, `turret_explosion`, `patrol_speed`, `patrol_turn`, `debris`. Flat scalars only (the type editor rewrites it). |
 | `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `explosion`, `drop`. Empty at present. |
-| `data/enemy_weapons.json` | Enemy fire in the original's units (`tick_rate` 70): `turret` (settle, turn, arc), `homing` (bearing refresh per level, radar penalty), the 20 `routines`, `soldier`, `mine`, `helicopter`. |
+| `data/enemy_weapons.json` | Enemy fire in the original's units (`tick_rate` 70): `turret` (settle, turn, arc), `homing` (bearing refresh per level, radar penalty), the 20 `routines`, `soldier` (with `wander`), `mine`, `helicopter` (with the respawn clearance), and `movement` (route modes, hangar rides, yield distance). Read once by `World` (`world.enemy_rules`). |
 | `data/missions.json` | Section 9. |
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable); `armor_base` is the original's per-vehicle armor factor (chopper 20, tank 40). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
