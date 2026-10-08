@@ -54,12 +54,16 @@ local function quote(s)
 end
 
 -- The converter invocation, or nil when none ships with this build: the
+-- one-file binary of the macOS download (a stock Mac has no Python), the
 -- Python zipapp, or the repo script when running from a source checkout. The
 -- Windows download carries its own Python next to the game.
 local function converter()
     local base   = love.filesystem.getSourceBaseDirectory()
     local source = love.filesystem.getSource()
     local python = windows() and "py -3" or "python3"
+    if file_exists(base .. "/openseek-setup") then
+        return quote(base .. "/openseek-setup")
+    end
     if windows() and file_exists(base .. "/python/python.exe") then
         python = quote(base .. "/python/python.exe")
     end

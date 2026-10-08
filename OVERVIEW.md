@@ -51,7 +51,8 @@ decoded from the user's own copy of the game and are never distributed.
   converter runs in a `love.thread` through `io.popen`; its `download N%`,
   `unpack N%` and `[i/n]` step lines drive one bar split equally between the
   phases that run, and `DONE` restarts LOVE (`love.event.quit("restart")`). Converter
-  lookup: `openseek-setup.pyz` next to the game, run by `python/python.exe`
+  lookup: the `openseek-setup` binary next to the game (the macOS download
+  ships it inside the app, beside the `.love`); else `openseek-setup.pyz` next to the game, run by `python/python.exe`
   beside it on Windows when present (the Windows download ships it), else by
   `py -3` / `python3`; else `tools/build_pack.py` in an unfused source checkout. Web and mobile
   only show the label. `--selftest` exits with code 1.
@@ -727,13 +728,15 @@ point:
 
 `build_setup.py` packages the converter: `build/openseek-setup.pyz` (zipapp)
 and, with `--pyinstaller`, a one-file executable for a platform without Python
-(built on that platform). Both bundle `data/entity_types.json` and
+(built on that platform; on macOS for both architectures, which needs a
+universal Python). Both bundle `data/entity_types.json` and
 `content/fonts/main_synth/`, read through `gamedata.read_resource`.
 
 `build_release.py` builds the downloads into `build/`: `openseek.love` (the
 files git lists under `main.lua`, `conf.lua`, `engine`, `lib`, `data`,
 `content`, plus `build.json`), the converter zipapp and, with `--windows`,
-`openseek-<id>-win64.zip`. `build.json` is the version stamp: `commit` (short
+`openseek-<id>-win64.zip`, with `--macos SETUP` `openseek-<id>-macos.zip`.
+`build.json` is the version stamp: `commit` (short
 hash), `dirty` (uncommitted changes under those paths) and `version`, the git
 tag on `HEAD` when there is one; `<id>` is the tag, else the commit. The tag
 format is free. `--love PATH` writes the `.love` alone.
@@ -755,6 +758,30 @@ The exe icon: `love.exe` holds the six bitmaps of its `love.ico` verbatim
 in place with `content/icon/openseek.png` scaled to that size (area average),
 so the file keeps its layout and no resource table is rewritten. The build
 stops if a bitmap is not found exactly once.
+
+The macOS zip holds `openSEEK.app`, built from the pinned
+`love-11.5-macos.zip` (universal, x86_64 and arm64) and one file made on a
+Mac: `SETUP`, the converter binary of `build_setup.py --pyinstaller`, since a
+stock Mac has no Python. Nothing is signed; LOVE's `love.app` is not either,
+so changing it breaks no seal.
+
+| In `openSEEK.app/Contents` | From |
+|----------------------------|------|
+| `MacOS/openseek` | `MacOS/love`, renamed |
+| `Frameworks/`, `PkgInfo` | `love-11.5-macos.zip`, unchanged (the frameworks keep their symlinks) |
+| `Info.plist` | LOVE's with the game's name, identifier (`net.genserek.openseek`), executable, icon and version, plus `NSMicrophoneUsageDescription`; the document types and the exported `.love` type removed |
+| `Resources/openseek.love` | the game; LOVE runs a `.love` found there, fused |
+| `Resources/openseek-setup` | `SETUP` |
+| `Resources/openseek.icns` | PNG entries of 1024 to 32 pixels, each scaled from the one above, the first being `content/icon/openseek_1024.png` |
+| `Resources/LOVE-LICENSE.txt` | LOVE's `license.txt` |
+| `Resources/LICENSE.txt`, `Resources/README.md` | the repo |
+
+The converter is inside the bundle because macOS runs a downloaded app from a
+read-only copy of the bundle alone, where nothing next to the `.app` exists.
+`conf.lua` sets no window icon in the fused app: it would replace the Dock
+icon with one 256 pixel image. macOS asks for the microphone when an unsigned
+app opens the sound output, before the first window; the plist carries the
+text of that prompt (`MACOS_MICROPHONE`), since the game records nothing.
 
 Every text file of a pack is written with LF line endings, so a pack is the
 same bytes on every platform.

@@ -10,15 +10,21 @@ Build the release downloads into build/:
                                 .love, carrying the game icon), the LOVE DLLs
                                 and license, the converter zipapp with the
                                 Python that runs it (python/), LICENSE, README
+  openseek-<id>-macos.zip       --macos SETUP: openSEEK.app, LOVE's universal
+                                love.app holding the .love, the game icon and
+                                SETUP, the converter binary a Mac built with
+                                build_setup.py --pyinstaller
 
 The version is the git tag on HEAD, if any; <id> is that tag, else the commit.
-The Windows zip is built from the official LOVE and embeddable Python
-downloads, fetched once into build/cache and checked against pinned hashes, so
-it needs no Windows machine.
+The zips are built from the official LOVE and embeddable Python downloads,
+fetched once into build/cache and checked against pinned hashes, so the Windows
+one needs no Windows machine and the macOS one a Mac only for SETUP. Nothing is
+signed.
 
 Usage:
   python3 tools/build_release.py
   python3 tools/build_release.py --windows
+  python3 tools/build_release.py --macos build/openseek-setup-macos
   python3 tools/build_release.py --love PATH [--replay-upload]   # the .love alone
 """
 
@@ -26,9 +32,12 @@ import argparse
 import hashlib
 import json
 import math
+import plistlib
+import stat
 import struct
 import subprocess
 import sys
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -42,12 +51,28 @@ CACHE_DIR = BUILD_DIR / "cache"
 NAME      = "openseek"
 ROOTS     = ["main.lua", "conf.lua", "engine", "lib", "data", "content"]
 ICON      = REPO_ROOT / "content" / "icon" / "openseek.png"
+ICON_1024 = REPO_ROOT / "content" / "icon" / "openseek_1024.png"
 
 LOVE_WIN64          = "love-11.5-win64"
 LOVE_WIN64_URL      = f"https://github.com/love2d/love/releases/download/11.5/{LOVE_WIN64}.zip"
 LOVE_WIN64_SHA256   = "ba6e56be2685e53c817749c4a5007f51137136fe5a3ab64920508babc2e74369"
 PYTHON_WIN64_URL    = "https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip"
 PYTHON_WIN64_SHA256 = "0d57bb6cb078b74d23dbfe91f77d6780d45bed328911609f1f7ee2ba1606bf44"
+LOVE_MACOS          = "love-11.5-macos"
+LOVE_MACOS_URL      = f"https://github.com/love2d/love/releases/download/11.5/{LOVE_MACOS}.zip"
+LOVE_MACOS_SHA256   = "6795bb3a1656af6a2fdfe741e150787b481886d3a280327a261a3fdded586913"
+
+MACOS_APP        = "openSEEK"
+MACOS_BUNDLE_ID  = "net.genserek.openseek"
+# macOS asks for the microphone when LOVE opens the sound output of an unsigned
+# app; this is the text of that prompt.
+MACOS_MICROPHONE = ("openSEEK does not use the microphone and records nothing. "
+                    "macOS asks when the game opens the sound output.")
+# Pixel size -> the .icns entries holding a PNG of that size (point size at 1x,
+# half of it at 2x).
+ICNS_TYPES       = {32: [b"ic11"], 64: [b"ic12"], 128: [b"ic07"], 256: [b"ic08", b"ic13"],
+                    512: [b"ic09", b"ic14"], 1024: [b"ic10"]}
+MACHO_UNIVERSAL  = b"\xca\xfe\xba\xbe"
 
 
 def git(*args):
@@ -178,9 +203,80 @@ def build_windows(love_file, setup_file, info):
     return target
 
 
+def icns(icon):
+    """The 1024 pixel icon as an .icns of PNG entries, each size scaled from
+    the one above it."""
+    entries = b""
+    for size in sorted(ICNS_TYPES, reverse=True):
+        if size < icon.width:
+            scaled = image.new("RGBA", (size, size))
+            scaled.data = bytearray(v for row in downscale(icon, size) for pixel in row for v in pixel)
+            icon = scaled
+        png = image.encode_png(icon)
+        for kind in ICNS_TYPES[size]:
+            entries += kind + struct.pack(">I", 8 + len(png)) + png
+    return b"icns" + struct.pack(">I", 8 + len(entries)) + entries
+
+
+def macos_plist(plist, info):
+    """LOVE's Info.plist as the game's: its name, identifier, executable and
+    icon, the text of the microphone prompt, and no claim on .love files."""
+    plist = plistlib.loads(plist)
+    for key in ("CFBundleDocumentTypes", "UTExportedTypeDeclarations", "CFBundleIconName"):
+        del plist[key]
+    plist["CFBundleExecutable"]           = NAME
+    plist["CFBundleIconFile"]             = NAME
+    plist["CFBundleIdentifier"]           = MACOS_BUNDLE_ID
+    plist["CFBundleName"]                 = MACOS_APP
+    plist["CFBundleShortVersionString"]   = info.get("version") or info["commit"]
+    plist["NSHumanReadableCopyright"]     = (REPO_ROOT / "LICENSE").read_text().splitlines()[0]
+    plist["NSMicrophoneUsageDescription"] = MACOS_MICROPHONE
+    return plistlib.dumps(plist)
+
+
+def build_macos(love_file, setup_file, info):
+    """The app is LOVE's with the game inside Contents/Resources, where LOVE
+    looks for a .love to run fused. The converter sits there too: macOS runs a
+    downloaded app from a read-only copy of the bundle alone, so nothing next
+    to the .app is reachable."""
+    setup = setup_file.read_bytes()
+    if setup[:4] != MACHO_UNIVERSAL:
+        sys.exit(f"build_release: {setup_file} is not a universal macOS binary")
+    target  = BUILD_DIR / f"{NAME}-{info.get('version') or info['commit']}-macos.zip"
+    renamed = {"Contents/MacOS/love":            f"Contents/MacOS/{NAME}",
+               "Contents/Resources/license.txt": "Contents/Resources/LOVE-LICENSE.txt"}
+    dropped = {"Contents/Info.plist", "Contents/Resources/Assets.car",
+               "Contents/Resources/OS X AppIcon.icns", "Contents/Resources/GameIcon.icns"}
+    with zipfile.ZipFile(cached(LOVE_MACOS_URL, LOVE_MACOS_SHA256)) as runtime, \
+         zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as zf:
+        def add(name, data, mode=0o644, like=None):
+            """A file of the app; `like` is the runtime entry it copies, which
+            keeps its date, its mode and what it is (the frameworks hold symlinks)."""
+            entry = zipfile.ZipInfo(f"{MACOS_APP}.app/{name}",
+                                    like.date_time if like else time.localtime()[:6])
+            entry.create_system = 3
+            entry.external_attr = like.external_attr if like else (stat.S_IFREG | mode) << 16
+            entry.compress_type = like.compress_type if like else zipfile.ZIP_DEFLATED
+            zf.writestr(entry, data)
+        for entry in runtime.infolist():
+            name = entry.filename.split("/", 1)[1]
+            if name not in dropped:
+                add(renamed.get(name, name), runtime.read(entry), like=entry)
+        add("Contents/Info.plist", macos_plist(runtime.read("love.app/Contents/Info.plist"), info))
+        add(f"Contents/Resources/{NAME}.icns", icns(image.open(ICON_1024)))
+        add(f"Contents/Resources/{love_file.name}", love_file.read_bytes())
+        add(f"Contents/Resources/{build_setup.NAME}", setup, mode=0o755)
+        add("Contents/Resources/LICENSE.txt", (REPO_ROOT / "LICENSE").read_bytes())
+        add("Contents/Resources/README.md", (REPO_ROOT / "README.md").read_bytes())
+    return target
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Build the release downloads.")
     ap.add_argument("--windows", action="store_true", help="also build the Windows zip")
+    ap.add_argument("--macos", type=Path, metavar="SETUP",
+                    help="also build the macOS zip around SETUP, the converter binary "
+                         "built on a Mac (build_setup.py --pyinstaller)")
     ap.add_argument("--love", type=Path, metavar="PATH",
                     help="write only the .love, to PATH")
     ap.add_argument("--replay-upload", action="store_true",
@@ -198,6 +294,8 @@ def main(argv=None):
     build_setup.main([])
     if args.windows:
         print(build_windows(love_file, BUILD_DIR / f"{build_setup.NAME}.pyz", info))
+    if args.macos:
+        print(build_macos(love_file, args.macos, info))
 
 
 if __name__ == "__main__":

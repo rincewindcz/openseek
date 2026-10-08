@@ -5,9 +5,11 @@ function love.conf(t)
     local os_name = rawget(love, "_os")
     t.identity = "openseek"   -- save directory for persisted high scores
     t.window.title = "openSEEK - Seek & Destroy"
-    -- The Windows build carries the icon in its exe, in every size the shell
-    -- asks for; a window icon would replace those with one scaled image.
-    if os_name ~= "Windows" and os_name ~= "Web" then
+    -- The Windows build carries the icon in its exe and the macOS app in its
+    -- bundle, in every size the shell asks for; a window icon would replace
+    -- those with one scaled image.
+    local own_icon = os_name == "Windows" or (os_name == "OS X" and love.filesystem.isFused())
+    if not own_icon and os_name ~= "Web" then
         t.window.icon = "content/icon/openseek.png"
     end
     t.window.width = 1280

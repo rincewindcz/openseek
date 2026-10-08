@@ -8,6 +8,8 @@ Package the game data converter (build_pack.py) for release, next to the game:
   build/openseek-setup[.exe] PyInstaller one-file console build (--pyinstaller),
                              for a platform without Python; run it on that
                              platform, PyInstaller does not cross-compile
+                             (on macOS it builds both architectures, which
+                             takes a universal Python)
 
 Both carry the converter modules plus the repo files the exporters read
 (RESOURCES), resolved at run time by gamedata.read_resource.
@@ -76,6 +78,8 @@ def build_pyinstaller(root):
             "--name", NAME, "--distpath", str(BUILD_DIR),
             "--workpath", str(root / "pyinstaller"), "--specpath", str(root),
             "--paths", str(root)]
+    if sys.platform == "darwin":
+        args += ["--target-arch", "universal2"]
     for name in MODULES:
         args += ["--hidden-import", name]
     for rel in RESOURCES:
