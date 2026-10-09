@@ -21,4 +21,10 @@ function love.conf(t)
     -- post-processing shaders assume units are pixels.
     t.window.usedpiscale = false
     t.modules.physics = false
+    -- LOVE 12 (which alone has t.graphics) would pick Metal or Vulkan first;
+    -- OpenGL is what every build of the game is tested on. The list is a
+    -- filter, LOVE keeps its own order, so the others have to stay off it.
+    if t.graphics then
+        t.graphics.renderers = { "opengl" }
+    end
 end

@@ -14,6 +14,9 @@ Build the release downloads into build/:
                                 love.app holding the .love, the game icon and
                                 SETUP, the converter binary a Mac built with
                                 build_setup.py --pyinstaller
+  openseek-<id>-linux.tar.gz    --linux: the .love, the converter zipapp and
+                                the openseek launcher, LICENSE, README; it
+                                runs on the LOVE and the Python of the system
 
 The version is the git tag on HEAD, if any; <id> is that tag, else the commit.
 The zips are built from the official LOVE and embeddable Python downloads,
@@ -25,11 +28,13 @@ Usage:
   python3 tools/build_release.py
   python3 tools/build_release.py --windows
   python3 tools/build_release.py --macos build/openseek-setup-macos
+  python3 tools/build_release.py --linux
   python3 tools/build_release.py --love PATH [--replay-upload]   # the .love alone
 """
 
 import argparse
 import hashlib
+import io
 import json
 import math
 import plistlib
@@ -37,6 +42,7 @@ import stat
 import struct
 import subprocess
 import sys
+import tarfile
 import time
 import urllib.request
 import zipfile
@@ -73,6 +79,18 @@ MACOS_MICROPHONE = ("openSEEK does not use the microphone and records nothing. "
 ICNS_TYPES       = {32: [b"ic11"], 64: [b"ic12"], 128: [b"ic07"], 256: [b"ic08", b"ic13"],
                     512: [b"ic09", b"ic14"], 1024: [b"ic10"]}
 MACHO_UNIVERSAL  = b"\xca\xfe\xba\xbe"
+
+# The launcher of the Linux download: the game runs on the LOVE of the system.
+LINUX_LAUNCHER = """#!/bin/sh
+# Starts openSEEK with the LOVE installed on this system.
+here=$(dirname "$(readlink -f "$0")")
+if ! command -v love > /dev/null 2>&1; then
+    echo "openSEEK needs LOVE 11 or 12 (https://love2d.org):" \\
+         "install the love package of your distribution." >&2
+    exit 1
+fi
+exec love "$here/openseek.love" "$@"
+"""
 
 
 def git(*args):
@@ -271,9 +289,31 @@ def build_macos(love_file, setup_file, info):
     return target
 
 
+def build_linux(love_file, setup_file, info):
+    """One folder with the game, the converter next to it (where the setup
+    screen looks for it) and the launcher."""
+    target = BUILD_DIR / f"{NAME}-{info.get('version') or info['commit']}-linux.tar.gz"
+    now    = int(time.time())
+    with tarfile.open(target, "w:gz") as tf:
+        def add(name, data, mode=0o644):
+            entry = tarfile.TarInfo(f"{NAME}/{name}")
+            entry.size, entry.mode, entry.mtime = len(data), mode, now
+            tf.addfile(entry, io.BytesIO(data))
+        folder = tarfile.TarInfo(NAME)
+        folder.type, folder.mode, folder.mtime = tarfile.DIRTYPE, 0o755, now
+        tf.addfile(folder)
+        add(NAME, LINUX_LAUNCHER.encode(), mode=0o755)
+        add(love_file.name, love_file.read_bytes())
+        add(setup_file.name, setup_file.read_bytes(), mode=0o755)
+        add("LICENSE.txt", (REPO_ROOT / "LICENSE").read_bytes())
+        add("README.md", (REPO_ROOT / "README.md").read_bytes())
+    return target
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Build the release downloads.")
     ap.add_argument("--windows", action="store_true", help="also build the Windows zip")
+    ap.add_argument("--linux", action="store_true", help="also build the Linux archive")
     ap.add_argument("--macos", type=Path, metavar="SETUP",
                     help="also build the macOS zip around SETUP, the converter binary "
                          "built on a Mac (build_setup.py --pyinstaller)")
@@ -296,6 +336,8 @@ def main(argv=None):
         print(build_windows(love_file, BUILD_DIR / f"{build_setup.NAME}.pyz", info))
     if args.macos:
         print(build_macos(love_file, args.macos, info))
+    if args.linux:
+        print(build_linux(love_file, BUILD_DIR / f"{build_setup.NAME}.pyz", info))
 
 
 if __name__ == "__main__":

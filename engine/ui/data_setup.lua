@@ -153,6 +153,7 @@ function DataSetup:_choose(id)
     elseif id == "path" then
         self.mode = "path"
         love.keyboard.setKeyRepeat(true)
+        love.keyboard.setTextInput(true)   -- LOVE 12 sends no typed text until asked
     end
 end
 

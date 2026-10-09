@@ -388,7 +388,10 @@ function LightFX:_ensure(w, h)
     local g = love.graphics
     -- A float map keeps the dim end of the range smooth; without one the beam
     -- shows faint bands.
-    local format = g.getCanvasFormats().rgba16f and "rgba16f" or "normal"
+    -- LOVE 12 renamed the query and warns on screen about the old name.
+    local query   = rawget(g, "getTextureFormats")
+    local formats = query and query({ canvas = true }) or g.getCanvasFormats()
+    local format  = formats.rgba16f and "rgba16f" or "normal"
     self.scene = g.newCanvas(w, h)
     self.map   = g.newCanvas(w, h, { format = format })
     self.cw, self.ch = w, h

@@ -9,7 +9,7 @@ decoded from the user's own copy of the game and are never distributed.
 | Path | Contents |
 |------|----------|
 | `main.lua` | Entry point: game data check, shared `app` context, scene registration, `love.*` callbacks. |
-| `conf.lua` | Window configuration; the window icon `content/icon/openseek.png` (not on Windows, where the exe carries the icon, nor on the web). |
+| `conf.lua` | Window configuration; the window icon `content/icon/openseek.png` (not on Windows, where the exe carries the icon, nor on the web). Under LOVE 12, supported experimentally, it allows the OpenGL renderer alone (`t.graphics.renderers`). |
 | `engine/core/` | No game knowledge: class, config, input, gamepad, mouse stick, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, flic, mathx, log. |
 | `engine/game/` | Simulation and gameplay presentation systems. |
 | `engine/ui/` | Screens and widgets. |
@@ -829,7 +829,9 @@ universal Python). Both bundle `data/entity_types.json` and
 `build_release.py` builds the downloads into `build/`: `openseek.love` (the
 files git lists under `main.lua`, `conf.lua`, `engine`, `lib`, `data`,
 `content`, plus `build.json`), the converter zipapp and, with `--windows`,
-`openseek-<id>-win64.zip`, with `--macos SETUP` `openseek-<id>-macos.zip`.
+`openseek-<id>-win64.zip`, with `--macos SETUP` `openseek-<id>-macos.zip`,
+with `--linux` `openseek-<id>-linux.tar.gz` (the `.love`, the zipapp and an
+`openseek` launcher for the LOVE of the system).
 `build.json` is the version stamp: `commit` (short
 hash), `dirty` (uncommitted changes under those paths) and `version`, the git
 tag on `HEAD` when there is one; `<id>` is the tag, else the commit. The tag

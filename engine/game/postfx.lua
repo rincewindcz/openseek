@@ -102,6 +102,8 @@ end
 -- offsets on a wide canvas. Every shader here opts into highp where available.
 -- LOVE declares effect() before this code at mediump, so the parameters keep
 -- that precision and the texture coordinate is read from its highp varying.
+-- Only there: on the desktop the declaration carries no precision, and the
+-- Vulkan renderer of LOVE 12 refuses a definition that names another one.
 local PRECISION = [[
 #if defined(GL_ES) && defined(GL_FRAGMENT_PRECISION_HIGH)
 precision highp float;
@@ -109,7 +111,12 @@ precision highp float;
 ]]
 
 local EFFECT = [[
-vec4 effect(mediump vec4 color, Image tex, mediump vec2 texcoord, mediump vec2 screen) {
+#ifdef GL_ES
+#define ARG_PRECISION mediump
+#else
+#define ARG_PRECISION
+#endif
+vec4 effect(ARG_PRECISION vec4 color, Image tex, ARG_PRECISION vec2 texcoord, ARG_PRECISION vec2 screen) {
     vec2 uv = VaryingTexCoord.st;
 ]]
 
