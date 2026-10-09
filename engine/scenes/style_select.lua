@@ -11,15 +11,14 @@ local Config        = require "engine.core.config"
 local InputFrame    = require "engine.core.input_frame"
 local Layout        = require "engine.ui.layout"
 local Pointer       = require "engine.ui.pointer"
-local TouchControls = require "engine.ui.touch_controls"
 local Style         = require "engine.game.style"
 local Difficulty    = require "engine.game.difficulty"
 
--- Style selection screen: the player picks a game style (engine/game/style.lua),
--- a difficulty and the controls over a live view of the game. The scene is a
--- gameplay phase of its own, unrecorded and silent, and every choice is
--- applied to Config at once, so the picture behind the cards is the game as
--- it will look (the phase holds no simulation parameters, see holds_params).
+-- Style selection screen: the player picks a game style (engine/game/style.lua)
+-- and a difficulty over a live view of the game. The scene is a gameplay
+-- phase of its own, unrecorded and silent, and every choice is applied to
+-- Config at once, so the picture behind the cards is the game as it will
+-- look (the phase holds no simulation parameters, see holds_params).
 --
 -- The phase is flown by the scripted runs of data/styles.json `preview`, one
 -- after the other, each started inside an enemy base so there is always
@@ -58,8 +57,9 @@ local CARD_H    = 21
 local CARD_GAP  = 8
 local LABEL_DY  = 5
 local ABOUT_Y   = 204   -- the chosen style's one line
-local ROW_Y     = { 217, 229 }
+local ROW_Y     = { 217 }
 local ROW_H     = 10
+local HINT_Y    = 229   -- the line under the rows, centred in their zone
 local ROW_X     = 24    -- row label
 local VALUE_X0  = 116   -- value zone, the value centred in it between its arrows
 local VALUE_X1  = 240
@@ -75,10 +75,7 @@ local DEFAULT_VEHICLE = "chopper"
 local DEFAULT_SCRIPT  = { { ticks = 1800 } }
 local DEFAULT_FADE    = 30
 
-local CONTROLS = {
-    { label = "KEYBOARD", value = false },
-    { label = "KEYS + MOUSE", value = true },
-}
+local HINT = "YOU CAN TUNE YOUR OWN STYLE IN OPTIONS"
 
 -- Input source answering from a preview run's script: one held mask per
 -- segment, its edge actions on the segment's first tick.
@@ -133,8 +130,8 @@ function StyleSelect:init(app)
     end
 end
 
--- The choice rows, top to bottom: the style (drawn as the cards), the
--- difficulty and, where a mouse can steer, the controls.
+-- The choice rows, top to bottom: the style (drawn as the cards) and the
+-- difficulty.
 function StyleSelect:_build_rows()
     self.rows = {
         {
@@ -151,13 +148,6 @@ function StyleSelect:_build_rows()
             end,
         },
     }
-    if not TouchControls.available(self.app) then
-        self.rows[#self.rows + 1] = {
-            id = "controls", label = "CONTROLS", choices = CONTROLS,
-            get = function() return Config.mouse_control end,
-            set = function(value) Config.mouse_control = value end,
-        }
-    end
 end
 
 -- The preview's runs, each on a stage the pack holds.
@@ -533,6 +523,9 @@ function StyleSelect:draw()
         end
     end
     for i = 2, #self.rows do self:_draw_row(i, fade) end
+    local hint_x = centered(self.about_font, HINT, ROW_X, VALUE_X1 - ROW_X)
+    self.about_font:print(HINT, hint_x + 1, HINT_Y + 1, { color = { 0, 0, 0, 0.8 * fade } })
+    self.about_font:print(HINT, hint_x, HINT_Y, { color = { 1, 1, 1, 0.6 * fade } })
 
     self:_draw_plate(1, "ok", OK_XY, fade)
     if self.return_to then self:_draw_plate(2, "exit", EXIT_XY, fade) end

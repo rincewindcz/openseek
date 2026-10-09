@@ -23,6 +23,13 @@
         ]
     },
 
+    "extra_lines": {
+        "DEMOOVER": [
+            { "text": "GET THE FULL GAME DATA TO", "x": 8, "y": 100 },
+            { "text": "CONTINUE THIS ADVENTURE...", "x": 8, "y": 110 }
+        ]
+    },
+
     "stats": {
         "x":           8,
         "y":           150,
@@ -31,7 +38,10 @@
         "pictures": {
             "FIN01": ["phases", "time", "vehicles_lost"],
             "FIN02": ["ground", "buildings", "choppers"],
-            "FIN03": ["rescues", "badges", "score"]
+            "FIN03": ["rescues", "badges", "score"],
+            "DEMO01": ["phases", "time", "vehicles_lost"],
+            "DEMO02": ["ground", "buildings", "choppers"],
+            "DEMO03": ["rescues", "badges", "score"]
         },
         "labels": {
             "phases":        "PHASES CLEARED",

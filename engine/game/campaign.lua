@@ -148,9 +148,9 @@ function Campaign.finish(app)
     app.scenes:switch("hiscores", close(app))
 end
 
--- The last stage was cleared: the original's ending when the pack has it (the
--- registered release), then the credits under the end music, then the
--- high-score screen.
+-- The last stage was cleared: the original's ending when the pack has it (a
+-- pack converted before the shareware's was exported has none), then the
+-- credits under the end music, then the high-score screen.
 function Campaign.complete(app)
     local record = app.run_record
     local scores = close(app)

@@ -14,11 +14,12 @@ local json   = require "lib.json"
 
 -- The original's ending (FUN_001f2b70), played when a campaign run clears the
 -- last stage: the CD's ending animation with its frame-timed sounds, then the
--- end music under six story pictures (FIN01..03, VIC1..3). Each picture fades
--- in, holds, then types its lines one letter per retrace (a tab pauses and
--- draws nothing) and waits on PRESS A KEY OR MOUSE BUTTON. The story and its
--- layout come from the pack (tools/export_ending.py), the timing and the
--- animation's sound cues from data/ending.json.
+-- end music under six story pictures (FIN01..03, VIC1..3); the shareware has
+-- no animation and four pictures of its own (DEMO01..03, DEMOOVER). Each
+-- picture fades in, holds, then types its lines one letter per retrace (a tab
+-- pauses and draws nothing) and waits on PRESS A KEY OR MOUSE BUTTON. The
+-- story and its layout come from the pack (tools/export_ending.py), the timing
+-- and the animation's sound cues from data/ending.json.
 --
 -- Over the original: a key completes the whole picture's text instead of one
 -- line, a key skips the animation, and Esc skips the rest of the sequence.
@@ -192,12 +193,16 @@ function Ending:_next_slide()
     self.type_t  = 0
 end
 
--- The picture's lines: the story (VIC3's alternate ending on request), then
--- the run's record under the first pictures.
+-- The picture's lines: the story (VIC3's alternate ending on request), the
+-- lines data/ending.json adds under it (the shareware's closing call to get
+-- the full game data), then the run's record under the first pictures.
 function Ending:_lines(slide)
     local out = {}
     local story = (self.alternate and slide.alternate_lines) or slide.lines or {}
     for _, l in ipairs(story) do out[#out + 1] = l end
+    for _, l in ipairs((self.cfg.extra_lines or {})[slide.picture] or {}) do
+        out[#out + 1] = l
+    end
     -- EXTRA (ending_stats): the run's service record under the story.
     if Config.ending_stats and self.record then
         for _, l in ipairs(self:_stat_lines(slide.picture)) do out[#out + 1] = l end

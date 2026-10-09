@@ -22,7 +22,12 @@ Output:
   assets/fonts/endstory.*     ENDCHARS in the slides' palette: white face,
                               near-black drop shadow
 
-The shareware release has no ending; nothing is written for it.
+The shareware release has its own, shorter ending (DEMO01-03, DEMOOVER): the
+same typewriter and font, four pictures, then a register pitch and three
+advertising screenshots. The pitch and screenshots are not exported; the engine
+adds its own closing lines from data/ending.json (extra_lines). Its strings sit
+in a differently based data object (SHAREWARE_DELTA). No animation, no
+alternate ending.
 
 Usage:
   python3 tools/export_ending.py
@@ -75,18 +80,32 @@ ALTERNATE_LINES = [(0x21d9f8, 8, 60), (0x21da1c, 8, 70), (0x21da40, 8, 80),
                    (0x21db2c, 8, 170), (0x21db54, 8, 180), (0x21db78, 8, 190),
                    (0x21db98, 8, 210)]
 
+# The shareware ending: SEEK.EXE's story strings (load address - file offset),
+# a story-only subset of its picture sequence. Addresses are object offsets
+# from the code (mov edx, offset) plus the data object base 0x70000.
+SHAREWARE_DELTA = 0xe600
+SHAREWARE_ANCHORS = {0x70614: "IN THE END, THE SABOTAGE OF THE ENEMY",
+                     0x70660: "data\\demoover.bin"}
+SHAREWARE_PROMPT = 0x70558
+SHAREWARE_SLIDES = [
+    ("DEMO01",   [(0x704f4, 8, 40), (0x70500, 8, 60), (0x70528, 8, 70), (0x7054c, 8, 80)]),
+    ("DEMO02",   [(0x70584, 8, 50), (0x705ac, 8, 60), (0x705d0, 8, 70), (0x705f4, 8, 80)]),
+    ("DEMO03",   [(0x70614, 8, 50), (0x7063c, 8, 60)]),
+    ("DEMOOVER", [(0x70674, 8, 40), (0x70688, 8, 50), (0x706b4, 8, 60), (0x706e0, 8, 70)]),
+]
+
 FONT = ("endstory", {"src": "data/ENDCHARS.BIN", "mode": "truecolor",
-                     "pal": "data/FIN01.BIN"})
+                     "pal": ["data/FIN01.BIN", "data/DEMO01.BIN"]})
 
 
-def read_string(exe, address):
-    start = address - EXE_DELTA
+def read_string(exe, address, delta=EXE_DELTA):
+    start = address - delta
     end = exe.index(b"\0", start)
     return exe[start:end].decode("latin-1")
 
 
-def lines(exe, table, dy=0):
-    return [{"text": read_string(exe, a), "x": x, "y": y + dy} for a, x, y in table]
+def lines(exe, table, dy=0, delta=EXE_DELTA):
+    return [{"text": read_string(exe, a, delta), "x": x, "y": y + dy} for a, x, y in table]
 
 
 def build(exe):
@@ -101,6 +120,20 @@ def build(exe):
         "prompt": {"x": LAST_PROMPT_POS[0], "y": LAST_PROMPT_POS[1]},
     })
     return {"prompt": read_string(exe, PROMPT), "slides": slides}
+
+
+def build_shareware(exe):
+    slides = [{"picture": pic, "lines": lines(exe, table, delta=SHAREWARE_DELTA),
+               "prompt": {"x": PROMPT_POS[0], "y": PROMPT_POS[1]}}
+              for pic, table in SHAREWARE_SLIDES]
+    return {"prompt": read_string(exe, SHAREWARE_PROMPT, SHAREWARE_DELTA), "slides": slides}
+
+
+def matches(exe, anchors, delta):
+    try:
+        return all(read_string(exe, a, delta) == s for a, s in anchors.items())
+    except (ValueError, IndexError):
+        return False
 
 
 def find_file(game_dir, name):
@@ -122,17 +155,17 @@ def main(argv=None):
         print("  SKIP: no SEEK.EXE")
         return
     exe = exe_path.read_bytes()
-    try:
-        ok = all(read_string(exe, a) == s for a, s in ANCHORS.items())
-    except (ValueError, IndexError):
-        ok = False
-    if not ok:
-        print("  SKIP: SEEK.EXE has no ending text at the registered release's offsets")
+    if matches(exe, ANCHORS, EXE_DELTA):
+        build_story = build
+    elif matches(exe, SHAREWARE_ANCHORS, SHAREWARE_DELTA):
+        build_story = build_shareware
+    else:
+        print("  SKIP: SEEK.EXE has no ending text at a known release's offsets")
         return
 
     out_dir = gamedata.ASSETS / "ending"
     out_dir.mkdir(parents=True, exist_ok=True)
-    data = build(exe)
+    data = build_story(exe)
     gamedata.write_text(out_dir / "ending.json", json.dumps(data, indent=2) + "\n")
     print(f"  ending.json: {len(data['slides'])} slides")
 
