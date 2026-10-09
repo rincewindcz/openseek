@@ -341,9 +341,8 @@ function Replay.params_now()
     return out
 end
 
--- Force Config back to a recorded set of parameters. Applied every tick of a
--- recorded or replayed run, so editing them from the options screen mid-run
--- cannot silently change the simulation the recording claims to describe.
+-- Set Config to a set of parameters: a recording's on playback, the values a
+-- phase holds (Replay.Hold), or the player's own on the way out of one.
 function Replay.apply_params(params)
     local Config = require "engine.core.config"
     for _, key in ipairs(Replay.PARAMS) do
@@ -359,6 +358,50 @@ function Replay.apply_params(params)
             end
         end
     end
+end
+
+-- A phase's hold on the simulation parameters. From its first tick to its
+-- last a phase runs on one set, the player's own at that moment or a
+-- recording's, so an options edit made over a suspended game cannot change the
+-- simulation the recording claims to describe. The edit is not lost either:
+-- it lands in `own`, the values Config gets back whenever the phase lets go
+-- (menus over it, its end), and so the next phase starts with it.
+local Hold = Class()
+Replay.Hold = Hold
+
+-- params: a recording's parameters, or nil to hold the current ones.
+function Hold:init(params)
+    self.own = Replay.params_now()
+    if params then Replay.apply_params(params) end
+    self.held    = Replay.params_now()
+    self.holding = true
+end
+
+-- Start of a tick: Config carries the held values again. Whatever it carried
+-- instead is the player's doing and is kept in `own`.
+function Hold:enforce()
+    local Config = require "engine.core.config"
+    if not self.holding then
+        self.own = Replay.params_now()
+    else
+        local same = true
+        for _, key in ipairs(Replay.PARAMS) do
+            if Config[key] ~= self.held[key] then
+                self.own[key] = Config[key]
+                same = false
+            end
+        end
+        if same then return end
+    end
+    Replay.apply_params(self.held)
+    self.holding = true
+end
+
+-- Config carries the player's own values until the next enforce().
+function Hold:release()
+    if not self.holding then return end
+    Replay.apply_params(self.own)
+    self.holding = false
 end
 
 -- header helpers

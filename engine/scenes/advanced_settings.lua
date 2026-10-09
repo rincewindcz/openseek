@@ -15,6 +15,8 @@ local Hint          = require "engine.ui.hint"
 local PostFX        = require "engine.game.postfx"
 local Vehicles      = require "engine.game.vehicles"
 local Difficulty    = require "engine.game.difficulty"
+local Style         = require "engine.game.style"
+local Replay        = require "engine.game.replay"
 local TouchControls = require "engine.ui.touch_controls"
 
 -- Advanced OpenSeek options: a category sidebar (DISPLAY / VIDEO / EFFECTS /
@@ -60,6 +62,7 @@ local function apply_preset()     PostFX.apply_preset(Config.postfx_preset) end
 local function match_preset()     Config.postfx_preset = PostFX.match_preset() end
 local function apply_difficulty() Difficulty.apply_preset(Config.difficulty) end
 local function match_difficulty() Config.difficulty = Difficulty.match_preset() end
+local function apply_style()      Style.apply(Config.style) end
 
 -- Categories listed in the sidebar. A category with `options` shows a rows panel;
 -- `kind = "controls"` builds its rows from the rebindable input actions; `kind =
@@ -67,8 +70,14 @@ local function match_difficulty() Config.difficulty = Difficulty.match_preset() 
 -- field (or, for keybinds, an Input action). An option with `web = false` is
 -- dropped on the web build, where the page owns the canvas size and fullscreen;
 -- a category with `touch` set is shown only where touch play is possible
--- (TouchControls.available).
+-- (TouchControls.available). A `kind = "scene"` row opens another scene; with
+-- `menu_only` it is dimmed and does nothing while a game is suspended under
+-- the options.
 local CATEGORIES = {
+    { title = "STYLE", options = {
+        { key = "style", label = "GAME STYLE", kind = "choice", choices = Style.choices(), on_change = apply_style },
+        { label = "PREVIEW STYLES", kind = "scene", scene = "style_select", menu_only = true },
+    } },
     { title = "DISPLAY", options = {
         { key = "fullscreen",  label = "FULLSCREEN",  kind = "toggle", on_change = apply_display, web = false },
         { key = "window_size", label = "WINDOW SIZE", kind = "choice", choices = Display.size_choices(), on_change = apply_display, web = false },
@@ -180,6 +189,12 @@ local CATEGORIES = {
 
 local DEVICE_LABELS = { keys = "KEYBOARD", pad = "GAMEPAD" }
 
+-- Rows a running phase holds its own values of (Replay.Hold): edited over a
+-- suspended game, they count from the next one. The difficulty preset sets
+-- such keys; the game style sets some of them next to looks that show at once.
+local DEFERRED = { difficulty = "TAKES EFFECT NEXT GAME", style = "RULES TAKE EFFECT NEXT GAME" }
+for _, key in ipairs(Replay.PARAMS) do DEFERRED[key] = "TAKES EFFECT NEXT GAME" end
+
 local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 
 function AdvancedSettings:init(app)
@@ -212,8 +227,18 @@ function AdvancedSettings:init(app)
         self.control_opts[#self.control_opts + 1] = opt
     end
 
+    self:_build_categories()
+
+    local ok, img = pcall(love.graphics.newImage, "assets/fullscreen/MAINP.png")
+    if ok then img:setFilter("linear", "linear"); self.bg = img end
+    local aok, arrow = pcall(love.graphics.newImage, "assets/mainmen/arrow.png")
+    if aok then arrow:setFilter("nearest", "nearest"); self.arrow = arrow end
+end
+
+-- The categories and rows this build shows.
+function AdvancedSettings:_build_categories()
     local web   = love.system.getOS() == "Web"
-    local touch = TouchControls.available(app)
+    local touch = TouchControls.available(self.app)
     self.categories = {}
     for _, cat in ipairs(CATEGORIES) do
         if touch or not cat.touch then
@@ -228,16 +253,17 @@ function AdvancedSettings:init(app)
         end
     end
     self.cat_dy = math.min(CAT_DY, math.floor(SIDE_SPAN / (#self.categories - 1)))
-
-    local ok, img = pcall(love.graphics.newImage, "assets/fullscreen/MAINP.png")
-    if ok then img:setFilter("linear", "linear"); self.bg = img end
-    local aok, arrow = pcall(love.graphics.newImage, "assets/mainmen/arrow.png")
-    if aok then arrow:setFilter("nearest", "nearest"); self.arrow = arrow end
 end
 
 function AdvancedSettings:enter()
     self.t = 0; self.cat = 1; self.cursor = 1; self.focus = "menu"; self.capturing = nil
     self.scroll = 0; self.key_col = 1
+    self.in_run = self.app.scenes:depth() > 1   -- a game is suspended underneath
+end
+
+-- True for a row that cannot be used on this visit.
+function AdvancedSettings:_blocked(opt)
+    return opt.menu_only and self.in_run
 end
 
 function AdvancedSettings:_category() return self.categories[self.cat] end
@@ -252,11 +278,11 @@ function AdvancedSettings:_options()
     return cat.options or {}
 end
 
--- Persist config + bindings and return to the menu.
-function AdvancedSettings:_exit()
+-- Persist config + bindings and leave for another scene (the menu by default).
+function AdvancedSettings:_exit(scene, ...)
     Config.save()
     Input.save()
-    self.app.scenes:replace("main_menu")
+    self.app.scenes:replace(scene or "main_menu", ...)
 end
 
 function AdvancedSettings:_move_cat(dir)
@@ -311,6 +337,10 @@ end
 function AdvancedSettings:_activate(dir)
     local opt = self:_options()[self.cursor]
     if not opt then return end
+    if self:_blocked(opt) then
+        Audio.play_event("ui.back")
+        return
+    end
     -- The click doubles as the audition for the volume rows: it plays through
     -- the mixer, so the level the row just set is what the player hears.
     Audio.play_event("ui.confirm")
@@ -320,6 +350,9 @@ function AdvancedSettings:_activate(dir)
         self.device = ((self.device - 1 + dir) % #Input.DEVICES) + 1
     elseif opt.kind == "reset" then
         Input.reset(self:_device())
+    elseif opt.kind == "scene" then
+        self:_exit(opt.scene, { return_to = "advanced_settings" })
+        return
     elseif opt.kind == "toggle" then
         Config[opt.key] = not Config[opt.key]
         if opt.on_change then opt.on_change() end
@@ -340,6 +373,7 @@ function AdvancedSettings:_activate(dir)
         Config[opt.key] = clamp(v, opt.min, opt.max)
         if opt.on_change then opt.on_change() end
     end
+    Config.style = Style.match()   -- any row may be one a style owns
 end
 
 function AdvancedSettings:captures_keys()
@@ -369,8 +403,10 @@ function AdvancedSettings:keypressed(key)
         -- enter/space starts the capture; every other row still steps its value.
         local opt     = self:_options()[self.cursor]
         local keybind = opt and opt.kind == "keybind"
+        local opens   = opt and opt.kind == "scene"   -- only enter/space opens it
         if     key == "up"    then self:_move(-1)
         elseif key == "down"  then self:_move(1)
+        elseif opens and (key == "left" or key == "right") then return
         elseif key == "left"  then if keybind then self:_move_key_col(-1) else self:_activate(-1) end
         elseif key == "right" then if keybind then self:_move_key_col(1)  else self:_activate(1)  end
         elseif key == "return" or key == "space" or key == "kpenter" then self:_activate(1)
@@ -391,7 +427,7 @@ function AdvancedSettings:padpressed(pad, button, from_stick)
 end
 
 function AdvancedSettings:_value_text(opt)
-    if opt.kind == "reset" then
+    if opt.kind == "reset" or opt.kind == "scene" then
         return ""
     elseif opt.kind == "device" then
         return DEVICE_LABELS[self:_device()]
@@ -576,7 +612,7 @@ function AdvancedSettings:draw()
             local opt = options[i]
             local y   = ROW_Y0 + (i - 1 - self.scroll) * ROW_DY
             local sel = (self.focus == "panel" and i == self.cursor)
-            local a   = (sel and 1 or 0.6) * fade
+            local a   = (sel and 1 or 0.6) * (self:_blocked(opt) and 0.5 or 1) * fade
             self.font:print(opt.label, PANEL_LX, y, { color = { 1, 1, 1, a } })
             if opt.kind == "keybind" then
                 self:_draw_keybind(opt, y, sel, a, fade)
@@ -598,6 +634,12 @@ function AdvancedSettings:draw()
         hint = "{UP/DOWN} SELECT   {ENTER} OPEN   {ESC} EXIT"
     elseif row and row.kind == "keybind" then
         hint = "{LEFT/RIGHT} COLUMN   {ENTER} BIND   {DEL} CLEAR"
+    elseif row and self:_blocked(row) then
+        hint = "NOT AVAILABLE DURING GAME"
+    elseif row and self.in_run and DEFERRED[row.key] then
+        hint = DEFERRED[row.key]
+    elseif row and row.kind == "scene" then
+        hint = "{UP/DOWN} MOVE   {ENTER} OPEN   {ESC} BACK"
     else
         hint = "{UP/DOWN} MOVE   {LEFT/RIGHT} CHANGE   {ESC} BACK"
     end

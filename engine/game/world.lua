@@ -224,9 +224,9 @@ function World:load(name)
         end
     end
 
-    -- Destruction-crater art is per-mission: each world ships its own HOLE4038
-    -- variant, exported into that mission's phase-0 dir. Pick it by the stage's
-    -- mission digit, falling back to mission 0 for worlds without their own.
+    -- Destruction-crater art is per-mission: HOLE4038 in the mission's own
+    -- palette, exported into that mission's phase-0 dir. Pick it by the stage's
+    -- mission digit, falling back to mission 0 for a pack without it.
     self.crater_img = self:_load_crater(name)
 
     -- A tank is stored as two co-located entities: the hull (kind "tank") and a
@@ -555,7 +555,8 @@ function World:_fit_wrap_period()
 end
 
 -- Crater sprite for the stage's mission. HOLE4038 is exported per mission into
--- assets/stage{M}0/; missions without their own variant reuse mission 0's.
+-- assets/stage{M}0/; a pack converted before every mission had one reuses
+-- mission 0's.
 function World:_load_crater(name)
     local mission = name:match("^stage(%d)")
     local function try(m)

@@ -22,6 +22,10 @@ local GameplayBase = Class(Scene)
 -- The gameplay scenes are the simulation: main.lua steps them at a fixed rate.
 GameplayBase.fixed_step = true
 
+-- Whether a phase holds its simulation parameters against options edits
+-- (Replay.Hold). Only a scene that exists to show such edits turns it off.
+GameplayBase.holds_params = true
+
 -- Weather overlay per mission digit (snow on the winter world, rain on the
 -- jungle world); other missions run clear.
 local WEATHER_FOR_MISSION = { [1] = "snow", [2] = "rain" }
@@ -159,7 +163,14 @@ end
 -- Count a tick the scene is actually simulating. Called once per update, after
 -- the early returns (pause, stats screen) that skip simulation entirely.
 function GameplayBase:begin_tick()
+    if self.hold then self.hold:enforce() end
     self.app.tick = self.app.tick + 1
+end
+
+-- A menu goes up over the phase: it shows and saves the player's own
+-- parameters, not the ones the phase holds.
+function GameplayBase:suspend()
+    if self.hold then self.hold:release() end
 end
 
 -- Take this tick's input frame for p from its source and apply the edge actions
@@ -277,6 +288,8 @@ end
 -- live again.
 function GameplayBase:end_session()
     self:save_recording()
+    if self.hold then self.hold:release() end
+    self.hold = nil
     if self.playback then
         self.app.replay_play   = nil
         self.app.replay_verify = false
@@ -293,13 +306,16 @@ function GameplayBase:seed_phase()
     self.desync       = nil
     self.desync_parts = nil
     self.recording    = nil
+    -- The phase before (a restart) lets go first, so an options edit made
+    -- during it is what this one starts with.
+    if self.hold then self.hold:release() end
+    self.hold = nil
     if self.playback then
-        self.params = Replay.decode_map(self.playback.header.params)
-        Replay.apply_params(self.params)
+        self.hold = Replay.Hold:new(Replay.decode_map(self.playback.header.params))
         self.seed = self.playback:number("seed", 0)
         self.tick_scale = app.replay_verify and VERIFY_SCALE or 1
     else
-        self.params = Replay.params_now()
+        if self.holds_params then self.hold = Replay.Hold:new() end
         self.seed = Rng.new_seed()
         self.tick_scale = 1
     end
@@ -434,11 +450,9 @@ end
 
 -- End of a simulated tick: store this tick's input and a periodic checksum, or on
 -- playback compare that checksum and remember the first tick that disagrees.
--- Recorded parameters are re-applied so a live options edit cannot change the run.
 function GameplayBase:tick_replay(players)
     local app  = self.app
     local tick = app.tick
-    Replay.apply_params(self.params)   -- a live options edit cannot change a run in progress
     if self.recording then
         for slot, p in ipairs(players) do
             self.recording:record_input(tick, slot, p.frame)

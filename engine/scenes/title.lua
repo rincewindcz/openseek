@@ -10,7 +10,8 @@ local Sound  = require "engine.game.sound"
 -- openSEEK engine card on the first launch or while Config.engine_intro is on. Draws an opaque fill
 -- every frame so the overview never flashes during the intro; done, Esc, Enter
 -- or Space drops into the main menu (Enter / Space on the engine card skip only
--- to the TITLE card). The menu music starts here, at boot, as in the original.
+-- to the TITLE card), or into the style selection screen until the player has
+-- confirmed it once. The menu music starts here, at boot, as in the original.
 local Title = Class(Scene)
 
 Title.ENGINE_INTRO = "content/intro/openseek_intro.png"
@@ -18,7 +19,9 @@ Title.ENGINE_INTRO = "content/intro/openseek_intro.png"
 function Title:enter()
     local app = self.app
     Sound.play_music("menu")
-    local function to_menu() app.scenes:switch("main_menu") end
+    local function to_menu()
+        app.scenes:switch(Config.style_chosen and "main_menu" or "style_select")
+    end
     local function show_title()
         app.screen:show("TITLE", {
             fade_in   = 0.6,

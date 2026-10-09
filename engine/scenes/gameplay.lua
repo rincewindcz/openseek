@@ -587,6 +587,7 @@ function Gameplay:touchreleased(id)
 end
 
 function Gameplay:suspend()
+    GameplayBase.suspend(self)
     self.touch:reset()
 end
 

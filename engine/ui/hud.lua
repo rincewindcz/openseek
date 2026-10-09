@@ -203,6 +203,18 @@ function Hud:_preload_item(item, prefix)
             item._frames[i + 1] = self:_img(p)
             i = i + 1
         end
+        -- A mission's own set may store its frames the other way round, full
+        -- first (reversed_sets lists those missions); the shared set never does.
+        local reversed = false
+        for _, m in ipairs(override and item.reversed_sets or {}) do
+            reversed = reversed or m == self.mission
+        end
+        if reversed then
+            local frames, n = item._frames, #item._frames
+            for k = 1, math.floor(n / 2) do
+                frames[k], frames[n + 1 - k] = frames[n + 1 - k], frames[k]
+            end
+        end
     end
     -- One marker sprite per player slot (the co-op P1..P4 labels). Shipped art,
     -- so no per-mission override pass over it.

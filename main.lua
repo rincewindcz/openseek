@@ -125,6 +125,10 @@ function love.load(args)
     if Config.difficulty ~= "custom" then
         require("engine.game.difficulty").apply_preset(Config.difficulty)
     end
+    -- The same for a named game style.
+    if Config.style ~= "custom" then
+        require("engine.game.style").apply(Config.style)
+    end
     Input.load()    -- overlay persisted key bindings onto the defaults
     Display.apply() -- restore the saved window mode (size / fullscreen / vsync)
     -- Without a usable pack nothing past this point can load: the data setup
@@ -271,6 +275,7 @@ function love.load(args)
     scenes:register("replay_select",    ReplaySelect:new(app))
     scenes:register("advanced_menu",    AdvancedMenu:new(app))
     scenes:register("saves",            Saves:new(app))
+    scenes:register("style_select",     require("engine.scenes.style_select"):new(app))
     -- Required in place, like the ending: love.load is out of upvalues.
     if photo then app.photo = require("engine.dev.photo_mode"):new(app) end
     scenes:switch("title")

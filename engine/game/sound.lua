@@ -92,10 +92,11 @@ end
 
 -- Silence everything and forget the per-frame state. Called when a phase ends
 -- and when the simulation is fast-forwarded (replay verification, self-test),
--- where thousands of events would arrive per second.
-function Sound:set_muted(muted)
+-- where thousands of events would arrive per second. world_only leaves the
+-- mixer open, for a screen that runs a silent phase behind its own UI clicks.
+function Sound:set_muted(muted, world_only)
     self.muted   = muted and true or false
-    Audio.muted  = self.muted
+    Audio.muted  = self.muted and not world_only
     if self.muted then self:stop_loops() end
 end
 

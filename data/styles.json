@@ -1,0 +1,100 @@
+{
+  "styles": [
+    {
+      "name": "classic", "label": "CLASSIC", "camo": 1,
+      "about": "CLOSE TO THE ORIGINAL",
+      "values": {
+        "effects_flashes": false, "flash_intensity": 1.0, "night_lighting": false,
+        "postfx_enabled": false, "postfx_preset": "none",
+        "axis_aligned_pickups": true, "score_count_up": false, "shop_fx": false,
+        "audio_positional": false, "explosion_pitch": false,
+        "explosive_trees": false, "remote_mine": false, "flame_momentum": false, "weapon_finds": false,
+        "radar_zoom_grow": false, "radar_backdrop": 0, "aim_laser": false, "air_strike_fx": false,
+        "tank_tracks": false, "tank_recoil": false, "shell_casings": false, "tread_dust": false,
+        "wreck_smoke": false, "shell_impact": false, "shard_amount": 1.0, "lying_shards": false,
+        "hit_flash": false, "camera_shake": false, "camera_shake_amount": 1.0, "low_armor_fx": false, "damage_flash": false,
+        "pickup_glint": false, "target_glint": false,
+        "ending_stats": false, "crash_fx": false, "crash_cause": false, "crash_stats": false
+      }
+    },
+    {
+      "name": "enhanced", "label": "ENHANCED", "camo": 2,
+      "about": "MODERN LOOKS FOR OLD-TIMERS",
+      "values": {
+        "effects_flashes": true, "flash_intensity": 0.7, "night_lighting": true,
+        "postfx_enabled": true, "postfx_preset": "mild",
+        "axis_aligned_pickups": false, "score_count_up": true, "shop_fx": true,
+        "audio_positional": true, "explosion_pitch": true,
+        "explosive_trees": true, "remote_mine": true, "flame_momentum": true, "weapon_finds": true,
+        "radar_zoom_grow": true, "radar_backdrop": 0.2, "aim_laser": true, "air_strike_fx": true,
+        "tank_tracks": true, "tank_recoil": true, "shell_casings": true, "tread_dust": true,
+        "wreck_smoke": true, "shell_impact": true, "shard_amount": 1.5, "lying_shards": true,
+        "hit_flash": false, "camera_shake": true, "camera_shake_amount": 0.5, "low_armor_fx": false, "damage_flash": false,
+        "pickup_glint": true, "target_glint": true,
+        "ending_stats": true, "crash_fx": true, "crash_cause": true, "crash_stats": true
+      }
+    },
+    {
+      "name": "overkill", "label": "OVERKILL", "camo": 4,
+      "about": "THE BEST WAY TO ENJOY OPENSEEK!",
+      "values": {
+        "effects_flashes": true, "flash_intensity": 1.0, "night_lighting": true,
+        "postfx_enabled": true, "postfx_preset": "full",
+        "axis_aligned_pickups": false, "score_count_up": true, "shop_fx": true,
+        "audio_positional": true, "explosion_pitch": true,
+        "explosive_trees": true, "remote_mine": true, "flame_momentum": true, "weapon_finds": true,
+        "radar_zoom_grow": true, "radar_backdrop": 0.4, "aim_laser": true, "air_strike_fx": true,
+        "tank_tracks": true, "tank_recoil": true, "shell_casings": true, "tread_dust": true,
+        "wreck_smoke": true, "shell_impact": true, "shard_amount": 2.0, "lying_shards": true,
+        "hit_flash": true, "camera_shake": true, "camera_shake_amount": 1.0, "low_armor_fx": true, "damage_flash": true,
+        "pickup_glint": true, "target_glint": true,
+        "ending_stats": true, "crash_fx": true, "crash_cause": true, "crash_stats": true
+      }
+    }
+  ],
+  "default": "overkill",
+  "preview": {
+    "fade": 30,
+    "runs": [
+      {
+        "stage": "stage03", "vehicle": "chopper", "x": 620, "y": 1650, "angle": 90,
+        "script": [
+          { "ticks": 100, "events": ["slot:3"] },
+          { "ticks": 125, "held": ["up", "fire"] },
+          { "ticks": 34,  "held": ["up", "right", "fire"] },
+          { "ticks": 50,  "held": ["up", "fire"], "events": ["slot:1"] },
+          { "ticks": 34,  "held": ["up", "right", "fire"] },
+          { "ticks": 125, "held": ["up", "fire"], "events": ["slot:4"] },
+          { "ticks": 34,  "held": ["up", "right", "fire"] },
+          { "ticks": 50,  "held": ["up", "fire"], "events": ["slot:1"] },
+          { "ticks": 34,  "held": ["up", "right", "fire"] },
+          { "ticks": 60,  "held": ["up", "fire"], "events": ["slot:3"] }
+        ]
+      },
+      {
+        "stage": "stage03", "vehicle": "tank", "x": 560, "y": 1760, "angle": 90,
+        "script": [
+          { "ticks": 30,  "events": ["slot:2"] },
+          { "ticks": 39,  "held": ["modifier", "left"] },
+          { "ticks": 110, "held": ["up", "fire"] },
+          { "ticks": 77,  "held": ["up", "fire", "modifier", "right"] },
+          { "ticks": 110, "held": ["up", "fire"] },
+          { "ticks": 30,  "held": ["fire"] }
+        ]
+      },
+      {
+        "stage": "stage11", "vehicle": "chopper", "x": 700, "y": 780, "angle": 90,
+        "script": [
+          { "ticks": 100, "events": ["slot:3"] },
+          { "ticks": 130, "held": ["up", "fire"] },
+          { "ticks": 34,  "held": ["up", "right", "fire"] },
+          { "ticks": 90,  "held": ["up", "fire"], "events": ["slot:1"] },
+          { "ticks": 34,  "held": ["up", "right", "fire"] },
+          { "ticks": 130, "held": ["up", "fire"], "events": ["slot:3"] },
+          { "ticks": 34,  "held": ["up", "right", "fire"] },
+          { "ticks": 60,  "held": ["up", "fire"] }
+        ]
+      }
+    ]
+  }
+}

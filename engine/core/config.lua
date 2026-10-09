@@ -272,6 +272,14 @@ local Config = {
 
     -- Set by Config.load when no saved settings exist yet. Not persisted.
     first_launch = false,
+
+    -- Game style (engine/game/style.lua, data/styles.json): the named set of
+    -- extras and looks the keys it owns were last set from, "custom" once one
+    -- of them is edited. style_chosen is false until the player has confirmed
+    -- the style selection screen (engine/scenes/style_select.lua), which the
+    -- title opens in place of the menu until then.
+    style        = "custom",
+    style_chosen = false,
 }
 
 -- Player-editable keys persisted to the save directory, so the advanced settings
@@ -299,6 +307,7 @@ local PERSISTED = {
     "touch_color", "touch_opacity", "touch_button_scale", "touch_stick_scale",
     "touch_left_handed",
     "pad_dead_zone", "mouse_control", "mouse_sensitivity", "coop_device_1", "coop_device_2",
+    "style", "style_chosen",
 }
 
 -- Overlay any saved values onto the shipped defaults. Called once at startup.

@@ -17,7 +17,9 @@ local json   = require "lib.json"
 --                   (begin_scene) and multiplied by the map on the way back, so
 --                   a lit pixel can come out brighter than its art: the night
 --                   palette is dark to begin with, and the original's own night
---                   spot doubled what it covered.
+--                   spot doubled what it covered. With Config.night_lighting
+--                   off the pass draws that spot instead: the stage in its
+--                   bare palette and one disc ahead of each vehicle.
 --
 --   draw_additive() Oversaturation over everything: brief world-anchored bright
 --                   circles at explosions, the glow of live fire and full-screen
@@ -67,6 +69,29 @@ local LIGHT_RANGE = 4
 local EFFECT_FADE_IN  = 0.1
 local EFFECT_FADE_OUT = 0.4
 
+-- The original's night light, the only one it has: a disc on the vehicle's
+-- axis, 110 px ahead of it, under which every pixel becomes the palette colour
+-- nearest to twice its own plus 16 of the 63 steps of a VGA channel. The disc
+-- is the mask of the original's spot sprite, 47 px across, which is exactly
+-- the pixels within NIGHT_SPOT_REACH (squared) of its centre pixel. Without a
+-- palette here the sum is taken as it is.
+local NIGHT_SPOT_SIZE  = 47
+local NIGHT_SPOT_REACH = 550
+local NIGHT_SPOT_AHEAD = 110
+local NIGHT_SPOT_GAIN  = 2
+local NIGHT_SPOT_LIFT  = 16 / 63
+
+local NIGHT_SPOT_SRC = [[
+uniform Image mask;
+uniform float gain;
+uniform float lift;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
+    vec3 art = Texel(tex, uv).rgb;
+    vec3 lit = min(art * gain + vec3(lift), vec3(1.0));
+    return vec4(mix(art, lit, step(0.5, Texel(mask, uv).r)), 1.0);
+}
+]]
+
 -- Lights that pile up (a blast inside the beam) stop at max_light times the
 -- art, short of burning every sprite under them to white.
 local LIGHT_SRC = [[
@@ -110,6 +135,19 @@ local function make_spot()
     return love.graphics.newImage(image)
 end
 
+-- The mask of the original's night spot, one texel per original pixel.
+local function make_night_spot()
+    local image = love.image.newImageData(NIGHT_SPOT_SIZE, NIGHT_SPOT_SIZE)
+    local c     = (NIGHT_SPOT_SIZE - 1) / 2
+    image:mapPixel(function(x, y)
+        local inside = (x - c) * (x - c) + (y - c) * (y - c) <= NIGHT_SPOT_REACH
+        return 1, 1, 1, inside and 1 or 0
+    end)
+    local mask = love.graphics.newImage(image)
+    mask:setFilter("nearest", "nearest")
+    return mask
+end
+
 -- The headlight beam, pointing up from the bottom centre of the sprite: a cone
 -- that opens from a narrow start, soft at its sides, brightest a little under
 -- halfway out and fading to nothing at its far end. Drawn stretched to the
@@ -129,7 +167,9 @@ end
 function LightFX:init()
     self.spot         = make_spot()
     self.beam         = make_beam()
+    self.night_spot   = make_night_spot()
     self.shader       = love.graphics.newShader(LIGHT_SRC)
+    self.spot_shader  = love.graphics.newShader(NIGHT_SPOT_SRC)
     self.enabled      = false
     self.world        = nil     -- the stage being lit, for its players and its fire
     self.night        = nil     -- active night params, or nil on day stages
@@ -359,7 +399,7 @@ end
 -- transform and scissor, and clears the whole target so split-screen halves
 -- never show each other's pixels.
 function LightFX:begin_scene()
-    self.scene_on = self.enabled and self.night ~= nil and Config.night_lighting
+    self.scene_on = self.enabled and self.night ~= nil
     if not self.scene_on then return end
     local g = love.graphics
     self:_ensure(g.getDimensions())
@@ -371,22 +411,10 @@ function LightFX:begin_scene()
     if clip_x then g.setScissor(clip_x, clip_y, clip_w, clip_h) end
 end
 
--- Pass A: build the night light map and lay the lit world onto the target the
--- pass started on. After the world, entities and effects have been drawn.
-function LightFX:draw_night(camera)
-    if not self.scene_on then return end
-    self.scene_on = false
-    local g = love.graphics
-
-    -- The light map is built under the caller's transform, like the world it
-    -- lights (a split-screen half is translated to its place), over the whole
-    -- target; the lit world is then laid down target for target, inside the
-    -- caller's scissor.
-    local clip_x, clip_y, clip_w, clip_h = g.getScissor()
-    g.setCanvas(self.scene_prev)
-    g.push("all")
-    g.setScissor()
-    g.setCanvas(self.map)
+-- The light map of a night stage: the ambient tone, the headlights, the
+-- transient lights and everything burning.
+function LightFX:_draw_light_map(camera)
+    local g  = love.graphics
     local a  = self.night.ambient
     local br = Config.night_brightness / LIGHT_RANGE   -- lifts the floor toward daylight
     g.clear(a[1] * br, a[2] * br, a[3] * br, 1)
@@ -406,16 +434,60 @@ function LightFX:draw_night(camera)
         self:_stamp(sx, sy, spec.radius * z, spec.color[1], spec.color[2], spec.color[3],
             spec.intensity * flicker(s, i, now) / LIGHT_RANGE)
     end
+end
+
+-- The original's night spot ahead of every vehicle still running, as a mask.
+function LightFX:_draw_spot_mask(camera)
+    local g = love.graphics
+    g.clear(0, 0, 0, 1)
+    local combat = self.world and self.world.combat
+    if not combat then return end
+    local z = camera:zoom()
+    g.setColor(1, 1, 1, 1)
+    for _, p in ipairs(combat.players or {}) do
+        if not p.death then
+            local sx, sy = camera:project(p.x, p.y)
+            local rot    = math.rad(p.angle) + (camera.angle or 0)
+            g.draw(self.night_spot, sx, sy, rot, z, z, NIGHT_SPOT_SIZE / 2, NIGHT_SPOT_SIZE / 2 + NIGHT_SPOT_AHEAD)
+        end
+    end
+end
+
+-- Pass A: light the world of a night stage and lay it onto the target the
+-- pass started on. After the world, entities and effects have been drawn.
+function LightFX:draw_night(camera)
+    if not self.scene_on then return end
+    self.scene_on = false
+    local g   = love.graphics
+    local lit = Config.night_lighting
+
+    -- The light map (or the spot mask) is built under the caller's transform,
+    -- like the world it lights (a split-screen half is translated to its
+    -- place), over the whole target; the lit world is then laid down target
+    -- for target, inside the caller's scissor.
+    local clip_x, clip_y, clip_w, clip_h = g.getScissor()
+    g.setCanvas(self.scene_prev)
+    g.push("all")
+    g.setScissor()
+    g.setCanvas(self.map)
+    if lit then self:_draw_light_map(camera) else self:_draw_spot_mask(camera) end
 
     g.origin()
     g.setCanvas(self.scene_prev)
     if clip_x then g.setScissor(clip_x, clip_y, clip_w, clip_h) end
     g.setBlendMode("replace", "premultiplied")
     g.setColor(1, 1, 1, 1)
-    self.shader:send("light_map", self.map)
-    self.shader:send("range", LIGHT_RANGE)
-    self.shader:send("max_light", self.night.max_light or DEFAULT_NIGHT.max_light)
-    g.setShader(self.shader)
+    if lit then
+        self.shader:send("light_map", self.map)
+        self.shader:send("range", LIGHT_RANGE)
+        self.shader:send("max_light", self.night.max_light or DEFAULT_NIGHT.max_light)
+        g.setShader(self.shader)
+    else
+        self.spot_shader:send("mask", self.map)
+        self.spot_shader:send("gain", NIGHT_SPOT_GAIN)
+        self.spot_shader:send("lift", NIGHT_SPOT_LIFT)
+        g.setShader(self.spot_shader)
+    end
     g.draw(self.scene)
     g.pop()
 end

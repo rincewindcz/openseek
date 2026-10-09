@@ -6,6 +6,7 @@
       "value": "armor",
       "sprite_pattern": "hud/armour_f%02d.png",
       "sprite_count": 17,
+      "reversed_sets": [2],
       "anchor": "bottom_left",
       "offset": [
         8,

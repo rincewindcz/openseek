@@ -29,8 +29,11 @@ import image
 # stage selects the STAGE0{n}/ BIN and palette; the output stage selects the
 # assets/stage{NN}/ dir (usually the same, but the crater is per-mission art: each
 # world ships its own HOLE4038, exported into that mission's phase-0 dir so the
-# engine can pick it by mission. sgun's BULLET ships in STAGE01). Pass keep=None
-# to export every frame (e.g. when inspecting an arc).
+# engine can pick it by mission. sgun's BULLET ships in STAGE01). A sixth
+# value names the mission whose palette colours the frames instead of the
+# source stage's: missions 2 to 4 load STAGE00's HOLE4038 and draw it in their
+# own palette. Pass keep=None to export every frame (e.g. when inspecting an
+# arc).
 PROJECTILE_SPRITES = [
     ("MISSLE",   "missle", {0},                    0,  0),
     ("SHELL",    "shell",  {0},                    0,  0),
@@ -44,6 +47,9 @@ PROJECTILE_SPRITES = [
     ("RTRACE",   "rtrace", set(range(0, 224, 32)), 4, 40),
     ("HOLE4038", "hole",   {16},                   0,  0),
     ("HOLE4038", "hole",   {16},                   1, 10),
+    ("HOLE4038", "hole",   {16},                   0, 20, 2),
+    ("HOLE4038", "hole",   {16},                   0, 30, 3),
+    ("HOLE4038", "hole",   {16},                   0, 40, 4),
     ("ENEMY",    "enemy",  {16, 32},               0,  0),
     ("PICKUPS",  "pickup", None,                   0,  0),
     ("BULLET",   "bullet", {0},                    1,  1),
@@ -119,6 +125,16 @@ def export_sprite(src_path, prefix, out_dir, palette, keep=None):
     return names
 
 
+def stage_palette(game_dir, mission):
+    """The mission's world palette: PAL.BIN, else PAL1.BIN (the night mission
+    has no PAL.BIN). None when the game copy lacks the mission."""
+    for name in ("PAL.BIN", "PAL1.BIN"):
+        path = game_dir / f"STAGE{mission:02d}" / name
+        if path.exists():
+            return path.read_bytes()
+    return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Export projectile sprites to assets/stage0{n}/")
     ap.add_argument("--game-dir", default=None)
@@ -128,18 +144,18 @@ def main(argv=None):
     print(f"Game dir: {game_dir}")
     print()
 
-    palettes = {}   # stage -> palette bytes (one PAL.BIN read per source stage)
-    for stem, prefix, keep, src_stage, out_stage in PROJECTILE_SPRITES:
-        stage_dir = game_dir / f"STAGE{src_stage:02d}"
-        src = stage_dir / (stem + ".BIN")
-        if not src.exists():
-            print(f"  skip {stem}: not found")
+    palettes = {}   # stage -> palette bytes (one read per palette stage)
+    for stem, prefix, keep, src_stage, out_stage, *pal_stage in PROJECTILE_SPRITES:
+        pal_stage = pal_stage[0] if pal_stage else src_stage
+        src = game_dir / f"STAGE{src_stage:02d}" / (stem + ".BIN")
+        if pal_stage not in palettes:
+            palettes[pal_stage] = stage_palette(game_dir, pal_stage)
+        if not src.exists() or palettes[pal_stage] is None:
+            print(f"  skip {stem} for stage{out_stage:02d}: not found")
             continue
-        if src_stage not in palettes:
-            palettes[src_stage] = (stage_dir / "PAL.BIN").read_bytes()
         out_dir = gamedata.ASSETS / f"stage{out_stage:02d}"
         out_dir.mkdir(parents=True, exist_ok=True)
-        export_sprite(src, prefix, out_dir, palettes[src_stage], keep)
+        export_sprite(src, prefix, out_dir, palettes[pal_stage], keep)
 
 
 if __name__ == "__main__":
