@@ -1,12 +1,12 @@
 [
-  { "name": "MAVERICK", "score": 98500 },
-  { "name": "ICEMAN",   "score": 87200 },
-  { "name": "VIPER",    "score": 76400 },
-  { "name": "", "score": 0 },
-  { "name": "", "score": 0 },
-  { "name": "", "score": 0 },
-  { "name": "", "score": 0 },
-  { "name": "", "score": 0 },
+  { "name": "MICHAL", "score": 128000 },
+  { "name": "VISION", "score": 64000 },
+  { "name": "AARON",  "score": 32000 },
+  { "name": "ROD",    "score": 16000 },
+  { "name": "PAUL",   "score": 8000 },
+  { "name": "ROGER",  "score": 4000 },
+  { "name": "GRANT",  "score": 2000 },
+  { "name": "FRED",   "score": 1000 },
   { "name": "", "score": 0 },
   { "name": "", "score": 0 }
 ]
