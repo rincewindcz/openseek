@@ -179,11 +179,12 @@ function Hud:_anchor_offset(item)
     return anchor, ox, oy
 end
 
--- Load an item's frames/background, optionally from a per-mission override dir
--- (prefix, e.g. "hud/stage3/"). An item draws entirely from one source: if the
--- override has it (frame 0 / the background exists) every frame comes from there,
--- otherwise the shared "hud/" set. Frames are counted until the first gap, so an
--- override with a different frame count (mission 3 weapons has 19 vs 14) works.
+-- Load an item's frames/background/icon, optionally from a per-mission override
+-- dir (prefix, e.g. "hud/stage3/"). An item draws entirely from one source: if
+-- the override has it (frame 0 / the background / the icon exists) every frame
+-- comes from there, otherwise the shared "hud/" set. Frames are counted until
+-- the first gap, so an override with a different frame count (mission 3 weapons
+-- has 19 vs 14) works.
 function Hud:_preload_item(item, prefix)
     local function over(path)
         if not prefix then return path end
@@ -217,6 +218,9 @@ function Hud:_preload_item(item, prefix)
     end
     if item.background then
         item._bg = self:_img(over(item.background))
+    end
+    if item.icon then
+        item._icon = self:_img(over(item.icon))
     end
 end
 
@@ -313,7 +317,7 @@ function Hud:_number_icon(item)
         local i = math.max(1, math.min(#item._icons, self.player.index or 1))
         return item._icons[i]
     end
-    return item.icon and self:_img(item.icon)
+    return item._icon
 end
 
 function Hud:_draw_number(g, item, x, y, s)

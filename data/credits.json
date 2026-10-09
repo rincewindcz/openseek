@@ -2,7 +2,7 @@
   "styles": {
     "large": { "heading_font": "main", "name_font": "credchars", "name_dy": 18 },
     "small": { "heading_font": "credchars", "name_font": "chars", "name_dy": 11 },
-    "label": { "font": "hichars", "color": [1.0, 0.78, 0.16] }
+    "label": { "font": "credchars" }
   },
   "entries": [
     { "style": "large", "x": 16,  "y": 62,  "heading": "OPENSEEK", "name": "MICHAL GENSEREK" },

@@ -46,6 +46,13 @@ local function turn_toward(e, target, step)
     return math.abs(diff) - step
 end
 
+-- Whether a side round leaves with `left` ticks of the reload to go: no earlier
+-- than its `first` and no later than its `last`, where it names them.
+local function in_span(shot, left)
+    return (not shot.first or left <= level_ticks(shot.first))
+        and (not shot.last or left >= level_ticks(shot.last))
+end
+
 function EnemyFire:routine(id)
     return self.data.routines[tostring(id)]
 end
@@ -118,7 +125,8 @@ function EnemyFire:turret(e, dx, dy, d2, dt, can_fire)
     for _, shot in ipairs(spec.shots) do
         if shot.every and e.reload > 0 then
             local period = self:_seconds(shot.every) / Config.enemy_fire_rate
-            if math.floor(before / period) > math.floor(e.reload / period) then
+            local passed = math.floor(before / period)
+            if passed > math.floor(e.reload / period) and in_span(shot, passed * shot.every) then
                 e.volleys = e.volleys or 1
                 self:_shoot(e, shot, e.aim_angle)
             end

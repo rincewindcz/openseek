@@ -71,6 +71,10 @@ function Player:init(x, y)
     self.tank_barrel      = 0    -- last-fired barrel, cycles through the variant's barrels
     self.turret_rate      = 140
     self.collision_radius = 8
+    self.bump_bounce      = 1      -- share of the mirrored speed a tank keeps off an obstacle
+    self.bump_back        = 0.029  -- seconds of travel it is set back by (2 original ticks)
+    self.bump_arc         = 78.75  -- obstacle bearing off the travel direction that still bumps (deg)
+    self.bump_min         = 0.25   -- share of top speed below which it stops or slides instead
     self.world            = nil  -- set in game mode for collision queries
     self.camera           = nil  -- set in game mode for screen placement
 
@@ -138,6 +142,10 @@ function Player:load_vehicle_def(def)
     self.land_time      = def.land_time      or self.land_time
     self.turret_rate      = def.turret_rate      or self.turret_rate
     self.collision_radius = def.collision_radius or self.collision_radius
+    self.bump_bounce      = def.bump_bounce      or self.bump_bounce
+    self.bump_back        = def.bump_back        or self.bump_back
+    self.bump_arc         = def.bump_arc         or self.bump_arc
+    self.bump_min         = def.bump_min         or self.bump_min
     self:_apply_config()
     self.armor = self.max_armor
 end
@@ -782,14 +790,24 @@ end
 -- HP the tank loses per tree it bulldozes through (EXTRA: explosive_trees). Tiny.
 local TREE_CRUSH_DAMAGE = 0.35
 
+-- A tank held against a wall counts as stuck when sliding along it makes less
+-- than this share of the step it attempted.
+local STUCK_SHARE = 0.1
+
+-- EXTRA (explosive_trees): whether e is a tree a tank can smash through.
+local function crushable(e)
+    return Config.explosive_trees and e and e.type_data and e.type_data.explosive_tree
+end
+
 -- Whether a hull-sized circle at (x, y) is blocked by a solid object. With the
 -- explosive_trees extra on, a tank at speed instead pops a tree it drives into and
 -- passes through it for a tiny armor cost, rather than being stopped; below the
 -- crush-speed threshold (a fraction of top speed) the tree still blocks.
+-- Returns the blocking object as well.
 function Player:_solid_at(x, y, r)
     local blocked, e = self.world:blocked(x, y, r)
     if not blocked then return false end
-    if Config.explosive_trees and e and e.type_data and e.type_data.explosive_tree then
+    if crushable(e) then
         local top = self.max_fwd * self.speed_factor
         if math.abs(self.speed) >= Config.tree_crush_speed * top then
             self.world:crush_tree(e)
@@ -800,6 +818,31 @@ function Player:_solid_at(x, y, r)
             return false
         end
     end
+    return true, e
+end
+
+-- The tank drove into solid object e, travelling (vx, vy): as in the original
+-- (0x1fc94c) it bounces off when e lies within bump_arc of where it is going.
+-- Its speed flips to the same share of the opposite top speed and it is set
+-- back by bump_back of travel, so the controls then ease it out of the bounce.
+-- Returns false when it only stops or slides: a glancing touch, or a crawl
+-- under bump_min of top speed (the original bounces at any speed, which the
+-- slower ramps here would turn into a shiver).
+function Player:_bump(e, vx, vy)
+    local fwd = math.max(1, self.max_fwd * self.speed_factor)
+    local rev = math.max(1, self.max_rev * self.speed_factor)
+    local top = self.speed > 0 and fwd or rev
+    if math.abs(self.speed) < self.bump_min * top then return false end
+
+    local ox, oy = self.world:delta(e.x, e.y, self.x, self.y)
+    local along  = ox * vx + oy * vy
+    local reach  = math.sqrt((ox * ox + oy * oy) * (vx * vx + vy * vy))
+    if reach <= 0 or along < reach * math.cos(self.bump_arc * math.pi / 180) then return false end
+
+    local back   = self.bump_back * Config.speed_scale
+    local bx, by = self.x - vx * back, self.y - vy * back
+    if not self.world:blocked(bx, by, self.collision_radius) then self.x, self.y = bx, by end
+    self.speed = -self.speed / top * (self.speed > 0 and rev or fwd) * self.bump_bounce
     return true
 end
 
@@ -810,14 +853,26 @@ function Player:_move(dt)
     local dy     = vy * sdt
 
     if self.world and not self:is_flyer() then
-        -- Axis-separated so the tank slides along obstacles instead of sticking.
-        local r  = self.collision_radius
-        local nx = self.x + dx
-        if self:_solid_at(nx, self.y, r) then nx = self.x end
-        local ny = self.y + dy
-        if self:_solid_at(nx, ny, r) then ny = self.y end
-        dx, dy = nx - self.x, ny - self.y
-        self.x, self.y = nx, ny
+        -- A tree it may push through is no wall to it: it neither bounces off
+        -- one nor loses the speed it builds up against it.
+        local r      = self.collision_radius
+        local hit, e = self:_solid_at(self.x + dx, self.y + dy, r)
+        local wall   = hit and not crushable(e)
+        if wall and self:_bump(e, vx, vy) then
+            dx, dy = 0, 0
+        else
+            -- Axis-separated so the tank slides along obstacles instead of sticking.
+            local step = dx * dx + dy * dy
+            local nx   = self.x + dx
+            if self:_solid_at(nx, self.y, r) then nx = self.x end
+            local ny = self.y + dy
+            if self:_solid_at(nx, ny, r) then ny = self.y end
+            dx, dy = nx - self.x, ny - self.y
+            self.x, self.y = nx, ny
+            -- Held against a wall with next to nowhere to slide, it stands,
+            -- and does not gather speed for another bump.
+            if wall and dx * dx + dy * dy < STUCK_SHARE * STUCK_SHARE * step then self.speed = 0 end
+        end
     else
         self.x = self.x + dx
         self.y = self.y + dy
