@@ -1,15 +1,16 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class    = require "engine.core.class"
-local Scene    = require "engine.core.scene"
-local Font     = require "engine.core.font"
-local Layout   = require "engine.ui.layout"
-local Pointer  = require "engine.ui.pointer"
-local Hint     = require "engine.ui.hint"
-local Audio    = require "engine.core.audio"
-local Savegame = require "engine.game.savegame"
-local Campaign = require "engine.game.campaign"
+local Class      = require "engine.core.class"
+local Scene      = require "engine.core.scene"
+local Font       = require "engine.core.font"
+local Layout     = require "engine.ui.layout"
+local Pointer    = require "engine.ui.pointer"
+local Hint       = require "engine.ui.hint"
+local ScrollText = require "engine.ui.scroll_text"
+local Audio      = require "engine.core.audio"
+local Savegame   = require "engine.game.savegame"
+local Campaign   = require "engine.game.campaign"
 
 -- SAVE / LOAD screen: an options-style panel of named slots over the pulsating
 -- main-menu backdrop, tinted green so it reads as a sibling of the OPTIONS page
@@ -17,8 +18,10 @@ local Campaign = require "engine.game.campaign"
 -- slot boxes, which this list cannot use). The list is unlimited and scrolls,
 -- every slot showing the name the player typed and the phase the run is parked
 -- on, with the highlighted slot's score, medals and lives under the
--- list. Reached from the mission briefing's SAVE and LOAD buttons and from the
--- main menu's LOAD entry.
+-- list. A name is held to the column left of the phase: the field being typed
+-- into follows the caret, the highlighted slot's name pans to its end and back
+-- when it is too wide, any other is cut off. Reached from the mission
+-- briefing's SAVE and LOAD buttons and from the main menu's LOAD entry.
 --
 -- enter() takes { mode = "save" | "load", return_to = <scene name>,
 -- stage = <stage name for the briefing> }. Saving writes the run state captured
@@ -39,6 +42,7 @@ local ROW_DY      = 16
 local ROW_H       = 12
 local MAX_ROWS    = 8
 local NAME_X      = 32
+local NAME_GAP    = 12     -- clear space between a name and its phase
 local PHASE_RX    = 290    -- right edge of the row's phase column
 local HIT_X0      = 22     -- row hit-test left / right
 local HIT_X1      = 300
@@ -48,7 +52,7 @@ local EXIT_RX     = 296
 local ARROW_GAP   = 8
 local FOOTER_Y    = 222
 local FADE_IN     = 0.25
-local NAME_MAX    = 18
+local NAME_MAX    = 40
 
 local GOLD = { 1, 0.8, 0.2 }
 
@@ -72,6 +76,8 @@ function Saves:enter(opts)
     self.t         = 0
     self.caret_t   = 0
     self.cursor    = 1
+    self.shown     = nil   -- the row whose name is panning, and for how long
+    self.shown_t   = 0
     self.scroll    = 0
     self.entry     = nil   -- { text, path } while a slot name is being typed
     self.pending_delete = nil
@@ -90,6 +96,10 @@ function Saves:_refresh()
     end
     self.cursor = math.min(self.cursor, #self.rows + 1)
     self:_scroll_to(self.cursor)
+end
+
+function Saves:leave()
+    self:_end_entry()
 end
 
 function Saves:_exit_index() return #self.rows + 1 end
@@ -126,12 +136,18 @@ function Saves:_begin_entry(row)
         path = (row.kind == "slot") and row.path or nil,
     }
     self.caret_t = 0
+    love.keyboard.setKeyRepeat(true)   -- a long name is erased by holding backspace
     Audio.play_event("ui.confirm")
+end
+
+function Saves:_end_entry()
+    self.entry = nil
+    love.keyboard.setKeyRepeat(false)
 end
 
 function Saves:_commit_entry()
     local entry = self.entry
-    self.entry  = nil
+    self:_end_entry()
     local name  = entry.text ~= "" and entry.text or "SAVED GAME"
     local data  = Savegame.capture(self.app, name)
     if Savegame.write(data, entry.path) then
@@ -181,7 +197,7 @@ function Saves:_entry_key(key)
     if key == "return" or key == "kpenter" then
         self:_commit_entry()
     elseif key == "escape" then
-        self.entry = nil
+        self:_end_entry()
         Audio.play_event("ui.back")
     elseif key == "backspace" then
         entry.text = entry.text:sub(1, -2)
@@ -249,6 +265,10 @@ end
 function Saves:update(dt)
     self.t       = self.t + dt
     self.caret_t = self.caret_t + dt
+    if self.shown ~= self.cursor or self.entry then
+        self.shown, self.shown_t = self.cursor, 0
+    end
+    self.shown_t = self.shown_t + dt
 end
 
 -- The blinking selection arrow to the left of a row at (x, y).
@@ -285,24 +305,32 @@ function Saves:_draw_row(i, y, fade)
     local hue   = sel and GOLD or { 1, 1, 1 }
     local col   = { hue[1], hue[2], hue[3], alpha }
 
+    local name_w = PHASE_RX - NAME_X
+    if row.kind == "slot" then
+        local phase = Savegame.stage_short(row.data.stage)
+        if type(row.data.coop) == "table" then phase = "2P " .. phase end
+        local phase_x = PHASE_RX - self.font:width(phase)
+        self.font:print(phase, phase_x, y + 2, { color = col })
+        name_w = phase_x - NAME_GAP - NAME_X
+    end
+
     local editing = self.entry and sel
-    local name
+    local name, offset
     if editing then
+        -- The caret's room is kept while it is dark, so the name stands still.
         local caret = (math.floor(self.caret_t * 2) % 2 == 0) and "_" or ""
-        name = self.entry.text .. caret
+        offset = ScrollText.tail(self.name_font, self.entry.text .. "_", name_w)
+        name   = self.entry.text .. caret
     elseif row.kind == "new" then
         name = "NEW SAVE"
     else
         name = tostring(row.data.name or "")
         if name == "" then name = "---" end
     end
-    self.name_font:print(name, NAME_X, y, { color = col })
-
-    if row.kind == "slot" then
-        local phase = Savegame.stage_short(row.data.stage)
-        if type(row.data.coop) == "table" then phase = "2P " .. phase end
-        self.font:print(phase, PHASE_RX - self.font:width(phase), y + 2, { color = col })
+    if not offset then
+        offset = sel and ScrollText.swing(self.name_font, name, name_w, self.shown_t) or 0
     end
+    ScrollText.print(self.name_font, name, NAME_X, y, name_w, offset, { color = col })
     if sel and not self.entry then self:_draw_arrow(NAME_X, y, fade) end
 end
 

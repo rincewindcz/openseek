@@ -8,6 +8,7 @@ local Assets     = require "engine.core.assets"
 local InfoScreen = require "engine.ui.info_screen"
 local Sound      = require "engine.game.sound"
 local Pointer    = require "engine.ui.pointer"
+local ScrollText = require "engine.ui.scroll_text"
 local json       = require "lib.json"
 local Log        = require "engine.core.log"
 
@@ -19,6 +20,8 @@ local Log        = require "engine.core.log"
 --     top 10, a new row opens for the player to type a name (blinking caret),
 --     which is saved to the persisted table on Enter. A co-op run passes a list
 --     of { score, label } instead; each qualifying player enters a name in turn.
+-- A name is held to the column left of its score: the row being typed into
+-- follows the caret, a stored name too wide for it pans to its end and back.
 -- EXIT returns to the menu.
 local HiScores = Class(Scene)
 
@@ -32,12 +35,13 @@ local GOLD          = { 1, 0.8, 0.2 }
 local LIVE          = { 1, 1, 1 }   -- the row being typed into, brighter than the rest
 
 local MAX_ROWS   = 10
-local NAME_MAX   = 8      -- longest nickname the entry field accepts
+local NAME_MAX   = 40     -- longest nickname the entry field accepts
 local LIST_TOP   = 58     -- first row baseline
 local ROW_H      = 15
 local RANK_X     = 66
 local NAME_X     = 96
 local SCORE_RX   = 254    -- score right edge
+local NAME_GAP   = 10     -- clear space between a name and its score
 local PANEL_X    = 52
 local PANEL_W    = 216
 
@@ -90,6 +94,7 @@ function HiScores:_begin_entry(score, label)
     table.insert(self.entries, rank, { name = "", score = score, editing = true })
     while #self.entries > MAX_ROWS do table.remove(self.entries) end
     self.entry = { row = rank, text = "", label = label }
+    love.keyboard.setKeyRepeat(true)
 end
 
 -- Open the next queued score that still makes the table, if any.
@@ -109,6 +114,7 @@ function HiScores:_commit_entry()
     row.editing = nil
     Log.info("hiscores", "new entry %s, %d points, rank %d", row.name, row.score, self.entry.row)
     self.entry  = nil
+    love.keyboard.setKeyRepeat(false)
     self:_save()
     self:_next_entry()
 end
@@ -161,15 +167,22 @@ function HiScores:_draw_table(g, fade)
         if not e then
             self.font:print("---", NAME_X, y, { color = col })
         else
-            local name = e.name ~= "" and e.name or "---"
+            local score   = tostring(e.score)
+            local score_x = SCORE_RX - self.font:width(score)
+            local name_w  = score_x - NAME_GAP - NAME_X
+            local name    = e.name ~= "" and e.name or "---"
+            local offset
             if e.editing then
-                -- Blinking underscore caret trailing the typed text.
+                -- Blinking underscore caret trailing the typed text; the row
+                -- follows it, with the caret's room kept while it is dark.
                 local caret = (math.floor((self.caret_t or 0) * 2) % 2 == 0) and "_" or ""
-                name = e.name .. caret
+                offset = ScrollText.tail(self.font, e.name .. "_", name_w)
+                name   = e.name .. caret
+            else
+                offset = ScrollText.swing(self.font, name, name_w, self.t)
             end
-            self.font:print(name, NAME_X, y, { color = col })
-            local score = tostring(e.score)
-            self.font:print(score, SCORE_RX - self.font:width(score), y, { color = col })
+            ScrollText.print(self.font, name, NAME_X, y, name_w, offset, { color = col })
+            self.font:print(score, score_x, y, { color = col })
         end
     end
 
@@ -184,6 +197,7 @@ end
 function HiScores:enter(new_scores)
     self.entries = self:_load()
     self.entry   = nil
+    self.t       = 0
     self.caret_t = 0
     self.pending = {}
     if type(new_scores) == "number" then
@@ -198,8 +212,12 @@ function HiScores:enter(new_scores)
     self.screen:open()
 end
 
-function HiScores:leave()          self.screen:close()     end
+function HiScores:leave()
+    love.keyboard.setKeyRepeat(false)
+    self.screen:close()
+end
 function HiScores:update(dt)
+    self.t       = self.t + dt
     self.caret_t = (self.caret_t or 0) + dt
     self.screen:update(dt)
 end
