@@ -1,8 +1,10 @@
 # About openSEEK game
 
-openSEEK is an open-source recreation of the game Seek & Destroy originally developed by SAFARI Software and Vision. It aims to provide a modern and accessible version of the game, while using the original game's assets and mechanics as a foundation.
+openSEEK is an open-source recreation of the game *Seek & Destroy* originally developed by SAFARI and Vision Software. It aims to provide a modern and accessible version of the game, while using the original game's assets and mechanics as a foundation.
 
 The engine is built using Lua and the Love2D framework and it's not a direct copy of the original game, but rather a reimagined version that captures the essence of Seek & Destroy while introducing new features and improvements. 
+
+This is unofficial project and is not affiliated with the original developers or publishers of *Seek & Destroy*. 
 
 > [!NOTE]
 > openSEEK source code is licensed under the MIT License. You are free to use, modify, and distribute it as you wish.
@@ -40,7 +42,7 @@ openSEEK converts the original game files on your machine on first launch:
 * **DOWNLOAD SHAREWARE** fetches the freely distributable Seek & Destroy v1.0 shareware release (missions 1 and 2) and converts it.
 * **USE MY COPY** converts your own DOS installation (the folder with `DATA.JAM`, or the files already unpacked) or a release `.zip`. Type or paste the path, or drop the folder onto the window. The full version unlocks all five missions.
 
-The converter ships next to the game as `openseek-setup.pyz`. The Windows download brings the Python that runs it and the macOS app carries the converter as a program of its own; elsewhere it needs Python 3.8+ and nothing else. The Linux download runs on the LOVE 11 and the Python 3 of your distribution: unpack it and start `./openseek`. LOVE 12 works too, experimentally: it is still in development, and openSEEK runs it on its OpenGL renderer. The converted data lives in the LOVE save directory, not in the game folder.
+The converter ships next to the game as `openseek-setup.pyz`. The Windows download brings the Python that runs it and the macOS app carries the converter as a program of its own; elsewhere it needs Python 3.8+.
 
 From a source checkout the same converter runs directly:
 
