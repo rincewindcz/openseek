@@ -40,7 +40,8 @@ local Audio = {
     _bus = { sfx = 1.0, voice = 1.0, engine = 1.0, ui = 1.0, music = 1.0 },
 
     _music      = nil,   -- { source, track, gain, fade } currently playing
-    _music_next = nil,   -- track queued behind a fade-out
+    _music_next = nil,   -- track queued behind a fade-out, or held back by a jingle
+    _jingle     = nil,   -- { source, gain, fading } one-shot on the music bus
 
     muted = false,   -- hard mute (replay verification, self-test)
 }
@@ -50,7 +51,8 @@ local Audio = {
 local MAX_VOICES      = 28
 local MAX_CLIP_VOICES = 4
 
-local MUSIC_FADE = 1.2   -- seconds of crossfade between tracks
+local MUSIC_FADE  = 1.2   -- seconds of crossfade between tracks
+local JINGLE_FADE = 0.3   -- seconds a stopped jingle takes to fade out
 
 function Audio.load(path)
     Audio._cats, Audio._files, Audio._sources, Audio._last = {}, {}, {}, nil
@@ -453,16 +455,31 @@ function Audio.music_tracks()
     return out
 end
 
+-- A sounding jingle holds the music back until its last MUSIC_FADE seconds, so
+-- a track requested under it fades in over its tail. A stopped one holds nothing.
+local function jingle_holds()
+    local jingle = Audio._jingle
+    if not jingle or jingle.fading then return false end
+    local src = jingle.source
+    return src:isPlaying() and src:getDuration() - src:tell() > MUSIC_FADE
+end
+
 -- Crossfade to `track` (a bare filename in assets/music/, or nil to fade out).
 -- Re-requesting the playing track is a no-op, so a scene can call this on every
--- enter without restarting the music.
+-- enter without restarting the music. With nothing playing, a track requested
+-- under a jingle waits for it (Audio.update starts it).
 function Audio.play_music(track)
     if Audio._music and Audio._music.track == track then
         Audio._music_next = nil
         return
     end
     if not Audio._music then
+        Audio._music_next = nil
         if not track then return end
+        if jingle_holds() then
+            Audio._music_next = track
+            return
+        end
         local path = Audio.music_tracks()[track]
         if not path then return end
         local ok, src = pcall(love.audio.newSource, path, "stream")
@@ -481,8 +498,33 @@ function Audio.stop_music()
     Audio._music, Audio._music_next = nil, nil
 end
 
--- Per-frame mixer housekeeping: duck release and the music crossfade. Driven
--- from main.lua with the real frame delta, never the fixed tick.
+-- A one-shot piece on the music bus, outside the track crossfade so its attack
+-- is not faded in (the engine intro's riff). path is a full content path. The
+-- music waits for it (jingle_holds).
+-- Returns its length in seconds, or nil when it does not play (muted, silent
+-- music bus, missing file).
+function Audio.play_jingle(path)
+    if Audio._jingle then Audio._jingle.source:stop() end
+    Audio._jingle = nil
+    local level = Audio.bus_gain("music")
+    if Audio.muted or level <= 0.004 then return nil end
+    if not love.filesystem.getInfo(path) then return nil end
+    local ok, src = pcall(love.audio.newSource, path, "stream")
+    if not ok then return nil end
+    src:setVolume(level)
+    src:play()
+    Audio._jingle = { source = src, gain = 1, fading = false }
+    return src:getDuration()
+end
+
+-- Fade the jingle out, if one is still sounding.
+function Audio.stop_jingle()
+    if Audio._jingle then Audio._jingle.fading = true end
+end
+
+-- Per-frame mixer housekeeping: duck release, the jingle and the music
+-- crossfade. Driven from main.lua with the real frame delta, never the fixed
+-- tick.
 function Audio.update(dt)
     local now = love.timer.getTime()
     for bus, d in pairs(Audio._duck) do
@@ -492,8 +534,23 @@ function Audio.update(dt)
         end
     end
 
+    local jingle = Audio._jingle
+    if jingle then
+        if jingle.fading then jingle.gain = jingle.gain - dt / JINGLE_FADE end
+        if jingle.gain <= 0 or not jingle.source:isPlaying() then
+            jingle.source:stop()
+            Audio._jingle = nil
+        else
+            jingle.source:setVolume(jingle.gain * Audio.bus_gain("music"))
+        end
+    end
+
     local m = Audio._music
-    if not m then return end
+    if not m then
+        local held = Audio._music_next
+        if held and not jingle_holds() then Audio.play_music(held) end
+        return
+    end
     local target = Audio._music_next == nil and 1 or 0
     local step   = dt / MUSIC_FADE
     m.gain = math.max(0, math.min(1, m.gain + (target > m.gain and step or -step)))

@@ -72,6 +72,7 @@ decoded from the user's own copy of the game and are never distributed.
 | `hud/player_f00..f03.png` | Co-op score labels P1-P4, 8x6 masks, 3x5 glyphs. |
 | `fonts/main_synth/{B,J,K,Q,Y,Z}.png` | Menu word-art letters absent from `MAINMEN.BIN`. |
 | `intro/openseek_intro.png` | openSEEK engine card, 1920x1080, shown before TITLE (`engine_intro`) and behind `MISSING GAME DATA`. |
+| `intro/openseek_intro.ogg` | The engine card's riff, about 5.6 s, started with the card and ringing on over TITLE. |
 | `fonts/loaded/loaded.ttf` | "Loaded" TTF (Andrew Wilson, SIL OFL 1.1, `OFL.txt`). Text fallback when the pack's bitmap fonts are missing. |
 
 ## 3. Code conventions
@@ -194,7 +195,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 
 | Scene | Role |
 |-------|------|
-| `title` | Engine intro card on the first launch or while `engine_intro` is on (Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`, or to `style_select` until `Config.style_chosen` is set. |
+| `title` | Engine intro card on the first launch or while `engine_intro` is on (about 3 s; its riff rings on over TITLE and holds the menu music back; Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`, or to `style_select` until `Config.style_chosen` is set. |
 | `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT, or FULLSCREEN on the web); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. |
 | `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
@@ -232,7 +233,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/rng` | Seeded per-phase RNG with draw counter. |
 | `core/animation` | `AnimClip` from `data/animations.json`, per-instance `AnimState`. |
 | `core/assets` | Path resolution and pack check (section 2). |
-| `core/audio` | Clip catalog, event table (clip lists, per-vehicle variants, size pitch), callouts and sequences, voice pools, buses, ducking, music (`.ogg`, `.mp3`, `.med`; an `.ogg` / `.mp3` beats a `.med` of the same name). |
+| `core/audio` | Clip catalog, event table (clip lists, per-vehicle variants, size pitch), callouts and sequences, voice pools, buses, ducking, music (`.ogg`, `.mp3`, `.med`; an `.ogg` / `.mp3` beats a `.med` of the same name), one-shot jingle on the music bus. |
 | `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. `print` `cell` option draws fixed-pitch at each glyph's in-frame x offset. `for_mission(name, m)` returns the cut a mission ships for its own HUD palette (`chars3`), else the shared font. |
 | `core/screen` | Fullscreen image fade in / hold / out, with an optional `fx` object animating the picture (`update`, `cue`, `draw`; `cut` skips the fade-in). `is_closing` reports the fade-out. |
 | `core/flic` | FLI / FLC player: decodes one frame per `next_frame` into an index buffer and an RGBA `image` (COLOR_256 / 64, DELTA_FLC / FLI, BYTE_RUN, BLACK, COPY); the caller sets the pace. |
@@ -699,6 +700,12 @@ replay header `player.N.skin` / `player.N.tank`).
   the high scores after a run (`menu` when browsed from the menu). The pack
   holds `menu.med`, `hiscores.med` and `ending.med` (OctaMED, played through
   ModPlug); an `.ogg` / `.mp3` of the same name replaces one.
+- Jingle: `Audio.play_jingle(path)` plays one content file once on the music
+  bus, at full level from its first sample (no crossfade), and returns its
+  length; `Audio.stop_jingle()` fades it out. With no track playing, music
+  requested under a sounding jingle is held until the jingle's last 1.2 s (the
+  music fade), so it comes in over the tail. The engine intro card's riff
+  (`content/intro/openseek_intro.ogg`).
 
 ## 11. Additions beyond the original
 

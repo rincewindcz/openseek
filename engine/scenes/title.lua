@@ -3,6 +3,7 @@
 
 local Class  = require "engine.core.class"
 local Scene  = require "engine.core.scene"
+local Audio  = require "engine.core.audio"
 local Config = require "engine.core.config"
 local Sound  = require "engine.game.sound"
 
@@ -11,16 +12,27 @@ local Sound  = require "engine.game.sound"
 -- every frame so the overview never flashes during the intro; done, Esc, Enter
 -- or Space drops into the main menu (Enter / Space on the engine card skip only
 -- to the TITLE card), or into the style selection screen until the player has
--- confirmed it once. The menu music starts here, at boot, as in the original.
+-- confirmed it once. The menu music starts here, at boot, as in the original;
+-- behind the engine card's riff the mixer holds it back. The riff outlasts its
+-- card and rings on over the TITLE card; skipping either card fades it out.
 local Title = Class(Scene)
 
-Title.ENGINE_INTRO = "content/intro/openseek_intro.png"
+Title.ENGINE_INTRO       = "content/intro/openseek_intro.png"
+Title.ENGINE_INTRO_MUSIC = "content/intro/openseek_intro.ogg"
+
+local INTRO_FADE_IN   = 0.25
+local INTRO_HOLD      = 0.8   -- without the riff (muted, music volume at zero)
+local INTRO_HOLD_RIFF = 2.5
+local INTRO_FADE_OUT  = 0.25
 
 function Title:enter()
     local app = self.app
-    Sound.play_music("menu")
     local function to_menu()
         app.scenes:switch(Config.style_chosen and "main_menu" or "style_select")
+    end
+    local function skip_to_menu()
+        Audio.stop_jingle()
+        to_menu()
     end
     local function show_title()
         app.screen:show("TITLE", {
@@ -30,7 +42,7 @@ function Title:enter()
             build_tag = true,
             skippable = true,
             on_done   = to_menu,
-            on_cancel = to_menu,
+            on_cancel = skip_to_menu,
         })
     end
     -- EXTRA (engine_intro): always shown on the first launch, which also saves the
@@ -41,17 +53,23 @@ function Title:enter()
         Config.first_launch = false
         Config.save()
     end
-    if not (first or Config.engine_intro) then
+    local intro = first or Config.engine_intro
+    local riff  = intro and Audio.play_jingle(Title.ENGINE_INTRO_MUSIC)
+    Sound.play_music("menu")
+    if not intro then
         show_title()
         return
     end
     app.screen:show(Title.ENGINE_INTRO, {
-        fade_in   = 0.25,
-        hold      = 0.8,
-        fade_out  = 0.25,
+        fade_in   = INTRO_FADE_IN,
+        hold      = riff and INTRO_HOLD_RIFF or INTRO_HOLD,
+        fade_out  = INTRO_FADE_OUT,
         skippable = true,
         on_done   = show_title,
-        on_cancel = show_title,
+        on_cancel = function()
+            Audio.stop_jingle()
+            show_title()
+        end,
     })
 end
 
