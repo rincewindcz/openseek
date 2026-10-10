@@ -136,9 +136,11 @@ either:
   so the overview and everything reached only from it (sandbox, co-op free
   play, replay browser `F4`, sound gallery, ending preview) cannot be entered.
 - The developer keys do nothing: `F2` (debug inspector), `F5` (god mode), `F6`
-  (pickup override), `Delete` (self-destruct), the stage and kind pickers in
-  free play (`Tab`, `K`, `PgUp` / `PgDn`) and the main menu's `F8` / `F9`
-  galleries.
+  (pickup override), `E` (weapon level), `Delete` (self-destruct), the stage
+  and kind pickers in free play (`Tab`, `K`, `PgUp` / `PgDn`) and the main
+  menu's `F8` / `F9` galleries.
+- `R` restarts a stage in free play only; in a campaign it would be a free
+  retry.
 
 `--touch` turns the left mouse button into a single touch (the pointer moves
 only while it is held, as a finger would) and makes `Z` hold the on-screen FIRE
@@ -937,9 +939,9 @@ same bytes on every platform.
 | Ctrl | Fire |
 | Space | Take off / land |
 | Q, 1-9 | Cycle / select weapon |
-| E | Weapon level (free play) |
+| E | Weapon level (free play, `--dev`) |
 | P | Pause |
-| R | Restart stage |
+| R | Restart stage (free play; in a campaign only under `--dev`) |
 | F1 | Game mode |
 | F2 | Debug inspector (`--dev`) |
 | F3 | Sandbox |

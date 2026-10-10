@@ -503,8 +503,9 @@ function Gameplay:debug_keys(key)
 end
 
 -- The in-game keys after the debug (and sandbox) layers had their chance. God
--- mode, the pickup override, the self-destruct and the stage / kind pickers
--- are developer keys (--dev).
+-- mode, the pickup override, the weapon level, the self-destruct and the stage
+-- / kind pickers are developer keys (--dev), and so is a restart in a campaign,
+-- where it would be a free retry.
 function Gameplay:game_keys(key)
     local app = self.app
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
@@ -514,12 +515,12 @@ function Gameplay:game_keys(key)
         if key == "escape" then self:finish_playback("stopped") end
         return
     end
-    if key == "r"  then self.paused = false; self:restart(); return end
+    if key == "r" and (app.dev or not app.campaign) then self.paused = false; self:restart(); return end
     if app.dev and key == "f5" then self.source:queue("god"); return end
     if app.dev and key == "f6" then self.source:queue("pickup_mode"); return end
     if Input.pressed("takeoff", key) then self.source:queue("takeoff"); return end
     if Input.pressed("weapon", key)  then self.source:queue("weapon"); return end
-    if key == "e" then self.source:queue("level"); return end
+    if app.dev and key == "e" then self.source:queue("level"); return end
     if app.dev and not app.campaign then
         if key == "delete" then self.source:queue("destruct"); return end
         if Overview.picker_keys(app, key) then return end

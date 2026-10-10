@@ -658,9 +658,10 @@ function CoopGameplay:keypressed(key)
         if key == p.controls.radar_zoom then app.hud:toggle_radar_zoom(p) end
     end
     if self.playback then return end
-    if key == "r" then
+    if key == "r" and (app.dev or not app.campaign) then
         -- Restart reloads the stage first, like single player, so destroyed
-        -- entities and spent objectives come back.
+        -- entities and spent objectives come back. A campaign has none (it
+        -- would be a free retry), outside a developer run.
         Log.info("game", "restart %s", app.world.stage_name)
         app.world:load(app.world.stage_name)
         app.after_stage_load()
