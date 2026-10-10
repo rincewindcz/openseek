@@ -82,9 +82,9 @@ function MainMenu:keypressed(key)
         if self.over_game then self.app.scenes:pop() end
         return
     end
-    -- The F8/F9 dev galleries stay reachable from the fresh menu; they switch
-    -- back to the menu when closed.
-    if (key == "f8" or key == "f9") and not self.over_game then
+    -- The F8/F9 dev galleries stay reachable from the fresh menu of a developer
+    -- run (--dev); they switch back to the menu when closed.
+    if (key == "f8" or key == "f9") and self.app.dev and not self.over_game then
         self.app.scenes:switch(key == "f8" and "anim_gallery" or "font_gallery")
         return
     end

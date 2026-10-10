@@ -10,12 +10,14 @@ local Assets  = require "engine.core.assets"
 -- Replaces the LOVE error screen (love.errorhandler, set in main.lua). An
 -- unhandled error writes a report into the save directory (the error, the
 -- traceback, the build, the platform, the pack and the last log lines) and
--- shows the error with the report's location, in the look of the data setup
--- screen: both draw only what ships with the engine, so neither needs the pack.
+-- shows the error with the report's location and where to send it, in the look
+-- of the data setup screen: both draw only what ships with the engine, so
+-- neither needs the pack.
 -- Everything it reads is guarded, since any part of the game may be what broke.
 local ErrorScreen = Class()
 
 local REPORT_DIR   = "crashes"
+local ISSUES_URL   = "https://github.com/rincewindcz/openseek/issues"
 local FONT_PATH    = "content/fonts/loaded/loaded.ttf"
 local DESKTOP      = { Linux = true, Windows = true, ["OS X"] = true }
 local HEADLESS_ARG = "--selftest"
@@ -70,7 +72,7 @@ local function pack_line()
 end
 
 local function build_report(message, trace)
-    local lines = { "openSEEK crash report", "" }
+    local lines = { "openSEEK crash report", "please send it to " .. ISSUES_URL, "" }
     local function field(label, fn)
         lines[#lines + 1] = ("%-10s%s"):format(label .. ":", guarded(fn))
     end
@@ -211,6 +213,8 @@ function ErrorScreen:_rows()
     else
         add(self.small_font, "THE REPORT COULD NOT BE SAVED", GREY)
     end
+    add(self.small_font, "PLEASE REPORT THE CRASH AT", GREY)
+    add(self.text_font, ISSUES_URL, GOLD)
     space()
     if self.notice then
         add(self.small_font, self.notice, GOLD)

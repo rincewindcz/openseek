@@ -158,14 +158,18 @@ function love.load(args)
 
     -- Command line: `love . stage12` opens a stage, `love . --selftest [ticks]
     -- [stage]` runs the determinism self-test (below), `love . --photo` enables
-    -- photo mode (engine/dev/photo_mode.lua). Flags and the tick count are
-    -- skipped when looking for the stage name.
-    local stage_arg, selftest_ticks, selftest, photo = nil, nil, false, false
+    -- photo mode (engine/dev/photo_mode.lua), `love . --dev` unlocks the
+    -- developer tools (the ADVANCED menu's EDITOR entry, the debug panel, the
+    -- cheat keys). Flags and the tick count are skipped when looking for the
+    -- stage name.
+    local stage_arg, selftest_ticks, selftest, photo, dev = nil, nil, false, false, false
     for _, a in ipairs(args or {}) do
         if a == "--selftest" then
             selftest = true
         elseif a == "--photo" then
             photo = true
+        elseif a == "--dev" then
+            dev = true
         elseif a == "--touch" then
             touch_emulation = true
         elseif tonumber(a) then
@@ -194,6 +198,7 @@ function love.load(args)
         record_runs       = true,  -- write a replay file for every phase played
         upload_runs       = Replay.upload_enabled(), -- also hand each one to the hosting web page
         touch_emulation   = touch_emulation, -- `--touch`: mouse as a finger, MOBILE UI options shown
+        dev               = dev or photo, -- `--dev` (or `--photo`): the editor, the debug panel, the cheat keys
         replay_play       = nil,   -- Replay being played back (set by the replay picker)
         replay_verify     = false, -- playback at speed, only to check for divergence
         replay_result     = nil,   -- outcome of the last playback, shown by the picker

@@ -9,7 +9,8 @@ local Menu  = require "engine.ui.menu"
 -- / phase picker, the overview editor view, the replay browser), kept off the
 -- main menu so it stays short. Same Menu widget and backdrop as the main menu;
 -- BACK returns to it. Not to be confused with advanced_settings, which is the
--- OPTIONS page.
+-- OPTIONS page. The editor is not ready for players: EDITOR answers with a
+-- notice unless the game was started with --dev.
 local AdvancedMenu = Class(Scene)
 
 AdvancedMenu.ui_pointer = true
@@ -21,9 +22,12 @@ local ENTRIES = {
     { id = "back",    label = "BACK" },
 }
 
+local EDITOR_NOTICE = "EDITOR IS IN DEVELOPMENT"
+
 function AdvancedMenu:init(app)
     Scene.init(self, app)
     self.menu = Menu:new(ENTRIES)
+    if not app.dev then self.menu:set_notice("editor", EDITOR_NOTICE) end
     self.menu.on_select = function(id) self:_select(id) end
 end
 

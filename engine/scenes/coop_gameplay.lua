@@ -667,12 +667,13 @@ function CoopGameplay:keypressed(key)
         app.scenes:switch("coop_gameplay")
         return
     end
-    if key == "f5" then
+    -- Developer keys (--dev): god mode and the pickup override.
+    if app.dev and key == "f5" then
         app.settings.coop.god = not app.settings.coop.god
         for _, src in ipairs(self.sources) do src:queue("god") end
         return
     end
-    if key == "f6" then self.sources[1]:queue("pickup_mode"); return end
+    if app.dev and key == "f6" then self.sources[1]:queue("pickup_mode"); return end
     for i, p in ipairs(self.players) do
         if key == p.controls.weapon then self.sources[i]:queue("weapon") end
         if key == p.controls.action then self.sources[i]:queue("takeoff") end

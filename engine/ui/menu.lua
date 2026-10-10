@@ -58,6 +58,12 @@ local CONFIRM_TIME = 0.30
 local CONFIRM_FLASH = 100  -- rad/s of the confirmed row's fast on/off flash
 local CONFIRM_FLASH_LOW = 0.0
 
+-- The line an entry answers with instead of being confirmed (set_notice),
+-- under the last row in the CHARS font.
+local NOTICE_TIME = 2.2   -- seconds it stays up
+local NOTICE_FADE = 0.25  -- seconds of fade at either end
+local NOTICE_GAP  = 10    -- px below the last row
+
 local Menu_DEFAULT_ENTRIES = {
     { id = "new_game",   label = "NEW GAME" },
     { id = "resume",     label = "RESUME",     enabled = false },
@@ -75,13 +81,14 @@ local Menu_DEFAULT_ENTRIES = {
 function Menu:init(entries)
     -- Copy so each instance owns its entries (enabled/y are mutated in place)
     -- rather than sharing / clobbering the module-level defaults. An entry with
-    -- `web` set is kept only on (true) or off (false) the web build.
+    -- `web` set is kept only on (true) or off (false) the web build; one with
+    -- `notice` shows that line when confirmed and is never delivered.
     self.entries = {}
     local web = love.system.getOS() == "Web"
     for _, e in ipairs(entries or Menu_DEFAULT_ENTRIES) do
         if e.web == nil or e.web == web then
             self.entries[#self.entries + 1] = { id = e.id, label = e.label, enabled = e.enabled,
-                gap_after = e.gap_after }
+                gap_after = e.gap_after, notice = e.notice }
         end
     end
     self.cursor  = 1
@@ -148,6 +155,8 @@ function Menu:open()
     self.confirming = nil   -- pending confirmed id during the fade-out
     self.confirm_t = 0
     self.pressed = nil      -- entry armed by mouse/touch down, fires on release
+    self.notice = nil       -- line shown by an entry that is not available
+    self.notice_t = 0
     self.sel_blink_t = SEL_BLINK_TIME  -- start with no blink in progress
     if self.entries[self.cursor] and self.entries[self.cursor].enabled == false then
         self:_move(1, true)
@@ -175,6 +184,27 @@ function Menu:set_enabled(id, enabled)
     if self.entries[self.cursor] and self.entries[self.cursor].enabled == false then
         self:_move(1, true)
     end
+end
+
+-- Makes an entry answer with a line of text instead of being confirmed (a
+-- feature that is not available yet); nil makes it an ordinary entry again.
+function Menu:set_notice(id, text)
+    for _, e in ipairs(self.entries) do
+        if e.id == id then e.notice = text end
+    end
+end
+
+-- Confirm an entry: start the fade-out that delivers it, or show its notice.
+function Menu:_confirm(e)
+    if not e or e.enabled == false then return end
+    if e.notice then
+        self.notice, self.notice_t = e.notice, 0
+        Audio.play_event("ui.back")
+        return
+    end
+    self.confirming = e.id
+    self.confirm_t = 0
+    Audio.play_event("ui.confirm")
 end
 
 -- quiet: land on the entry without the navigation click, for the corrective
@@ -233,14 +263,7 @@ function Menu:release(x, y)
     local i   = self:_entry_at(Pointer.to_design(x, y, DESIGN_W, DESIGN_H))
     local was = self.pressed
     self.pressed = nil
-    if was and i == was then
-        local e = self.entries[was]
-        if e and e.enabled ~= false then
-            self.confirming = e.id
-            self.confirm_t = 0
-            Audio.play_event("ui.confirm")
-        end
-    end
+    if was and i == was then self:_confirm(self.entries[was]) end
 end
 
 -- Confirming an entry starts a short fade-out; the choice is delivered to
@@ -253,12 +276,7 @@ function Menu:keypressed(key)
     elseif key == "down" then
         self:_move(1)
     elseif key == "return" or key == "space" or key == "kpenter" then
-        local e = self.entries[self.cursor]
-        if e and e.enabled ~= false then
-            self.confirming = e.id
-            self.confirm_t = 0
-            Audio.play_event("ui.confirm")
-        end
+        self:_confirm(self.entries[self.cursor])
     end
 end
 
@@ -266,6 +284,10 @@ function Menu:update(dt)
     if not self.active or self.held then return end
     self.t = self.t + dt
     if self.open_t < OPEN_TIME then self.open_t = self.open_t + dt end
+    if self.notice then
+        self.notice_t = self.notice_t + dt
+        if self.notice_t >= NOTICE_TIME then self.notice = nil end
+    end
 
     if self.confirming then
         self.confirm_t = self.confirm_t + dt
@@ -358,6 +380,13 @@ function Menu:draw()
         if selected then
             self:_draw_arrow(g, hl * fade)
         end
+    end
+
+    local last = self.entries[#self.entries]
+    if self.notice and last then
+        local a = math.min(1, self.notice_t / NOTICE_FADE, (NOTICE_TIME - self.notice_t) / NOTICE_FADE)
+        self.edition_font:print(self.notice, ROW_X, last.y + last.h + NOTICE_GAP,
+            { color = { 1, 1, 1, a * fade } })
     end
 
     g.pop()

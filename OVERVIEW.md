@@ -126,7 +126,19 @@ love . --selftest [ticks] [stage]
 love . [stageMP]
 love . --touch                # phone controls on a desktop (see below)
 love . --photo [stageMP]      # developer photo mode (see below)
+love . --dev                  # developer run: the editor, the debug panel, the cheat keys
 ```
+
+`--dev` marks a developer run (`app.dev`); `--photo` implies it. Without
+either:
+
+- The ADVANCED menu's EDITOR entry answers with `EDITOR IS IN DEVELOPMENT`,
+  so the overview and everything reached only from it (sandbox, co-op free
+  play, replay browser `F4`, sound gallery, ending preview) cannot be entered.
+- The developer keys do nothing: `F2` (debug inspector), `F5` (god mode), `F6`
+  (pickup override), `Delete` (self-destruct), the stage and kind pickers in
+  free play (`Tab`, `K`, `PgUp` / `PgDn`) and the main menu's `F8` / `F9`
+  galleries.
 
 `--touch` turns the left mouse button into a single touch (the pointer moves
 only while it is held, as a finger would) and makes `Z` hold the on-screen FIRE
@@ -191,13 +203,13 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
   (`Gamepad.MENU_KEYS`: d-pad arrows, A / START Enter, B / BACK Esc), which is
   what drives every menu; the gameplay scenes take their bound actions instead.
   The `Screen` overlay is advanced or cancelled (B) first, as by a key.
-- An unhandled error ends in `ui/error_screen` (`love.errorhandler`).
+- An unhandled error ends in `ui/error_screen` (`love.errorhandler`), which names the GitHub issues page for the report.
 
 | Scene | Role |
 |-------|------|
 | `title` | Engine intro card on the first launch or while `engine_intro` is on (about 3 s; its riff rings on over TITLE and holds the menu music back; Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`, or to `style_select` until `Config.style_chosen` is set. |
 | `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT, or FULLSCREEN on the web); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. |
-| `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. |
+| `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. EDITOR is locked: it shows the `EDITOR IS IN DEVELOPMENT` notice and opens the overview only under `--dev` / `--photo` (`app.dev`). |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews; the active card names its variant in the gold `credchars` font, its letters closed up by up to 2 px when the name is wider than the gap between the arrows (the co-op columns). Campaign: START begins the run. Free (F7): the focused card is the vehicle; G toggles god mode. Two players: a CONTROLS line per column (`1` / `2` or a click cycles AUTO, KEYS, PAD 1, PAD 2 into `coop_device_1` / `_2`, showing what AUTO resolves to and a named pad that is missing); a pad steps the column of the player holding it. |
 | `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3 (the shareware: DEMO01..03 and DEMOOVER, no animation, with `extra_lines` appended under DEMOOVER). Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, preview, keep_music, on_done }`; `alternate` types VIC3's alternate ending, `preview` falls back to `data/ending.json` `preview` without a record (overview F11), `keep_music` leaves the end music playing into the credits (`Campaign.complete`). EXTRA `ending_stats` adds the run record under FIN01..03 (DEMO01..03). |
@@ -207,7 +219,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
 | `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. Co-op: once per player (tagged), EXIT steps back a player. |
 | `shop` | POWUP / POWUPT weapon shop. Co-op: once per player, each with their own purse. |
-| `overview` | Free camera, stage and kind pickers, entity type editor. |
+| `overview` | Free camera, stage and kind pickers, entity type editor. Reached only with `--dev` / `--photo`. |
 | `gameplay` (F1) | Player-locked rotating camera, combat. |
 | `sandbox` (F3) | Gameplay plus live vehicle parameter editor. |
 | `style_select` | Style selection screen, a `gameplay` subclass: three style cards (CLASSIC, ENHANCED, OVERKILL, on the VSELECT camo strip the style's `camo` names), the chosen style's one `about` line, a DIFFICULTY row, a fixed line pointing at the options for a style of one's own, and the OK plate over a live phase, unrecorded, silent and in god mode. The phase is flown by the scripted runs of `data/styles.json` `preview` in turn, each entered as a new phase on its own stage and started inside an enemy base. Nothing holds the replay parameters fixed during a run, so a choice is written to `Config` and shows at once. Opened by `title` until confirmed once (starts on the `default` style, no way out but OK), and by OPTIONS with `return_to`, where Esc restores every `Config` scalar. Leaving reloads the stage that was loaded before. |
@@ -275,7 +287,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/crash_fx` | EXTRA crash picture effects (`data/crash_fx.json`), the `fx` of the crash / game-over overlay: smoke, fire glow, embers and heat haze composed at the picture's resolution, flash and static entrance, static burst on a radio cue (`crash_fx`); the typed cause of the loss (`crash_cause`, from `Player.damage_cause`); the run's trivia (`crash_stats`, from `World.tally` and the campaign record via `GameplayBase:crash_stats`). `CrashFX.show` picks the picture and its timing for both gameplay scenes (the fx is nil with every extra off); `CrashFX.preview` is the overview's `Delete` key. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse, greys levels the purse cannot pay for (not the selected one, whose COST reads red), slides the focus frame, marks the hovered box and dims LOADED while a higher level is selected. |
-| `ui/menu` | Main menu over `MAINP`, `main` font (`mainmen` on a pack exported before `main` existed). Also drives the `new_game` and `advanced_menu` submenus. |
+| `ui/menu` | Main menu over `MAINP`, `main` font (`mainmen` on a pack exported before `main` existed). Also drives the `new_game` and `advanced_menu` submenus. `set_notice(id, text)` makes an entry answer with a line under the last row (`chars` font, 2.2 s) instead of being confirmed. |
 | `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
 | `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. The icon under the pointer lights up: its art is added onto itself by as much as lifts the card's mean brightness to `HOVER_TARGET` (the dark night cards about 2.5 times, a day card barely). |
 | `ui/mission_select` | `STAGE0X_MPIC` carousel over the missions present, phase buttons. |
@@ -287,7 +299,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/hint` | Two-tone footer key hints: `{ENTER} LOAD` draws the braced key name gold and the action white. |
 | `ui/scroll_text` | Text held to a fixed width for typed values: clipped print with an offset, `tail` (the end in view, for a field being typed into) and `swing` (pans a text that does not fit to its end and back). |
 | `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Buttons draw their white icon from `content/mobileui/icon_<id>.png` (label when missing), tinted gold or white. MOBILE UI options: `touch_color`, `touch_opacity` (multiplies every alpha), `touch_button_scale`, `touch_stick_scale`, `touch_left_handed` (buttons measured from the left edge, stick on the right half). Drawn while the last input was touch (from the start under `--touch`). |
-| `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay. |
+| `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay (`--dev`). |
 | `dev/selftest` | Scripted phase run three ways, compared per tick. |
 | `dev/photo_mode` | `--photo` only: holds the scene, puts a free view (focus offset, zoom multiplier, turn) on the scene's camera for the length of a draw, and captures the scene's `draw_world()` into a canvas of the output size (`data/photo.json`). Presentation only; steps whole ticks through the scene's update. |
 
@@ -929,19 +941,19 @@ same bytes on every platform.
 | P | Pause |
 | R | Restart stage |
 | F1 | Game mode |
-| F2 | Debug inspector |
+| F2 | Debug inspector (`--dev`) |
 | F3 | Sandbox |
 | F4 | Replays |
-| F5 | God mode |
-| F6 | Fly-over pickup override (ignores the difficulty landing rules) |
-| Delete | Free play: wreck the own vehicle (crash picture test). Overview: preview the game-over picture, Shift the one before a respawn |
+| F5 | God mode (`--dev`) |
+| F6 | Fly-over pickup override (ignores the difficulty landing rules; `--dev`) |
+| Delete | Free play: wreck the own vehicle (crash picture test; `--dev`). Overview: preview the game-over picture, Shift the one before a respawn |
 | F7 | Co-op free play (vehicle select) |
-| F8 / F9 / F10 | Animation / font / sound gallery (overview) |
+| F8 / F9 / F10 | Animation / font / sound gallery (overview; `F8` / `F9` also on the main menu under `--dev`) |
 | F11, Shift+F11 | Ending, VIC3's alternate ending, with the preview stats (overview) |
 | F9 | Radar auto zoom (in game, rebindable). Co-op: P1 Tab, P2 keypad `.` |
 | F12 | Screenshot (rebindable) |
 | Overview: wheel, +/- | Zoom |
-| Overview: Tab, PgUp/PgDn | Stage picker / cycle (also in free play, never in a campaign) |
+| Overview: Tab, PgUp/PgDn | Stage picker / cycle (also in free play under `--dev`, never in a campaign) |
 | Overview: L, G | Segment lines, 256 px grid |
 | Overview: V, O | Vehicle, optional game over |
 | Overview: C, [ ] | Axis-aligned pickups, `speed_scale` |

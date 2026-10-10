@@ -492,16 +492,19 @@ function Gameplay:draw()
     app.debug_panel:draw()
 end
 
--- Debug-panel keys, shared with the sandbox subclass. Returns true when the
--- key was consumed.
+-- Debug-panel keys, shared with the sandbox subclass; developer runs (--dev)
+-- only. Returns true when the key was consumed.
 function Gameplay:debug_keys(key)
     local app = self.app
+    if not app.dev then return false end
     if key == "f2" then app.debug_panel:toggle(); return true end
     if app.debug_panel.enabled and app.debug_panel:keypressed(key) then return true end
     return false
 end
 
--- The in-game keys after the debug (and sandbox) layers had their chance.
+-- The in-game keys after the debug (and sandbox) layers had their chance. God
+-- mode, the pickup override, the self-destruct and the stage / kind pickers
+-- are developer keys (--dev).
 function Gameplay:game_keys(key)
     local app = self.app
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
@@ -512,13 +515,15 @@ function Gameplay:game_keys(key)
         return
     end
     if key == "r"  then self.paused = false; self:restart(); return end
-    if key == "f5" then self.source:queue("god"); return end
-    if key == "f6" then self.source:queue("pickup_mode"); return end
+    if app.dev and key == "f5" then self.source:queue("god"); return end
+    if app.dev and key == "f6" then self.source:queue("pickup_mode"); return end
     if Input.pressed("takeoff", key) then self.source:queue("takeoff"); return end
     if Input.pressed("weapon", key)  then self.source:queue("weapon"); return end
     if key == "e" then self.source:queue("level"); return end
-    if key == "delete" and not app.campaign then self.source:queue("destruct"); return end
-    if not app.campaign and Overview.picker_keys(app, key) then return end
+    if app.dev and not app.campaign then
+        if key == "delete" then self.source:queue("destruct"); return end
+        if Overview.picker_keys(app, key) then return end
+    end
     local slot = key:match("^(%d)$")
     if slot then self.source:queue("slot:" .. slot); return end
     if key == "escape" then app.scenes:push("main_menu") end
