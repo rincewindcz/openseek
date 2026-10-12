@@ -27,7 +27,7 @@ local json   = require "lib.json"
 -- enter(opts): alternate (VIC3's alternate ending), record (the run's record,
 -- engine/game/campaign.lua), scores (a number, or co-op { score, label }
 -- entries), preview (without a record, the sample record and score of
--- data/ending.json preview, for the overview's viewer), keep_music (leave the
+-- data/ending.json preview, for the developer's preview), keep_music (leave the
 -- end music playing into the next scene), on_done (where to go once it ends;
 -- back to the main menu without).
 local Ending = Class(Scene)

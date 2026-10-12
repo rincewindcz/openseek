@@ -13,6 +13,20 @@
         "pool_ahead": 24,
         "pool_intensity": 0.35
       }
+    },
+    "default": {
+      "ambient": [0.27, 0.31, 0.45],
+      "max_light": 0.95,
+      "headlight": {
+        "color": [1.0, 0.93, 0.76],
+        "gap": 6,
+        "length": 300,
+        "spread_deg": 40,
+        "intensity": 0.4,
+        "pool_radius": 120,
+        "pool_ahead": 24,
+        "pool_intensity": 0.18
+      }
     }
   },
   "weapons": {

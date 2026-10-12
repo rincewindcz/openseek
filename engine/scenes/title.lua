@@ -9,7 +9,7 @@ local Sound  = require "engine.game.sound"
 
 -- Boot scene: the TITLE card fading in over black, preceded by the short
 -- openSEEK engine card on the first launch or while Config.engine_intro is on. Draws an opaque fill
--- every frame so the overview never flashes during the intro; done, Esc, Enter
+-- every frame so the scene below never flashes during the intro; done, Esc, Enter
 -- or Space drops into the main menu (Enter / Space on the engine card skip only
 -- to the TITLE card), or into the style selection screen until the player has
 -- confirmed it once. The menu music starts here, at boot, as in the original;

@@ -32,6 +32,7 @@ function MissionSelectScene:_select(id, stage_name)
     local app = self.app
     if id == "play" then
         Log.info("game", "single mission %s", stage_name)
+        app.play_return  = nil
         app.campaign     = false   -- picked a single stage: play it, then back to menu
         app.loadout_free = nil     -- fresh MISSION-mode inventory, re-seeded with START_MEDALS
         Loadout.active(app)

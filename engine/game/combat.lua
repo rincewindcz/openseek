@@ -235,8 +235,7 @@ function CombatSystem:_resolve_sprite(weapon_def)
         return pick
     end
     if weapon_def.proj_type == "tracer" and self.world and self.world.stage_name then
-        local m    = tonumber(self.world.stage_name:match("^stage(%d)"))
-        local name = m and TRACER_SPRITE[m]
+        local name = TRACER_SPRITE[self.world:mission()]
         if name and Animation.clip(name) then sprite = name end
     end
     -- An enemy round drawn with whatever sprite the stage files under that
@@ -483,7 +482,7 @@ function CombatSystem:reset_phase()
 end
 
 -- Fire one volley from an entity along its current aim, the way its AI would.
--- Used by the overview entity editor's FIRE action. Returns true if it fired.
+-- Used by the debug panel's FIRE action. Returns true if it fired.
 function CombatSystem:fire_entity(e)
     if not e or not e:is_alive() or not e:is_combatant() then return false end
     if e.has_turret and not e.turret_alive then return false end
@@ -1241,7 +1240,7 @@ end
 function CombatSystem:draw()
     if #self.projectiles == 0 and #self.effects == 0 then return end
     local g       = love.graphics
-    local mission = self.world and self.world.stage_name and self.world.stage_name:match("^stage(%d)")
+    local mission = self.world and self.world.stage_name and self.world.env.art
     g.push()
     self.camera:apply()
 

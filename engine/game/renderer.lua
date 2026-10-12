@@ -10,13 +10,6 @@ local Renderer = Class()
 function Renderer:init(world, camera)
     self.world         = world
     self.camera        = camera
-    self.show_segments = true
-    self.show_grid     = false
-    self.picker        = false      -- stage picker
-    self.kind_picker   = false      -- kind visibility panel
-    self.kind_index    = 1          -- cursor in kind panel
-    self.hidden_kinds  = {}         -- set: kind_name -> true means hidden
-    self._kinds        = {}         -- ordered list of {name, count} for the panel
     self.highlight     = nil        -- Entity to tint (debug selection / hover)
 end
 
@@ -39,64 +32,10 @@ function Renderer:_glint(img, x, y, rot, ox, oy)
         rot + (self.camera.angle or 0), self.world.time)
 end
 
--- Called after a stage load to rebuild the kind list.
-function Renderer:refresh_kinds()
-    local counts = {}
-    for _, cls in ipairs(self.world.stage.classes) do
-        local kn = cls.kind_name
-        if kn then counts[kn] = (counts[kn] or 0) + 1 end
-    end
-    -- count entities per kind
-    local entity_counts = {}
-    for _, e in ipairs(self.world.entities) do
-        local cls = self.world.stage.classes[e.class_idx + 1]
-        local kn  = cls.kind_name
-        if kn then entity_counts[kn] = (entity_counts[kn] or 0) + 1 end
-    end
-    self._kinds = {}
-    for kn, _ in pairs(counts) do
-        self._kinds[#self._kinds + 1] = { name = kn, count = entity_counts[kn] or 0 }
-    end
-    table.sort(self._kinds, function(a, b) return a.name < b.name end)
-    self.kind_index = math.min(self.kind_index, math.max(1, #self._kinds))
-end
-
-function Renderer:is_kind_visible(kind_name)
-    return not self.hidden_kinds[kind_name]
-end
-
-function Renderer:toggle_kind(kind_name)
-    self.hidden_kinds[kind_name] = not self.hidden_kinds[kind_name] or nil
-end
-
-function Renderer:toggle_kind_picker()
-    self.kind_picker = not self.kind_picker
-    if self.kind_picker then
-        self:refresh_kinds()
-        self.picker = false  -- close stage picker if open
-    end
-end
-
-function Renderer:on_kind_picker_key(key)
-    local n = #self._kinds
-    if n == 0 then return end
-    if key == "up" then
-        self.kind_index = (self.kind_index - 2) % n + 1
-    elseif key == "down" then
-        self.kind_index = self.kind_index % n + 1
-    elseif key == "space" or key == "return" then
-        self:toggle_kind(self._kinds[self.kind_index].name)
-    elseif key == "backspace" then
-        self.hidden_kinds = {}  -- show all
-    end
-end
-
 -- draw
 
 function Renderer:draw()
     self:_draw_world()
-    if self.picker      then self:_draw_stage_picker() end
-    if self.kind_picker then self:_draw_kind_picker()  end
 end
 
 function Renderer:_draw_world()
@@ -162,36 +101,19 @@ function Renderer:_draw_ground_layers(vp)
     if self.detailfx then self.detailfx:draw_ground() end   -- EXTRA (shell_casings, tread_dust)
     self:_draw_lying_debris(vp)
 
-    if self.show_segments then
-        g.setLineStyle("rough")
-        g.setLineWidth(1)
-        for _, s in ipairs(w.stage.segments) do
-            g.setColor(s.color[1] / 255, s.color[2] / 255, s.color[3] / 255)
-            g.line(s.x1, s.y1, s.x2, s.y2)
-        end
-        g.setColor(1, 1, 1)
+    g.setLineStyle("rough")
+    g.setLineWidth(1)
+    for _, s in ipairs(w.stage.segments) do
+        g.setColor(s.color[1] / 255, s.color[2] / 255, s.color[3] / 255)
+        g.line(s.x1, s.y1, s.x2, s.y2)
     end
+    g.setColor(1, 1, 1)
 
     self:_draw_craters(vp)
 end
 
 function Renderer:_draw_object_layers(vp, mode)
-    local g = love.graphics
-    local w = self.world
-
-    self:_draw_entities(w.objects, w.object_index, vp, mode)
-    if mode == "under" then return end   -- the grid rides with the "over" pass
-
-    if self.show_grid then
-        g.setColor(0, 0, 0, 0.2)
-        g.setLineWidth(1 / self.camera:zoom())
-        local ws = w.stage.world_size
-        for i = 0, ws, 256 do
-            g.line(i, 0, i, ws)
-            g.line(0, i, ws, i)
-        end
-        g.setColor(1, 1, 1)
-    end
+    self:_draw_entities(self.world.objects, self.world.object_index, vp, mode)
 end
 
 -- Objects tall enough to stand over a ground vehicle: solid props (trees,
@@ -215,9 +137,9 @@ function Renderer:_draw_entity(e, vp, mode)
     if mode == "under" and is_occluder(e) then return end
     if mode == "over" and not is_occluder(e) then return end
     local cls = self.world.stage.classes[e.class_idx + 1]
-    -- Skip kinds the editor hid, emptied POW building markers (rescue_hidden) and
-    -- a building the mission holds back (dormant).
-    if self.hidden_kinds[cls.kind_name] or e.rescue_hidden or e.sabotage_hidden or e.dormant then return end
+    -- Skip emptied POW building markers (rescue_hidden) and a building the
+    -- mission holds back (dormant).
+    if e.rescue_hidden or e.sabotage_hidden or e.dormant then return end
     local g      = love.graphics
     local images = self.world.images
     if e.type_data and e.type_data.sprite then
@@ -463,96 +385,6 @@ function Renderer:_draw_unit(e)
         end
     end
     if e:is_alive() then self:_draw_smokes(e) end
-end
-
--- One-line objective summary (screen space, top-center) with live counts. Shown
--- in the viewer and in game mode; phases with no destroy/rescue goal show nothing.
--- The current stage objective as a status line: text plus an RGB color, or nil
--- when the phase has no destroy/rescue goal. Used by the overview status bar.
-function Renderer:objective_status()
-    local obj = self.world.stage.objectives
-    if not obj or not (obj.destroy or obj.rescue) then return nil end
-    if obj.destroy then
-        local rem = 0
-        for _, e in ipairs(self.world.targets) do if e:is_alive() then rem = rem + 1 end end
-        local text = string.format("DESTROY  %d target%s remaining", rem, rem == 1 and "" or "s")
-        if obj.special_end then text = text .. "  [COMMANDERS BUILDING]" end
-        return text, { 1, 0.55, 0.3 }
-    end
-    local n = #self.world.rescue_people
-    local text = n > 0
-        and string.format("RESCUE  %d POW%s to recover", n, n == 1 and "" or "s")
-        or  "RESCUE  reach the marked POW landing zones"
-    return text, { 0.4, 1, 0.6 }
-end
-
-function Renderer:_draw_stage_picker()
-    local g                  = love.graphics
-    local screen_w, screen_h = g.getDimensions()
-    local stages             = self.world.stages
-    local lh                 = 28
-    local bw                 = 280
-    local bh                 = #stages * lh + 50
-    local bx                 = (screen_w - bw) / 2
-    local by                 = (screen_h - bh) / 2
-    g.setColor(0, 0, 0, 0.85)
-    g.rectangle("fill", bx, by, bw, bh, 6)
-    g.setColor(1, 1, 1)
-    g.print("Select stage  (Enter)", bx + 16, by + 12)
-    for i, name in ipairs(stages) do
-        local y = by + 40 + (i - 1) * lh
-        if i == self.world.stage_index then
-            g.setColor(1, 1, 0)
-            g.rectangle("line", bx + 10, y - 4, bw - 20, lh - 4)
-        else
-            g.setColor(0.8, 0.8, 0.8)
-        end
-        g.print(name, bx + 20, y)
-    end
-    g.setColor(1, 1, 1)
-end
-
-function Renderer:_draw_kind_picker()
-    local g                  = love.graphics
-    local screen_w, screen_h = g.getDimensions()
-    local kinds              = self._kinds
-    local lh                 = 22
-    local bw                 = 320
-    local bh                 = #kinds * lh + 60
-    local bx                 = (screen_w - bw) / 2
-    local by                 = (screen_h - bh) / 2
-
-    g.setColor(0, 0, 0, 0.88)
-    g.rectangle("fill", bx, by, bw, bh, 6)
-    g.setColor(1, 1, 1)
-    g.print("Entity kinds  (Space toggle, Backspace show all)", bx + 12, by + 10)
-
-    for i, entry in ipairs(kinds) do
-        local y       = by + 36 + (i - 1) * lh
-        local hidden  = self.hidden_kinds[entry.name]
-        local cursor  = (i == self.kind_index)
-
-        if cursor then
-            g.setColor(1, 1, 0, 0.15)
-            g.rectangle("fill", bx + 6, y - 2, bw - 12, lh - 2, 3)
-            g.setColor(1, 1, 0)
-            g.rectangle("line", bx + 6, y - 2, bw - 12, lh - 2, 3)
-        end
-
-        -- checkbox
-        g.setColor(hidden and { 0.4, 0.4, 0.4 } or { 0.2, 0.9, 0.3 })
-        g.print(hidden and "[ ]" or "[x]", bx + 12, y)
-
-        -- kind name
-        g.setColor(hidden and { 0.5, 0.5, 0.5 } or { 1, 1, 1 })
-        g.print(entry.name, bx + 48, y)
-
-        -- entity count
-        g.setColor(0.5, 0.5, 0.5)
-        g.print(tostring(entry.count), bx + bw - 44, y)
-    end
-
-    g.setColor(1, 1, 1)
 end
 
 return Renderer

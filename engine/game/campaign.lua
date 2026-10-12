@@ -34,6 +34,7 @@ function Campaign.new_record()
 end
 
 function Campaign.start(app, players)
+    app.play_return    = nil
     app.campaign       = true
     app.run_score      = 0
     app.run_lives      = Score.START_LIVES
@@ -63,6 +64,9 @@ end
 -- chopper on some phases), or nil. Only a solo campaign is held to it; a single
 -- mission, free play and co-op leave the choice open.
 function Campaign.required_vehicle(app, stage_name)
+    -- A player-made map says so itself, however it is played.
+    local own = app.world.stage_name == stage_name and app.world.stage.mission
+    if own then return own.vehicle end
     if not app.campaign or app.coop_run then return nil end
     return Mission.required_vehicle(stage_name)
 end
@@ -171,7 +175,7 @@ end
 -- A phase was cleared and its state carried into the run: open the next
 -- phase's briefing (with the mission picture when a new mission begins), or
 -- complete the run after the last stage. The next stage follows the loaded
--- stage's name, not world.stage_index, which the overview's stage picker moves
+-- stage's name, not world.stage_index, which a developer's stage step moves
 -- without loading anything.
 function Campaign.advance(app)
     local world = app.world
@@ -201,6 +205,7 @@ function Campaign.resume(app, data)
     if not Savegame.apply(app, data) then return false end
     local stage = data.stage
     Log.info("game", "resumed %s at %s, score %d", data.name or "?", stage, app.run_score)
+    app.play_return = nil
     app.world:load(stage)
     app.after_stage_load()
     app.scenes:switch("mission_briefing", stage)

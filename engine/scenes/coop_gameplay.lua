@@ -259,8 +259,8 @@ function CoopGameplay:leave()
     app.postfx:reset()
     self:end_audio()
     app.renderer.in_game = false
-    -- Restore the shared overview camera on every system that was pointed at
-    -- a split camera, or the overview renders through a stale half-view.
+    -- Restore the shared camera on every system that was pointed at a split
+    -- camera, or the next scene renders through a stale half-view.
     app.renderer.camera = app.camera
     app.combat.camera   = app.camera
     app.powerups.camera = app.camera

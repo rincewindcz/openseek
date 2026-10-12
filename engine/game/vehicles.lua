@@ -13,7 +13,7 @@ local Assets = require "engine.core.assets"
 local Vehicles = {}
 
 -- Weapon lists per vehicle (order determines cycle order). Free-play modes
--- (overview F1, sandbox, co-op) use these full lists; a campaign run builds
+-- (a free flight, the sandbox, co-op) use these full lists; a campaign run builds
 -- its list from the equip-screen loadout instead (engine/game/loadout.lua).
 Vehicles.WEAPONS = {
     chopper = { "chaingun", "napalm", "rockets", "mega_missile", "air_to_ground", "air_to_air", "bomb",
@@ -133,7 +133,7 @@ function Vehicles.step_skin(vehicle, skin, dir)
     return ((Vehicles.clamp_skin(vehicle, skin) - 1 + dir) % n) + 1
 end
 
--- The next (vehicle, skin) pair in the overview's picker cycle: every chopper
+-- The next (vehicle, skin) pair in the developer's vehicle cycle (V on the main menu): every chopper
 -- variant, then every tank variant, then back.
 function Vehicles.cycle(vehicle, skin)
     if skin < Vehicles.variant_count(vehicle) then return vehicle, skin + 1 end

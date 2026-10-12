@@ -31,15 +31,19 @@ end
 -- The objectives a stage's own data asks for, as the original counts them at
 -- load: every is_target entity destroyed (0x290e58), everybody on the stage
 -- picked up (0x290e4a) and every agent back aboard (0x290e76).
+-- A map (stage.mission, engine/game/map_compiler.lua) words them itself and
+-- may leave the rescue optional.
 local function objectives_from_stage(world)
-    local def = { objectives = {} }
-    if #world.targets > 0 then def.objectives[#def.objectives + 1] = { type = "destroy_targets" } end
-    if world.rescue and world.rescue.total > 0 then
-        def.objectives[#def.objectives + 1] = { type = "rescue_people" }
+    local own   = world.stage.mission
+    local goals = own and own.goals or {}
+    local def   = { objectives = {} }
+    local function add(kind, goal)
+        goal = goal or {}
+        def.objectives[#def.objectives + 1] = { type = kind, label = goal.label, optional = goal.optional }
     end
-    if world.saboteur and #world.saboteur.sites > 0 then
-        def.objectives[#def.objectives + 1] = { type = "sabotage" }
-    end
+    if #world.targets > 0 then add("destroy_targets", goals.destroy) end
+    if world.rescue and world.rescue.total > 0 then add("rescue_people", goals.rescue) end
+    if world.saboteur and #world.saboteur.sites > 0 then add("sabotage", goals.sabotage) end
     return #def.objectives > 0 and def or nil
 end
 
@@ -62,6 +66,11 @@ end
 function Mission.required_vehicle(stage_name)
     local def = defs[stage_name]
     return def and def.vehicle or nil
+end
+
+-- The data/missions.json entry of a stage, or nil.
+function Mission.def(stage_name)
+    return defs[stage_name]
 end
 
 -- True if entity e satisfies a spec's filters: asset (.bin) filename, kind_name,

@@ -5,7 +5,7 @@ local Class = require "engine.core.class"
 local Scene = require "engine.core.scene"
 local Audio = require "engine.core.audio"
 
--- Test scene reached from the overview/editor (F10): every imported sound in
+-- Test scene of a developer run (F10 in the main menu): every imported sound in
 -- assets/sounds.json laid out by category as clickable rows. Click a row to play
 -- it (a ▶ triangle) and select it; the sounding row shows a ■ stop square and a
 -- click stops it. The categories are rough, so a selected sound can be re-filed:
@@ -132,7 +132,7 @@ function SoundGallery:mousepressed(x, y, button)
 end
 
 function SoundGallery:keypressed(key)
-    if key == "escape" or key == "f10" then self.app.scenes:switch("overview"); return end
+    if key == "escape" or key == "f10" then self.app.scenes:switch("main_menu"); return end
 
     if key == "s" then
         if self.dirty then

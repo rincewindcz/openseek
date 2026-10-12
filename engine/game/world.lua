@@ -1,14 +1,16 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class      = require "engine.core.class"
-local json       = require "lib.json"
-local StrictMath = require "lib.strict_math"
-local Entity     = require "engine.game.entity"
-local Animation  = require "engine.core.animation"
-local Rng        = require "engine.core.rng"
-local Debris     = require "engine.game.debris"
-local Log        = require "engine.core.log"
+local Class       = require "engine.core.class"
+local json        = require "lib.json"
+local StrictMath  = require "lib.strict_math"
+local Entity      = require "engine.game.entity"
+local Animation   = require "engine.core.animation"
+local Rng         = require "engine.core.rng"
+local Debris      = require "engine.game.debris"
+local Log         = require "engine.core.log"
+local MapCompiler = require "engine.game.map_compiler"
+local MapFile     = require "engine.game.map_file"
 
 -- Class flag bit of the player's own base buildings (tested at spawn by the
 -- original, 0x1f64e4). The player's fire cannot harm them (see Entity:take_damage).
@@ -38,6 +40,13 @@ local DEFAULT_GROUND = { 0.3, 0.5, 0 }
 -- Missions rendered without a sun (the volcanic phases): helicopter ground
 -- shadows are disabled there. Keyed by mission digit, like MISSION_GROUND.
 local NIGHT_MISSIONS = { ["3"] = true }
+
+-- Falling particles per mission (snow on the winter world, rain on the jungle
+-- world); the others run clear.
+local MISSION_WEATHER = { ["1"] = "snow", ["2"] = "rain" }
+
+-- Stage names of player-made maps: "map_" plus the file's name in maps/.
+local MAP_PREFIX = "map_"
 
 local World = Class()
 
@@ -104,6 +113,7 @@ local WALKER_CLASS = 20
 function World:init()
     self.stage       = nil   -- decoded JSON table
     self.stage_name  = nil
+    self.env         = { art = "0", night = false, look = "0", music = "0" }   -- see World:_set_environment
     self.time        = 0     -- simulation clock: accumulated fixed dt since the stage loaded
     self.rng         = Rng:new(0)   -- simulation randomness; reseeded per phase
     self.debris      = Debris:new(self)   -- explosion shards (presentation, engine/game/debris.lua)
@@ -187,20 +197,85 @@ function World:mission_count()
     return count
 end
 
-function World:load(name)
+-- True for the stage name of a player-made map (maps/<name>.json), which
+-- World:load compiles into a stage instead of reading one from the pack.
+function World.is_map(name)
+    return type(name) == "string" and name:sub(1, #MAP_PREFIX) == MAP_PREFIX
+end
+
+function World.map_stage(map_name)
+    return MAP_PREFIX .. map_name
+end
+
+function World.map_name(stage_name)
+    return World.is_map(stage_name) and stage_name:sub(#MAP_PREFIX + 1) or nil
+end
+
+-- Whether a stage a recording names can still be loaded as it was: nil when it
+-- can, "missing" when the stage or the map file is gone, "changed" when the
+-- map was edited since (map_hash is the fingerprint the recording carries).
+function World.stage_state(name, map_hash)
+    if not World.is_map(name) then
+        if love.filesystem.getInfo("assets/" .. tostring(name) .. ".json") then return nil end
+        return "missing"
+    end
+    local map, raw = MapFile.read(World.map_name(name))
+    if not map or not MapCompiler.pack_stage(map.base) then return "missing" end
+    if map_hash and MapFile.hash(raw) ~= map_hash then return "changed" end
+    return nil
+end
+
+-- The decoded stage of a name: a pack stage, or a map compiled into one (nil
+-- and the reason when the map cannot be: its file is gone or damaged).
+function World:_read_stage(name)
+    if World.is_map(name) then return MapCompiler.load(World.map_name(name)) end
     local data = love.filesystem.read("assets/" .. name .. ".json")
     if not data then error("stage not found: " .. name) end
-    self.stage      = json.decode(data)
+    return json.decode(data)
+end
+
+-- What the stage looks and sounds like. A pack stage takes everything from its
+-- mission digit; a map names its art set and may mix the rest (a night on the
+-- winter world, rain in the desert). art, look and music are mission digits as
+-- strings: the sprites and ground, the POST FX grade, the music track.
+function World:_set_environment(name)
+    local custom = self.stage.environment or {}
+    local art    = tostring(custom.art or name:match("^stage(%d)") or "0")
+    local night  = custom.night
+    if night == nil then night = NIGHT_MISSIONS[art] == true end
+    local weather = custom.weather or MISSION_WEATHER[art]
+    if weather == "none" then weather = nil end
+    self.env = {
+        art     = art,
+        night   = night,
+        weather = weather,
+        look    = tostring(custom.look or art),
+        music   = tostring(custom.music or art),
+    }
+end
+
+function World:load(name)
+    local stage, err = self:_read_stage(name)
+    if not stage then
+        -- A map erased or changed under the game (the world is reloaded by name
+        -- on a restart): fall back to a stage that is always there.
+        Log.warn("world", "cannot load %s (%s), loading %s", name, tostring(err), self.stages[1])
+        name  = self.stages[1]
+        stage = self:_read_stage(name)
+    end
+    self.stage      = stage
     self.stage_name = name
     self.time       = 0   -- a fresh stage restarts the simulation clock
+    self:_set_environment(name)
     for i, s in ipairs(self.stages) do
         if s == name then self.stage_index = i end
     end
 
     self.images = {}
     local cache = {}
-    local function load_img(file)
-        local path = "assets/" .. name .. "/" .. file
+    -- A map's classes name the pack stage each sprite comes from (render.dir).
+    local function load_img(dir, file)
+        local path = "assets/" .. dir .. "/" .. file
         if not cache[path] and love.filesystem.getInfo(path) then
             cache[path] = love.graphics.newImage(path)
             cache[path]:setFilter("nearest", "nearest")
@@ -209,7 +284,8 @@ function World:load(name)
     end
     for i, c in ipairs(self.stage.classes) do
         if c.render then
-            local img = load_img(c.render.image)
+            local dir = c.render.dir or name
+            local img = load_img(dir, c.render.image)
             if img then
                 local entry = { img = img, ox = c.render.ox, oy = c.render.oy }
                 -- Unit kinds (soldiers) carry a sibling dead-pose frame, exported as
@@ -218,7 +294,7 @@ function World:load(name)
                 if dead_frame_offset then
                     local dframe = math.max(0, c.frame_base or 0) + dead_frame_offset
                     local dfile  = c.render.image:gsub("_f%d+%.png$", "_f" .. dframe .. ".png")
-                    entry.dead = load_img(dfile)
+                    entry.dead = load_img(dir, dfile)
                 end
                 self.images[i] = entry
             end
@@ -228,7 +304,7 @@ function World:load(name)
     -- Destruction-crater art is per-mission: HOLE4038 in the mission's own
     -- palette, exported into that mission's phase-0 dir. Pick it by the stage's
     -- mission digit, falling back to mission 0 for a pack without it.
-    self.crater_img = self:_load_crater(name)
+    self.crater_img = self:_load_crater()
 
     -- A tank is stored as two co-located entities: the hull (kind "tank") and a
     -- separate top on top of a hull (tank turret, radar dish). Classify each class
@@ -534,6 +610,7 @@ end
 -- (player movement, World:delta, Camera:tiles, the renderer passes) lines up and
 -- the seam disappears. Full-bleed stages already reach the edges and keep 4096.
 function World:_fit_wrap_period()
+    if World.is_map(self.stage_name) then return end   -- a map's size is its period
     local s = self.stage.world_size
     local lo_x, lo_y, hi_x, hi_y = s, s, 0, 0
     local function bounds(list)
@@ -558,8 +635,8 @@ end
 -- Crater sprite for the stage's mission. HOLE4038 is exported per mission into
 -- assets/stage{M}0/; a pack converted before every mission had one reuses
 -- mission 0's.
-function World:_load_crater(name)
-    local mission = name:match("^stage(%d)")
+function World:_load_crater()
+    local mission = self.env.art
     local function try(m)
         local path = "assets/stage" .. m .. "0/hole_f16.png"
         if love.filesystem.getInfo(path) then
@@ -568,7 +645,7 @@ function World:_load_crater(name)
             return img
         end
     end
-    return (mission and try(mission)) or try("0")
+    return try(mission) or try("0")
 end
 
 function World:load_index(idx)
@@ -602,19 +679,13 @@ end
 function World:walker_clip(suffix)
     local file = self:asset_file(WALKER_CLASS)
     local stem = file and file:lower():match("^(%w+)%.bin$") or "pow"
-    local m    = self.stage_name and self.stage_name:match("^stage(%d)") or "0"
+    local m    = self.env.art
     suffix = suffix or ""
     for _, name in ipairs({ stem .. m .. suffix, stem .. "0" .. suffix }) do
         local clip = Animation.clip(name)
         if clip and not clip:is_empty() then return name end
     end
     return stem .. m .. suffix
-end
-
--- The phase objective block exported into the stage JSON, or nil. Drives the
--- objective banner (see Renderer:objective_status).
-function World:objectives()
-    return self.stage and self.stage.objectives
 end
 
 -- World position the player spawns at: the friendly base pad (basecirc.bin, or
@@ -726,8 +797,7 @@ end
 
 -- A dust puff settling on the ground where a shard landed.
 function World:add_ground_dust(x, y)
-    local m    = self.stage_name and self.stage_name:match("^stage(%d)")
-    local anim = Animation.new(DUST_CLIP .. (m or "0"))
+    local anim = Animation.new(DUST_CLIP .. self.env.art)
     if anim:is_done() then anim = Animation.new(DUST_CLIP .. "0") end
     if anim:is_done() then return end
     self.ground_fx[#self.ground_fx + 1] = { anim = anim, x = x, y = y }
@@ -783,29 +853,43 @@ end
 function World:explosion_clip(size)
     local name = "explosion_" .. size
     local clip = Animation.clip(name)
-    local m    = self.stage_name and self.stage_name:match("^stage(%d)")
-    local own  = clip and clip.missions and clip.missions[m]
+    local own  = clip and clip.missions and clip.missions[self.env.art]
     local alt  = own and Animation.clip(own)
     if alt and not alt:is_empty() then return own end
     return name
 end
 
 function World:ground_color()
-    local m = self.stage_name and self.stage_name:match("^stage(%d)")
-    return MISSION_GROUND[m] or DEFAULT_GROUND
+    return MISSION_GROUND[self.env.art] or DEFAULT_GROUND
 end
 
--- Whether aircraft cast ground shadows on this stage (off on night missions).
+-- Ground fill of an art set (a mission digit), for views that show one
+-- without a stage of it loaded.
+function World.art_ground(art)
+    return MISSION_GROUND[tostring(art)] or DEFAULT_GROUND
+end
+
+-- Mission digit of the stage's art set, as a number: its HUD art, briefing
+-- picture and tracer sprites.
+function World:mission()
+    return tonumber(self.env.art) or 0
+end
+
+-- Whether aircraft cast ground shadows on this stage (off at night).
 function World:shadows_enabled()
-    local m = self.stage_name and self.stage_name:match("^stage(%d)")
-    return not NIGHT_MISSIONS[m]
+    return not self.env.night
 end
 
--- Night missions render under a dark palette, so the player vehicle swaps to its
--- palette-matched night sprite set (see Player:_clip).
+-- A stage lit as a night (the light map of engine/game/lightfx.lua).
 function World:is_night()
-    local m = self.stage_name and self.stage_name:match("^stage(%d)")
-    return NIGHT_MISSIONS[m] == true
+    return self.env.night
+end
+
+-- An art set painted in a night palette, so the player vehicle swaps to its
+-- palette-matched night sprite set (see Player:_clip). A night laid over a
+-- day art set keeps the day sprites; the light map darkens them with the rest.
+function World:dark_art()
+    return NIGHT_MISSIONS[self.env.art] == true
 end
 
 -- Forwarders so combat / entity code can drive LightFX and ImpactFX (set at

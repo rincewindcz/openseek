@@ -27,15 +27,11 @@ GameplayBase.fixed_step = true
 -- (Replay.Hold). Only a scene that exists to show such edits turns it off.
 GameplayBase.holds_params = true
 
--- Weather overlay per mission digit (snow on the winter world, rain on the
--- jungle world); other missions run clear.
-local WEATHER_FOR_MISSION = { [1] = "snow", [2] = "rain" }
-
--- Activate the stage's weather; call from a scene's enter(). leave() should
--- clear it with self.app.weather:set(nil).
+-- Activate the stage's weather (World.env: snow on the winter world, rain on
+-- the jungle world, whatever a map asks for); call from a scene's enter().
+-- leave() should clear it with self.app.weather:set(nil).
 function GameplayBase:enter_weather()
-    local m = tonumber((self.app.world.stage_name or ""):match("^stage(%d)"))
-    self.app.weather:set(WEATHER_FOR_MISSION[m])
+    self.app.weather:set(self.app.world.env.weather)
 end
 
 -- Centered title in the game's bitmap body font (same as the score readout)
@@ -240,8 +236,8 @@ end
 -- Crossfade to the stage's music: a track named after the stage, then one named
 -- after its mission, then a generic one. All optional (see Sound.play_music).
 function GameplayBase:enter_music()
-    local stage = self.app.world.stage_name or ""
-    Sound.play_music(stage, "mission" .. (stage:match("^stage(%d)") or ""), "game")
+    local world = self.app.world
+    Sound.play_music(world.stage_name or "", "mission" .. world.env.music, "game")
 end
 
 -- Point the sound system at this scene's cameras and run the engine bed.
@@ -332,6 +328,7 @@ function GameplayBase:replay_header(mode, players)
         build   = Replay.build_id(),
         version = Version.string(),
         stage   = app.world.stage_name,
+        map     = app.world.stage.map_hash,   -- a player-made map: the file's fingerprint
         mode    = mode,
         seed    = self.seed,
         players = #players,
@@ -431,7 +428,7 @@ function GameplayBase:begin_input(mode, players, bindings, devices)
         end
         -- The sandbox edits vehicle parameters live, outside the input frame, so
         -- its runs cannot be replayed and are not recorded.
-        if app.record_runs and not self.no_record then
+        if app.record_runs and not self.no_record and not (app.play_return and app.play_return.test) then
             self.recording = Replay:new(self:replay_header(mode, players))
         end
     end
@@ -617,10 +614,20 @@ function GameplayBase:crash_stats()
     return out
 end
 
--- Where to go once the stats screen is dismissed. Base returns to the menu;
--- single-player overrides this to continue a campaign run to the next phase.
+-- Leave a phase played on its own for where it was started from: the map
+-- list or the editor (app.play_return), else the menu.
+function GameplayBase:leave_run()
+    local app  = self.app
+    local back = app.play_return
+    app.play_return = nil
+    app.scenes:switch(back and back.scene or "main_menu")
+end
+
+-- Where to go once the stats screen is dismissed. Base returns to where the
+-- phase came from; single-player overrides this to continue a campaign run to
+-- the next phase.
 function GameplayBase:on_stats_done()
-    self.app.scenes:switch("main_menu")
+    self:leave_run()
 end
 
 -- End-stats key handling: any key (Esc included) steps the screen, snapping the
@@ -639,10 +646,7 @@ function GameplayBase:mousereleased(_x, _y)
 end
 
 function GameplayBase:wheelmoved(_dx, dy)
-    local app = self.app
-    if not app.renderer.picker and not app.renderer.kind_picker then
-        app.camera:on_wheel(dy)
-    end
+    self.app.camera:on_wheel(dy)
 end
 
 return GameplayBase

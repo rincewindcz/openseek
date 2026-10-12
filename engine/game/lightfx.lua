@@ -193,8 +193,7 @@ function LightFX:enter(world)
     self.world   = world
     if world and world:is_night() then
         local night = load_data().night
-        local m     = world.stage_name and world.stage_name:match("^stage(%d)")
-        self.night  = night[m] or night.default or DEFAULT_NIGHT
+        self.night  = night[world.env.art] or night.default or DEFAULT_NIGHT
     end
 end
 
@@ -462,7 +461,9 @@ function LightFX:draw_night(camera)
     if not self.scene_on then return end
     self.scene_on = false
     local g   = love.graphics
-    local lit = Config.night_lighting
+    -- The original's spot belongs to its night palette; a night laid over a
+    -- day art set (a map) is always lit by the map.
+    local lit = Config.night_lighting or not self.world:dark_art()
 
     -- The light map (or the spot mask) is built under the caller's transform,
     -- like the world it lights (a split-screen half is translated to its

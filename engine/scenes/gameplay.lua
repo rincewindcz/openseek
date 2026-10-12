@@ -3,7 +3,6 @@
 
 local Class        = require "engine.core.class"
 local GameplayBase = require "engine.scenes.gameplay_base"
-local Overview     = require "engine.scenes.overview"
 local Player       = require "engine.game.player"
 local Mission      = require "engine.game.mission"
 local Stats        = require "engine.game.stats"
@@ -228,7 +227,13 @@ function Gameplay:game_over()
     local score = player.score or 0
     if app.campaign then app.run_score = score end
     local function finish()
-        if app.campaign then Campaign.finish(app) else app.scenes:switch("hiscores", score) end
+        if app.campaign then
+            Campaign.finish(app)
+        elseif app.play_return then
+            self:leave_run()   -- a map played on its own enters no high score
+        else
+            app.scenes:switch("hiscores", score)
+        end
     end
     CrashFX.show(app.screen, player, true,
         { on_done = finish, on_cancel = finish, stats = self:crash_stats() })
@@ -272,7 +277,7 @@ end
 function Gameplay:on_stats_done()
     local app = self.app
     if not app.campaign then
-        app.scenes:switch("main_menu")   -- single stage done: back to the menu
+        self:leave_run()   -- single stage done: back to the menu, the map list or the editor
         return
     end
     app.run_score      = self.player.score or app.run_score
@@ -492,6 +497,15 @@ function Gameplay:draw()
     app.debug_panel:draw()
 end
 
+-- Developer key: fly the pack stage before or after this one.
+function Gameplay:step_stage(dir)
+    local app, world = self.app, self.app.world
+    world:load_index((world.stage_index - 1 + dir) % #world.stages + 1)
+    app.after_stage_load()
+    self.paused = false
+    self:restart()
+end
+
 -- Debug-panel keys, shared with the sandbox subclass; developer runs (--dev)
 -- only. Returns true when the key was consumed.
 function Gameplay:debug_keys(key)
@@ -504,8 +518,8 @@ end
 
 -- The in-game keys after the debug (and sandbox) layers had their chance. God
 -- mode, the pickup override, the weapon level, the self-destruct and the stage
--- / kind pickers are developer keys (--dev), and so is a restart in a campaign,
--- where it would be a free retry.
+-- step (PgUp / PgDn) are developer keys (--dev), and so is a restart in a
+-- campaign, where it would be a free retry.
 function Gameplay:game_keys(key)
     local app = self.app
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
@@ -523,11 +537,21 @@ function Gameplay:game_keys(key)
     if app.dev and key == "e" then self.source:queue("level"); return end
     if app.dev and not app.campaign then
         if key == "delete" then self.source:queue("destruct"); return end
-        if Overview.picker_keys(app, key) then return end
+        if key == "pageup" or key == "pagedown" then
+            self:step_stage(key == "pagedown" and 1 or -1)
+            return
+        end
     end
     local slot = key:match("^(%d)$")
     if slot then self.source:queue("slot:" .. slot); return end
-    if key == "escape" then app.scenes:push("main_menu") end
+    if key == "escape" then
+        -- A map being tried from the editor goes straight back to it.
+        if app.play_return and app.play_return.test and not self.playback then
+            self:leave_run()
+        else
+            app.scenes:push("main_menu")
+        end
+    end
 end
 
 function Gameplay:keypressed(key)

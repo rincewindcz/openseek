@@ -11,14 +11,16 @@ local Audio   = require "engine.core.audio"
 local Replay  = require "engine.game.replay"
 local Version = require "engine.core.version"
 local Log     = require "engine.core.log"
+local World   = require "engine.game.world"
 
 -- REPLAY screen: the player-facing recording browser, built like the SAVE /
 -- LOAD panel (engine/scenes/saves.lua) but tinted blue, with the stage each
 -- recording was made on in the row and its mode / players / running time under
 -- the list. Left / right step the sort order: newest, oldest, or by progress
 -- (the stage the run was recorded on).
--- Reached from the ADVANCED submenu. The raw dev browser on F4 in the overview
--- (engine/scenes/replays.lua) stays as it is: that one also verifies.
+-- Reached from the ADVANCED submenu. The raw dev browser (F4 on the main menu
+-- of a developer run, engine/scenes/replays.lua) stays as it is: that one
+-- also verifies.
 --
 -- enter() takes { return_to = <scene name> }; playback returns to this screen
 -- through app.replay_return (see GameplayBase:finish_playback).
@@ -143,6 +145,12 @@ end
 function ReplaySelect:_play(row)
     local app    = self.app
     local replay = row.replay
+    -- A recording made on a map that is gone has nothing to play on.
+    if self:_stage_state(row) == "missing" then
+        Audio.play_event("ui.back")
+        return
+    end
+    app.play_return      = nil
     app.campaign         = false
     app.settings.loadout = nil
     app.replay_play      = replay
@@ -153,6 +161,14 @@ function ReplaySelect:_play(row)
     Audio.play_event("ui.confirm")
     Log.info("replay", "playing %s", row.path)
     app.scenes:switch(replay.header.mode == "coop" and "coop_gameplay" or "gameplay")
+end
+
+-- World.stage_state of a row's recording, looked up once ("ok" when playable).
+function ReplaySelect:_stage_state(row)
+    if not row.stage_state then
+        row.stage_state = World.stage_state(row.replay.header.stage, row.replay.header.map) or "ok"
+    end
+    return row.stage_state
 end
 
 function ReplaySelect:_activate(i)
@@ -287,6 +303,7 @@ function ReplaySelect:_draw_row(i, y, fade)
     self.name_font:print(row_label(row), NAME_X, y, { color = col })
 
     local stage = tostring(row.replay.header.stage or "?"):upper()
+    if World.is_map(row.replay.header.stage) then stage = "MAP" end
     if row.replay.header.mode == "coop" then stage = "2P " .. stage end
     self.font:print(stage, STAGE_RX - self.font:width(stage), y + 2, { color = col })
     if sel then self:_draw_arrow(NAME_X, y, fade) end
@@ -319,7 +336,12 @@ function ReplaySelect:_draw_detail(fade)
     -- both match, so the line stays empty.
     if row then
         local header = row.replay.header
-        if header.version ~= Version.string() then
+        local state  = self:_stage_state(row)
+        if state == "missing" then
+            self.font:print("ITS MAP IS GONE", NAME_X, INFO_Y, { color = col })
+        elseif state == "changed" then
+            self.font:print("ITS MAP WAS CHANGED SINCE", NAME_X, INFO_Y, { color = col })
+        elseif header.version ~= Version.string() then
             self.font:print("RECORDED ON AN OLDER BUILD", NAME_X, INFO_Y, { color = col })
         elseif tostring(header.build or "?") ~= Replay.build_id() then
             self.font:print("RECORDED ON ANOTHER PLATFORM", NAME_X, INFO_Y, { color = col })

@@ -2,6 +2,7 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local Replay     = require "engine.game.replay"
+local World      = require "engine.game.world"
 local InputFrame = require "engine.core.input_frame"
 
 -- Determinism self-test: drives a scripted phase three ways and compares the
@@ -113,7 +114,7 @@ local function run_pass(app, script, ticks)
     script:rewind()
     app.scenes:switch("gameplay")
     local samples = drive(app, app.scenes:top(), ticks)
-    app.scenes:switch("overview")
+    app.scenes:switch("idle")
     return samples
 end
 
@@ -133,7 +134,7 @@ local function record_pass(app, stage, ticks, hook)
     local samples = drive(app, scene, ticks, hook)
     local recording = scene.recording
     scene.recording = nil          -- keep the self-test from writing a file
-    app.scenes:switch("overview")
+    app.scenes:switch("idle")
     return samples, recording
 end
 
@@ -238,6 +239,16 @@ function Selftest.verify(app, paths)
             ok = false
         end
     end
+    -- A recording made on a map that is not here has nothing to play on.
+    local playable = {}
+    for _, replay in ipairs(replays) do
+        if World.stage_state(replay.header.stage) == "missing" then
+            print(("SKIP  %s: no stage %s"):format(tostring(replay.path), tostring(replay.header.stage)))
+        else
+            playable[#playable + 1] = replay
+        end
+    end
+    replays = playable
     print(("verify: %d recordings on %s"):format(#replays, Replay.build_id()))
     for _, replay in ipairs(replays) do
         -- The title's fade is still up and nothing here advances it on its
@@ -248,7 +259,7 @@ function Selftest.verify(app, paths)
         app.replay_play      = replay
         app.replay_verify    = true
         app.replay_result    = nil
-        app.replay_return    = "overview"
+        app.replay_return    = "idle"
         replay:rewind()
         app.scenes:switch(replay.header.mode == "coop" and "coop_gameplay" or "gameplay")
         local scene = app.scenes:top()
@@ -261,7 +272,7 @@ function Selftest.verify(app, paths)
         local name   = tostring(replay.path)
         if not result then
             print(("FAIL  %s did not finish"):format(name))
-            app.scenes:switch("overview")
+            app.scenes:switch("idle")
             ok = false
         elseif result.desync then
             print(("FAIL  %s diverged at tick %d of %d: %s"):format(name, result.desync, result.length,

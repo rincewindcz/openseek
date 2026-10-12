@@ -199,7 +199,7 @@ function CrashFX.show(screen, player, terminal, opts)
     return fx
 end
 
--- Dev preview from the overview: the picture of a lost vehicle of that kind,
+-- Dev preview (Delete on the main menu, the editor's DEV menu): the picture of a lost vehicle of that kind,
 -- with data/crash_fx.json read again so an edit shows without a restart.
 function CrashFX.preview(screen, vehicle, terminal)
     data = nil

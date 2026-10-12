@@ -953,7 +953,7 @@ end
 -- Night missions ship a darker, palette-correct vehicle set under the same clip
 -- name plus an "n" suffix; resolve to it when one exists, else the day sprite.
 function Player:_clip(name)
-    if self.world and self.world:is_night() then
+    if self.world and self.world:dark_art() then
         local night = name .. "n"
         if Animation.clip(night) then return night end
     end
@@ -1256,7 +1256,7 @@ function Player:_draw_tank_parts(g, x, y, s, hull_rot, turret_rot, with_turret)
     local kick     = detailfx and detailfx:recoil_kick(self) or 0
     Player.draw_tank_variant(g, self:tank_variant(), x, y, s, hull_rot, turret_rot, {
         frame     = self._tank_anim.frame,
-        night     = self.world and self.world:is_night(),
+        night     = self.world and self.world:dark_art(),
         turret    = with_turret,
         turret_dx = -math.sin(turret_rot) * kick * s,
         turret_dy =  math.cos(turret_rot) * kick * s,

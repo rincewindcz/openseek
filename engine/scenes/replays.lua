@@ -4,9 +4,10 @@
 local Class  = require "engine.core.class"
 local Scene  = require "engine.core.scene"
 local Replay = require "engine.game.replay"
+local World  = require "engine.game.world"
 local Log    = require "engine.core.log"
 
--- Replay browser (F4 from the overview): the testing interface for recorded runs.
+-- Replay browser (F4 in the main menu of a developer run): the testing interface for recorded runs.
 -- Lists the recordings in the save directory, plays one back at normal speed, or
 -- verifies one at speed by comparing its state checksums and reporting the first
 -- tick that disagrees.
@@ -44,6 +45,7 @@ function Replays:_play(verify)
     if not entry then return end
     local app    = self.app
     local replay = entry.replay
+    if World.stage_state(replay.header.stage) == "missing" then return end
     -- The gameplay scene loads the replay's own stage on entry (reload_stage), so
     -- playback always starts from a pristine world.
     app.campaign         = false
@@ -59,7 +61,7 @@ function Replays:update(_dt) end   -- the world behind the panel stays frozen
 
 function Replays:keypressed(key)
     local app = self.app
-    if key == "escape" or key == "f4" then app.scenes:switch("overview"); return end
+    if key == "escape" or key == "f4" then app.scenes:switch("main_menu"); return end
     if key == "up"     then self.index = math.max(1, self.index - 1); return end
     if key == "down"   then self.index = math.min(#self.entries, self.index + 1); return end
     if key == "return" or key == "kpenter" then self:_play(false); return end
@@ -89,12 +91,9 @@ end
 
 function Replays:draw()
     local app = self.app
-    -- The overview stays visible behind the panel.
-    app.scenes:get("overview"):draw()
-
     local g = love.graphics
     local screen_w, screen_h = g.getDimensions()
-    g.setColor(0, 0, 0, 0.85)
+    g.setColor(0, 0, 0, 1)
     g.rectangle("fill", 0, 0, screen_w, screen_h)
 
     local x, y = 40, 40

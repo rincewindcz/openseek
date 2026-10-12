@@ -38,6 +38,8 @@ function Scene:update(_dt) end
 function Scene:draw() end
 
 function Scene:keypressed(_key) end
+function Scene:textinput(_text) end
+function Scene:filedropped(_file) end
 -- True while the scene wants every key raw (a rebind prompt), so global
 -- shortcuts stand aside.
 function Scene:captures_keys() return false end

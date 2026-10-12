@@ -27,7 +27,11 @@ end
 
 function MissionBriefing:enter(stage_name)
     local world = self.app.world
-    self.menu:open(stage_name or world.stage_name or world.stages[1])
+    stage_name  = stage_name or world.stage_name or world.stages[1]
+    -- A player-made map briefs with its own text over its art set's backdrop.
+    local own = world.stage_name == stage_name and world.stage.mission
+    self.own  = own and { mission = world:mission(), name = own.name, paragraphs = own.briefing } or nil
+    self.menu:open(stage_name, self.own)
     if self.app.campaign then Savegame.autosave(self.app) end
     Sound.play_music("menu")   -- back after a phase, as the original restarts it
 end
@@ -39,7 +43,7 @@ end
 function MissionBriefing:_select(id)
     if id == "play" then
         -- Launching a real mission (new game / mission select both funnel here)
-        -- turns on the lives + game-over flow; the overview toggle can still
+        -- turns on the lives + game-over flow; the developer toggle (O on the main menu) can still
         -- disable it. The sandbox is left deathless.
         self.app.settings.death_enabled = true
         -- A co-op run always goes through the equip scene: it builds each
@@ -53,11 +57,18 @@ function MissionBriefing:_select(id)
         self.app.scenes:switch("shop", self.app.world.stage_name)
     elseif id == "save" or id == "load" then
         -- The briefing is the one point where a run is between phases, so it is
-        -- what a slot stores and what a loaded slot reopens.
+        -- what a slot stores and what a loaded slot reopens. A map played on its
+        -- own is no run: there is nothing to store.
+        if self.app.play_return then
+            self.menu:open(self.app.world.stage_name, self.own)
+            return
+        end
         self.app.scenes:switch("saves", { mode = id, return_to = "mission_briefing",
             stage = self.app.world.stage_name })
     elseif id == "exit" then
-        self.app.scenes:switch("main_menu")
+        local back = self.app.play_return
+        self.app.play_return = nil
+        self.app.scenes:switch(back and back.scene or "main_menu")
     end
 end
 

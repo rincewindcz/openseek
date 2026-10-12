@@ -260,7 +260,7 @@ function Debug:highlight_entity()
 end
 
 -- True while F2 is steering its own UI with the arrow keys (pick list, animation
--- picker, or a selected entity's field editor), so the overview camera must not
+-- picker, or a selected entity's field editor), so a free camera must not
 -- pan at the same time.
 function Debug:captures_arrows()
     return self.enabled and (self.pick_list ~= nil or self.anim_picker or self.selected ~= nil)
@@ -775,9 +775,6 @@ end
 -- stats bar & help
 
 function Debug:_draw_stats_bar()
-    -- The overview (editor) shows this live state in its own bottom status bar and
-    -- has no F2 toggle, so the top-right bar is redundant there.
-    if self.editor then return end
     local g    = love.graphics
     local live = 0
     for _, e in ipairs(self.world.entities) do
@@ -793,7 +790,6 @@ function Debug:_draw_stats_bar()
 end
 
 function Debug:_draw_help()
-    if self.editor then return end   -- editor is always on here; no [F2] toggle hint
     local g        = love.graphics
     local screen_w = g.getWidth()
     local screen_h = g.getHeight()

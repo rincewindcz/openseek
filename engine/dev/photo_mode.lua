@@ -8,7 +8,7 @@ local Screenshot = require "engine.core.screenshot"
 local json       = require "lib.json"
 
 -- Photo mode, a developer tool for promotional stills: `love . --photo`, then
--- F8 in a gameplay scene or the overview. It holds the simulation like a pause,
+-- F8 in a gameplay scene. It holds the simulation like a pause,
 -- leaves out the HUD and every overlay, and frees the view. The scene's camera
 -- keeps its focus (the vehicle); photo mode moves where that focus sits on
 -- screen, how far the view is zoomed and how far it is turned. A capture draws

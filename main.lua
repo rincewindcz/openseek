@@ -49,7 +49,6 @@ local MissionSelect   = require "engine.scenes.mission_select"
 local Equip           = require "engine.scenes.equip"
 local Shop            = require "engine.scenes.shop"
 local AdvancedSettings = require "engine.scenes.advanced_settings"
-local Overview        = require "engine.scenes.overview"
 local Gameplay        = require "engine.scenes.gameplay"
 local Sandbox         = require "engine.scenes.sandbox"
 local CoopGameplay    = require "engine.scenes.coop_gameplay"
@@ -92,10 +91,9 @@ local function after_stage_load()
     local world, camera = app.world, app.camera
     camera.world_size = world.stage.world_size
     camera:clamp()
-    app.renderer:refresh_kinds()
     app.debug_panel.world = world
     app.hud.world = world
-    app.hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
+    app.hud:set_mission(world:mission())
     local top = app.scenes:top()
     local player = top and top.player
     if player then
@@ -161,7 +159,7 @@ function love.load(args)
     -- [replays/a.osr ...]` plays recordings back and checks them (every one in
     -- the save directory when none is named), `love . --photo` enables photo
     -- mode (engine/dev/photo_mode.lua), `love . --dev` unlocks the developer
-    -- tools (the ADVANCED menu's EDITOR entry, the debug panel, the cheat keys).
+    -- tools (the main menu's launch keys, the debug panel, the cheat keys).
     -- Flags, recordings and the tick count are skipped when looking for the
     -- stage name.
     local stage_arg, selftest_ticks, selftest, photo, dev = nil, nil, false, false, false
@@ -205,12 +203,12 @@ function love.load(args)
         record_runs       = true,  -- write a replay file for every phase played
         upload_runs       = Replay.upload_enabled(), -- also hand each one to the hosting web page
         touch_emulation   = touch_emulation, -- `--touch`: mouse as a finger, MOBILE UI options shown
-        dev               = dev or photo, -- `--dev` (or `--photo`): the editor, the debug panel, the cheat keys
+        dev               = dev or photo, -- `--dev` (or `--photo`): the launch keys, the debug panel, the cheat keys
         replay_play       = nil,   -- Replay being played back (set by the replay picker)
         replay_verify     = false, -- playback at speed, only to check for divergence
         replay_result     = nil,   -- outcome of the last playback, shown by the picker
         replay_return     = nil,   -- scene playback returns to (set by the picker)
-        viewer_zoom_index = 4,     -- overview zoom, restored when a game mode ends
+        viewer_zoom_index = 4,     -- free view zoom, restored when a game mode ends
         campaign          = false, -- NEW GAME run: advance phase->phase, accumulate score
         run_score         = 0,     -- score carried across phases of a campaign run
         run_lives         = Score.START_LIVES,        -- spare vehicles carried across phases of a run
@@ -229,7 +227,7 @@ function love.load(args)
     if touch_emulation then Pointer.touch = true end
     app.hud:load("data/hud.json")
     app.hud.world = world
-    app.hud:set_mission(tonumber(world.stage_name:match("^stage(%d)")) or 0)
+    app.hud:set_mission(world:mission())
     app.combat = CombatSystem:new(world, camera)
     app.combat:load("data/weapons.json")
     world.combat = app.combat   -- lets world emit explosion effects (e.g. crushed trees)
@@ -255,7 +253,6 @@ function love.load(args)
     app.postfx   = PostFX:new()
     app.sound    = Sound:new(world)
     world.sound_sys = app.sound   -- same route for the audio emitters (World:sound / :say)
-    app.renderer:refresh_kinds()
 
     -- A 1x1 transparent hardware cursor, used to hide the pointer reliably (LOVE's
     -- setVisible(false) is flaky under some Wayland compositors).
@@ -272,7 +269,8 @@ function love.load(args)
     scenes:register("equip",            Equip:new(app))
     scenes:register("shop",             Shop:new(app))
     scenes:register("advanced_settings", AdvancedSettings:new(app))
-    scenes:register("overview",         Overview:new(app))
+    -- A scene that does nothing, to rest on between scripted runs (the self-test).
+    scenes:register("idle",             require("engine.core.scene"):new(app))
     scenes:register("gameplay",         Gameplay:new(app))
     scenes:register("sandbox",          Sandbox:new(app))
     scenes:register("coop_gameplay",    CoopGameplay:new(app))
@@ -288,6 +286,8 @@ function love.load(args)
     scenes:register("advanced_menu",    AdvancedMenu:new(app))
     scenes:register("saves",            Saves:new(app))
     scenes:register("style_select",     require("engine.scenes.style_select"):new(app))
+    scenes:register("editor",           require("engine.scenes.editor"):new(app))
+    scenes:register("map_select",       require("engine.scenes.map_select"):new(app))
     -- Required in place, like the ending: love.load is out of upvalues.
     if photo then app.photo = require("engine.dev.photo_mode"):new(app) end
     scenes:switch("title")
@@ -360,7 +360,7 @@ function love.draw()
     -- Hide the OS cursor while a pointer-driven UI scene, the stats screen, or
     -- a fullscreen overlay is up (the SELPOINT sprite is drawn instead), and
     -- under a scene that shows no pointer at all (hide_cursor: the ending);
-    -- restore it for gameplay and the overview. `--touch` keeps it everywhere,
+    -- restore it for gameplay and the map editor. `--touch` keeps it everywhere,
     -- since a touch draws no pointer sprite.
     local ui = not touch_emulation
         and ((top and (top.ui_pointer or top.hide_cursor)) or app.end_stats:is_active()
@@ -421,6 +421,17 @@ function love.keypressed(key)
         return
     end
     app.scenes:dispatch("keypressed", key)
+end
+
+-- Typed text, for the scenes with text fields (the map editor).
+function love.textinput(text)
+    if app.screen:is_active() then return end
+    app.scenes:dispatch("textinput", text)
+end
+
+-- A file dropped on the window (the map list imports a map file).
+function love.filedropped(file)
+    app.scenes:dispatch("filedropped", file)
 end
 
 function love.keyreleased(key)

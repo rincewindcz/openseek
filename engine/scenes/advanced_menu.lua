@@ -6,28 +6,33 @@ local Scene = require "engine.core.scene"
 local Menu  = require "engine.ui.menu"
 
 -- ADVANCED submenu: the entries that are not part of a normal run (the mission
--- / phase picker, the overview editor view, the replay browser), kept off the
--- main menu so it stays short. Same Menu widget and backdrop as the main menu;
--- BACK returns to it. Not to be confused with advanced_settings, which is the
--- OPTIONS page. The editor is not ready for players: EDITOR answers with a
--- notice unless the game was started with --dev.
+-- / phase picker, the player-made maps with their editor, the replay browser),
+-- kept off the main menu so it stays short. Same Menu widget and backdrop as
+-- the main menu; BACK returns to it. Not to be confused with
+-- advanced_settings, which is the OPTIONS page. The map editor is a mouse and
+-- keyboard tool, so the web and phone builds leave MAPS out.
 local AdvancedMenu = Class(Scene)
 
 AdvancedMenu.ui_pointer = true
 
+local DESKTOP = { Linux = true, Windows = true, ["OS X"] = true }
+
 local ENTRIES = {
     { id = "mission", label = "MISSION" },
-    { id = "replays", label = "REPLAYS" },
-    { id = "editor",  label = "EDITOR",  gap_after = 8 },
+    { id = "maps",    label = "MAPS" },
+    { id = "replays", label = "REPLAYS", gap_after = 8 },
     { id = "back",    label = "BACK" },
 }
 
-local EDITOR_NOTICE = "EDITOR IS IN DEVELOPMENT"
-
 function AdvancedMenu:init(app)
     Scene.init(self, app)
-    self.menu = Menu:new(ENTRIES)
-    if not app.dev then self.menu:set_notice("editor", EDITOR_NOTICE) end
+    local entries = {}
+    for _, entry in ipairs(ENTRIES) do
+        if entry.id ~= "maps" or (DESKTOP[love.system.getOS()] and not app.touch_emulation) then
+            entries[#entries + 1] = entry
+        end
+    end
+    self.menu = Menu:new(entries)
     self.menu.on_select = function(id) self:_select(id) end
 end
 
@@ -38,10 +43,10 @@ function AdvancedMenu:_select(id)
     local app = self.app
     if id == "mission" then
         app.scenes:replace("mission_select")
+    elseif id == "maps" then
+        app.scenes:switch("map_select", { return_to = "advanced_menu" })
     elseif id == "replays" then
         app.scenes:replace("replay_select", { return_to = "advanced_menu" })
-    elseif id == "editor" then
-        app.scenes:switch("overview")
     elseif id == "back" then
         app.scenes:replace("main_menu")
     end

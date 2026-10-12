@@ -59,7 +59,7 @@ end
 
 function DetailFX:enter(world)
     self:reset()
-    local m     = world and world.stage_name and world.stage_name:match("^stage(%d)")
+    local m      = world and world.env.art
     local colors = self.data.tread_dust and self.data.tread_dust.colors or {}
     self.dust_color = (m and colors[m]) or colors.default
 end

@@ -181,7 +181,7 @@ end
 -- Editor keys; everything else falls through to the game keys so movement
 -- (WASD, Space, weapons) keeps working while editing.
 function Sandbox:sandbox_keys(key)
-    if key == "f3" then self.app.scenes:switch("overview"); return true end
+    if key == "f3" then self.app.scenes:switch("main_menu"); return true end
     if key == "f4" then self:save(); return true end
     if key == "[" then
         self.cursor = ((self.cursor - 2) % #PARAMS) + 1

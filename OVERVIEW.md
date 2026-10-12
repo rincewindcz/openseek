@@ -13,6 +13,7 @@ decoded from the user's own copy of the game and are never distributed.
 | `engine/core/` | No game knowledge: class, config, input, gamepad, mouse stick, rng, display, camera, animation, audio, font, screen, screenshot, scenes, assets, flic, mathx, log. |
 | `engine/game/` | Simulation and gameplay presentation systems. |
 | `engine/ui/` | Screens and widgets. |
+| `engine/editor/` | The map editor behind `scenes/editor`: document, catalog, view, tools, panels, dialogs, checks. |
 | `engine/scenes/` | One scene per top-level mode. |
 | `engine/dev/` | Debug panel, determinism self-test, photo mode. |
 | `lib/` | Self-contained modules with no game or LOVE knowledge: `json.lua` (excluded from lint) and `strict_math.lua` (`sin`, `cos`, `atan`, `atan2`, `deg`, `rad` built from `+ - * /` alone, so they return the same bits on every platform; linted with `std = "min"`). |
@@ -129,19 +130,19 @@ love . --verify [replays/a.osr ...]   # play recordings back, check every checkp
 love . [stageMP]
 love . --touch                # phone controls on a desktop (see below)
 love . --photo [stageMP]      # developer photo mode (see below)
-love . --dev                  # developer run: the editor, the debug panel, the cheat keys
+love . --dev                  # developer run: the launch keys, the debug panel, the cheat keys
 ```
 
 `--dev` marks a developer run (`app.dev`); `--photo` implies it. Without
 either:
 
-- The ADVANCED menu's EDITOR entry answers with `EDITOR IS IN DEVELOPMENT`,
-  so the overview and everything reached only from it (sandbox, co-op free
-  play, replay browser `F4`, sound gallery, ending preview) cannot be entered.
-- The developer keys do nothing: `F2` (debug inspector), `F5` (god mode), `F6`
-  (pickup override), `E` (weapon level), `Delete` (self-destruct), the stage
-  and kind pickers in free play (`Tab`, `K`, `PgUp` / `PgDn`) and the main
-  menu's `F8` / `F9` galleries.
+- The main menu's launch keys do nothing: `F1` (fly the loaded stage freely),
+  `F3` (sandbox), `F4` (replay panel), `F7` (co-op free play), `F8` / `F9` /
+  `F10` (galleries), `F11` (ending preview), `Delete` (crash picture). The map
+  editor's DEV menu, which holds the same entries, is not shown.
+- The developer keys in play do nothing: `F2` (debug inspector), `F5` (god
+  mode), `F6` (pickup override), `E` (weapon level), `Delete` (self-destruct)
+  and the stage step in free play (`PgUp` / `PgDn`).
 - `R` restarts a stage in free play only; in a campaign it would be a free
   retry.
 
@@ -153,8 +154,8 @@ visible. Other mouse buttons and the keyboard behave as usual.
 
 `--photo` enables photo mode (`dev/photo_mode`), a developer tool for
 promotional stills; without the flag the module is never loaded. `F8` in
-gameplay, co-op or the overview opens it (the overview's animation gallery key
-is taken while the flag is on): the simulation holds as in a pause, the HUD and
+gameplay or co-op opens it (`F1` on the main menu flies the loaded stage): the
+simulation holds as in a pause, the HUD and
 every overlay are left out, and the view is free.
 
 | Input | Action |
@@ -181,6 +182,7 @@ one full-window view from the first player's camera.
 |-------|--------------------|
 | `--selftest` | any simulation code |
 | `--verify` | any simulation code, with recordings from the same version at hand; on each platform before a release |
+| `luajit tools/sim_maps.lua` | `game/map_file`, `game/map_compiler`, `World:load`, `engine/editor/` (document, catalog, ops, validate), the stage exporter |
 
 ## 5. Architecture
 
@@ -214,26 +216,27 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | Scene | Role |
 |-------|------|
 | `title` | Engine intro card on the first launch or while `engine_intro` is on (about 3 s; its riff rings on over TITLE and holds the menu music back; Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`, or to `style_select` until `Config.style_chosen` is set. |
-| `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT, or FULLSCREEN on the web); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. |
-| `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, REPLAYS, EDITOR, BACK. Keeps the non-run entries off the main menu. EDITOR is locked: it shows the `EDITOR IS IN DEVELOPMENT` notice and opens the overview only under `--dev` / `--photo` (`app.dev`). |
+| `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT, or FULLSCREEN on the web); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. Under `--dev` the fresh menu takes the launch keys of section 4 (`MainMenu:_dev_key`). |
+| `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, MAPS, REPLAYS, BACK. Keeps the non-run entries off the main menu. MAPS is left out on the web and phone builds and under `--touch` (the editor is a mouse and keyboard tool). |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews; the active card names its variant in the gold `credchars` font, its letters closed up by up to 2 px when the name is wider than the gap between the arrows (the co-op columns). Campaign: START begins the run. Free (F7): the focused card is the vehicle; G toggles god mode. Two players: a CONTROLS line per column (`1` / `2` or a click cycles AUTO, KEYS, PAD 1, PAD 2 into `coop_device_1` / `_2`, showing what AUTO resolves to and a named pad that is missing); a pad steps the column of the player holding it. |
 | `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3 (the shareware: DEMO01..03 and DEMOOVER, no animation, with `extra_lines` appended under DEMOOVER). Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, preview, keep_music, on_done }`; `alternate` types VIC3's alternate ending, `preview` falls back to `data/ending.json` `preview` without a record (overview F11), `keep_music` leaves the end music playing into the credits (`Campaign.complete`). EXTRA `ending_stats` adds the run record under FIN01..03 (DEMO01..03). |
 | `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a `credchars` label in the small style (`credchars` heading, `chars` name); `enter(on_exit)` replaces EXIT's return to the menu (the ending passes the high scores). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry (up to 40 characters), one per qualifying player after a co-op run; a name is held to the column left of its score through `ui/scroll_text`, following the caret while typed and panning to its end and back when stored. The shipped table (`data/highscores.json`) is the original's own default names and scores under the port's author. |
 | `advanced_settings` | OPTIONS: STYLE (the GAME STYLE row, and PREVIEW STYLES opening `style_select`, dimmed and inert while a game is suspended underneath), DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, MOBILE UI, GAMEPLAY, DIFFICULTY, EXTRAS. MOBILE UI only where `TouchControls.available` (web, Android, iOS, `--touch`); the web build drops DISPLAY's FULLSCREEN and WINDOW SIZE. The sidebar packs tighter when it holds more than nine entries. Rows scroll when a category holds more than `MAX_ROWS` (9). CONTROLS: a DEVICE row switches the action rows between KEYBOARD and GAMEPAD, each with two binding columns (Enter captures the next key or pad button, Del clears a slot), RESET TO DEFAULTS restores the shown device, then STICK DEAD ZONE, MOUSE STEERING and MOUSE SPEED. Over a suspended game the footer of a row the phase holds its own value of (`Replay.PARAMS`, the difficulty preset, the game style) says that it takes effect next game. |
-| `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. Rewrites the autosave on every open in a campaign run. |
+| `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. Rewrites the autosave on every open in a campaign run. A map briefs with its own name and paragraphs over the backdrop of its art set's mission, without the icon column, and has no SAVE / LOAD. |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
 | `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. Co-op: once per player (tagged), EXIT steps back a player. |
 | `shop` | POWUP / POWUPT weapon shop. Co-op: once per player, each with their own purse. |
-| `overview` | Free camera, stage and kind pickers, entity type editor. Reached only with `--dev` / `--photo`. |
-| `gameplay` (F1) | Player-locked rotating camera, combat. |
-| `sandbox` (F3) | Gameplay plus live vehicle parameter editor. |
+| `map_select` | MAPS screen (menu ADVANCED), built like `saves` over an amber-tinted `MAINP`: the maps of `maps/` in the save directory, newest first, under a NEW MAP row. PLAY (Enter, or a click on the row) runs briefing, equip, phase and stats and comes back (`app.play_return`), with the MISSION mode medal purse and no high score entry; EDIT (`E`) opens the editor; COPY (`C`) duplicates; two-step delete; FOLDER (`F`) opens the directory. A map with a check error (section 6a) is listed but not played. A map file dropped on the window is imported (`Scene:filedropped`). |
+| `editor` | Map editor (section 6a). Entered from `map_select` with `{ map = name }` or `{ new = true }`; with nothing it resumes the map already open (after a try). Key repeat is on while it is the top scene. Under `--dev` its DEV menu launches the sandbox, co-op free play, the replay panel, the galleries, the ending previews and the crash picture. |
+| `gameplay` | Player-locked rotating camera, combat. A phase played on its own returns to where it was started (`GameplayBase:leave_run`, `app.play_return`: the map list or the editor, else the menu); a map tried from the editor leaves on Esc and is not recorded. Under `--dev` `PgUp` / `PgDn` step the pack stage in free play. |
+| `sandbox` (F3 on the main menu, `--dev`) | Gameplay plus live vehicle parameter editor. |
 | `style_select` | Style selection screen, a `gameplay` subclass: three style cards (CLASSIC, ENHANCED, OVERKILL, on the VSELECT camo strip the style's `camo` names), the chosen style's one `about` line, a DIFFICULTY row, a fixed line pointing at the options for a style of one's own, and the OK plate over a live phase, unrecorded, silent and in god mode. The phase is flown by the scripted runs of `data/styles.json` `preview` in turn, each entered as a new phase on its own stage and started inside an enemy base. Nothing holds the replay parameters fixed during a run, so a choice is written to `Config` and shows at once. Opened by `title` until confirmed once (starts on the `default` style, no way out but OK), and by OPTIONS with `return_to`, where Esc restores every `Config` scalar. Leaving reloads the stage that was loaded before. |
 | `coop_gameplay` (F7, LOCAL COOP) | Split-screen two-player co-op; full screen when one player is left in a campaign. |
-| `replays` (F4) | Dev replay panel over the overview: play back, verify, toggle recording, delete. |
+| `replays` (F4 on the main menu, `--dev`) | Dev replay panel: play back, verify, toggle recording, delete. |
 | `replay_select` | REPLAYS screen (menu ADVANCED), built like `saves` over a blue-tinted `MAINP`: watch a recording, two-step delete, left / right (or the label) step the order between newest, oldest and by progress, stage / mode / players / running time of the highlighted one, flagged when it was recorded on another version of the game or on another platform. Playback returns here through `app.replay_return`. |
 | `saves` | SAVE / LOAD slots over the green-tinted `MAINP` backdrop: unlimited named slots, scrolling, name entry (up to 40 characters; the field follows the caret, the highlighted slot's name pans when wider than its column, `ui/scroll_text`), two-step delete. Opened from the briefing (both modes) and from the menu LOAD entry. |
-| `anim_gallery`, `font_gallery`, `sound_gallery` (F8/F9/F10) | Asset galleries. |
+| `anim_gallery`, `font_gallery`, `sound_gallery` (F8/F9/F10 on the main menu, `--dev`) | Asset galleries. |
 
 `scenes/gameplay_base.lua` is shared by the three gameplay scenes: firing,
 weapon cycling, landing, tick accounting, mission-won sequencing.
@@ -258,7 +261,9 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/mathx` | `heading_deg`: the game's angle convention over `lib/strict_math`. |
 | `core/log` | Timestamped, tagged console lines (`info`, `warn`); `recent()` keeps the last 80 for the crash report. |
 | `core/version` | Build identity from `build.json` (`version`, `commit`, `dirty`). `string()` for the startup log line; `draw()` puts the build tag in the bottom-right corner of the title, the main menu and the mission select: `OPENSEEK <version>` in the gold CHARS font (`OPENSEEK DEV` without a release tag) and, on a packaged build, the commit under it in grey (`+` when built with uncommitted changes). |
-| `game/world` | Stage load, entities, ground colour, collision (`blocked`), objectives, ground dust, `world.time`, `world.rng`, `world.params`. |
+| `game/world` | Stage load (a pack stage, or a map compiled by `game/map_compiler`: `World.is_map`, `map_stage`, `stage_state`), entities, environment (`world.env`: art set, night, weather, look, music; section 6a), ground colour, collision (`blocked`), objectives, ground dust, `world.time`, `world.rng`, `world.params`. A map that cannot be loaded falls back to the first pack stage. |
+| `game/map_file` | Player-made maps: format, compact one-object-per-line encoding, read / write / list / import in `maps/` of the save directory, `hash` (the fingerprint a replay header carries as `map`). Section 6a. |
+| `game/map_compiler` | `compile`: map -> the stage table `World:load` builds a phase from. `decompile`: pack stage -> map (a clone). `pack_stage`: the cached class side of a pack stage (classes, assets, uses per class, classes sharing a spot). |
 | `game/debris` | Explosion shards (`data/debris.json`), owned by the world as `world.debris`: `burst(name, x, y, opts)` throws the named burst, `update` flies the pieces (linear slow-down to rest, sinking through the size rows of their clip, smoke trail puffs, dust puff on landing through `World:add_ground_dust`, then lying on the ground with EXTRA `lying_shards`). Presentation only: fed through the one-way `World:spawn_debris`, random numbers from `math.random`, never read by the simulation. Flying pieces and puffs are drawn by `Renderer:draw_debris`, lying ones in the ground pass over the tread marks. |
 | `game/entity` | HP, state machine, damage smoke, hit effects, crater. |
 | `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. A tank that drives into a solid object lying within `bump_arc` of its travel direction bounces off as in the original: its speed flips to the same share of the opposite top speed (times `bump_bounce`) and it is set back `bump_back` seconds of travel, after which the controls ease it out. Under `bump_min` of top speed, or on a glancing touch, it slides along instead, and stands still when it cannot. A tree it may crush (`explosive_trees`) never bounces it. `Player.draw_tank_variant` is shared with the select screen. |
@@ -293,6 +298,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/crash_fx` | EXTRA crash picture effects (`data/crash_fx.json`), the `fx` of the crash / game-over overlay: smoke, fire glow, embers and heat haze composed at the picture's resolution, flash and static entrance, static burst on a radio cue (`crash_fx`); the typed cause of the loss (`crash_cause`, from `Player.damage_cause`); the run's trivia (`crash_stats`, from `World.tally` and the campaign record via `GameplayBase:crash_stats`). `CrashFX.show` picks the picture and its timing for both gameplay scenes (the fx is nil with every extra off); `CrashFX.preview` is the overview's `Delete` key. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse, greys levels the purse cannot pay for (not the selected one, whose COST reads red), slides the focus frame, marks the hovered box and dims LOADED while a higher level is selected. |
+| `ui/kit` | Immediate-mode widget kit of the map editor: panels, buttons, check boxes, text and number fields, drop-downs, tabs, scroll areas, menus, tooltips, one dialog; popups and the dialog are deferred to `finish()` and own the input while open. The shipped "Loaded" font, tinted icon masks from `content/editor/icons/`, theme from `data/editor.json`. UI units are window pixels divided by `kit.scale` (1, 1.25, 1.5 or 2; `Kit.scale_for` picks by window height). |
 | `ui/menu` | Main menu over `MAINP`, `main` font (`mainmen` on a pack exported before `main` existed). Also drives the `new_game` and `advanced_menu` submenus. `set_notice(id, text)` makes an entry answer with a line under the last row (`chars` font, 2.2 s) instead of being confirmed. |
 | `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
 | `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. The icon under the pointer lights up: its art is added onto itself by as much as lifts the card's mean brightness to `HOVER_TARGET` (the dark night cards about 2.5 times, a day card barely). |
@@ -305,7 +311,14 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/hint` | Two-tone footer key hints: `{ENTER} LOAD` draws the braced key name gold and the action white. |
 | `ui/scroll_text` | Text held to a fixed width for typed values: clipped print with an offset, `tail` (the end in view, for a field being typed into) and `swing` (pans a text that does not fit to its end and back). |
 | `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Buttons draw their white icon from `content/mobileui/icon_<id>.png` (label when missing), tinted gold or white. MOBILE UI options: `touch_color`, `touch_opacity` (multiplies every alpha), `touch_button_scale`, `touch_stick_scale`, `touch_left_handed` (buttons measured from the left edge, stick on the right half). Drawn while the last input was touch (from the start under `--touch`). |
-| `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay (`--dev`). |
+| `editor/document` | The open map: lookups by id, group and owner, a 128 px grid for picking and culling, the undo history (every change is a recorded redo / undo pair, batched per action), type interning (`type_with`). |
+| `editor/catalog` | What can be placed, read from the pack: one entry per sprite and kind of an art set, classes sharing a spot kept as one entry (`stack_share`), `feature` (flag, pad, person, home pad classes, from any art set when the own one lacks them), `type_info` (what a map type draws as), inspector choices (firing routines, soldier and helicopter modes, movements). |
+| `editor/view` | Free camera over the wrapped map in a window rect; draws the document (ground, decals, lines, objects, map copies past the seam shaded), picks under a point. |
+| `editor/tools` | SELECT, PLACE, SCATTER, ERASE, ROUTE, LINE. |
+| `editor/ops` | Placing an entry, the objective marks of a building (people inside, agent target, waiting crew), copy / paste / duplicate, grouping, `auto_group` of a cloned stage. |
+| `editor/panels`, `editor/dialogs` | The dock (OBJECTS, PROPERTIES, LAYERS, CHECKS) and the dialogs (map settings, new, open, save as, ground generator, keys, questions). |
+| `editor/validate`, `editor/generate`, `editor/selection` | Map checks; ground cover at a pack stage's densities; the selected objects. |
+| `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay (`--dev`), also in a map being tried. |
 | `dev/selftest` | Scripted phase run three ways, compared per tick (`--selftest`); recordings played back against their checkpoints (`--verify`). |
 | `dev/photo_mode` | `--photo` only: holds the scene, puts a free view (focus offset, zoom multiplier, turn) on the scene's camera for the length of a draw, and captures the scene's `draw_world()` into a canvas of the output size (`data/photo.json`). Presentation only; steps whole ticks through the scene's update. |
 
@@ -337,6 +350,113 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 - The renderer draws ground (dust, decals, segments, craters), then objects.
   Tank and landed chopper draw between passes; airborne chopper above objects and
   enemy flyers.
+
+## 6a. Maps and the map editor
+
+A map is one phase made by a player: `maps/<name>.json` in the save directory
+(`game/map_file`), holding sprite names, class references into the pack's
+stages and coordinates, never pixels. Its stage name is `map_<name>`;
+`World:load` compiles it (`game/map_compiler`) instead of reading a stage. The
+map list and the editor are reached through ADVANCED / MAPS.
+
+| Map field | Contents |
+|-----------|----------|
+| `format`, `name`, `author` | Format version (1), display name, free text. |
+| `based_on` | The pack stage a clone was copied from. The file then holds that stage's layout. |
+| `base` | The pack stage whose class table the compiled stage starts from. |
+| `environment` | `art` (mission digit 0-4: sprites, ground, HUD art, tracers, dust), and optionally `night`, `weather` (`none` / `snow` / `rain`), `look` (POST FX grade of a mission), `music` (track of a mission). Unset keys follow the art set. |
+| `size` | Wrap period in world pixels (1024-4096; the editor offers 2048, 3072, 4096). |
+| `vehicle` | `tank` / `chopper` when forced (applies however the map is played). |
+| `briefing` | Up to three paragraphs. |
+| `objectives` | `destroy`, `rescue`, `sabotage`: `label`, and `optional` for the rescue. |
+| `hold_agents`, `commander` | Stage global 5 (agents wait until all are in) and the special end. |
+| `types` | `{ from, class, sprite, set }`: a class of a pack stage and the class fields changed on it. |
+| `objects` | Rows `[id, t, x, y, route, owner, group]` in entity order, 0 for no link. `owner`: the building a POW flag, a landing pad or a waiting person belongs to. `group`: parts placed as one thing. |
+| `routes`, `lines` | `{ id, points }`; ground polylines `{ color, points }`. |
+
+Compiling:
+
+- The stage starts as the class table of `base`, so the classes the engine
+  addresses by index (projectiles, walker class 20, helicopters) keep their
+  place. Every map type is appended as a class of its own, its sprite read from
+  the pack stage it names (`render.dir`). A type this pack cannot resolve
+  leaves its objects out (`stage.missing`).
+- The original's links are written back in its form: a pad or person class
+  gets `parent_class` = its owner's entity index (one class per owner), and a
+  POW flag is emitted right after its building.
+- `stage.environment` feeds `World:_set_environment`; `stage.mission` (name,
+  briefing, vehicle, objective wording) replaces `data/missions.json`. The
+  objectives themselves follow from the content, as for a pack stage without
+  an entry (`Mission.for_stage`): targets, people, agent pads.
+- `World:_fit_wrap_period` is skipped: a map's `size` is its period. A clone
+  states the period the fit gives its stage.
+- `tools/sim_maps.lua` holds the contract: every pack stage decompiled, encoded,
+  decoded, compiled and loaded resolves to the same world as the stage itself.
+
+Environment (`world.env`): `art`, `night`, `weather`, `look`, `music`. A pack
+stage takes all five from its mission digit. `World:is_night()` is the light
+(light map, no aircraft shadows); `World:dark_art()` is the night palette (the
+player's and the air strike's night sprite sets, the original's night spot). A
+night over a day art set uses `night.default` of `data/lightfx.json` and is
+always lit by the light map.
+
+Playing: PLAY in the map list loads the map, sets `app.play_return` and opens
+the briefing; the phase ends back in the list. No campaign state, no high
+score, the MISSION mode purse. Replays record the stage name and the map
+file's fingerprint (`map`); the replay list marks a recording whose map is
+gone (not playable) or changed since. Co-op on maps is not offered.
+
+The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
+
+| Area | Contents |
+|------|----------|
+| Top bar | FILE, EDIT, VIEW, MAP, (DEV,) HELP menus; map name (`*` when unsaved), art set, night / weather icons; the check state; TRY. |
+| Tool strip | The six tools, undo / redo, grid, snap, home. |
+| Options bar | The active tool's settings and a one-line hint. |
+| Dock | OBJECTS (catalog by art set and category, search), PROPERTIES (the selection, or the map summary), LAYERS (show / lock per layer, view toggles), CHECKS. |
+| Status line | Last message; pointer position, zoom, selection and object counts. |
+| View | The map unlit and north up, copies past the seam shaded, the seam outlined, routes, owner links, objective badges, the overview map. |
+
+| Tool | Behaviour |
+|------|-----------|
+| SELECT `V` | Click picks the topmost object, a second click on it the one beneath. Shift adds or removes. Dragging empty ground draws a box; dragging a selected object moves the selection (snapped when snap is on). Right click or Esc clears. A group is picked whole unless SINGLE PARTS (`Tab`) is on. |
+| PLACE `P` | The entry picked in OBJECTS follows the pointer; click places, drag lays a row at the sprite's pitch. The home pad is one of a kind and leads the entity order: placing it again moves it. |
+| SCATTER `B` | Paints the ticked entries at random inside the brush: RADIUS, PER DAB, GAP. One stroke is one undo step. |
+| ERASE `E` | Removes what the brush touches: scenery and ground, or everything visible. |
+| ROUTE `R`, LINE `L` | Click points, Enter or a double click finishes, Backspace takes the last back. A point drags, a click on a segment inserts one, `Delete` removes the point or shape under the pointer. A route drawn while units are selected is theirs. Lines take a colour from the options bar. |
+
+- Catalog entries are built from the pack per art set: one per sprite and kind,
+  the classes the original sets on one spot kept together (tank hull and
+  turret, gun and base, radar and dish, hangar tank with its hut). Any art
+  set's sprites can be placed on any map.
+- PROPERTIES edits class fields per kind: toughness, score, mission target,
+  drops, missile guidance (radar / radio tower), own base building,
+  commander's building, firing routine, movement, route, soldier and
+  helicopter weapon, respawn, leash. On a single building: PEOPLE INSIDE (adds
+  the POW flag and the pickup pad), AGENT TARGET (adds the drop pad), CREW
+  WAITING (adds the people). A changed field makes the object a type of its own.
+- LAYERS: base, units, guns, buildings, objective marks, scenery, ground,
+  routes, ground lines. SCENERY is locked at first, so a click never picks a
+  stone; brushes ignore the lock.
+- Undo covers every change (300 steps). Unsaved changes are written aside every
+  `autosave_seconds` (`maps/_auto_<name>.json`) and offered back when the map
+  is opened again. Leaving with unsaved changes asks.
+- MAP / GENERATE GROUND scatters a pack stage's scenery over the map at that
+  stage's densities, clear of everything else. NEW MAP starts blank (with a home
+  pad and, if asked, ground cover) or as a copy of a pack stage, grouped
+  (`Ops.auto_group`).
+- CHECKS (`editor/validate`): errors keep a map from being played (no home pad,
+  no objective, commander rule without its building or without other targets,
+  sprites this pack lacks, base stage missing); warnings do not (loose
+  objective marks, a route under two points, a hangar tank without a hangar,
+  solid objects on the home pad, nothing armed, very many objects). Every pack
+  stage clones without an error.
+- TRY (`F5`) writes the map aside (`maps/_playtest.json`), loads it and starts
+  gameplay with the full weapon list; Esc returns to the editor.
+
+Limits: desktop with mouse and keyboard only. The briefing backdrop is the art
+set's own, mission number included. A route or line that crosses the seam is
+drawn the long way round.
 
 ## 7. Combat
 
@@ -713,8 +833,8 @@ replay header `player.N.skin` / `player.N.tank`).
 - Music: `.ogg` / `.mp3` / `.med` in `assets/music/`, as the original uses its
   three modules: `menu` from boot (title), on the main menu and on every
   briefing (after each phase); per phase the first of `stage<MP>`,
-  `mission<M>`, `game`, else silence (the original plays none in play or the
-  overview); `ending` for the ending and the credits after it; `hiscores` on
+  `mission<M>` (M from `world.env.music`), `game`, else silence (the original
+  plays none in play); `ending` for the ending and the credits after it; `hiscores` on
   the high scores after a run (`menu` when browsed from the menu). The pack
   holds `menu.med`, `hiscores.med` and `ending.med` (OctaMED, played through
   ModPlug); an `.ogg` / `.mp3` of the same name replaces one.
@@ -766,7 +886,7 @@ Options:
 | `style` | STYLE | CLASSIC / ENHANCED / OVERKILL: sets every key the style owns (`data/styles.json`); CUSTOM once one of them differs. `style_chosen` records that the selection screen was confirmed. |
 | `difficulty`, `enemy_damage_level`, `enemy_damage`, `enemy_fire_level`, `enemy_fire_rate`, `enemy_aggression`, `pickup_level`, `land_for_medals`, `land_for_supplies` | DIFFICULTY | The original's EASY / MEDIUM / HARD (`game/difficulty`, `data/difficulty.json`), each value also editable (preset then reads CUSTOM); a named preset is re-applied at startup. `enemy_damage_level` (ENEMY DAMAGE) picks the original's per-weapon enemy damage (`enemy_damage` tables in `data/weapons.json`, `Difficulty.damage_level`), `enemy_fire_level` (ENEMY FIRE) its enemy reloads, burst pauses and missile tracking (`data/enemy_weapons.json`, `Difficulty.fire_level`). Extra multipliers, 1.0 in every preset: that damage (DAMAGE SCALE), the enemy fire rate (FIRE SCALE), and aggression (detection and attack range). `pickup_level` (PICKUP TIME: LONG / MEDIUM / SHORT) is how long a power-up lies (17.4 / 13.9 / 10.5 s). MEDIUM needs a landing to collect medals, HARD also fuel and armor. Replay parameters; replays from before them apply HARD with no landing rules (`Replay.LEGACY_PARAMS`). |
 | `enemy_hunts_people` | DIFFICULTY | On (the original): guns near a POW or an agent stepping into the open turn on them. Off: the enemy cannot harm people on foot. Outside the presets. |
-| `chopper_skin`, `tank_skin` | GAMEPLAY | Solo chopper and tank variants (section 9a); also set by the vehicle select screen and the overview `V` cycle. Recorded in the replay header. |
+| `chopper_skin`, `tank_skin` | GAMEPLAY | Solo chopper and tank variants (section 9a); also set by the vehicle select screen. Recorded in the replay header. |
 | `coop_lives` | GAMEPLAY | Co-op campaign lives: `separate` or `shared` pool (section 9). |
 | `master_volume`, `sfx_volume`, `engine_volume`, `voice_volume`, `ui_volume`, `music_volume` | AUDIO | Master and bus volumes. |
 | `audio_positional` | AUDIO | Directional mix; off centres all sounds. |
@@ -779,7 +899,7 @@ Modes and tools: split-screen co-op (free play and campaign), vehicle select
 screen (unused `VSELECT` art), replays, chopper skins 2 and 3 (`CHOP*2`,
 `CHOP*3`, unused in the original), tank variants from the enemy tanks, runtime
 sprite rotation, weather, runtime
-shadows, shrapnel / dust / craters, overview type editor, vehicle sandbox, asset
+shadows, shrapnel / dust / craters, map editor and player-made maps, type editor, vehicle sandbox, asset
 galleries, debug mission picker, headless checks.
 
 ## 12. Data files
@@ -791,6 +911,7 @@ galleries, debug mission picker, headless checks.
 | `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `explosion`, `drop`. Empty at present. |
 | `data/enemy_weapons.json` | Enemy fire in the original's units (`tick_rate` 70): `turret` (settle, turn, arc), `homing` (bearing refresh per level, radar penalty), the 20 `routines`, `soldier` (with `wander`), `mine`, `helicopter` (with the respawn clearance), and `movement` (route modes, hangar rides, yield distance). Read once by `World` (`world.enemy_rules`). |
 | `data/missions.json` | Section 9. |
+| `data/editor.json` | Map editor: `theme` (colours and sizes of `ui/kit`), `art` (art set labels), `sizes`, `grid_steps`, `categories` and `layers` (kinds per catalog tab, `locked` by default), `layer_colors` (overview map dots), `line_colors` (ground line swatches), `stack_share`, `home_pad` (pad and mark sprite), `names` (sprite labels), `weapons` (labels of enemy weapons), `scatter` / `erase` brush defaults, `ground` (`min_uses`, `clear`), `autosave_seconds`. |
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable); `armor_base` is the original's per-vehicle armor factor (chopper 20, tank 40). Tank only: `bump_bounce`, `bump_back`, `bump_arc`, `bump_min` (the bounce off a solid object). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
 | `data/credits.json` | Credits: `styles` (fonts, name offset, `color` tint of a mask font) and positioned `entries` (`heading` / `name`, or a label `text`), 320x240 design space. |
@@ -799,7 +920,7 @@ galleries, debug mission picker, headless checks.
 | `data/hud.json` | HUD layout; sprite paths through `core/assets`. The `notice` item is the weapon find line: `text` format, `font`, `time`, `fade_in`, `fade_out`. `icon_color_mission` tints a mask icon per mission digit (the player label on the night HUD). `reversed_sets` on a gauge lists the missions whose own sprite set runs from full to empty (the armour gauge of mission 2, `STAGE02/ARMOUR.BIN`); the HUD turns such a set round on load. |
 | `data/audio.json` | Sound events (`defaults`, `events` with clip or `clips`, per-vehicle variants, `size_pitch`, `group`), `callouts` (armor / fuel thresholds, warning period, selection guard, finish-him mark, follow-up lines) and `sequences` (timed screen cues). |
 | `data/photo.json` | Photo mode (`--photo`): `outputs` (label, `w`, `h`; an entry without a size is the window), zoom limits and wheel step, turn step (degrees) and drag rate (degrees per pixel), slow motion speed. |
-| `data/lightfx.json` | `night` per mission digit (or `default`): `ambient` floor colour, `max_light` cap, `headlight` (`color`, `gap` of the lamp ahead of the vehicle centre, beam `length` in world units, `spread_deg` half-angle and `intensity`, `pool_radius` / `pool_ahead` / `pool_intensity` of the pool around the vehicle). `weapons` (a round in flight) and `effects` (an ignited effect clip) carry a light: `radius`, `intensity` and `color` in the night light map, `flicker` depth, `fade` over the round's range, `glow` and `glow_radius` of the additive glow shown on any stage. Intensities are multiples of the art's brightness. |
+| `data/lightfx.json` | `night` per mission digit (or `default`, which a map's night over a day art set uses): `ambient` floor colour, `max_light` cap, `headlight` (`color`, `gap` of the lamp ahead of the vehicle centre, beam `length` in world units, `spread_deg` half-angle and `intensity`, `pool_radius` / `pool_ahead` / `pool_intensity` of the pool around the vehicle). `weapons` (a round in flight) and `effects` (an ignited effect clip) carry a light: `radius`, `intensity` and `color` in the night light map, `flicker` depth, `fade` over the round's range, `glow` and `glow_radius` of the additive glow shown on any stage. Intensities are multiples of the art's brightness. |
 | `data/postfx.json` | `look` (100% values), `missions` (per mission digit, look fields that differ, e.g. the cold grade of mission 1) and `presets`. |
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/styles.json` | `styles` (`name`, `label`, `about`: the one line shown under the cards, `camo`: the VSELECT camo row behind the card, `values` per owned Config key), `default` (the style the selection screen starts on) and `preview`: `fade` (ticks of fade in and out around a run) and `runs`, each a `stage`, a `vehicle`, a start `x`, `y`, `angle` and a `script` of segments (`ticks`, `held` actions, `events` on the first tick). |
@@ -932,13 +1053,14 @@ same bytes on every platform.
 | `decode_blitter.py` | Exact world-sprite decoder |
 | `decode_planar.py` | Exact planar HUD sprite decoder |
 | `unjam.py` | `DATA.JAM` / `DATA.JAL` lister and extractor |
+| `gen_editor_icons.py` | `content/editor/icons/`: the map editor's icons, white on alpha at 16, 20, 32 and 40 px, from the SVGs vendored under `svg/` (needs `rsvg-convert`) |
 | `decode_palette.py`, `decode_sincos.py`, `decode_stage_assets.py`, `decode_font.py`, `decode_fullscreen.py`, `decode_fullscreen_v2.py` | Viewers / dumps (need Pillow, numpy) |
 
 ## 14. Controls
 
 | Key | Action |
 |-----|--------|
-| WASD / arrows | Drive / pan |
+| WASD / arrows | Drive |
 | Shift + turn | Strafe chopper / rotate tank turret |
 | Ctrl | Fire |
 | Space | Take off / land |
@@ -946,24 +1068,16 @@ same bytes on every platform.
 | E | Weapon level (free play, `--dev`) |
 | P | Pause |
 | R | Restart stage (free play; in a campaign only under `--dev`) |
-| F1 | Game mode |
 | F2 | Debug inspector (`--dev`) |
-| F3 | Sandbox |
-| F4 | Replays |
 | F5 | God mode (`--dev`) |
 | F6 | Fly-over pickup override (ignores the difficulty landing rules; `--dev`) |
-| Delete | Free play: wreck the own vehicle (crash picture test; `--dev`). Overview: preview the game-over picture, Shift the one before a respawn |
-| F7 | Co-op free play (vehicle select) |
-| F8 / F9 / F10 | Animation / font / sound gallery (overview; `F8` / `F9` also on the main menu under `--dev`) |
-| F11, Shift+F11 | Ending, VIC3's alternate ending, with the preview stats (overview) |
+| Delete | Free play: wreck the own vehicle (crash picture test; `--dev`) |
+| PgUp / PgDn | Free play: the pack stage before / after (`--dev`) |
 | F9 | Radar auto zoom (in game, rebindable). Co-op: P1 Tab, P2 keypad `.` |
 | F12 | Screenshot (rebindable) |
-| Overview: wheel, +/- | Zoom |
-| Overview: Tab, PgUp/PgDn | Stage picker / cycle (also in free play under `--dev`, never in a campaign) |
-| Overview: L, G | Segment lines, 256 px grid |
-| Overview: V, O | Vehicle, optional game over |
-| Overview: C, [ ] | Axis-aligned pickups, `speed_scale` |
-| Overview: S | Save `data/entity_types.json` |
+| Main menu, `--dev` | `F1` fly the loaded stage, `F3` sandbox, `F4` replay panel, `F7` co-op free play, `F8` / `F9` / `F10` animation / font / sound gallery, `F11` ending (`Shift`: VIC3's alternate ending), `Delete` game-over picture (`Shift`: the one before a respawn) |
+| Map list | Up / Down, Enter play, `E` edit, `N` new, `C` copy, `Delete` twice erase, `F` folder, Esc back |
+| Map editor | Tools `V` `P` `B` `E` `R` `L`; wheel zoom; right or middle drag, Space + drag, `W A S D` move the view; arrows nudge (Shift 8 px); `Ctrl+C` / `X` / `V` / `D` copy, cut, paste, duplicate; `Delete`; `Ctrl+Z` / `Ctrl+Y` (or `Ctrl+Shift+Z`) undo / redo; `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+N`, `Ctrl+O`; `Ctrl+A` select all; `Ctrl+Shift+G` ungroup; `G` grid, `Ctrl+G` snap; `Tab` single parts; `Home` home pad; `F` show the selection; `M` overview map; `+` / `-` zoom; `F5` try; `F1` keys; Esc cancel, then leave |
 | Esc | Back (menu in game) |
 | Gamepad | Left stick or d-pad: drive (stick turn is analog). Right stick: strafe / turret. A or RT fire, LB or LT strafe, B take off / land, Y or RB weapon, X radar zoom, BACK pause, START menu. Buttons rebindable (CONTROLS, DEVICE GAMEPAD); the sticks and START are fixed. Menus: d-pad or left stick, A / START confirm, B / BACK back. Co-op: per player, see `vehicle_select`. |
 | Mouse (`mouse_control`) | Pointer offset from the vehicle is the stick: sideways turns, ahead drives, behind reverses. Left button fire, right strafe, middle take off / land, wheel next weapon (instead of the view zoom). Single player. |

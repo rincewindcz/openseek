@@ -25,7 +25,7 @@ local Player    = require "engine.game.player"
 -- enter() takes { players = 1 | 2, free = bool, return_to = <scene> }:
 --   * campaign (NEW GAME): each player picks a chopper and a tank variant; the
 --     equip screen still picks the vehicle per phase. START begins the run.
---   * free (overview F7, two players): the focused card is the vehicle the
+--   * free (F7 on a developer run's main menu, two players): the focused card is the vehicle the
 --     player drives, and G toggles god mode. START drops
 --     into split-screen co-op on the current stage.
 -- Two players drive their own card column with their own keys (P1 W/S/A/D, P2

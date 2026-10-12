@@ -168,14 +168,17 @@ end
 -- stage_name is "stageMP": M = mission (0-4), P = phase (0-3). The backdrop,
 -- phase title and objective icons are 1-based on the phase, and the mission
 -- text is keyed by the raw stage name in mission_text.json.
-function MissionMenu:open(stage_name)
-    local m = tonumber(stage_name:sub(6, 6)) or 0
+-- A player-made map passes own = { mission, name, paragraphs }: the backdrop of
+-- its art set's mission, its name for a title, its own text and no icons.
+function MissionMenu:open(stage_name, own)
+    local m = own and own.mission or tonumber(stage_name:sub(6, 6)) or 0
     local p = tonumber(stage_name:sub(7, 7)) or 0
 
-    local icon_path = string.format("assets/phase/stage%d_phase%d_f00.png", m, p + 1)
-    self.backdrop = self:_img(string.format("assets/fullscreen/STAGE0%d_MS.png", m))
-    self.title    = self:_img(string.format("assets/mission/title_phase0%d.png", p + 1))
-    self.icon     = self:_img(icon_path)
+    local icon_path = own and "" or string.format("assets/phase/stage%d_phase%d_f00.png", m, p + 1)
+    self.backdrop   = self:_img(string.format("assets/fullscreen/STAGE0%d_MS.png", m))
+    self.title      = not own and self:_img(string.format("assets/mission/title_phase0%d.png", p + 1)) or nil
+    self.title_text = own and tostring(own.name or ""):upper() or nil
+    self.icon       = not own and self:_img(icon_path) or nil
 
     -- Original briefing text: one paragraph per box slot, carrying its slot index
     -- (0-2) from mission_text.json. Each paragraph snaps to its slot's box
@@ -198,6 +201,12 @@ function MissionMenu:open(stage_name)
     end
     self.paragraphs = {}
     local info = self.text[stage_name]
+    if own then
+        info = { paragraphs = {} }
+        for i, text in ipairs(own.paragraphs or {}) do
+            info.paragraphs[i] = { slot = i - 1, text = tostring(text):upper() }
+        end
+    end
     if info and info.paragraphs then
         for _, para in ipairs(info.paragraphs) do
             local slot = para.slot or (#self.paragraphs)
@@ -340,6 +349,8 @@ function MissionMenu:draw()
     end
     if self.title then
         g.draw(self.title, (DW - self.title:getWidth()) / 2, TITLE_Y)
+    elseif self.title_text then
+        self.font:print(self.title_text, (DW - self.font:width(self.title_text)) / 2, TITLE_Y)
     end
     if self.icon then
         g.draw(self.icon, ICON_X, ICON_Y)

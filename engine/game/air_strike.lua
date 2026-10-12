@@ -207,9 +207,10 @@ local function strike_point(strike, along, across)
     return strike.x + fx * along + rx * across, strike.y + fy * along + ry * across
 end
 
--- The night variant of clip name when the stage is at night and one exists.
+-- The night variant of clip name when the stage's art is a night palette and
+-- one exists.
 function AirStrike:_clip(name)
-    if self.world:is_night() and Animation.clip(name .. "n") then name = name .. "n" end
+    if self.world:dark_art() and Animation.clip(name .. "n") then name = name .. "n" end
     local clip = Animation.clip(name)
     return clip and not clip:is_empty() and clip or nil
 end

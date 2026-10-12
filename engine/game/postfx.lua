@@ -247,7 +247,7 @@ end
 -- missions, else the base look.
 function PostFX:enter(world)
     local d = load_data()
-    local m = world and world.stage_name and world.stage_name:match("^stage(%d)")
+    local m = world and world.env.look
     self.look = (m and d.missions[m]) or d.look
 end
 
