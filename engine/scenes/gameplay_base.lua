@@ -12,6 +12,7 @@ local Sound       = require "engine.game.sound"
 local Campaign    = require "engine.game.campaign"
 local Log         = require "engine.core.log"
 local Config      = require "engine.core.config"
+local Version     = require "engine.core.version"
 
 -- Shared base for the gameplay scenes (single player, sandbox, co-op split):
 -- firing, weapon cycling, landing, the mission-won -> DESTRUCTION STATS
@@ -305,6 +306,7 @@ function GameplayBase:seed_phase()
     self.playback     = app.replay_play
     self.desync       = nil
     self.desync_parts = nil
+    self.drift        = nil
     self.recording    = nil
     -- The phase before (a restart) lets go first, so an options edit made
     -- during it is what this one starts with.
@@ -328,6 +330,7 @@ function GameplayBase:replay_header(mode, players)
     local app    = self.app
     local header = {
         build   = Replay.build_id(),
+        version = Version.string(),
         stage   = app.world.stage_name,
         mode    = mode,
         seed    = self.seed,
@@ -450,6 +453,7 @@ end
 
 -- End of a simulated tick: store this tick's input and a periodic checksum, or on
 -- playback compare that checksum and remember the first tick that disagrees.
+-- A drift (Replay.is_drift) is counted and played through.
 function GameplayBase:tick_replay(players)
     local app  = self.app
     local tick = app.tick
@@ -466,8 +470,14 @@ function GameplayBase:tick_replay(players)
         if expected and not self.desync then
             local parts = Replay.checksum_parts(app.world, players, app.combat)
             if parts.all ~= expected.hash then
-                self.desync = tick
-                self.desync_parts = Replay.check_diff(expected, parts)
+                local moved = Replay.check_diff(expected, parts)
+                if Replay.is_drift(moved) then
+                    self.drift = self.drift or { first = tick, count = 0 }
+                    self.drift.count = self.drift.count + 1
+                else
+                    self.desync       = tick
+                    self.desync_parts = moved
+                end
             end
         end
         if self.desync or tick >= self.playback.length then
@@ -501,6 +511,8 @@ function GameplayBase:finish_playback(reason)
         length  = self.playback.length,
         desync  = self.desync,
         parts   = self.desync_parts,
+        drift   = self.drift,
+        checks  = #self.playback.checks,
         name    = self.playback.path,
     }
     local r = app.replay_result
@@ -510,6 +522,10 @@ function GameplayBase:finish_playback(reason)
         Log.info("replay", "%s verified, %d ticks", tostring(r.name), r.length)
     else
         Log.info("replay", "%s %s at tick %d of %d", tostring(r.name), r.reason or "ended", r.tick, r.length)
+    end
+    if r.drift then
+        Log.warn("replay", "%s player drifted at %d of %d checkpoints, first at tick %d", tostring(r.name),
+            r.drift.count, r.checks, r.drift.first)
     end
     self.playback     = nil
     app.replay_play   = nil
@@ -525,8 +541,9 @@ end
 function GameplayBase:draw_replay_tag()
     if not self.playback then return end
     local g = love.graphics
-    local text = string.format("REPLAY  %d / %d%s", self.app.tick, self.playback.length,
-        self.app.replay_verify and "  (verifying)" or "")
+    local text = string.format("REPLAY  %d / %d%s%s", self.app.tick, self.playback.length,
+        self.app.replay_verify and "  (verifying)" or "",
+        self.drift and ("  drift from " .. self.drift.first) or "")
     local w = g.getFont():getWidth(text) + 16
     g.setColor(0, 0, 0, 0.55)
     g.rectangle("fill", g.getWidth() / 2 - w / 2, 4, w, 20, 3)

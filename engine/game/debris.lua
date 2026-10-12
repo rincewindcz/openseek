@@ -1,11 +1,11 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class     = require "engine.core.class"
-local json      = require "lib.json"
-local Animation = require "engine.core.animation"
-local Config    = require "engine.core.config"
-local Mathx     = require "engine.core.mathx"
+local Class      = require "engine.core.class"
+local json       = require "lib.json"
+local Animation  = require "engine.core.animation"
+local Config     = require "engine.core.config"
+local StrictMath = require "lib.strict_math"
 
 -- Shards thrown by explosions, after the original's effect spawners.
 -- data/debris.json names the kinds of piece and the bursts that throw them. A
@@ -105,7 +105,7 @@ function Debris:burst(name, x, y, opts)
     local parts = self.data.bursts and self.data.bursts[name]
     if not parts then return end
     local base = math.random() * 2 * math.pi
-    if opts and opts.dx and (opts.dx ~= 0 or opts.dy ~= 0) then base = Mathx.atan2(opts.dy, opts.dx) end
+    if opts and opts.dx and (opts.dx ~= 0 or opts.dy ~= 0) then base = StrictMath.atan2(opts.dy, opts.dx) end
     for _, part in ipairs(parts) do
         local kind  = self.data.kinds[part.kind]
         local count = (opts and opts.count) or part.count or 1

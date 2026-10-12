@@ -4,6 +4,7 @@
 local Class      = require "engine.core.class"
 local Config     = require "engine.core.config"
 local Mathx      = require "engine.core.mathx"
+local StrictMath = require "lib.strict_math"
 local Difficulty = require "engine.game.difficulty"
 
 -- Enemy fire as the original game runs it. Every gun plays one of the twenty
@@ -71,7 +72,7 @@ function EnemyFire:_shoot(e, shot, aim)
     if type(side) == "table" then side = side[(e.volleys - 1) % #side + 1] end
     local forward = shot.forward or 0
     local rad     = (aim - 90) * math.pi / 180
-    local fx, fy  = math.cos(rad), math.sin(rad)
+    local fx, fy  = StrictMath.cos(rad), StrictMath.sin(rad)
     self.combat:fire(e.x + fx * forward - fy * side, e.y + fy * forward + fx * side,
         (aim + (shot.angle or 0)) % 360, shot.weapon, e, 1)
 end
@@ -187,8 +188,8 @@ function EnemyFire:_wander(e, walk, dx, dy, step, dt)
             turn_toward(e, Mathx.heading_deg(sx, sy), step)
             local rad  = (e.aim_angle - 90) * math.pi / 180
             local move = walk.step * self.tick_rate * dt * Config.speed_scale
-            e.x = e.x + math.cos(rad) * move
-            e.y = e.y + math.sin(rad) * move
+            e.x = e.x + StrictMath.cos(rad) * move
+            e.y = e.y + StrictMath.sin(rad) * move
             return
         end
     end

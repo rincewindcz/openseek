@@ -15,7 +15,7 @@ decoded from the user's own copy of the game and are never distributed.
 | `engine/ui/` | Screens and widgets. |
 | `engine/scenes/` | One scene per top-level mode. |
 | `engine/dev/` | Debug panel, determinism self-test, photo mode. |
-| `lib/` | Vendored `json.lua`. Excluded from lint. |
+| `lib/` | Self-contained modules with no game or LOVE knowledge: `json.lua` (excluded from lint) and `strict_math.lua` (`sin`, `cos`, `atan`, `atan2`, `deg`, `rad` built from `+ - * /` alone, so they return the same bits on every platform; linted with `std = "min"`). |
 | `data/` | Hand-maintained JSON tunables. |
 | `content/` | Original artwork shipped with the engine, including the icon (`content/icon/openseek.svg`, rendered to `openseek.png`). |
 | `assets/` | Game data pack decoded from the original files. Not tracked. |
@@ -93,7 +93,9 @@ decoded from the user's own copy of the game and are never distributed.
    section 11, and a `Replay.PARAMS` entry if it affects simulation.
 7. **Deterministic simulation.** Simulation code reads no wall clock, keyboard,
    window size, camera zoom or `math.random`; presentation never writes
-   simulation state.
+   simulation state. Its trigonometry comes from `lib/strict_math.lua`, never
+   from `math.sin` and its relatives, and it squares by multiplying, never by
+   `^`: those differ in the last bit between platforms and Lua runtimes.
 
 Style:
 
@@ -123,6 +125,7 @@ Style:
 ```bash
 luacheck .                    # zero warnings required
 love . --selftest [ticks] [stage]
+love . --verify [replays/a.osr ...]   # play recordings back, check every checkpoint
 love . [stageMP]
 love . --touch                # phone controls on a desktop (see below)
 love . --photo [stageMP]      # developer photo mode (see below)
@@ -177,6 +180,7 @@ one full-window view from the first player's camera.
 | Check | Run after touching |
 |-------|--------------------|
 | `--selftest` | any simulation code |
+| `--verify` | any simulation code, with recordings from the same version at hand; on each platform before a release |
 
 ## 5. Architecture
 
@@ -227,7 +231,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `style_select` | Style selection screen, a `gameplay` subclass: three style cards (CLASSIC, ENHANCED, OVERKILL, on the VSELECT camo strip the style's `camo` names), the chosen style's one `about` line, a DIFFICULTY row, a fixed line pointing at the options for a style of one's own, and the OK plate over a live phase, unrecorded, silent and in god mode. The phase is flown by the scripted runs of `data/styles.json` `preview` in turn, each entered as a new phase on its own stage and started inside an enemy base. Nothing holds the replay parameters fixed during a run, so a choice is written to `Config` and shows at once. Opened by `title` until confirmed once (starts on the `default` style, no way out but OK), and by OPTIONS with `return_to`, where Esc restores every `Config` scalar. Leaving reloads the stage that was loaded before. |
 | `coop_gameplay` (F7, LOCAL COOP) | Split-screen two-player co-op; full screen when one player is left in a campaign. |
 | `replays` (F4) | Dev replay panel over the overview: play back, verify, toggle recording, delete. |
-| `replay_select` | REPLAYS screen (menu ADVANCED), built like `saves` over a blue-tinted `MAINP`: watch a recording, two-step delete, left / right (or the label) step the order between newest, oldest and by progress, stage / mode / players / running time of the highlighted one, flagged when it was recorded on an older build. Playback returns here through `app.replay_return`. |
+| `replay_select` | REPLAYS screen (menu ADVANCED), built like `saves` over a blue-tinted `MAINP`: watch a recording, two-step delete, left / right (or the label) step the order between newest, oldest and by progress, stage / mode / players / running time of the highlighted one, flagged when it was recorded on another version of the game or on another platform. Playback returns here through `app.replay_return`. |
 | `saves` | SAVE / LOAD slots over the green-tinted `MAINP` backdrop: unlimited named slots, scrolling, name entry (up to 40 characters; the field follows the caret, the highlighted slot's name pans when wider than its column, `ui/scroll_text`), two-step delete. Opened from the briefing (both modes) and from the menu LOAD entry. |
 | `anim_gallery`, `font_gallery`, `sound_gallery` (F8/F9/F10) | Asset galleries. |
 
@@ -251,7 +255,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `core/font` | Bitmap fonts from `assets/fonts/`; mask (tinted) or truecolor. `print` `cell` option draws fixed-pitch at each glyph's in-frame x offset. `for_mission(name, m)` returns the cut a mission ships for its own HUD palette (`chars3`), else the shared font. |
 | `core/screen` | Fullscreen image fade in / hold / out, with an optional `fx` object animating the picture (`update`, `cue`, `draw`; `cut` skips the fade-in). `is_closing` reports the fade-out. |
 | `core/flic` | FLI / FLC player: decodes one frame per `next_frame` into an index buffer and an RGBA `image` (COLOR_256 / 64, DELTA_FLC / FLI, BYTE_RUN, BLACK, COPY); the caller sets the pace. |
-| `core/mathx` | `atan2` shim, `heading_deg`. |
+| `core/mathx` | `heading_deg`: the game's angle convention over `lib/strict_math`. |
 | `core/log` | Timestamped, tagged console lines (`info`, `warn`); `recent()` keeps the last 80 for the crash report. |
 | `core/version` | Build identity from `build.json` (`version`, `commit`, `dirty`). `string()` for the startup log line; `draw()` puts the build tag in the bottom-right corner of the title, the main menu and the mission select: `OPENSEEK <version>` in the gold CHARS font (`OPENSEEK DEV` without a release tag) and, on a packaged build, the commit under it in grey (`+` when built with uncommitted changes). |
 | `game/world` | Stage load, entities, ground colour, collision (`blocked`), objectives, ground dust, `world.time`, `world.rng`, `world.params`. |
@@ -282,7 +286,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. `Loadout.info` (cost, description lines) from `assets/pow/weapon_info.json`; `price` = list cost minus `trade_in` (`data/shop.json`) of the owned level's cost. `Loadout.active(app, player)` picks a co-op player's own. |
 | `game/score` | Kill values, phase bonus weights, bonus-life ladder, `Score.award`. |
 | `game/stats` | Destruction categories and stage totals. |
-| `game/replay` | Replay header, delta input, checksums, `.osr` files; hands each finished recording to the hosting page when the web build ships `build.json` with `replay_upload`. `Replay.Hold` is a phase's hold on the simulation parameters: the held values go back into `Config` at the start of every tick, the player's own while a menu is up and when the phase ends, edits included. |
+| `game/replay` | Replay header (platform `build`, game `version`), delta input, checksums, `.osr` files; on playback a checkpoint where only the player part disagrees is a drift (`is_drift`), played through and reported, anything more ends it; hands each finished recording to the hosting page when the web build ships `build.json` with `replay_upload`. `Replay.Hold` is a phase's hold on the simulation parameters: the held values go back into `Config` at the start of every tick, the player's own while a menu is up and when the phase ends, edits included. |
 | `game/savegame` | Campaign save slots: capture / apply a run (stage, score, lives, bonus ladder, whole inventory, run record; co-op adds a `coop` table per player), one JSON file per slot in `saves/`, plus the `autosave.json` of the run in progress (written by each campaign briefing, removed by `Campaign.finish`). |
 | `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base, pickup and air strike blips), weapon sights (the air strike's rests on its target), counters, OVERKILL banner, weapon find notice, rolling score. `set_mission` picks the mission's HUD art (gauges, weapon icons, radar, cursor box, lives icon: `assets/hud/stage{m}/` over `assets/hud/`) and `font()` its text font: the night mission's readouts, in-game messages and FPS counter draw in its green CHARS, as in the original. |
 | `ui/end_stats` | DESTRUCTION STATS screen: lines count up (icons filling), then wind back down as each pays its bonus into TOTAL SCORE; per-player columns in co-op. |
@@ -302,7 +306,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/scroll_text` | Text held to a fixed width for typed values: clipped print with an offset, `tail` (the end in view, for a field being typed into) and `swing` (pans a text that does not fit to its end and back). |
 | `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Buttons draw their white icon from `content/mobileui/icon_<id>.png` (label when missing), tinted gold or white. MOBILE UI options: `touch_color`, `touch_opacity` (multiplies every alpha), `touch_button_scale`, `touch_stick_scale`, `touch_left_handed` (buttons measured from the left edge, stick on the right half). Drawn while the last input was touch (from the start under `--touch`). |
 | `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay (`--dev`). |
-| `dev/selftest` | Scripted phase run three ways, compared per tick. |
+| `dev/selftest` | Scripted phase run three ways, compared per tick (`--selftest`); recordings played back against their checkpoints (`--verify`). |
 | `dev/photo_mode` | `--photo` only: holds the scene, puts a free view (focus offset, zoom multiplier, turn) on the scene's camera for the length of a draw, and captures the scene's `draw_world()` into a canvas of the output size (`data/photo.json`). Presentation only; steps whole ticks through the scene's update. |
 
 ## 6. World and coordinates

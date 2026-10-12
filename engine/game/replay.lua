@@ -48,8 +48,10 @@ Replay.LEGACY_PARAMS = {
     flame_momentum = false, enemy_hunts_people = false,
 }
 
--- A replay is only valid for the build that produced it: platform libm
--- differences can change the last bit of a sine, which compounds over a run.
+-- The platform a recording was made on. The simulation avoids what differs
+-- between platforms (lib/strict_math in place of the C library's sin and cos),
+-- so this is for the record: a recording is tied to the game version, which
+-- the header carries beside it.
 function Replay.build_id()
     local major, minor, revision = love.getVersion()
     return string.format("love%d.%d.%d-%s-%s", major, minor, revision,
@@ -132,6 +134,16 @@ function Replay.check_diff(entry, parts)
     if entry.entities and entry.entities ~= parts.entities then out[#out + 1] = "entities" end
     if entry.misc     and entry.misc     ~= parts.misc     then out[#out + 1] = "projectiles/rng" end
     return out
+end
+
+-- Whether a check_diff result is a drift and not a divergence: the player part
+-- alone disagrees, while every entity, the projectile count, the RNG and the
+-- clock still match. That is what a recording made before the simulation took
+-- its trigonometry from lib/strict_math shows on another platform, where the
+-- last bits of a position differ and nothing else does. Playback carries on
+-- through it and reports it; anything more ends it.
+function Replay.is_drift(parts)
+    return #parts == 1 and parts[1] == "player"
 end
 
 -- checksum

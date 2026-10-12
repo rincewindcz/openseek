@@ -4,7 +4,7 @@
 local Class      = require "engine.core.class"
 local Config     = require "engine.core.config"
 local Font       = require "engine.core.font"
-local Mathx      = require "engine.core.mathx"
+local StrictMath = require "lib.strict_math"
 local InputFrame = require "engine.core.input_frame"
 local Pointer    = require "engine.ui.pointer"
 
@@ -178,7 +178,7 @@ function TouchControls:_stick_angle()
     if not self.stick then return nil end
     local dx, dy, radius = self:_stick_offset()
     if dx * dx + dy * dy < (DEAD_ZONE * radius) ^ 2 then return nil end
-    return Mathx.atan2(dx, math.abs(dy)), dy
+    return StrictMath.atan2(dx, math.abs(dy)), dy
 end
 
 function TouchControls:held(action)

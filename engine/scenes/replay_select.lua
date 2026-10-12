@@ -9,6 +9,7 @@ local Hint    = require "engine.ui.hint"
 local Pointer = require "engine.ui.pointer"
 local Audio   = require "engine.core.audio"
 local Replay  = require "engine.game.replay"
+local Version = require "engine.core.version"
 local Log     = require "engine.core.log"
 
 -- REPLAY screen: the player-facing recording browser, built like the SAVE /
@@ -291,8 +292,9 @@ function ReplaySelect:_draw_row(i, y, fade)
     if sel then self:_draw_arrow(NAME_X, y, fade) end
 end
 
--- What the highlighted recording holds, under the list, and the build it was
--- made on beside the EXIT widget (a recording from another build may diverge).
+-- What the highlighted recording holds, under the list, and beside the EXIT
+-- widget a note when it comes from another version of the game (it may
+-- diverge) or from another platform.
 function ReplaySelect:_draw_detail(fade)
     local row = self.rows[self.cursor]
     local col = { 1, 1, 1, 0.55 * fade }
@@ -312,10 +314,16 @@ function ReplaySelect:_draw_detail(fade)
         text = ""
     end
     self.font:print(text, NAME_X, DETAIL_Y, { color = col })
-    -- A recording made on another build may not reproduce; nothing to say when
-    -- it matches, so the line stays empty.
-    if row and tostring(row.replay.header.build or "?") ~= Replay.build_id() then
-        self.font:print("RECORDED ON AN OLDER BUILD", NAME_X, INFO_Y, { color = col })
+    -- A recording made by another version may not reproduce; one made before
+    -- the header named the version is older by that alone. Nothing to say when
+    -- both match, so the line stays empty.
+    if row then
+        local header = row.replay.header
+        if header.version ~= Version.string() then
+            self.font:print("RECORDED ON AN OLDER BUILD", NAME_X, INFO_Y, { color = col })
+        elseif tostring(header.build or "?") ~= Replay.build_id() then
+            self.font:print("RECORDED ON ANOTHER PLATFORM", NAME_X, INFO_Y, { color = col })
+        end
     end
 end
 

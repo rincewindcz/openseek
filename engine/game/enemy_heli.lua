@@ -6,6 +6,7 @@ local Animation  = require "engine.core.animation"
 local Config     = require "engine.core.config"
 local Shadow     = require "engine.game.shadow"
 local Mathx      = require "engine.core.mathx"
+local StrictMath = require "lib.strict_math"
 local Score      = require "engine.game.score"
 local Difficulty = require "engine.game.difficulty"
 
@@ -184,8 +185,8 @@ function HeliSystem:_advance(heli, dt, factor)
     local rad  = (heli.heading - 90) * math.pi / 180
     local step = SPEED * (factor or 1) * dt * Config.speed_scale
     local s    = self.world.stage.world_size
-    heli.x = (heli.x + math.cos(rad) * step) % s
-    heli.y = (heli.y + math.sin(rad) * step) % s
+    heli.x = (heli.x + StrictMath.cos(rad) * step) % s
+    heli.y = (heli.y + StrictMath.sin(rad) * step) % s
 end
 
 function HeliSystem:_update_heli(heli, dt)
@@ -221,7 +222,7 @@ function HeliSystem:_update_heli(heli, dt)
             heli.dir = (front_pos > 0) and 1 or -1
         end
         heli.phase = heli.phase + dt * 1.7 * Config.speed_scale
-        local offset = 55 + 50 * math.sin(heli.phase)   -- 5..105 deg off the player
+        local offset = 55 + 50 * StrictMath.sin(heli.phase)   -- 5..105 deg off the player
         target = (toplayer + heli.dir * offset) % 360
     end
     -- Past its leash the heli turns for its post instead; it still fires on a
@@ -342,7 +343,7 @@ function HeliSystem:_update_smoke(heli, dt)
             local drift = (0.3 + self.world.rng:random() * 0.4) * SPEED
             heli.smoke[#heli.smoke + 1] = {
                 x = heli.x + (self.world.rng:random() - 0.5) * 14, y = heli.y + (self.world.rng:random() - 0.5) * 14,
-                vx = math.cos(rad) * drift, vy = math.sin(rad) * drift,
+                vx = StrictMath.cos(rad) * drift, vy = StrictMath.sin(rad) * drift,
                 dmg = true, anim = Animation.new("smoke"),
             }
         end

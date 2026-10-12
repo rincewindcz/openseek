@@ -217,4 +217,67 @@ function Selftest.run(app, ticks, stage)
     return ok
 end
 
+-- `love . --verify [replays/a.osr ...]`: play recordings back as fast as they
+-- go and compare every checkpoint, all of the save directory's when none is
+-- named. One line per recording; returns true when every checkpoint of every
+-- one matched. A drift (Replay.is_drift) is played through, reported and
+-- counted as a failure: this is the strict check, to run on each platform.
+function Selftest.verify(app, paths)
+    app.audio_mute = true
+    if app.sound then app.sound:set_muted(true) end
+    local replays, ok = {}, true
+    if #paths == 0 then
+        for _, entry in ipairs(Replay.list()) do replays[#replays + 1] = entry.replay end
+    end
+    for _, path in ipairs(paths) do
+        local replay, err = Replay.load(path)
+        if replay then
+            replays[#replays + 1] = replay
+        else
+            print("FAIL  " .. err)
+            ok = false
+        end
+    end
+    print(("verify: %d recordings on %s"):format(#replays, Replay.build_id()))
+    for _, replay in ipairs(replays) do
+        -- The title's fade is still up and nothing here advances it on its
+        -- own; a phase waits for it before it counts down a respawn.
+        app.screen.active    = nil
+        app.campaign         = false
+        app.settings.loadout = nil
+        app.replay_play      = replay
+        app.replay_verify    = true
+        app.replay_result    = nil
+        app.replay_return    = "overview"
+        replay:rewind()
+        app.scenes:switch(replay.header.mode == "coop" and "coop_gameplay" or "gameplay")
+        local scene = app.scenes:top()
+        for _ = 1, replay.length * 2 + 600 do
+            if app.scenes:top() ~= scene then break end
+            app.screen:update(TICK)
+            app.scenes:dispatch("update", TICK)
+        end
+        local result = app.replay_result
+        local name   = tostring(replay.path)
+        if not result then
+            print(("FAIL  %s did not finish"):format(name))
+            app.scenes:switch("overview")
+            ok = false
+        elseif result.desync then
+            print(("FAIL  %s diverged at tick %d of %d: %s"):format(name, result.desync, result.length,
+                table.concat(result.parts or {}, ", ")))
+            ok = false
+        elseif result.drift then
+            print(("FAIL  %s player drifted at %d of %d checkpoints, first at tick %d"):format(name,
+                result.drift.count, result.checks, result.drift.first))
+            ok = false
+        elseif result.ok then
+            print(("OK    %s %d ticks, %d checkpoints"):format(name, result.length, result.checks))
+        else
+            print(("OK    %s to tick %d of %d (%s)"):format(name, result.tick, result.length, result.reason))
+        end
+    end
+    return ok
+end
+
 return Selftest

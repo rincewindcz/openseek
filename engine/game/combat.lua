@@ -3,6 +3,7 @@
 
 local Class      = require "engine.core.class"
 local json       = require "lib.json"
+local StrictMath = require "lib.strict_math"
 local Animation  = require "engine.core.animation"
 local Config     = require "engine.core.config"
 local Mathx      = require "engine.core.mathx"
@@ -279,8 +280,8 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
 
     -- Forward direction in world space (angle_deg: 0=north CW)
     local rad     = (angle_deg - 90) * math.pi / 180
-    local fwd_x   = math.cos(rad)
-    local fwd_y   = math.sin(rad)
+    local fwd_x   = StrictMath.cos(rad)
+    local fwd_y   = StrictMath.sin(rad)
     -- Right-perpendicular (90 deg CW in Y-down screen space): (-fwd_y, fwd_x)
     local right_x = -fwd_y
     local right_y =  fwd_x
@@ -320,7 +321,7 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
     if level.swing then
         local key   = tostring(owner) .. weapon_name
         local swing = level.swing_deg and level.swing_deg * math.pi / 180 or spread
-        swing_off = math.sin(self._swing[key] or 0) * swing
+        swing_off = StrictMath.sin(self._swing[key] or 0) * swing
     end
 
     -- Alternate-side weapons (mega missile) fire one round, swapping the muzzle
@@ -389,8 +390,8 @@ function CombatSystem:fire(x, y, angle_deg, weapon_name, owner, level_idx, range
         local projectile = Projectile:new({
             x          = x + ox,
             y          = y + oy,
-            vx         = math.cos(fire_rad) * speed,
-            vy         = math.sin(fire_rad) * speed,
+            vx         = StrictMath.cos(fire_rad) * speed,
+            vy         = StrictMath.sin(fire_rad) * speed,
             carry_vx   = carry_vx,
             carry_vy   = carry_vy,
             damage     = damage,
@@ -451,7 +452,7 @@ function CombatSystem:_fire_flame(x, y, _fwd_x, _fwd_y, rad, weapon_def, level, 
     local lifetime = weapon_def.fire_lifetime or 1.0
     for _, a in ipairs(angles) do
         local dir    = rad + a * math.pi / 180
-        local cx, cy = math.cos(dir), math.sin(dir)
+        local cx, cy = StrictMath.cos(dir), StrictMath.sin(dir)
         for _, off in ipairs(offsets) do
             local ox, oy = x - cy * off, y + cx * off
             for i = 1, count do
@@ -693,23 +694,23 @@ function CombatSystem:_steer_homing(projectile, dt)
         projectile.refresh_t = projectile.refresh_t - dt * Config.speed_scale
         if projectile.refresh_t <= 0 or not projectile.bearing then
             local dx, dy = self.world:delta(tgt.x, tgt.y, projectile.x, projectile.y)
-            projectile.bearing   = Mathx.atan2(dy, dx)
+            projectile.bearing   = StrictMath.atan2(dy, dx)
             projectile.refresh_t = projectile.refresh
         end
         desired = projectile.bearing
     else
         local dx, dy = self.world:delta(tgt.x, tgt.y, projectile.x, projectile.y)
-        desired = Mathx.atan2(dy, dx)
+        desired = StrictMath.atan2(dy, dx)
     end
-    local cur      = Mathx.atan2(projectile.vy, projectile.vx)
+    local cur      = StrictMath.atan2(projectile.vy, projectile.vx)
     local diff     = ((desired - cur + math.pi) % (2 * math.pi)) - math.pi
-    local maxstep  = math.rad(projectile.turn_rate) * dt * Config.speed_scale
+    local maxstep  = StrictMath.rad(projectile.turn_rate) * dt * Config.speed_scale
     if diff >  maxstep then diff =  maxstep end
     if diff < -maxstep then diff = -maxstep end
     local new_angle = cur + diff
     local speed_now = math.sqrt(projectile.vx * projectile.vx + projectile.vy * projectile.vy)
-    projectile.vx = math.cos(new_angle) * speed_now
-    projectile.vy = math.sin(new_angle) * speed_now
+    projectile.vx = StrictMath.cos(new_angle) * speed_now
+    projectile.vy = StrictMath.sin(new_angle) * speed_now
     projectile.angle_rad = new_angle + math.pi / 2   -- sprite points north at frame 0; align to travel
 end
 
@@ -840,7 +841,8 @@ function CombatSystem:_update_effects(dt)
             effect.anim:update(dt)
             if effect.damage and not effect.hit then
                 effect.hit = true
-                local r2 = (effect.radius or 0) ^ 2
+                local radius = effect.radius or 0
+                local r2     = radius * radius
                 for _, e in ipairs(self.world.hittable) do
                     if e:is_alive() and not e.hide_shielded then
                         local dx, dy = self.world:delta(e.x, e.y, effect.x, effect.y)
@@ -931,7 +933,8 @@ function CombatSystem:_check_hit(projectile)
             if e:is_alive() and not e.hide_shielded then
                 local hit_radius = e.type_data.hit_radius
                 local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)
-                if dx * dx + dy * dy < (projectile.radius + hit_radius) ^ 2
+                local reach  = projectile.radius + hit_radius
+                if dx * dx + dy * dy < reach * reach
                     and not (projectile.pierced and projectile.pierced[e]) then
                     e:on_hit(self:_hit_clip(projectile.weapon_def))
                     local killed = e:take_damage(projectile.damage, projectile.vx, projectile.vy)
@@ -1126,7 +1129,7 @@ end
 -- markers (the POWHERE flag), decals, trees and scenery have nothing to destroy.
 -- Under friendly fire the other players in it take it too.
 function CombatSystem:_apply_aoe(projectile)
-    local r2 = projectile.aoe ^ 2
+    local r2 = projectile.aoe * projectile.aoe
     for _, e in ipairs(self.world.hittable) do
         if e:is_alive() and not e.hide_shielded then
             local dx, dy = self.world:delta(e.x, e.y, projectile.x, projectile.y)

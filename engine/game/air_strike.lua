@@ -1,10 +1,11 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class     = require "engine.core.class"
-local Config    = require "engine.core.config"
-local Animation = require "engine.core.animation"
-local Shadow    = require "engine.game.shadow"
+local Class      = require "engine.core.class"
+local Config     = require "engine.core.config"
+local Animation  = require "engine.core.animation"
+local Shadow     = require "engine.game.shadow"
+local StrictMath = require "lib.strict_math"
 
 -- Air strike, reimagined from the original (SEEK.EXE 0x1fa5d0). Calling one
 -- fixes a target point target_distance ahead of the vehicle and, delay seconds
@@ -54,7 +55,7 @@ end
 -- Heading unit vectors for angle_deg (0 = north, clockwise): forward and right.
 local function axes(angle_deg)
     local rad = (angle_deg - 90) * math.pi / 180
-    local fx, fy = math.cos(rad), math.sin(rad)
+    local fx, fy = StrictMath.cos(rad), StrictMath.sin(rad)
     return fx, fy, -fy, fx
 end
 
@@ -93,7 +94,7 @@ function AirStrike:_pattern(def, spec)
         for _ = 1, spec.impacts do
             local r = radius * math.sqrt(rng:random())
             local a = rng:random() * TWO_PI
-            add(rng:random() * spec.window, r * math.cos(a), r * math.sin(a))
+            add(rng:random() * spec.window, r * StrictMath.cos(a), r * StrictMath.sin(a))
         end
     else
         -- Craft fly abreast along the heading. Each lays its rounds in a line
@@ -166,7 +167,7 @@ function AirStrike:_detonate(strike, impact)
     local y    = (strike.y + fy * impact.along + ry * impact.across) % size
     self.combat:add_effect(spec.explosion, x, y, { scale = spec.explosion_scale or 1 })
     if spec.debris then self.world:spawn_debris(x, y, spec.debris) end
-    local r2 = spec.impact_radius ^ 2
+    local r2 = spec.impact_radius * spec.impact_radius
     for _, e in ipairs(self.world.hittable) do
         if e:is_alive() and not e.hide_shielded then
             local dx, dy = self.world:delta(e.x, e.y, x, y)

@@ -10,4 +10,8 @@ self = false
 -- An underscore prefix marks a deliberately unused local/argument.
 ignore = { "21./_.*" }
 
-exclude_files = { "lib/" }
+exclude_files = { "lib/json.lua" }
+
+-- The reusable trigonometry runs on every Lua, so it may only use what all of
+-- them have.
+files["lib/strict_math.lua"] = { std = "min" }

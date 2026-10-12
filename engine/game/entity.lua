@@ -1,10 +1,11 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class  = require "engine.core.class"
-local json   = require "lib.json"
-local Config = require "engine.core.config"
-local Mathx  = require "engine.core.mathx"
+local Class      = require "engine.core.class"
+local json       = require "lib.json"
+local StrictMath = require "lib.strict_math"
+local Config     = require "engine.core.config"
+local Mathx      = require "engine.core.mathx"
 
 local entity_types = {}  -- keyed by kind_name, loaded once
 
@@ -224,7 +225,8 @@ function Entity:update(dt)
     -- Corpse slide settles over a fraction of a second (ease-out).
     if self._death_push and self._death_t < 1 then
         self._death_t = math.min(1, self._death_t + dt / DEATH_SLIDE)
-        local f = 1 - (1 - self._death_t) ^ 2
+        local rest = 1 - self._death_t
+        local f    = 1 - rest * rest
         self.death_ox = self._death_push.x * f
         self.death_oy = self._death_push.y * f
     end
@@ -349,8 +351,8 @@ function Entity:_patrol(dt)
     if self.patrol_v > 0 then
         local rad  = (self.angle - 90) * math.pi / 180
         local step = self.patrol_v * dt * Config.speed_scale
-        self.x = self.x + math.cos(rad) * step
-        self.y = self.y + math.sin(rad) * step
+        self.x = self.x + StrictMath.cos(rad) * step
+        self.y = self.y + StrictMath.sin(rad) * step
     end
 end
 

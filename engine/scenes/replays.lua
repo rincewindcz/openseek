@@ -129,6 +129,12 @@ function Replays:draw()
                 (result.reason or "ended"):upper(), result.tick, result.length), x, y)
         end
         y = y + 24
+        if result.drift then
+            g.setColor(COLORS.value)
+            g.print(string.format("player position drifted at %d of %d checkpoints from tick %d; " ..
+                "entities and RNG matched", result.drift.count, result.checks, result.drift.first), x, y)
+            y = y + 24
+        end
     end
 
     if #self.entries == 0 then

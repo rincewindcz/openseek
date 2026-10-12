@@ -137,7 +137,7 @@ function love.load(args)
     if pack_status ~= "ok" then
         Log.warn("assets", "game data %s", pack_status)
         for _, a in ipairs(args or {}) do
-            if a == "--selftest" then love.event.quit(1) end
+            if a == "--selftest" or a == "--verify" then love.event.quit(1) end
         end
         DataSetup:new(pack_status, Title.ENGINE_INTRO, Assets.manifest()):install()
         return
@@ -157,15 +157,22 @@ function love.load(args)
     end
 
     -- Command line: `love . stage12` opens a stage, `love . --selftest [ticks]
-    -- [stage]` runs the determinism self-test (below), `love . --photo` enables
-    -- photo mode (engine/dev/photo_mode.lua), `love . --dev` unlocks the
-    -- developer tools (the ADVANCED menu's EDITOR entry, the debug panel, the
-    -- cheat keys). Flags and the tick count are skipped when looking for the
+    -- [stage]` runs the determinism self-test (below), `love . --verify
+    -- [replays/a.osr ...]` plays recordings back and checks them (every one in
+    -- the save directory when none is named), `love . --photo` enables photo
+    -- mode (engine/dev/photo_mode.lua), `love . --dev` unlocks the developer
+    -- tools (the ADVANCED menu's EDITOR entry, the debug panel, the cheat keys).
+    -- Flags, recordings and the tick count are skipped when looking for the
     -- stage name.
     local stage_arg, selftest_ticks, selftest, photo, dev = nil, nil, false, false, false
+    local verify
     for _, a in ipairs(args or {}) do
         if a == "--selftest" then
             selftest = true
+        elseif a == "--verify" then
+            verify = {}
+        elseif verify and a:match("%.osr$") then
+            verify[#verify + 1] = a
         elseif a == "--photo" then
             photo = true
         elseif a == "--dev" then
@@ -285,10 +292,13 @@ function love.load(args)
     if photo then app.photo = require("engine.dev.photo_mode"):new(app) end
     scenes:switch("title")
 
-    -- Run one scripted phase twice and compare the simulation tick by tick, then
-    -- quit. See engine/dev/selftest.lua.
+    -- Run one scripted phase twice and compare the simulation tick by tick, or
+    -- check recordings against their checkpoints, then quit. See
+    -- engine/dev/selftest.lua.
     if selftest then
         love.event.quit(Selftest.run(app, selftest_ticks, stage_arg) and 0 or 1)
+    elseif verify then
+        love.event.quit(Selftest.verify(app, verify) and 0 or 1)
     end
 end
 

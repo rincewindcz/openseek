@@ -9,6 +9,7 @@ local Camera     = require "engine.core.camera"
 local Shadow     = require "engine.game.shadow"
 local Score      = require "engine.game.score"
 local Vehicles   = require "engine.game.vehicles"
+local StrictMath = require "lib.strict_math"
 
 local Player = Class()
 
@@ -166,8 +167,8 @@ end
 function Player:velocity()
     local rad        = (self.angle - 90) * math.pi / 180
     local strafe_rad = rad + math.pi / 2
-    return math.cos(rad) * self.speed + math.cos(strafe_rad) * self.strafe,
-           math.sin(rad) * self.speed + math.sin(strafe_rad) * self.strafe
+    return StrictMath.cos(rad) * self.speed + StrictMath.cos(strafe_rad) * self.strafe,
+           StrictMath.sin(rad) * self.speed + StrictMath.sin(strafe_rad) * self.strafe
 end
 
 -- Heading projectiles travel along: the turret for tanks, the hull otherwise.
@@ -215,7 +216,7 @@ function Player:tank_muzzle(barrel)
     local fwd  = tip[2] * k
     local lat  = tip[1] * k
     local rad  = (self:fire_angle() - 90) * math.pi / 180
-    local fx, fy = math.cos(rad), math.sin(rad)
+    local fx, fy = StrictMath.cos(rad), StrictMath.sin(rad)
     return self.x + fx * fwd - fy * lat, self.y + fy * fwd + fx * lat
 end
 
@@ -671,8 +672,8 @@ function Player:_tank_blow(d)
         d.fx[#d.fx + 1] = {
             anim    = Animation.new(self.world.rng:random() < 0.5 and "explosion_small" or "explosion_flak"),
             ox      = 0, oy = -4,
-            vx      = math.cos(a) * sp,
-            vy      = math.sin(a) * sp - 60,
+            vx      = StrictMath.cos(a) * sp,
+            vy      = StrictMath.sin(a) * sp - 60,
             gravity = 220,
             scale   = 0.5 + self.world.rng:random() * 0.4,
         }
@@ -837,7 +838,7 @@ function Player:_bump(e, vx, vy)
     local ox, oy = self.world:delta(e.x, e.y, self.x, self.y)
     local along  = ox * vx + oy * vy
     local reach  = math.sqrt((ox * ox + oy * oy) * (vx * vx + vy * vy))
-    if reach <= 0 or along < reach * math.cos(self.bump_arc * math.pi / 180) then return false end
+    if reach <= 0 or along < reach * StrictMath.cos(self.bump_arc * math.pi / 180) then return false end
 
     local back   = self.bump_back * Config.speed_scale
     local bx, by = self.x - vx * back, self.y - vy * back

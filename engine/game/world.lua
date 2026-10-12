@@ -1,13 +1,14 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class     = require "engine.core.class"
-local json      = require "lib.json"
-local Entity    = require "engine.game.entity"
-local Animation = require "engine.core.animation"
-local Rng       = require "engine.core.rng"
-local Debris    = require "engine.game.debris"
-local Log       = require "engine.core.log"
+local Class      = require "engine.core.class"
+local json       = require "lib.json"
+local StrictMath = require "lib.strict_math"
+local Entity     = require "engine.game.entity"
+local Animation  = require "engine.core.animation"
+local Rng        = require "engine.core.rng"
+local Debris     = require "engine.game.debris"
+local Log        = require "engine.core.log"
 
 -- Class flag bit of the player's own base buildings (tested at spawn by the
 -- original, 0x1f64e4). The player's fire cannot harm them (see Entity:take_damage).
@@ -513,7 +514,7 @@ function World:_setup_hangar(tank, hut, mode)
     -- The gun is parked until the tank is half way out.
     local rad = (mode.ride_heading - 90) * math.pi / 180
     tank.hide_angle    = mode.ride_facing
-    tank.hide_axis     = { x = math.cos(rad), y = math.sin(rad) }
+    tank.hide_axis     = { x = StrictMath.cos(rad), y = StrictMath.sin(rad) }
     tank.hide_home     = { x = tank.x, y = tank.y }
     tank.hide_speed    = mode.ride_step * rules.tick_rate
     tank.hide_extend   = mode.ride_step * rules.movement.ride.ticks
