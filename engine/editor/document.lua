@@ -482,8 +482,8 @@ function Document:set_map(field, value, label)
         function() self.map[field] = before end)
 end
 
--- Change the wrap period. Objects, route and line points past the new edge
--- wrap around; the history is cleared, since it holds positions of the old size.
+-- Change the wrap period. Objects, route and line points and objective places
+-- past the new edge wrap around; the history is cleared, since it holds positions of the old size.
 function Document:resize(size)
     if size == self.map.size then return end
     self.map.size = size
@@ -494,6 +494,9 @@ function Document:resize(size)
         for _, shape in ipairs(shapes) do
             for _, p in ipairs(shape.points) do p[1], p[2] = p[1] % size, p[2] % size end
         end
+    end
+    for _, goal in ipairs(self.map.objectives) do
+        if goal.x then goal.x, goal.y = goal.x % size, goal.y % size end
     end
     self.undo, self.redo = {}, {}
     self:_index()

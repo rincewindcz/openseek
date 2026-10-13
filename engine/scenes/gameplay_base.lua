@@ -7,6 +7,7 @@ local Vehicles    = require "engine.game.vehicles"
 local Rng         = require "engine.core.rng"
 local InputSource = require "engine.core.input_source"
 local Replay      = require "engine.game.replay"
+local Difficulty  = require "engine.game.difficulty"
 local Score       = require "engine.game.score"
 local Sound       = require "engine.game.sound"
 local Campaign    = require "engine.game.campaign"
@@ -49,6 +50,12 @@ function GameplayBase:draw_overlay_text(title, dim)
     g.setColor(1, 1, 1)
 end
 
+local ORDER_TIME  = 4.0   -- seconds a map's objective line stays up after it changes
+local ORDER_FADE  = 0.6   -- of which the last ones fade it out
+local ORDER_SCALE = 3
+local CLOCK_LOW   = 10    -- seconds left from which the clock blinks
+local CLOCK_BLINK = 2     -- times a second
+
 -- Centered lines in the score font (CHARS), stacked down from y.
 local function print_lines(font, lines, s, y)
     local screen_w = love.graphics.getWidth()
@@ -81,6 +88,34 @@ end
 -- A standing order of the mission (mission.notice), kept on screen.
 function GameplayBase:draw_notice(text)
     print_lines(self.app.hud:font(), { text }, 3, love.graphics.getHeight() * 0.2)
+end
+
+-- The objective at hand on a player-made map (Mission:order), for a moment
+-- whenever it changes: a map words objectives the original never had. Over it
+-- the phase's clock while one runs, blinking on its last seconds.
+function GameplayBase:draw_orders(mission)
+    local g    = love.graphics
+    local font = self.app.hud:font()
+    local now  = love.timer.getTime()
+    local text = mission:order()
+    if text ~= self.order_text then
+        self.order_text, self.order_since = text, now
+    end
+    local screen_w, screen_h = g.getDimensions()
+    local y    = screen_h * 0.2
+    local left = text and ORDER_TIME - (now - self.order_since) or 0
+    if left > 0 and not mission.notice then
+        font:print(text, (screen_w - font:width(text, ORDER_SCALE)) / 2, y,
+            { scale = ORDER_SCALE, color = { 1, 1, 1, math.min(1, left / ORDER_FADE) } })
+    end
+    local seconds = mission:clock()
+    if seconds and (seconds > CLOCK_LOW or math.floor(now * CLOCK_BLINK * 2) % 2 == 0) then
+        local total = math.ceil(seconds)
+        local clock = string.format("%d:%02d", math.floor(total / 60), total % 60)
+        font:print(clock, (screen_w - font:width(clock, ORDER_SCALE)) / 2,
+            y - font.line_height * ORDER_SCALE - 10, { scale = ORDER_SCALE })
+    end
+    g.setColor(1, 1, 1)
 end
 
 -- Fire p's current weapon if its reload is up and it has ammo. owner stays the
@@ -313,7 +348,10 @@ function GameplayBase:seed_phase()
         self.seed = self.playback:number("seed", 0)
         self.tick_scale = app.replay_verify and VERIFY_SCALE or 1
     else
-        if self.holds_params then self.hold = Replay.Hold:new() end
+        -- A map that sets its own difficulty is played on it, over the player's.
+        local own = app.world.stage.mission
+        local params = own and own.difficulty and Difficulty.over(Replay.params_now(), own.difficulty) or nil
+        if self.holds_params then self.hold = Replay.Hold:new(params) end
         self.seed = Rng.new_seed()
         self.tick_scale = 1
     end
@@ -588,6 +626,7 @@ function GameplayBase:update_phase_failed(dt)
 end
 
 function GameplayBase:reset_end_stats()
+    self.order_text           = nil
     self.fail_timer           = nil
     self.phase_fail_handled   = false
     self.won_timer            = nil

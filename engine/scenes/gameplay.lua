@@ -122,6 +122,12 @@ function Gameplay:spawn_player(carry)
         player.score           = app.run_score
         player.lives           = app.run_lives
         player.next_bonus_life = app.run_bonus_life
+    else
+        -- A map that fixes the loadout also says how many vehicles there are.
+        local own = world.stage.mission
+        if own and own.loadout and tonumber(own.loadout.lives) then
+            player.lives = math.max(1, math.floor(own.loadout.lives))
+        end
     end
     player.world_size   = world.stage.world_size
     player.home_x, player.home_y = sx, sy
@@ -154,6 +160,8 @@ function Gameplay:spawn_player(carry)
         if weapon_list then player.weapon_name = weapon_list[1] end
     end
     player:seed_ammo(combat.weapons, loadout and loadout.counts)
+    -- A map tried from the editor may be flown in god mode.
+    if app.play_return and app.play_return.god then player.unlimited = true end
     self:apply_replay_player(player, 1)   -- playback: the recorded loadout wins
     self:begin_input("single", { player }, { Input.map }, { { self.touch, self.pad, self.mouse } })
     self:sync_weapon_icon()
@@ -478,6 +486,7 @@ function Gameplay:draw()
     if mission and mission.state == "won" and not app.end_stats:is_active() then
         self:draw_overlay_text("MISSION COMPLETE")
     end
+    if mission then self:draw_orders(mission) end
     if mission and mission.notice then self:draw_notice(mission.notice) end
     if mission and mission.state == "phase_failed" then self:draw_phase_failed(mission.fail_lines) end
     if mission and mission.state == "failed" then

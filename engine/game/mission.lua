@@ -9,6 +9,15 @@ local Mission = Class()
 
 local defs = {}   -- stage_name -> mission def, loaded once
 
+-- Objective types. destroy / rescue are the data/missions.json forms (by
+-- sprite, kind or count); destroy_targets, rescue_people and sabotage follow
+-- from a stage's content; a player-made map adds destroy by its own pick,
+-- reach, survive, collect and protect (engine/game/map_compiler.lua).
+Mission.TYPES = {
+    destroy = true, rescue = true, sabotage = true, destroy_targets = true, rescue_people = true,
+    reach = true, survive = true, collect = true, protect = true,
+}
+
 -- Half the side of the box around the home pad a vehicle has to be down in
 -- (0x20e2cd). Two vehicles do not fit in it, so a team gets a wider one.
 local HOME_RADIUS      = 24
@@ -18,9 +27,17 @@ local HOME_RADIUS_TEAM = 48
 -- the targets (0x1f640c, 0x1fe7ab).
 local COMMANDER_CLASS = 2
 
+-- World px around a place a "reach" objective is met within, when it names none.
+local REACH_RADIUS = 48
+
 local FAIL_ALLIES = { "ALLIES EXTERMINATED", "PHASE FAILED" }
 local FAIL_AGENT  = { "OBJECTIVE IMPOSSIBLE", "PHASE FAILED" }
+local FAIL_GUARD  = { "OBJECTIVE LOST", "PHASE FAILED" }
+local FAIL_TIME   = { "OUT OF TIME", "PHASE FAILED" }
 local NOTICE_COMMANDER = "DESTROY THE COMMANDERS BUILDING"
+
+-- The objectives a stage's content asks for, in the original's order.
+local DERIVED = { "destroy_targets", "rescue_people", "sabotage" }
 
 function Mission.load(path)
     local raw = love.filesystem.read(path)
@@ -31,19 +48,29 @@ end
 -- The objectives a stage's own data asks for, as the original counts them at
 -- load: every is_target entity destroyed (0x290e58), everybody on the stage
 -- picked up (0x290e4a) and every agent back aboard (0x290e76).
--- A map (stage.mission, engine/game/map_compiler.lua) words them itself and
--- may leave the rescue optional.
+-- A map (stage.mission, engine/game/map_compiler.lua) lists objectives of its
+-- own among them, in the order it wants them, and words them all; one its
+-- content asks for and it does not list follows the listed ones.
 local function objectives_from_stage(world)
-    local own   = world.stage.mission
-    local goals = own and own.goals or {}
-    local def   = { objectives = {} }
-    local function add(kind, goal)
-        goal = goal or {}
-        def.objectives[#def.objectives + 1] = { type = kind, label = goal.label, optional = goal.optional }
+    local own = world.stage.mission or {}
+    local def = { objectives = {}, no_return = own.no_return, ordered = own.ordered,
+                  time_limit = own.time_limit, announce = world.stage.mission ~= nil }
+    local asked = {
+        destroy_targets = #world.targets > 0,
+        rescue_people   = world.rescue ~= nil and world.rescue.total > 0,
+        sabotage        = world.saboteur ~= nil and #world.saboteur.sites > 0,
+    }
+    for _, spec in ipairs(own.objectives or {}) do
+        if asked[spec.type] == nil then
+            def.objectives[#def.objectives + 1] = spec
+        elseif asked[spec.type] then
+            def.objectives[#def.objectives + 1] = spec
+            asked[spec.type] = false
+        end
     end
-    if #world.targets > 0 then add("destroy_targets", goals.destroy) end
-    if world.rescue and world.rescue.total > 0 then add("rescue_people", goals.rescue) end
-    if world.saboteur and #world.saboteur.sites > 0 then add("sabotage", goals.sabotage) end
+    for _, kind in ipairs(DERIVED) do
+        if asked[kind] then def.objectives[#def.objectives + 1] = { type = kind } end
+    end
     return #def.objectives > 0 and def or nil
 end
 
@@ -74,8 +101,18 @@ function Mission.def(stage_name)
 end
 
 -- True if entity e satisfies a spec's filters: asset (.bin) filename, kind_name,
--- and a minimum sprite size (largest dimension), any of which may be omitted.
+-- one of several kind names (kinds: what of them can be destroyed, mines and
+-- the home base aside) and a minimum sprite size (largest dimension), any of which may be
+-- omitted.
 local function entity_matches(world, e, spec)
+    if spec.kinds then
+        local cls   = world.stage.classes[e.class_idx + 1]
+        local found = false
+        for _, kind in ipairs(spec.kinds) do
+            if cls and cls.kind_name == kind then found = true end
+        end
+        if not found or e.max_hp <= 0 or e.mine or e.base_building then return false end
+    end
     if spec.target then
         local f = world:asset_file(e.class_idx)
         if not f or f:lower() ~= spec.target:lower() then return false end
@@ -108,8 +145,11 @@ function Mission:init(world, players, def)
     self.fail_lines  = nil
     self.notice      = nil        -- standing on-screen order (the commander's building)
     self.objectives  = {}
+    self.guards      = {}         -- "protect" objectives: nothing to do, something to lose
     for _, spec in ipairs(def.objectives or {}) do
-        self.objectives[#self.objectives + 1] = self:_make_objective(spec)
+        local o = self:_make_objective(spec)
+        self.objectives[#self.objectives + 1] = o
+        if o.type == "protect" and o.target > 0 then self.guards[#self.guards + 1] = o end
     end
 
     -- The phase flagged with a special end (0x2909e8 bit 0) keeps its commander
@@ -149,10 +189,24 @@ function Mission:_collect(spec)
     return list
 end
 
+-- The entities a map's objective names by their place in the stage's entity
+-- list: each once (a turret is its hull), and only what can be destroyed.
+function Mission:_placed(indices)
+    local list, seen = {}, {}
+    for _, index in ipairs(indices) do
+        local e = self.world.placed[index]
+        if e and not seen[e] and e.max_hp > 0 then
+            seen[e] = true
+            list[#list + 1] = e
+        end
+    end
+    return list
+end
+
 function Mission:_make_objective(spec)
     local o = { spec = spec, type = spec.type, done = false, progress = 0 }
     if spec.type == "destroy" then
-        o.matching = self:_collect(spec)
+        o.matching = spec.entities and self:_placed(spec.entities) or self:_collect(spec)
         o.counted  = {}
         o.target   = (spec.count == nil or spec.count == "all")
             and #o.matching or math.min(spec.count, #o.matching)
@@ -176,15 +230,63 @@ function Mission:_make_objective(spec)
         o.optional = spec.optional
         if o.optional == nil then o.optional = not (flags and flags.rescue) end
         o.target = self.world.rescue and self.world.rescue.total or 0
+    elseif spec.type == "reach" then
+        -- Get to a place; with land, be down or stopped there.
+        o.x, o.y = spec.x or 0, spec.y or 0
+        o.radius = spec.radius or REACH_RADIUS
+        o.target = 1
+    elseif spec.type == "survive" then
+        o.target = math.max(0, spec.seconds or 0)
+    elseif spec.type == "collect" then
+        o.target = math.max(0, spec.count or 0)
+    elseif spec.type == "protect" then
+        -- Never in the way of a win: the phase fails once more of them fell
+        -- than the objective allows.
+        o.matching = self:_placed(spec.entities or {})
+        o.allowed  = spec.losses or 0
+        o.target   = #o.matching
+        o.progress = o.target
+        o.done     = true
     end
     if o.optional == nil then o.optional = spec.optional or false end
     -- An objective with nothing to act on is satisfied so it can never block a win.
-    local known = o.type == "destroy" or o.type == "rescue" or o.type == "sabotage"
-        or o.type == "destroy_targets" or o.type == "rescue_people"
-    if not known or o.target == 0 then
+    if not Mission.TYPES[o.type] or o.target == 0 then
         o.done = true
     end
     return o
+end
+
+-- An objective comes up: at the start of the phase, or when the ones before it
+-- are done on a map that wants them in order. What a map's objective is about
+-- goes on the radar from here.
+function Mission:_open(o)
+    o.open = true
+    if o.type == "destroy" and o.spec.mark then
+        o.marked = {}
+        for _, e in ipairs(o.matching) do
+            if e:is_alive() and not e.objective then
+                e.objective = true
+                o.marked[#o.marked + 1] = e
+            end
+        end
+    elseif o.type == "reach" then
+        o.mark = { x = o.x, y = o.y }
+        table.insert(self.world.marks, o.mark)
+    end
+end
+
+function Mission:_close(o)
+    for _, e in ipairs(o.marked or {}) do e.objective = nil end
+    o.marked = nil
+    if o.mark then
+        for i, mark in ipairs(self.world.marks) do
+            if mark == o.mark then
+                table.remove(self.world.marks, i)
+                break
+            end
+        end
+        o.mark = nil
+    end
 end
 
 -- per-frame progress
@@ -228,27 +330,40 @@ function Mission:update(dt)
         return
     end
     self:_update_commanders()
+    self:_update_guards()
 
     -- Optional objectives (e.g. a secondary POW rescue) are tracked but never block
-    -- the return-to-base / win once every required objective is done.
-    local all_done, cleared = true, false
+    -- the return-to-base / win once every required objective is done. On a map
+    -- that wants its objectives in order, one is only worked on once every
+    -- required one before it is done.
+    local all_done, cleared, reachable = true, false, true
     for _, o in ipairs(self.objectives) do
-        if not o.done then
-            self:_update_objective(o)
+        if not o.done and reachable then
+            if not o.open then self:_open(o) end
+            self:_update_objective(o, dt)
             if o.done then
                 cleared = true
+                self:_close(o)
                 Log.info("mission", "objective done: %s", self:objective_label(o))
             end
-            if not o.done and not o.optional then all_done = false end
+        end
+        if not o.done and not o.optional then
+            all_done = false
+            if self.def.ordered then reachable = false end
         end
     end
     if self.state == "phase_failed" then return end
+    if not all_done and self.def.time_limit and self.age >= self.def.time_limit then
+        self:_fail_phase(FAIL_TIME)
+        return
+    end
     -- An objective finishing is called out, except the last one: that rolls
     -- straight into the return-to-base line below.
     if cleared and not all_done then self.world:say("voice.objective_cleared") end
 
     if all_done then
-        if self.special_end then
+        -- The special end, and a map that asks for no flight home.
+        if self.special_end or self.def.no_return then
             self.state  = "won"
             self.notice = nil
             self.world:say("voice.mission_complete")
@@ -277,12 +392,54 @@ function Mission:vehicle_lost(p)
     end
 end
 
-function Mission:_update_objective(o)
+function Mission:_update_objective(o, dt)
     if     o.type == "destroy"         then self:_update_destroy(o)
     elseif o.type == "rescue"          then self:_update_rescue(o)
     elseif o.type == "sabotage"        then self:_update_sabotage(o)
     elseif o.type == "destroy_targets" then self:_update_destroy_targets(o)
-    elseif o.type == "rescue_people"   then self:_update_rescue_people(o) end
+    elseif o.type == "rescue_people"   then self:_update_rescue_people(o)
+    elseif o.type == "reach"           then self:_update_reach(o)
+    elseif o.type == "survive"         then self:_update_survive(o, dt)
+    elseif o.type == "collect"         then self:_update_collect(o) end
+end
+
+-- A vehicle inside the place's circle; with land, one that is down or stopped.
+function Mission:_update_reach(o)
+    for _, p in ipairs(self.players) do
+        if not p.death and (not o.spec.land or p:is_stationary()) then
+            local dx, dy = self.world:delta(p.x, p.y, o.x, o.y)
+            if dx * dx + dy * dy <= o.radius * o.radius then
+                o.progress = 1
+                o.done     = true
+            end
+        end
+    end
+end
+
+-- The clock of a hold-out runs while the objective is the one being worked on.
+function Mission:_update_survive(o, dt)
+    o.progress = math.min(o.target, o.progress + dt)
+    if o.progress >= o.target then o.done = true end
+end
+
+-- Medals picked up this phase, by the whole team.
+function Mission:_update_collect(o)
+    local medals = 0
+    for _, p in ipairs(self.players) do medals = medals + (p.medals or 0) end
+    o.progress = math.min(o.target, medals)
+    if medals >= o.target then o.done = true end
+end
+
+-- What a map wants kept: the phase is lost with one more of them than it allows.
+function Mission:_update_guards()
+    for _, o in ipairs(self.guards) do
+        local lost = 0
+        for _, e in ipairs(o.matching) do
+            if not e:is_alive() then lost = lost + 1 end
+        end
+        o.progress = o.target - lost
+        if lost > o.allowed then self:_fail_phase(FAIL_GUARD) end
+    end
 end
 
 function Mission:_update_destroy_targets(o)
@@ -373,9 +530,19 @@ end
 
 function Mission:objective_label(o)
     local s = o.spec
-    if o.type == "destroy" then
+    if o.type == "destroy" and (s.entities or s.kinds) then
+        return string.format("%s  %d/%d", s.label or "DESTROY", o.progress, o.target)
+    elseif o.type == "destroy" then
         return string.format("%s  %d/%d",
             s.label or ("Destroy " .. (s.target or s.kind or "targets")), o.progress, o.target)
+    elseif o.type == "reach" then
+        return s.label or "GET TO THE MARKED PLACE"
+    elseif o.type == "survive" then
+        return s.label or "HOLD OUT"
+    elseif o.type == "collect" then
+        return string.format("%s  %d/%d", s.label or "COLLECT MEDALS", o.progress, o.target)
+    elseif o.type == "protect" then
+        return string.format("%s  %d/%d", s.label or "KEEP INTACT", o.progress, o.target)
     elseif o.type == "rescue" then
         return string.format("%s  %d/%d", s.label or "Rescue people", o.progress, o.target)
     elseif o.type == "sabotage" then
@@ -388,6 +555,15 @@ function Mission:objective_label(o)
     return s.label or o.type
 end
 
+-- The first unfinished required objective, or nil. Optional ones never hold
+-- up the prompts.
+function Mission:_current()
+    for _, o in ipairs(self.objectives) do
+        if not o.done and not o.optional then return o end
+    end
+    return nil
+end
+
 -- Short shared-state line for the co-op banner: the first unfinished objective,
 -- or the return-to-base prompt once they are all done.
 function Mission:status_line()
@@ -395,11 +571,30 @@ function Mission:status_line()
     if self.state == "failed"       then return "MISSION FAILED" end
     if self.state == "phase_failed" then return table.concat(self.fail_lines, " - ") end
     if self.briefing and self.age < 5 then return self.briefing end
-    -- Required objectives drive the banner; optional ones never hold up the prompt.
+    local o = self:_current()
+    return o and self:objective_label(o) or "RETURN TO BASE"
+end
+
+-- The objective at hand as a player-made map words it, for the scene to show
+-- when it changes; nil on a stage of the original, which says nothing.
+function Mission:order()
+    if not self.def.announce or self.state ~= "active" then return nil end
+    local o = self:_current()
+    return o and self:objective_label(o) or nil
+end
+
+-- Seconds left on the phase's clock: the hold-out when that is the objective
+-- at hand, else the time limit of a map, else a hold-out running beside other
+-- objectives. nil when no clock runs.
+function Mission:clock()
+    if self.state ~= "active" then return nil end
+    local at_hand = self:_current()
+    if at_hand and at_hand.type == "survive" and at_hand.open then return at_hand.target - at_hand.progress end
+    if self.def.time_limit then return math.max(0, self.def.time_limit - self.age) end
     for _, o in ipairs(self.objectives) do
-        if not o.done and not o.optional then return self:objective_label(o) end
+        if o.type == "survive" and o.open and not o.done then return o.target - o.progress end
     end
-    return "RETURN TO BASE"
+    return nil
 end
 
 return Mission

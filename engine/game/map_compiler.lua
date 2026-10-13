@@ -22,6 +22,12 @@ local KIND_POW_MARKER = 9
 local KIND_PERSON     = 11
 local KIND_PAD        = 14
 
+-- A map's objective types as the mission knows them (Mission.TYPES).
+local GOAL_TYPES = {
+    targets = "destroy_targets", rescue = "rescue_people", sabotage = "sabotage", destroy = "destroy",
+    reach = "reach", survive = "survive", collect = "collect", protect = "protect",
+}
+
 local PAD_PICKUP = 1       -- pad class behaviour: people run out to the vehicle
 local HOLD_ALL   = 65535   -- stage global 5: agents wait until all are inside
 local HOLD_SLOT  = 5
@@ -239,7 +245,35 @@ function MapCompiler.compile(map)
     local globals = copy(base.globals or {})
     globals[HOLD_SLOT] = map.hold_agents and HOLD_ALL or 0
 
-    local goals = map.objectives or {}
+    -- The objectives as the mission takes them: an object named by its id
+    -- becomes its place in the entity list.
+    local function placed(ids)
+        local out = {}
+        for _, id in ipairs(ids or {}) do
+            if entity_index[id] then out[#out + 1] = entity_index[id] + 1 end
+        end
+        return out
+    end
+    local goals = {}
+    for _, goal in ipairs(map.objectives or {}) do
+        local spec = { type = GOAL_TYPES[goal.type], label = goal.label, optional = goal.optional }
+        if goal.type == "destroy" then
+            spec.mark  = true
+            spec.count = goal.count
+            if goal.kinds then spec.kinds = goal.kinds else spec.entities = placed(goal.objects) end
+        elseif goal.type == "reach" then
+            spec.x, spec.y, spec.radius, spec.land = goal.x, goal.y, goal.radius, goal.land
+        elseif goal.type == "survive" then
+            spec.seconds = goal.seconds
+        elseif goal.type == "collect" then
+            spec.count = goal.count
+        elseif goal.type == "protect" then
+            spec.entities, spec.losses = placed(goal.objects), goal.losses
+        end
+        if spec.type then goals[#goals + 1] = spec end
+    end
+    local rescue = MapFile.objective(map, "rescue")
+
     return {
         world_size  = map.size,
         header      = base.header,
@@ -253,13 +287,15 @@ function MapCompiler.compile(map)
         environment = map.environment,
         objectives  = {
             destroy           = targets > 0,
-            rescue            = not (goals.rescue and goals.rescue.optional),
+            rescue            = not (rescue and rescue.optional),
             special_end       = map.commander == true,
             target_classes    = target_classes,
             n_target_entities = targets,
         },
         -- What the briefing and the mission read in place of data/missions.json.
-        mission     = { name = map.name, briefing = map.briefing, vehicle = map.vehicle, goals = goals },
+        mission     = { name = map.name, briefing = map.briefing, vehicle = map.vehicle, objectives = goals,
+                        loadout = map.loadout, difficulty = map.difficulty, ordered = map.ordered == true,
+                        time_limit = map.time_limit, no_return = map.no_return == true },
         missing     = missing,
     }
 end
@@ -364,18 +400,23 @@ function MapCompiler.decompile(stage_name, goals)
     map.next_id     = #map.objects + 1
 
     local flags = stage.objectives or {}
+    local function add(kind, label, optional)
+        if not MapFile.objective(map, kind) then
+            map.objectives[#map.objectives + 1] = { type = kind, label = label, optional = optional }
+        end
+    end
     for _, spec in ipairs(goals and goals.objectives or {}) do
         if spec.type == "destroy" or spec.type == "destroy_targets" then
-            map.objectives.destroy = map.objectives.destroy or { label = spec.label }
+            add("targets", spec.label)
         elseif spec.type == "rescue_people" then
             local optional = spec.optional
             if optional == nil then optional = not flags.rescue end
-            map.objectives.rescue = { label = spec.label, optional = optional or nil }
+            add("rescue", spec.label, optional or nil)
         elseif spec.type == "sabotage" then
-            map.objectives.sabotage = { label = spec.label }
+            add("sabotage", spec.label)
         end
     end
-    if not map.objectives.rescue and not flags.rescue then map.objectives.rescue = { optional = true } end
+    if not flags.rescue then add("rescue", nil, true) end
     map.vehicle = goals and goals.vehicle or nil
     return map
 end

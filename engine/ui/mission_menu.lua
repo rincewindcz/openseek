@@ -168,8 +168,9 @@ end
 -- stage_name is "stageMP": M = mission (0-4), P = phase (0-3). The backdrop,
 -- phase title and objective icons are 1-based on the phase, and the mission
 -- text is keyed by the raw stage name in mission_text.json.
--- A player-made map passes own = { mission, name, paragraphs }: the backdrop of
--- its art set's mission, its name for a title, its own text and no icons.
+-- A player-made map passes own = { mission, name, paragraphs, cards }: the
+-- backdrop of its art set's mission, its name for a title, its own text, and
+-- for icons its own cards ({ [slot] = { image, w } }, slots 0-2), if any.
 function MissionMenu:open(stage_name, own)
     local m = own and own.mission or tonumber(stage_name:sub(6, 6)) or 0
     local p = tonumber(stage_name:sub(7, 7)) or 0
@@ -187,6 +188,11 @@ function MissionMenu:open(stage_name, own)
     -- so wide icons never overlap the text. A paragraph taller than a slot pushes
     -- the next one down so nothing overlaps. Already upper case to match CHARSTIT.
     local edges = self:_icon_slot_edges(icon_path)
+    self.own_cards = own and own.cards or nil
+    if self.own_cards then
+        edges = { [0] = -1, [1] = -1, [2] = -1, light = edges.light }
+        for slot, card in pairs(self.own_cards) do edges[slot] = card.w - 1 end
+    end
     self.icon_edges = edges
     self.icon_gain  = math.max(HOVER_MIN, math.min(HOVER_MAX, HOVER_TARGET / edges.light - 1))
     self.icon_hover = nil
@@ -351,6 +357,9 @@ function MissionMenu:draw()
         g.draw(self.title, (DW - self.title:getWidth()) / 2, TITLE_Y)
     elseif self.title_text then
         self.font:print(self.title_text, (DW - self.font:width(self.title_text)) / 2, TITLE_Y)
+    end
+    for slot, card in pairs(self.own_cards or {}) do
+        g.draw(card.image, ICON_X, ICON_Y + slot * SLOT_PITCH)
     end
     if self.icon then
         g.draw(self.icon, ICON_X, ICON_Y)

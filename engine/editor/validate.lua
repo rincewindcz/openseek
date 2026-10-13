@@ -2,8 +2,10 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local Entity      = require "engine.game.entity"
+local MapFile     = require "engine.game.map_file"
 local MapCompiler = require "engine.game.map_compiler"
 local Catalog     = require "engine.editor.catalog"
+local Goals       = require "engine.editor.goals"
 
 -- What stands between a map and a playable phase. An error keeps the map from
 -- being played; a warning does not. Each issue may name the objects it is
@@ -71,14 +73,45 @@ function Validate.run(doc)
         end
     end
 
+    -- The objectives of the map's own, and whether anything has to be done at all.
+    local content  = { targets = #targets, rescue = people, sabotage = drop_pads }
+    local required = 0
+    for kind, count in pairs(content) do
+        local listed = MapFile.objective(map, kind)
+        if count > 0 and not (listed and listed.optional) then required = required + 1 end
+    end
+    local feasible = 0
+    for i, goal in ipairs(map.objectives) do
+        local name  = "OBJECTIVE " .. i
+        local works = content[goal.type] == nil
+        if goal.type == "destroy" and goal.kinds then
+            if Goals.count_kinds(doc, goal.kinds) == 0 then
+                works = false
+                issue("warn", name .. " HAS NOTHING OF ITS KIND ON THE MAP AND IS LEFT OUT")
+            end
+        elseif goal.type == "destroy" or goal.type == "protect" then
+            if #Goals.objects(doc, goal) == 0 then
+                works = false
+                issue("warn", name .. " HAS NO OBJECT LEFT THAT CAN BE DESTROYED AND IS LEFT OUT")
+            end
+        end
+        if works and goal.type ~= "protect" then
+            feasible = feasible + 1
+            if not goal.optional then required = required + 1 end
+        end
+    end
+
     if #missing > 0 then
         issue("error", string.format("%d OBJECTS USE SPRITES THIS GAME DATA DOES NOT HAVE", #missing), missing)
     end
     if not home then
         issue("error", "NO HOME PAD: PLACE ONE FROM THE BASE OBJECTS")
     end
-    if #targets == 0 and people == 0 and drop_pads == 0 then
-        issue("error", "NO OBJECTIVE: MARK A MISSION TARGET, PUT PEOPLE IN A BUILDING OR SET AN AGENT TARGET")
+    if #targets == 0 and people == 0 and drop_pads == 0 and feasible == 0 then
+        issue("error", "NO OBJECTIVE: MARK A MISSION TARGET, PUT PEOPLE IN A BUILDING, SET AN AGENT TARGET "
+            .. "OR ADD AN OBJECTIVE IN THE MAP SETTINGS")
+    elseif required == 0 then
+        issue("warn", "EVERY OBJECTIVE IS OPTIONAL: THE PHASE IS WON AS IT STARTS")
     end
     if map.commander then
         if #commanders == 0 then

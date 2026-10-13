@@ -41,6 +41,12 @@ function Difficulty.pickup_level()
     return LEVELS[Config.pickup_level] or 2
 end
 
+-- What a multiplier a map sets for itself is held to.
+local SCALE_MIN, SCALE_MAX = 0.1, 5
+
+local SCALES = { enemy_damage = true, enemy_fire_rate = true, enemy_aggression = true }
+local FLAGS  = { land_for_medals = true, land_for_supplies = true }
+
 local presets
 
 local function load_presets()
@@ -78,12 +84,13 @@ local function same(a, b)
     return a == b
 end
 
--- The preset the current values match, or "custom".
-function Difficulty.match_preset()
+-- The preset a set of values matches (Config's when none is given), or "custom".
+function Difficulty.match_preset(values)
+    values = values or Config
     for _, p in ipairs(load_presets()) do
         local match = true
         for _, key in ipairs(Difficulty.KEYS) do
-            if not same(p.values[key], Config[key]) then
+            if not same(p.values[key], values[key]) then
                 match = false
                 break
             end
@@ -91,6 +98,44 @@ function Difficulty.match_preset()
         if match then return p.name end
     end
     return "custom"
+end
+
+-- A copy of a preset's values, or nil.
+function Difficulty.preset_values(name)
+    for _, p in ipairs(load_presets()) do
+        if p.name == name then
+            local out = {}
+            for _, key in ipairs(Difficulty.KEYS) do out[key] = p.values[key] end
+            return out
+        end
+    end
+    return nil
+end
+
+-- The label of a preset, or nil.
+function Difficulty.preset_label(name)
+    for _, p in ipairs(load_presets()) do
+        if p.name == name then return p.label end
+    end
+    return nil
+end
+
+-- params with the difficulty a map sets for itself (the "difficulty" of
+-- engine/game/map_file.lua) laid over them: only the difficulty keys, each
+-- held to a value the simulation can run on.
+function Difficulty.over(params, own)
+    for _, key in ipairs(Difficulty.KEYS) do
+        local v = own[key]
+        if SCALES[key] then
+            v = tonumber(v)
+            if v then params[key] = math.max(SCALE_MIN, math.min(SCALE_MAX, v)) end
+        elseif FLAGS[key] then
+            if type(v) == "boolean" then params[key] = v end
+        elseif LEVELS[v] then
+            params[key] = v
+        end
+    end
+    return params
 end
 
 return Difficulty

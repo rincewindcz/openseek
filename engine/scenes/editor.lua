@@ -12,6 +12,7 @@ local MapFile     = require "engine.game.map_file"
 local MapCompiler = require "engine.game.map_compiler"
 local Sound       = require "engine.game.sound"
 local Kit         = require "engine.ui.kit"
+local MissionMenu = require "engine.ui.mission_menu"
 local Catalog     = require "engine.editor.catalog"
 local Document    = require "engine.editor.document"
 local Selection   = require "engine.editor.selection"
@@ -22,6 +23,9 @@ local Panels      = require "engine.editor.panels"
 local Dialogs     = require "engine.editor.dialogs"
 local Validate    = require "engine.editor.validate"
 local Generate    = require "engine.editor.generate"
+local Cards       = require "engine.editor.cards"
+local Goals       = require "engine.editor.goals"
+local Loadout     = require "engine.game.loadout"
 
 -- The map editor: a free view of the map with a tool strip on the left, a
 -- dock on the right (objects, properties, layers, checks), menus on top and a
@@ -86,6 +90,13 @@ function Editor:init(app)
     self.map_stamp   = { revision = -1, at = 0 }
     self.auto_timer  = 0
     self.time        = 0
+    self.try         = { god = false, vehicle = "chopper" }   -- how TRY flies the map
+    self.card_pick   = nil      -- { slot, size, label } while a briefing picture is being picked
+    self.card_cache  = { revision = -1, cards = {} }
+    self.place_pick  = nil      -- { index, radius } while an objective's place is being picked
+    self.goal_cache  = { revision = -1, marks = nil }
+    self.briefing    = nil      -- the briefing screen, once previewed
+    self.previewing  = nil      -- { settings } while the briefing preview is up
 end
 
 -- lifecycle
@@ -96,6 +107,7 @@ function Editor:enter(opts)
     love.keyboard.setKeyRepeat(true)
     self.kit.scale = self.ui_scale or Kit.scale_for(select(2, love.graphics.getDimensions()))
     self.pan, self.right, self.work = nil, nil, nil
+    self.previewing = nil
     if MapFile.exists(TEST_NAME) then MapFile.delete(TEST_NAME) end
     if opts.map then
         self:open_map(opts.map)
@@ -310,12 +322,120 @@ function Editor:play_test()
     end
     app.world:load(World.map_stage(TEST_NAME))
     app.after_stage_load()
-    app.campaign               = false
-    app.settings.loadout       = nil
-    app.settings.death_enabled = true   -- as a map plays from the list: vehicles can be lost
-    if self.doc.map.vehicle then app.settings.vehicle = self.doc.map.vehicle end
-    app.play_return = { scene = "editor", test = true }
+    local settings = app.settings
+    local map      = self.doc.map
+    app.campaign           = false
+    settings.death_enabled = true   -- as a map plays from the list: vehicles can be lost
+    if map.loadout then
+        -- The loadout the map fixes, as the player will get it.
+        settings.vehicle, settings.loadout = Loadout.fixed(map.loadout, app.combat.weapons)
+    else
+        -- Otherwise every weapon, in the vehicle the map asks for or the one picked for the try.
+        settings.loadout = nil
+        settings.vehicle = map.vehicle or self.try.vehicle
+    end
+    app.play_return = { scene = "editor", test = true, god = self.try.god }
     app.scenes:switch("gameplay")
+end
+
+-- briefing pictures
+
+function Editor:set_card(slot, card)
+    local cards = {}
+    for i = 1, Cards.SLOTS do cards[i] = self.doc.map.briefing_cards[i] or { kind = "none" } end
+    cards[slot] = card or { kind = "none" }
+    self.doc:set_map("briefing_cards", cards, "BRIEFING PICTURE")
+end
+
+-- The map's briefing cards as images, redrawn when the map changed: { [slot] = { image, w } }.
+function Editor:card_images()
+    if self.card_cache.revision ~= self.doc.revision then
+        self.card_cache = { revision = self.doc.revision, cards = Cards.for_map(self.doc) }
+    end
+    return self.card_cache.cards
+end
+
+-- Pick the square of the map a briefing card shows: the settings close, the
+-- next click on the map sets it, and the settings come back.
+function Editor:start_card_pick(slot)
+    local card = self.doc.map.briefing_cards[slot] or {}
+    self.card_pick = { slot = slot, size = card.kind == "view" and card.size or Cards.SIZES[1],
+                       label = card.kind == "view" and card.label or nil }
+    Dialogs.close(self)
+    self:set_tool("card")
+end
+
+function Editor:finish_card_pick()
+    self.card_pick = nil
+    self.work      = nil
+    self.tool      = "select"
+    self:open_dialog("settings")
+    self.dialog.tab = "briefing"
+end
+
+-- objectives
+
+-- What the map's objectives point at (Goals.marks), recomputed when the map changed.
+function Editor:goal_marks()
+    if self.goal_cache.revision ~= self.doc.revision then
+        self.goal_cache = { revision = self.doc.revision, marks = Goals.marks(self.doc) }
+    end
+    return self.goal_cache.marks
+end
+
+-- Pick the place of objective `index` on the map: the settings close, the
+-- next click sets it, and the settings come back.
+function Editor:start_place_pick(index)
+    local goal = self.doc.map.objectives[index]
+    if not goal then return end
+    self.place_pick = { index = index, radius = goal.radius or Goals.limits().radius.default }
+    Dialogs.close(self)
+    self:set_tool("spot")
+end
+
+function Editor:finish_place_pick(wx, wy)
+    local pick = self.place_pick
+    local doc  = self.doc
+    self.place_pick = nil
+    self.work       = nil
+    self.tool       = "select"
+    if pick and wx and doc.map.objectives[pick.index] then
+        local size = doc:size()
+        local x, y = self:snap(wx, wy)
+        local rows = {}
+        for i, goal in ipairs(doc.map.objectives) do rows[i] = goal end
+        doc:begin("OBJECTIVE PLACE")
+        Goals.set(doc, rows, pick.index, "x", x % size)
+        Goals.set(doc, rows, pick.index, "y", y % size)
+        doc:commit()
+    end
+    self:open_dialog("settings")
+    self.dialog.tab = "objectives"
+end
+
+-- briefing preview
+
+-- Show the briefing as the player will see it; any key or click comes back,
+-- to the map settings when it was asked for from there.
+function Editor:preview_briefing()
+    local map = self.doc.map
+    self.briefing   = self.briefing or MissionMenu:new()
+    self.previewing = { settings = self.dialog ~= nil and self.dialog.kind == "settings" }
+    self.kit:close_popups()
+    self.kit:blur()
+    self.dialog = nil
+    self.briefing:open("", { mission = tonumber(self.doc:art()) or 0, name = map.name, paragraphs = map.briefing,
+                             cards = self:card_images() })
+end
+
+function Editor:close_preview()
+    local from = self.previewing
+    self.previewing = nil
+    self.briefing:close()
+    if from and from.settings then
+        self:open_dialog("settings")
+        self.dialog.tab = "briefing"
+    end
 end
 
 -- state the panels and tools ask for
@@ -487,6 +607,10 @@ end
 function Editor:update(dt)
     self.time = self.time + dt
     self.kit:update(dt)
+    if self.previewing then
+        self.briefing:update(dt)
+        return
+    end
     if self.message then
         self.message.left = self.message.left - dt
         if self.message.left <= 0 then self.message = nil end
@@ -527,6 +651,10 @@ function Editor:captures_keys()
 end
 
 function Editor:keypressed(key)
+    if self.previewing then
+        self:close_preview()
+        return
+    end
     if self.kit:keypressed(key) then return end
     if self.dialog then
         if key == "escape" then
@@ -582,6 +710,7 @@ function Editor:keypressed(key)
     elseif key == "home" then self:go_home()
     elseif key == "f" then self:frame_selection()
     elseif key == "f5" then self:play_test()
+    elseif key == "f6" then self:preview_briefing()
     elseif key == "f1" then self:open_dialog("help")
     elseif key == "=" or key == "+" or key == "kp+" then self.view:zoom_by(1, nil, nil, self.doc:size())
     elseif key == "-" or key == "kp-" then self.view:zoom_by(-1, nil, nil, self.doc:size())
@@ -590,6 +719,10 @@ end
 
 function Editor:mousepressed(x, y, button)
     button = button or 1
+    if self.previewing then
+        self:close_preview()
+        return
+    end
     self.kit:mousepressed(x, y, button)
     if self.kit:over(x, y) or not self.view:contains(x, y) then return end
     local mwx, mwy = self:_minimap_at(x, y)
@@ -616,6 +749,7 @@ function Editor:mousepressed(x, y, button)
 end
 
 function Editor:mousemoved(x, y, dx, dy)
+    if self.previewing then return end
     if self.pan then
         if self.pan.minimap then
             local mwx, mwy = self:_minimap_at(x, y)
@@ -658,6 +792,7 @@ function Editor:mousereleased(x, y, button)
 end
 
 function Editor:wheelmoved(_dx, dy)
+    if self.previewing then return end
     local x, y = love.mouse.getPosition()
     if self.kit:over(x, y) or not self.view:contains(x, y) then
         self.kit:wheelmoved(dy)
@@ -725,6 +860,16 @@ function Editor:_draw_marks()
             end
         end
     end
+    -- Where an objective asks the player to get to.
+    if self.layers.objectives.visible then
+        for _, place in ipairs(self:goal_marks().places) do
+            local dx, dy = doc:delta(place.x, place.y, self.view.x, self.view.y)
+            g.setColor(c[1], c[2], c[3], 0.1)
+            g.circle("fill", self.view.x + dx, self.view.y + dy, place.radius, 48)
+            g.setColor(c[1], c[2], c[3], 0.9)
+            g.circle("line", self.view.x + dx, self.view.y + dy, place.radius, 48)
+        end
+    end
     local x0, y0, x1, y1 = self.view:bounds()
     for _, o in ipairs(self.selection.list) do
         local info = doc:info(o)
@@ -783,7 +928,8 @@ function Editor:_draw_world()
     g.setColor(1, 1, 1, 1)
 end
 
--- Small marks over what matters to the objectives: targets, people, the home pad.
+-- Small marks over what matters to the objectives: targets, people, the home
+-- pad, and what an objective of the map's own names.
 function Editor:_draw_badges()
     if not self.badges or self.view:zoom() < BADGE_ZOOM then return end
     local kit   = self.kit
@@ -792,12 +938,16 @@ function Editor:_draw_badges()
     local s     = kit.scale
     local r     = self.view.rect
     local home  = doc:home()
+    local marks = self:goal_marks()
     love.graphics.setScissor(r.x, r.y, r.w, r.h)
     for _, o in ipairs(self.view.drawn.objects) do
         local cls  = doc:info(o).cls
+        local mark = marks.by_id[o.id]
         local icon, color
         if cls.kind_name == "structure" and cls.behaviour == 2 and cls.is_target then icon, color = "flag", theme.danger
         elseif cls.is_target then icon, color = "target", theme.danger
+        elseif mark and mark.type == "protect" then icon, color = "lock", theme.ok
+        elseif mark then icon, color = "crosshair", theme.warn
         elseif (cls.pows or 0) > 0 then icon, color = "people", theme.ok
         elseif cls.kind_name == "structure" and Catalog.has_flag(cls.flags, 0x40) then icon, color = "base", theme.text end
         if icon then
@@ -813,6 +963,12 @@ function Editor:_draw_badges()
         local sx, sy = self.view:to_screen(self.view.x + dx, self.view.y + dy)
         kit:rect(sx / s - 9, sy / s - 9, 18, 18, { 0, 0, 0, 0.72 }, 9)
         kit:icon("home", sx / s - 8, sy / s - 8, 16, theme.accent)
+    end
+    for _, place in ipairs(marks.places) do
+        local dx, dy = doc:delta(place.x, place.y, self.view.x, self.view.y)
+        local sx, sy = self.view:to_screen(self.view.x + dx, self.view.y + dy)
+        kit:rect(sx / s - 9, sy / s - 9, 18, 18, { 0, 0, 0, 0.72 }, 9)
+        kit:icon("pin", sx / s - 8, sy / s - 8, 16, theme.accent)
     end
     love.graphics.setScissor()
 end
@@ -950,6 +1106,8 @@ function Editor:_menus(kit, x)
         { label = "GENERATE GROUND", icon = "generate", action = function() self:open_dialog("generate") end },
         {},
         { label = "TRY THE MAP", key = "F5", icon = "play", action = function() self:play_test() end },
+        { label = "TRY IN GOD MODE", on = self.try.god, action = function() self.try.god = not self.try.god end },
+        { label = "PREVIEW THE BRIEFING", key = "F6", icon = "eye", action = function() self:preview_briefing() end },
     })
     if self.app.dev then
         local app = self.app
@@ -996,9 +1154,23 @@ function Editor:_top_bar(kit, sw)
     local issues = self:issues()
     local errors = Validate.errors(issues)
     local right  = sw - 8
-    right = right - 92
-    if kit:button("try", right, 4, 92, TOP_H - 8, { text = "TRY", icon = "play", primary = true,
-        tip = "PLAY THE MAP AS IT STANDS (F5)" }) then
+    right = right - 22
+    local vehicles = {}
+    if not (doc.map.loadout or doc.map.vehicle) then
+        vehicles = {
+            {},
+            { label = "FLY THE CHOPPER", on = self.try.vehicle == "chopper", action = function() self.try.vehicle = "chopper" end },
+            { label = "DRIVE THE TANK", on = self.try.vehicle == "tank", action = function() self.try.vehicle = "tank" end },
+        }
+    end
+    kit:menu("try_menu", right, 4, 22, TOP_H - 8, { icon = "chevron_down", tip = "HOW THE MAP IS TRIED" }, {
+        { label = "GOD MODE: NOTHING RUNS OUT, NOTHING HURTS", on = self.try.god,
+          action = function() self.try.god = not self.try.god end },
+        vehicles[1], vehicles[2], vehicles[3],
+    })
+    right = right - 2 - 84
+    if kit:button("try", right, 4, 84, TOP_H - 8, { text = self.try.god and "TRY (GOD)" or "TRY", icon = "play",
+        primary = true, tip = "PLAY THE MAP AS IT STANDS (F5)" }) then
         self:play_test()
     end
     right = right - 8 - 124
@@ -1058,12 +1230,14 @@ function Editor:_tool_strip(kit, sh)
 end
 
 local HINTS = {
-    select  = "CLICK OR DRAG A BOX TO SELECT.  DRAG THE SELECTION TO MOVE IT.  RIGHT CLICK: NOTHING SELECTED.",
+    select  = "CLICK OR DRAG A BOX TO SELECT.  DRAG THE SELECTION TO MOVE IT (CTRL: ALONG ONE AXIS).",
     place   = "CLICK TO PLACE, DRAG FOR A ROW.  RIGHT CLICK: BACK TO SELECT.",
     scatter = "TICK OBJECTS ON THE RIGHT, THEN PAINT.",
     erase   = "PAINT OVER WHAT SHOULD GO.",
-    route   = "CLICK POINTS, ENTER TO FINISH.  DRAG A POINT TO MOVE IT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
-    line    = "CLICK POINTS, ENTER TO FINISH.  DRAG A POINT TO MOVE IT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
+    route   = "CLICK POINTS, ENTER TO FINISH.  CTRL: 45 DEGREE STEPS.  DRAG A POINT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
+    line    = "CLICK POINTS, ENTER TO FINISH.  CTRL: 45 DEGREE STEPS.  DRAG A POINT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
+    card    = "CLICK WHAT THE BRIEFING PICTURE SHOULD SHOW.  RIGHT CLICK: BACK TO THE SETTINGS.",
+    spot    = "CLICK THE PLACE THE PLAYER HAS TO GET TO.  RIGHT CLICK: BACK TO THE SETTINGS.",
 }
 
 function Editor:_options_bar(kit, vx, vw)
@@ -1103,6 +1277,12 @@ function Editor:_options_bar(kit, vx, vw)
         self.erase.radius = number("opt_erase", "RADIUS", self.erase.radius, { min = 4, max = 512, step = 4, big = 32 })
         self.erase.all = kit:check("opt_erase_all", x, ry, 290, "EVERYTHING, NOT ONLY SCENERY", self.erase.all)
         x = x + 300
+    elseif self.tool == "card" and self.card_pick then
+        local sizes = {}
+        for i, size in ipairs(Cards.SIZES) do sizes[i] = { label = size .. " PX", value = size } end
+        kit:label("SHOWS", x, y, 52, OPTIONS_H, { color = theme.text_dim, size = theme.font_small })
+        self.card_pick.size = kit:choice("opt_card_size", x + 54, ry, 90, sizes, self.card_pick.size)
+        x = x + 154
     elseif self.tool == "line" then
         for i, color in ipairs(self.line_colors) do
             local id = "opt_color_" .. i
@@ -1163,8 +1343,25 @@ function Editor:_status_bar(kit, sw, sh)
         { align = "right", color = theme.text_dim, size = theme.font_small })
 end
 
+-- The briefing as the game shows it, under a line saying how to get back.
+function Editor:_draw_preview(kit)
+    local theme = kit.theme
+    self.briefing:draw()
+    kit:begin()
+    local text = "BRIEFING PREVIEW.  CLICK OR PRESS A KEY TO GO BACK."
+    local w    = kit:text_width(text, theme.font_small) + 20
+    kit:rect(8, 8, w, theme.row + 2, theme.panel, 4)
+    kit:label(text, 8, 8, w, theme.row + 2, { align = "center", color = theme.accent, size = theme.font_small })
+    kit:finish()
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 function Editor:draw()
     local kit = self.kit
+    if self.previewing then
+        self:_draw_preview(kit)
+        return
+    end
     local sw, sh, vx, _, vw = self:_layout()
     love.graphics.clear(0, 0, 0, 1)
     self:_draw_world()

@@ -45,6 +45,9 @@ end
 -- starts at 0 and earns medals from pickups across its phases.
 Loadout.START_MEDALS = 16
 
+-- Most a map's fixed loadout may multiply the ammunition by (the chopper's bay count).
+Loadout.MAX_LOADS = 6
+
 -- The loadout for the current run: the persistent campaign inventory (NEW GAME,
 -- earned from pickups) or the single-mission inventory (MISSION mode, seeded
 -- with START_MEDALS). Created on first use; the shop and equip screens share it.
@@ -213,6 +216,37 @@ function Loadout.restore(data)
         end
     end
     return loadout
+end
+
+-- The loadout a map fixes in place of the equip screen (the "loadout" of
+-- engine/game/map_file.lua): the vehicle, and the snapshot the equip screen
+-- would hand to the phase. The chain gun is always aboard; every weapon
+-- carries `loads` times its ammunition, as that many bays would.
+function Loadout.fixed(spec, weapons)
+    local vehicle = Vehicles.BAY_WEAPONS[spec.vehicle] and spec.vehicle or "chopper"
+    local loads   = math.max(1, math.min(Loadout.MAX_LOADS, math.floor(tonumber(spec.loads) or 1)))
+    local list, counts, levels = {}, {}, {}
+    local function carry(name, level)
+        local def = weapons and weapons[name]
+        if not def then return end
+        local top = def.levels and #def.levels or 0
+        list[#list + 1] = name
+        counts[name]    = loads
+        levels[name]    = math.max(1, math.min(level, math.max(1, top)))
+    end
+    for _, name in ipairs(Vehicles.BAY_WEAPONS[vehicle]) do
+        local level = math.floor(tonumber((spec.weapons or {})[name]) or 0)
+        if name == "chaingun" then level = math.max(1, level) end
+        if level > 0 then carry(name, level) end
+    end
+    for _, name in ipairs(Vehicles.SPECIAL_WEAPONS[vehicle]) do
+        if name == spec.special then carry(name, 1) end
+    end
+    local function share(value)
+        return math.max(0, math.min(100, tonumber(value) or 50)) / 100
+    end
+    return vehicle, { list = list, counts = counts, levels = levels,
+                      chars = { fuel = share(spec.fuel), armor = share(spec.armor) } }
 end
 
 -- The gameplay loadout: unique bay weapons in bay order plus the loaded

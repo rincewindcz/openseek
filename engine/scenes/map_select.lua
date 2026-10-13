@@ -1,21 +1,22 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class    = require "engine.core.class"
-local Scene    = require "engine.core.scene"
-local Font     = require "engine.core.font"
-local Layout   = require "engine.ui.layout"
-local Hint     = require "engine.ui.hint"
-local Pointer  = require "engine.ui.pointer"
-local Audio    = require "engine.core.audio"
-local Log      = require "engine.core.log"
-local World    = require "engine.game.world"
-local MapFile  = require "engine.game.map_file"
-local Loadout  = require "engine.game.loadout"
-local Sound    = require "engine.game.sound"
-local Catalog  = require "engine.editor.catalog"
-local Document = require "engine.editor.document"
-local Validate = require "engine.editor.validate"
+local Class      = require "engine.core.class"
+local Scene      = require "engine.core.scene"
+local Font       = require "engine.core.font"
+local Layout     = require "engine.ui.layout"
+local Hint       = require "engine.ui.hint"
+local Pointer    = require "engine.ui.pointer"
+local Audio      = require "engine.core.audio"
+local Log        = require "engine.core.log"
+local World      = require "engine.game.world"
+local MapFile    = require "engine.game.map_file"
+local Loadout    = require "engine.game.loadout"
+local Difficulty = require "engine.game.difficulty"
+local Sound      = require "engine.game.sound"
+local Catalog    = require "engine.editor.catalog"
+local Document   = require "engine.editor.document"
+local Validate   = require "engine.editor.validate"
 
 -- MAPS screen: the player-made maps (maps/ in the save directory), built like
 -- the SAVE / LOAD and REPLAYS panels but tinted amber. A map is played from
@@ -360,6 +361,10 @@ function MapSelect:_draw_detail(fade)
         local parts = { string.format("%d OBJECTS", #map.objects) }
         if map.environment.night == true then parts[#parts + 1] = "NIGHT" end
         if WEATHER[map.environment.weather] then parts[#parts + 1] = WEATHER[map.environment.weather] end
+        if map.difficulty then
+            local preset = Difficulty.preset_label(Difficulty.match_preset(map.difficulty))
+            parts[#parts + 1] = preset and ("ALWAYS " .. preset) or "OWN DIFFICULTY"
+        end
         if map.based_on then parts[#parts + 1] = "COPY OF " .. map.based_on:upper() end
         if self:_problem(row) then parts = { "NOT PLAYABLE YET: OPEN IT IN THE EDITOR" } end
         text = table.concat(parts, "   ")

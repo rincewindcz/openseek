@@ -16,6 +16,7 @@ local DRAG_START  = 3     -- screen px the pointer travels before a press become
 local HANDLE_GRAB = 7     -- screen px around a route or line point that grab it
 local SEG_GRAB    = 5
 local DOUBLE_TIME = 0.35
+local HALF_STEP_TAN = math.tan(math.rad(22.5))   -- between two rays 45 degrees apart
 
 local ROUTE_KINDS = { tank = true, truck = true }
 
@@ -23,6 +24,28 @@ Tools.ORDER = { "select", "place", "scatter", "erase", "route", "line" }
 
 local function shift_down()
     return love.keyboard.isDown("lshift", "rshift")
+end
+
+local function ctrl_down()
+    return love.keyboard.isDown("lctrl", "rctrl")
+end
+
+-- With Ctrl held, (x, y) moved onto the nearest ray from the anchor at a
+-- multiple of 45 degrees, as a drawing program constrains a segment. anchor
+-- is a map point { x, y }; the result lies on the pointer's own copy of the map.
+local function constrain(editor, x, y, anchor)
+    if not (anchor and ctrl_down()) then return x, y end
+    local dx, dy = editor.doc:delta(x, y, anchor[1], anchor[2])
+    local ax, ay = math.abs(dx), math.abs(dy)
+    if ay < ax * HALF_STEP_TAN then
+        dy = 0
+    elseif ax < ay * HALF_STEP_TAN then
+        dx = 0
+    else
+        local d = math.floor((ax + ay) / 2 + 0.5)
+        dx, dy = dx < 0 and -d or d, dy < 0 and -d or d
+    end
+    return anchor[1] + dx, anchor[2] + dy
 end
 
 -- An object with what is placed with it, unless single parts are being picked.
@@ -66,6 +89,10 @@ function Select.drag(editor, wx, wy)
     if not work.moving and math.max(math.abs(wx - work.x0), math.abs(wy - work.y0)) * z < DRAG_START then return end
     work.moving = true
     local dx, dy = editor:snap_delta(wx - work.x0, wy - work.y0)
+    -- Ctrl keeps the move on one axis.
+    if ctrl_down() then
+        if math.abs(dx) >= math.abs(dy) then dy = 0 else dx = 0 end
+    end
     if dx ~= work.dx or dy ~= work.dy then
         editor.doc:move(editor.selection.list, dx - work.dx, dy - work.dy, true)
         work.dx, work.dy = dx, dy
@@ -389,6 +416,7 @@ local function poly_tool(kind, def)
         if work and work.points then
             local now  = love.timer.getTime()
             local last = work.points[#work.points]
+            x, y = constrain(editor, x, y, last)
             if now - (work.clicked or 0) < DOUBLE_TIME and last[1] == x % size and last[2] == y % size then
                 finish_shape(editor, kind)
                 return
@@ -420,6 +448,8 @@ local function poly_tool(kind, def)
         if not (work and work.edit) then return end
         local x, y = editor:snap(wx, wy)
         local size = editor.doc:size()
+        -- Ctrl: at a multiple of 45 degrees from the point before (or after).
+        x, y = constrain(editor, x, y, work.edited[work.index - 1] or work.edited[work.index + 1])
         work.edited[work.index] = { x % size, y % size }
         work.moved = true
     end
@@ -498,6 +528,7 @@ local function poly_tool(kind, def)
             if editor.hover_world then
                 local x, y = editor:snap(editor.hover_world[1], editor.hover_world[2])
                 local last = points[#points]
+                x, y = constrain(editor, x, y, last)
                 local dx, dy = editor.doc:delta(x, y, last[1], last[2])
                 g.setColor(c[1], c[2], c[3], 0.6)
                 g.line(last[1], last[2], last[1] + dx, last[2] + dy)
@@ -517,7 +548,72 @@ local Route = poly_tool("route", { id = "route", icon = "route", label = "ROUTE"
 local Line = poly_tool("line", { id = "line", icon = "line", label = "LINE", key = "l",
     tip = "DRAW AND EDIT GROUND LINES (L)" })
 
-Tools.defs = { select = Select, place = Place, scatter = Scatter, erase = Erase, route = Route, line = Line }
+-- briefing picture: the square of the map a briefing card shows. Not on the
+-- tool strip; the BRIEFING page of the map settings hands over to it.
+
+local Card = { id = "card", icon = "image", label = "PICTURE" }
+
+function Card.press(editor, wx, wy)
+    local pick = editor.card_pick
+    if pick then
+        local size = editor.doc:size()
+        local x, y = editor:snap(wx, wy)
+        editor:set_card(pick.slot, { kind = "view", x = x % size, y = y % size, size = pick.size,
+                                     label = pick.label })
+    end
+    editor:finish_card_pick()
+end
+
+function Card.drag() end
+function Card.release() end
+
+function Card.cancel(editor)
+    editor:finish_card_pick()
+end
+
+function Card.draw(editor)
+    local pick = editor.card_pick
+    if not (pick and editor.hover_world) then return end
+    local g = love.graphics
+    local c = editor.kit.theme.accent
+    local x, y = editor:snap(editor.hover_world[1], editor.hover_world[2])
+    local half = pick.size / 2
+    g.setColor(0, 0, 0, 0.7)
+    g.rectangle("line", x - half - 1, y - half - 1, pick.size + 2, pick.size + 2)
+    g.setColor(c[1], c[2], c[3], 1)
+    g.rectangle("line", x - half, y - half, pick.size, pick.size)
+end
+
+-- objective place: where a "get to a place" objective is met. Not on the tool
+-- strip either; the OBJECTIVES page of the map settings hands over to it.
+
+local Spot = { id = "spot", icon = "pin", label = "OBJECTIVE" }
+
+function Spot.press(editor, wx, wy)
+    editor:finish_place_pick(wx, wy)
+end
+
+function Spot.drag() end
+function Spot.release() end
+
+function Spot.cancel(editor)
+    editor:finish_place_pick()
+end
+
+function Spot.draw(editor)
+    local pick = editor.place_pick
+    if not (pick and editor.hover_world) then return end
+    local g = love.graphics
+    local c = editor.kit.theme.accent
+    local x, y = editor:snap(editor.hover_world[1], editor.hover_world[2])
+    g.setColor(c[1], c[2], c[3], 0.12)
+    g.circle("fill", x, y, pick.radius, 48)
+    g.setColor(c[1], c[2], c[3], 1)
+    g.circle("line", x, y, pick.radius, 48)
+end
+
+Tools.defs = { select = Select, place = Place, scatter = Scatter, erase = Erase, route = Route, line = Line,
+               card = Card, spot = Spot }
 
 Tools.ROUTE_KINDS = ROUTE_KINDS
 

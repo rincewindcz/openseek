@@ -772,6 +772,10 @@ function Hud:_draw_radar(g, item, x, y, s)
     local home = self.world.home_entity
     if home then plot(base, home.x, home.y) end
 
+    -- Places a mission points at (a map's objective to get somewhere).
+    local places = {}
+    for _, mark in ipairs(self.world.marks or {}) do plot(places, mark.x, mark.y) end
+
     -- Airborne enemy helicopters live outside world.entities (heli system).
     for _, h in ipairs(self.world.air_units or {}) do
         if h.state == "alive" then plot(air, h.x, h.y) end
@@ -814,6 +818,7 @@ function Hud:_draw_radar(g, item, x, y, s)
     draw_blips(pickups,        RADAR_COLORS.pickup)
     draw_blips(strikes,        RADAR_COLORS.strike, 1.6)
     draw_blips(objectives,     RADAR_COLORS.objective)
+    draw_blips(places,         RADAR_COLORS.objective, item.place_size or 1.6)
 
     -- Co-op teammate (split screen): a larger dot in the teammate's color.
     local mate = self.coplayer

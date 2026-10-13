@@ -114,6 +114,26 @@
     "enemy_bullet":      "BULLET",
     "enemy_heli_homing": "HOMING MISSILE"
   },
+  "goals": {
+    "radius":     { "min": 16, "max": 512, "step": 8, "default": 48 },
+    "seconds":    { "min": 5, "max": 3600, "step": 5, "default": 60 },
+    "medals":     { "min": 1, "max": 99, "default": 5 },
+    "time_limit": { "min": 30, "max": 7200, "step": 30, "default": 300 },
+    "kinds": [
+      { "id": "units",     "label": "UNITS AND GUNS", "kinds": ["tank", "truck", "soldier", "soldier_aggressive", "flak_turret"] },
+      { "id": "tanks",     "label": "TANKS",          "kinds": ["tank"] },
+      { "id": "trucks",    "label": "TRUCKS",         "kinds": ["truck"] },
+      { "id": "soldiers",  "label": "SOLDIERS",       "kinds": ["soldier", "soldier_aggressive"] },
+      { "id": "guns",      "label": "GUNS",           "kinds": ["flak_turret"] },
+      { "id": "radars",    "label": "RADAR DISHES",   "kinds": ["radar"] },
+      { "id": "buildings", "label": "BUILDINGS",      "kinds": ["structure"] }
+    ]
+  },
+  "difficulty": {
+    "enemy_damage":     { "min": 25, "max": 300, "step": 5 },
+    "enemy_fire_rate":  { "min": 25, "max": 300, "step": 5 },
+    "enemy_aggression": { "min": 50, "max": 200, "step": 5 }
+  },
   "scatter": { "radius": 96, "density": 6, "gap": 10 },
   "erase":   { "radius": 48 },
   "ground":  { "min_uses": 100, "clear": 40 },

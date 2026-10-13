@@ -436,14 +436,15 @@ function Kit:separator(x, y, w)
     self:rect(x, y, w, 1, self.theme.border)
 end
 
-function Kit:_push_clip(x, y, w, h)
+-- Clip drawing and pointer hits to a rect until the matching unclip().
+function Kit:clip(x, y, w, h)
     local s = self.scale
     local prev = { love.graphics.getScissor() }
     love.graphics.intersectScissor(math.floor(x * s), math.floor(y * s), math.ceil(w * s), math.ceil(h * s))
     self.clips[#self.clips + 1] = { x, y, w, h, prev }
 end
 
-function Kit:_pop_clip()
+function Kit:unclip()
     local clip = table.remove(self.clips)
     local prev = clip[5]
     if prev[1] then love.graphics.setScissor(prev[1], prev[2], prev[3], prev[4]) else love.graphics.setScissor() end
@@ -461,12 +462,12 @@ function Kit:scroll_begin(id, x, y, w, h, content_h)
     end
     self.scrolls[id] = offset
     self.areas[#self.areas + 1] = { id = id, x = x, y = y, w = w, h = h, content_h = content_h, limit = limit }
-    self:_push_clip(x, y, w, h)
+    self:clip(x, y, w, h)
     return offset
 end
 
 function Kit:scroll_end()
-    self:_pop_clip()
+    self:unclip()
     local area = table.remove(self.areas)
     if area.limit <= 0 then return end
     local theme  = self.theme
@@ -619,7 +620,7 @@ function Kit:field(id, x, y, w, text, opts)
     self:frame(x, y, w, h, edit and theme.accent or (hover and theme.widget_down or theme.border), 3)
     local shown = (edit and not committed) and edit.text or text
     local inner = w - theme.pad * 2
-    self:_push_clip(x + 2, y, w - 4, h)
+    self:clip(x + 2, y, w - 4, h)
     local ty = y + (h - self:text_height()) / 2
     if shown == "" and opts.hint and not edit then
         self:print(opts.hint, x + theme.pad, ty, { color = theme.text_dim })
@@ -632,7 +633,7 @@ function Kit:field(id, x, y, w, text, opts)
             self:rect(x + theme.pad - shift + caret_x, y + 4, 1, h - 8, theme.accent)
         end
     end
-    self:_pop_clip()
+    self:unclip()
     return text, changed, committed
 end
 

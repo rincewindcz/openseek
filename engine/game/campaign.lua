@@ -66,7 +66,7 @@ end
 function Campaign.required_vehicle(app, stage_name)
     -- A player-made map says so itself, however it is played.
     local own = app.world.stage_name == stage_name and app.world.stage.mission
-    if own then return own.vehicle end
+    if own then return own.loadout and own.loadout.vehicle or own.vehicle end
     if not app.campaign or app.coop_run then return nil end
     return Mission.required_vehicle(stage_name)
 end

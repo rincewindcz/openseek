@@ -240,6 +240,51 @@ function View:pick(doc, wx, wy, pickable)
     return hits
 end
 
+-- Draw a square of the map, `size` world pixels a side with (x, y) at its
+-- middle, into the rect (px, py, pw, ph) of the current render target: ground,
+-- decals, ground lines and objects, as the editor shows them.
+function View.draw_region(doc, x, y, size, px, py, pw, ph)
+    local g      = love.graphics
+    local period = doc:size()
+    local ground = World.art_ground(doc:art())
+    local half   = size / 2
+    g.push("all")
+    g.setScissor(px, py, pw, ph)
+    g.setColor(ground[1], ground[2], ground[3], 1)
+    g.rectangle("fill", px, py, pw, ph)
+    g.translate(px + pw / 2, py + ph / 2)
+    g.scale(pw / size, ph / size)
+    g.translate(-x, -y)
+    g.setLineStyle("rough")
+    g.setLineWidth(1)
+    -- The square may reach over the seam: every map copy it touches is drawn.
+    for ky = math.floor((y - half - CULL_MARGIN) / period), math.floor((y + half + CULL_MARGIN) / period) do
+        for kx = math.floor((x - half - CULL_MARGIN) / period), math.floor((x + half + CULL_MARGIN) / period) do
+            local ox, oy = kx * period, ky * period
+            local decals, objects = {}, {}
+            doc:each_in(x - half - ox, y - half - oy, x + half - ox, y + half - oy, CULL_MARGIN, function(o)
+                local list = doc:info(o).kind_name == "ground_decal" and decals or objects
+                list[#list + 1] = o
+            end)
+            table.sort(decals, by_depth)
+            table.sort(objects, by_depth)
+            g.push()
+            g.translate(ox, oy)
+            for _, o in ipairs(decals) do draw_object(doc, o) end
+            for _, line in ipairs(doc.map.lines) do
+                local c = line.color
+                g.setColor(c[1] / 255, c[2] / 255, c[3] / 255, 1)
+                for i = 1, #line.points - 1 do
+                    g.line(line.points[i][1], line.points[i][2], line.points[i + 1][1], line.points[i + 1][2])
+                end
+            end
+            for _, o in ipairs(objects) do draw_object(doc, o) end
+            g.pop()
+        end
+    end
+    g.pop()
+end
+
 function View:state()
     return { x = math.floor(self.x), y = math.floor(self.y), zoom = self.zoom_index }
 end

@@ -18,10 +18,35 @@ local Log  = require "engine.core.log"
 --                digit) and what may be mixed over it (World:_set_environment)
 --   size         wrap period of the torus in world pixels
 --   vehicle      "tank" / "chopper" when the map forces one
+--   loadout      what the player flies when the map decides instead of the
+--                equip screen: { vehicle, weapons = { name = level }, special,
+--                loads (ammunition multiplier), fuel, armor (0-100), lives }
 --   briefing     paragraphs of the briefing text
---   objectives   { destroy, rescue, sabotage }, each { label, optional }
+--   briefing_cards  the picture beside each paragraph: { kind = "view", x, y,
+--                size, label } (a square of the map itself, drawn when shown),
+--                { kind = "card", stage, slot } (a card of a pack stage's
+--                briefing) or { kind = "none" }
+--   difficulty   the difficulty the map is played on whatever the player's own
+--                is: values of the keys of engine/game/difficulty.lua
+--   objectives   the objectives in the order they are listed (and, with
+--                ordered, worked on), each { type, label, optional } and:
+--                  "targets"   every object that is a mission target
+--                  "rescue"    the people on the map
+--                  "sabotage"  the agents and their buildings
+--                  "destroy"   objects (ids) or kinds (entity kind names) to
+--                              destroy, count of them when not all
+--                  "reach"     x, y, radius: a place to get to; land: be down
+--                              or stopped there
+--                  "survive"   seconds to hold out
+--                  "collect"   count of medals to pick up
+--                  "protect"   objects (ids) to keep, losses allowed among them
+--                The first three follow from what is on the map and need no
+--                entry; one gives them their wording and their place.
+--   ordered      an objective is worked on once those before it are done
+--   time_limit   seconds the required objectives have to be done in
 --   hold_agents  agents stay inside until every building has one
 --   commander    the commander building rule (stage special end)
+--   no_return    the phase ends with the last objective, without the flight home
 --   types        property sets: { from, class, sprite, set }: a class of a
 --                pack stage and the fields changed on it
 --   objects      { id, t, x, y, route, owner, group }, in entity order;
@@ -40,6 +65,13 @@ MapFile.MAX_SIZE     = 4096
 MapFile.DEFAULT_SIZE = 4096
 
 local NAME_MAX = 40
+
+local OBJECTIVE_TYPES = {
+    targets = true, rescue = true, sabotage = true, destroy = true, reach = true, survive = true,
+    collect = true, protect = true,
+}
+-- The first files kept the three objectives of the original under these keys.
+local FIRST_OBJECTIVES = { { "destroy", "targets" }, { "rescue", "rescue" }, { "sabotage", "sabotage" } }
 
 function MapFile.path(name)
     return MapFile.DIR .. "/" .. name .. ".json"
@@ -73,6 +105,7 @@ function MapFile.new(display_name, art, base)
         environment = { art = art },
         size        = MapFile.DEFAULT_SIZE,
         briefing    = {},
+        briefing_cards = {},
         objectives  = {},
         hold_agents = false,
         commander   = false,
@@ -117,8 +150,9 @@ end
 
 -- Header keys in file order; the lists follow, one entry per line, so a map
 -- stays readable and diffable.
-local HEADER = { "format", "name", "author", "based_on", "base", "environment", "size", "vehicle",
-                 "briefing", "objectives", "hold_agents", "commander", "view", "next_id" }
+local HEADER = { "format", "name", "author", "based_on", "base", "environment", "size", "vehicle", "loadout",
+                 "difficulty", "briefing", "briefing_cards", "objectives", "ordered", "time_limit", "hold_agents",
+                 "commander", "no_return", "view", "next_id" }
 
 function MapFile.encode(map)
     local out = {}
@@ -138,6 +172,32 @@ local function link(v)
     return (type(v) == "number" and v > 0) and v or nil
 end
 
+local function objective_list(raw)
+    local out = {}
+    if type(raw) ~= "table" then return out end
+    if raw[1] == nil then
+        for _, pair in ipairs(FIRST_OBJECTIVES) do
+            local goal = raw[pair[1]]
+            if type(goal) == "table" then
+                out[#out + 1] = { type = pair[2], label = goal.label, optional = goal.optional }
+            end
+        end
+        return out
+    end
+    for _, goal in ipairs(raw) do
+        if type(goal) == "table" and OBJECTIVE_TYPES[goal.type] then out[#out + 1] = goal end
+    end
+    return out
+end
+
+-- The entry of a map's objectives of one type, or nil.
+function MapFile.objective(map, kind)
+    for _, goal in ipairs(map.objectives) do
+        if goal.type == kind then return goal end
+    end
+    return nil
+end
+
 -- A decoded file as a map table, or nil and what is wrong with it.
 function MapFile.decode(text)
     local ok, map = pcall(json.decode, text)
@@ -152,7 +212,12 @@ function MapFile.decode(text)
     map.environment = type(map.environment) == "table" and map.environment or {}
     map.size        = math.max(MapFile.MIN_SIZE, math.min(MapFile.MAX_SIZE, tonumber(map.size) or MapFile.DEFAULT_SIZE))
     map.briefing    = type(map.briefing) == "table" and map.briefing or {}
-    map.objectives  = type(map.objectives) == "table" and map.objectives or {}
+    map.loadout     = type(map.loadout) == "table" and map.loadout or nil
+    map.difficulty  = type(map.difficulty) == "table" and map.difficulty or nil
+    map.briefing_cards = type(map.briefing_cards) == "table" and map.briefing_cards or {}
+    map.objectives  = objective_list(map.objectives)
+    map.ordered     = map.ordered == true or nil
+    map.time_limit  = (tonumber(map.time_limit) or 0) > 0 and tonumber(map.time_limit) or nil
     map.routes      = type(map.routes) == "table" and map.routes or {}
     map.lines       = type(map.lines) == "table" and map.lines or {}
     local objects, top = {}, 0

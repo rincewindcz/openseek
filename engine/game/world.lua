@@ -363,6 +363,8 @@ function World:load(name)
     self.route_states  = {}   -- route index -> {halts, finished}, shared by the units on it
     self.route_units   = {}   -- route units that give way to a player on the ground
     self.air_units     = {}   -- live enemy helicopters (owned by the heli system)
+    self.placed        = {}   -- stage entity index -> the entity it became (a turret: its hull)
+    self.marks         = {}   -- { x, y }: places a mission shows on the radar (owned by Mission)
 
     -- First pass: build every entity and index hulls by exact position.
     local created  = {}
@@ -475,6 +477,7 @@ function World:load(name)
             -- Fold the turret onto its co-located hull, dropping it as a standalone entity.
             hull:attach_turret({ img = r.img, ax = -r.ox, ay = -r.oy }, tdef.spin, cls)
             hull.fire_routine = cls.behaviour or 0   -- the tank fires what its turret does
+            self.placed[id]   = hull
         elseif cls.kind_name == "enemy_helicopter" then
             -- Enemy helicopters are not placed units: each marks a spawn point for the
             -- airborne heli system and is never drawn or hit in place.
@@ -485,6 +488,7 @@ function World:load(name)
             self.land_zones[#self.land_zones + 1] = { ent = entity, building = linked_structure(cls) }
         else
             self.entities[#self.entities + 1] = entity
+            self.placed[id] = entity
             local list = cls.kind == 15 and self.decals or self.objects
             list[#list + 1] = entity
             if target_class[raw.class] then
