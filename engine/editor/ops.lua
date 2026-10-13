@@ -6,8 +6,9 @@ local Catalog     = require "engine.editor.catalog"
 
 -- Editing operations of the map editor above the document's primitives:
 -- placing a catalog entry, the objective marks a building carries (POW flag
--- and pickup pad, agent drop pad, waiting crew), copy and paste, grouping the
--- parts of a cloned stage.
+-- and pickup pad, agent drop pad, waiting crew), copy and paste, arranging a
+-- selection (align, even gaps, turn, mirror), grouping the parts of a cloned
+-- stage.
 local Ops = {}
 
 local PAD_OFFSET    = 48   -- world px from a building to the pad placed for it
@@ -19,7 +20,7 @@ local KIND_FLAG, KIND_PAD, KIND_PERSON =
     MapCompiler.KIND_POW_MARKER, MapCompiler.KIND_PAD, MapCompiler.KIND_PERSON
 
 local function type_of_part(doc, part, set)
-    return doc:intern({ from = part.from, class = part.class, sprite = part.sprite, set = set })
+    return doc:intern(Catalog.part_type(part, set))
 end
 
 -- Place a catalog entry with its main part at (x, y). The parts of a stack
@@ -178,6 +179,125 @@ function Ops.duplicate(doc, objects)
     local clip = Ops.copy(doc, objects)
     if not clip then return {} end
     return Ops.paste(doc, clip, objects[1].x + PASTE_OFFSET, objects[1].y + PASTE_OFFSET)
+end
+
+-- arranging
+
+local ALIGN_AXIS = { left = "x", center = "x", right = "x", top = "y", middle = "y", bottom = "y" }
+local ALIGN_LOW  = { left = true, top = true }
+local ALIGN_HIGH = { right = true, bottom = true }
+
+-- What of a selection moves as one: the selected parts of a group, or an
+-- object on its own. Each { objects, x0, y0, x1, y1 }, the box of its sprites
+-- measured from the first object, so a selection over the seam stays whole.
+local function units(doc, objects)
+    local origin = objects[1]
+    local out, by_group = {}, {}
+    for _, o in ipairs(objects) do
+        local unit = o.group and by_group[o.group]
+        if not unit then
+            unit = { objects = {}, x0 = math.huge, y0 = math.huge, x1 = -math.huge, y1 = -math.huge }
+            out[#out + 1] = unit
+            if o.group then by_group[o.group] = unit end
+        end
+        unit.objects[#unit.objects + 1] = o
+        local info   = doc:info(o)
+        local dx, dy = doc:delta(o.x, o.y, origin.x, origin.y)
+        unit.x0, unit.y0 = math.min(unit.x0, dx + info.ox), math.min(unit.y0, dy + info.oy)
+        unit.x1, unit.y1 = math.max(unit.x1, dx + info.ox + info.w), math.max(unit.y1, dy + info.oy + info.h)
+    end
+    return out
+end
+
+local function shift(doc, objects, axis, by)
+    by = math.floor(by + 0.5)
+    doc:move(objects, axis == "x" and by or 0, axis == "y" and by or 0)
+end
+
+-- Bring the sprite boxes of a selection to one edge of the box around them
+-- all (left, right, top, bottom), or their middles to its middle (center: on
+-- a column, middle: on a row), as a drawing program aligns.
+function Ops.align(doc, objects, edge)
+    local list = units(doc, objects)
+    if #list < 2 then return end
+    local axis   = ALIGN_AXIS[edge]
+    local lo, hi = axis .. "0", axis .. "1"
+    local a, b   = math.huge, -math.huge
+    for _, unit in ipairs(list) do a, b = math.min(a, unit[lo]), math.max(b, unit[hi]) end
+    doc:begin("ALIGN")
+    for _, unit in ipairs(list) do
+        if ALIGN_LOW[edge] then shift(doc, unit.objects, axis, a - unit[lo])
+        elseif ALIGN_HIGH[edge] then shift(doc, unit.objects, axis, b - unit[hi])
+        else shift(doc, unit.objects, axis, (a + b - unit[lo] - unit[hi]) / 2) end
+    end
+    doc:commit()
+end
+
+-- Make the gaps between the sprite boxes of a selection equal along an axis
+-- ("x" or "y"); the outermost stay. Returns false under three to space out.
+function Ops.distribute(doc, objects, axis)
+    local list = units(doc, objects)
+    if #list < 3 then return false end
+    local lo, hi = axis .. "0", axis .. "1"
+    table.sort(list, function(a, b)
+        if a[lo] ~= b[lo] then return a[lo] < b[lo] end
+        return a.objects[1].id < b.objects[1].id
+    end)
+    local filled, last = 0, -math.huge
+    for _, unit in ipairs(list) do
+        filled = filled + unit[hi] - unit[lo]
+        last   = math.max(last, unit[hi])
+    end
+    local gap = (last - list[1][lo] - filled) / (#list - 1)
+    local at  = list[1][lo]
+    doc:begin("EVEN GAPS")
+    for _, unit in ipairs(list) do
+        local width = unit[hi] - unit[lo]
+        shift(doc, unit.objects, axis, at - unit[lo])
+        at = at + width + gap
+    end
+    doc:commit()
+    return true
+end
+
+-- Where the objects' anchors lie from the first one, and the box they span.
+local function spread(doc, objects)
+    local origin = objects[1]
+    local at     = {}
+    local x0, y0, x1, y1 = 0, 0, 0, 0
+    for i, o in ipairs(objects) do
+        local dx, dy = doc:delta(o.x, o.y, origin.x, origin.y)
+        at[i] = { dx, dy }
+        x0, y0, x1, y1 = math.min(x0, dx), math.min(y0, dy), math.max(x1, dx), math.max(y1, dy)
+    end
+    return at, x0, y0, x1, y1
+end
+
+-- Turn a selection a quarter about its middle: dir 1 clockwise, -1 the other
+-- way. Positions only; a sprite stands as it did.
+function Ops.turn(doc, objects, dir)
+    if #objects < 2 then return end
+    local at, x0, y0, x1, y1 = spread(doc, objects)
+    local cx, cy = math.floor((x0 + x1) / 2), math.floor((y0 + y1) / 2)
+    doc:begin(dir > 0 and "TURN RIGHT" or "TURN LEFT")
+    for i, o in ipairs(objects) do
+        local rx, ry = at[i][1] - cx, at[i][2] - cy
+        doc:move({ o }, cx - ry * dir - at[i][1], cy + rx * dir - at[i][2])
+    end
+    doc:commit()
+end
+
+-- Mirror a selection about its middle, left to right ("x") or top to bottom
+-- ("y"). Positions only.
+function Ops.mirror(doc, objects, axis)
+    if #objects < 2 then return end
+    local at, x0, y0, x1, y1 = spread(doc, objects)
+    doc:begin("MIRROR")
+    for i, o in ipairs(objects) do
+        if axis == "x" then doc:move({ o }, x0 + x1 - 2 * at[i][1], 0)
+        else doc:move({ o }, 0, y0 + y1 - 2 * at[i][2]) end
+    end
+    doc:commit()
 end
 
 -- grouping

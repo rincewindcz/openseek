@@ -2,18 +2,23 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local json        = require "lib.json"
+local Animation   = require "engine.core.animation"
 local MapCompiler = require "engine.game.map_compiler"
+local Vehicles    = require "engine.game.vehicles"
 
 -- What the map editor can place, read from the pack: one entry per sprite and
 -- kind of an art set (a mission's stages), with the classes the original sets
 -- on the same spot kept together as one entry (a turret on its hull, a gun on
 -- its base, a tank under its hangar). Also resolves a map type to what the
 -- editor draws and lists for it. Labels, categories and layers come from
--- data/editor.json.
+-- data/editor.json. The pickups a map lays out (fuel, armour, medals,
+-- ammunition) are entries of every art set; their types name no class.
 local Catalog = {}
 
-local DATA_PATH  = "data/editor.json"
-local RULES_PATH = "data/enemy_weapons.json"
+local DATA_PATH    = "data/editor.json"
+local RULES_PATH   = "data/enemy_weapons.json"
+local PICKUPS_PATH = "data/powerups.json"
+local PICKUP_CLIP  = "pickup"
 
 local BASE_FLAG = 0x40
 
@@ -33,7 +38,7 @@ local KIND_LAYER = {
     ground_decal = "ground", powerup_marker = "objectives", unknown_14 = "objectives", civilian = "objectives",
 }
 
-local data, rules
+local data, rules, pickups
 local images     = {}   -- path -> Image or false
 local by_art     = {}   -- art -> { list, by_category, by_key }
 local type_infos = setmetatable({}, { __mode = "k" })   -- map type -> info
@@ -119,13 +124,98 @@ function Catalog.layer_of(cls, stem)
     return KIND_LAYER[cls.kind_name] or "scenery"
 end
 
+local function weapon_label(name)
+    return Catalog.data().weapons[name] or tostring(name):upper():gsub("ENEMY_", ""):gsub("_", " ")
+end
+
+-- pickups
+
+local function pickup_data()
+    if not pickups then pickups = json.decode(love.filesystem.read(PICKUPS_PATH) or "{}") end
+    return pickups
+end
+
+-- The type of a catalog entry's part: a pack class with fields changed on it,
+-- or a pickup.
+function Catalog.part_type(part, set)
+    if part.pickup then return { pickup = part.pickup, weapon = part.weapon } end
+    return { from = part.from, class = part.class, sprite = part.sprite, set = set }
+end
+
+-- A pickup as one value, for a choice: "fuel", "ammo/rockets".
+function Catalog.pickup_value(map_type)
+    return map_type.weapon and (map_type.pickup .. "/" .. map_type.weapon) or map_type.pickup
+end
+
+function Catalog.pickup_type(value)
+    local kind, weapon = value:match("^([^/]+)/(.+)$")
+    return { pickup = kind or value, weapon = weapon }
+end
+
+local function pickup_label(map_type)
+    if map_type.pickup == "ammo" then return (weapon_label(map_type.weapon)) end
+    return Catalog.data().pickups.labels[map_type.pickup] or tostring(map_type.pickup):upper()
+end
+
+-- The vehicles that can load a weapon, in Vehicles.KINDS order.
+function Catalog.weapon_users(weapon)
+    local out = {}
+    for _, vehicle in ipairs(Vehicles.KINDS) do
+        local fits = false
+        for _, group in ipairs({ Vehicles.BAY_WEAPONS, Vehicles.SPECIAL_WEAPONS }) do
+            for _, name in ipairs(group[vehicle] or {}) do
+                if name == weapon then fits = true end
+            end
+        end
+        if fits then out[#out + 1] = vehicle end
+    end
+    return out
+end
+
+-- Every pickup a map can lay out: { label, value }, the supplies and the
+-- medal first, then the ammunition of each vehicle's weapons.
+function Catalog.pickup_choices()
+    local out, seen = {}, {}
+    local function add(map_type)
+        out[#out + 1] = { label = pickup_label(map_type), value = Catalog.pickup_value(map_type) }
+    end
+    for _, kind in ipairs(Catalog.data().pickups.kinds) do add({ pickup = kind }) end
+    for _, vehicle in ipairs(Vehicles.KINDS) do
+        for _, group in ipairs({ Vehicles.BAY_WEAPONS, Vehicles.SPECIAL_WEAPONS }) do
+            for _, weapon in ipairs(group[vehicle] or {}) do
+                if pickup_data().ammo_frames[weapon] and not seen[weapon] then
+                    seen[weapon] = true
+                    add({ pickup = "ammo", weapon = weapon })
+                end
+            end
+        end
+    end
+    return out
+end
+
+local function pickup_info(map_type)
+    local d     = pickup_data()
+    local frame = d.frames[map_type.pickup]
+    if map_type.pickup == "ammo" then frame = d.ammo_frames[map_type.weapon] end
+    -- A medal flips between two frames, an ammunition frame may differ by vehicle: show one.
+    if type(frame) == "table" then frame = select(2, next(frame)) end
+    local clip = Animation.clip(PICKUP_CLIP)
+    local img  = frame and clip and clip.frames[frame + 1] or nil
+    local w, h = 16, 16
+    if img then w, h = img:getDimensions() end
+    return { ok = frame ~= nil, cls = {}, kind_name = "pickup", stem = "pickup", layer = "pickups", img = img,
+             ox = -math.floor(w / 2), oy = -math.floor(h / 2), w = w, h = h, label = pickup_label(map_type) }
+end
+
 -- What a map type resolves to: its class fields with the type's changes, its
 -- sprite and the layer it is filed under. ok is false when this pack lacks it.
 function Catalog.type_info(map_type)
     local info = type_infos[map_type]
     if info then return info end
     local cls, pack = MapCompiler.type_source(map_type)
-    if not cls then
+    if map_type.pickup then
+        info = pickup_info(map_type)
+    elseif not cls then
         info = { ok = false, cls = {}, kind_name = "missing", stem = map_type.sprite or "?", layer = "scenery",
                  w = 16, h = 16, ox = -8, oy = -8, label = (map_type.sprite or "?"):upper() }
     else
@@ -292,6 +382,15 @@ function Catalog.entries(art)
         by_category[entry.category] = by_category[entry.category] or {}
         table.insert(by_category[entry.category], entry)
     end
+    -- The pickups are the same on every art set, and keep their own order.
+    by_category.pickups = {}
+    for _, choice in ipairs(Catalog.pickup_choices()) do
+        local entry = { key = "pickup/" .. choice.value, label = choice.label, category = "pickups",
+                        kind_name = "pickup", parts = { Catalog.pickup_type(choice.value) }, main = 1, art = art }
+        found[entry.key]    = entry
+        list[#list + 1]     = entry
+        table.insert(by_category.pickups, entry)
+    end
     by_art[art] = { list = list, by_category = by_category, by_key = found }
     return by_art[art]
 end
@@ -308,6 +407,7 @@ local FEATURES = {
 }
 
 local feature_cache = {}
+local road_styles   = {}
 
 -- A class the objectives need (a POW flag, a landing pad, a waiting person, a
 -- home pad): a part { from, class, sprite } from the art set's own stages when
@@ -333,11 +433,43 @@ function Catalog.feature(art, what)
     return hit
 end
 
--- Inspector choices
-
-local function weapon_label(name)
-    return Catalog.data().weapons[name] or tostring(name):upper():gsub("ENEMY_", ""):gsub("_", " ")
+-- How a road is drawn on an art set (data/editor.json "roads"): { width,
+-- pitch, edge = { color, color }, across, down }. across / down are the parts
+-- of the centre mark of a level and an upright leg: the mark sprite of that
+-- shape the art set's stages place most, else any stage's; nil when the pack
+-- has none.
+function Catalog.road_style(art)
+    art = tostring(art)
+    if road_styles[art] then return road_styles[art] end
+    local spec  = Catalog.data().roads
+    local base  = spec.styles[art] or spec.styles["0"]
+    local style = { width = base.width, pitch = base.pitch, edge = base.edge }
+    local wanted = {}
+    for _, stem in ipairs(spec.marks) do wanted[stem] = true end
+    local function search(names)
+        local most, found = {}, {}
+        for _, name in ipairs(names) do
+            local pack = MapCompiler.pack_stage(name)
+            for _, cls in ipairs(pack and pack.classes or {}) do
+                local count = pack.uses[cls.index] or 0
+                if cls.kind_name == "ground_decal" and cls.render and count > 0
+                and wanted[MapCompiler.asset_stem(pack, cls)] then
+                    local part = part_of(pack, cls.index)
+                    local info = Catalog.type_info(Catalog.part_type(part))
+                    local way  = info.w > info.h and "across" or "down"
+                    if count > (most[way] or 0) then most[way], found[way] = count, part end
+                end
+            end
+        end
+        style.across, style.down = style.across or found.across, style.down or found.down
+    end
+    search(Catalog.stages(art))
+    search(all_stages())
+    road_styles[art] = style
+    return style
 end
+
+-- Inspector choices
 
 -- The firing routines a gun can run: { label, value }.
 function Catalog.routines()

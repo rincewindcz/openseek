@@ -31,7 +31,7 @@ local function draw_entry(kit, entry, x, y, w, h)
     local x0, y0, x1, y1 = 0, 0, 0, 0
     local infos = {}
     for i, part in ipairs(entry.parts) do
-        local info = Catalog.type_info({ from = part.from, class = part.class, sprite = part.sprite })
+        local info = Catalog.type_info(Catalog.part_type(part))
         infos[i] = info
         x0, y0 = math.min(x0, info.ox), math.min(y0, info.oy)
         x1, y1 = math.max(x1, info.ox + info.w), math.max(y1, info.oy + info.h)
@@ -354,16 +354,36 @@ function SECTIONS.enemy_helicopter(editor, kit, x, y, w, objects)
     return y
 end
 
+-- A pickup the map lays out: what it holds, and who can use it.
+function SECTIONS.pickup(editor, kit, x, y, w, objects)
+    local doc   = editor.doc
+    local theme = kit.theme
+    local value = shared(objects, function(o) return Catalog.pickup_value(doc.map.types[o.t]) end)
+    local new, changed = kit:choice("prop_pickup", x + LABEL_W, y, w - LABEL_W, Catalog.pickup_choices(), value,
+        { empty = "MIXED", list_w = 200 })
+    if changed then doc:set_field(objects, "t", doc:intern(Catalog.pickup_type(new)), "PICKUP") end
+    y = row(kit, x, y, "HOLDS")
+    local weapon = value and Catalog.pickup_type(value).weapon
+    local text   = "LIES THERE UNTIL IT IS TAKEN."
+    if weapon then
+        local users = {}
+        for i, vehicle in ipairs(Catalog.weapon_users(weapon)) do users[i] = "THE " .. vehicle:upper() end
+        text = "AMMUNITION FOR " .. table.concat(users, " AND ") .. ". GIVES THE WEAPON WHEN IT IS NOT ABOARD. "
+            .. "LEFT OUT WHEN THE VEHICLE CANNOT USE IT."
+    end
+    return y + kit:paragraph(text, x, y + 2, w, { color = theme.text_dim, size = theme.font_small }) + 4
+end
+
 local KIND_TITLES = {
     structure = "BUILDING", flak_turret = "GUN", tank = "TANK HULL", truck = "TRUCK", soldier = "SOLDIER",
     soldier_aggressive = "SOLDIER", enemy_helicopter = "HELICOPTER POST", scenery = "SCENERY", tree = "TREE",
     ground_decal = "GROUND", radar = "RADAR DISH", powerup_marker = "POW FLAG", unknown_14 = "LANDING PAD",
-    civilian = "WAITING PERSON", missing = "MISSING SPRITE",
+    civilian = "WAITING PERSON", pickup = "PICKUP", missing = "MISSING SPRITE",
 }
 
 local KIND_ORDER = { "structure", "tank", "truck", "flak_turret", "radar", "soldier", "soldier_aggressive",
-                     "enemy_helicopter", "powerup_marker", "unknown_14", "civilian", "ground_decal", "scenery",
-                     "tree", "missing" }
+                     "enemy_helicopter", "powerup_marker", "unknown_14", "civilian", "pickup", "ground_decal",
+                     "scenery", "tree", "missing" }
 
 local function map_summary(editor, kit, x, y, w)
     local theme = kit.theme
@@ -484,6 +504,7 @@ function Panels.layers(editor, kit, x, y, w)
     local counts = Validate.summary(editor.doc).layers
     counts.routes = #editor.doc.map.routes
     counts.lines  = #editor.doc.map.lines
+    counts.roads  = #editor.doc.map.roads
     local cy = kit:header("LAYERS", x, y, w)
     for _, layer in ipairs(Catalog.data().layers) do
         local state = editor.layers[layer.id]

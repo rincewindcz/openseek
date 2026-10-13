@@ -932,7 +932,7 @@ end
 -- keys
 
 local KEYS = {
-    { "V  P  B  E  R  L", "SELECT, PLACE, SCATTER, ERASE, ROUTE, LINE" },
+    { "V  P  B  E  R  L  O", "SELECT, PLACE, SCATTER, ERASE, ROUTE, LINE, ROAD" },
     { "WHEEL", "ZOOM ABOUT THE POINTER" },
     { "RIGHT OR MIDDLE DRAG, SPACE + DRAG", "MOVE THE VIEW" },
     { "W A S D", "MOVE THE VIEW" },
@@ -946,14 +946,15 @@ local KEYS = {
     { "CTRL + S", "SAVE" },
     { "G  /  CTRL + G", "GRID, SNAP TO GRID" },
     { "HOME  F  M", "GO TO THE HOME PAD, SHOW THE SELECTION, OVERVIEW MAP" },
-    { "ENTER  /  BACKSPACE", "FINISH A ROUTE OR LINE, TAKE BACK ITS LAST POINT" },
+    { "ENTER  /  BACKSPACE", "FINISH A ROUTE, LINE OR ROAD, TAKE BACK ITS LAST POINT" },
     { "CTRL WHILE DRAWING OR DRAGGING", "ROUTE AND LINE SEGMENTS IN 45 DEGREE STEPS; A MOVE ALONG ONE AXIS" },
-    { "F5", "TRY THE MAP (ESC COMES BACK)" },
+    { "CTRL + [  ]  /  SHIFT + H  V", "TURN THE SELECTION A QUARTER, MIRROR IT" },
+    { "F5  /  SHIFT + F5", "TRY THE MAP FROM THE HOME PAD, OR FROM HERE (ESC COMES BACK)" },
     { "F6", "PREVIEW THE BRIEFING" },
 }
 
 local function draw_help(editor, kit)
-    kit:dialog("KEYS", 660, 540, function(_, x, y, w, h)
+    kit:dialog("KEYS", 660, 564, function(_, x, y, w, h)
         local theme = kit.theme
         for i, item in ipairs(KEYS) do
             local ry = y + (i - 1) * (theme.row + 2)

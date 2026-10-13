@@ -4,6 +4,7 @@
 local Class       = require "engine.core.class"
 local MapFile     = require "engine.game.map_file"
 local MapCompiler = require "engine.game.map_compiler"
+local Roads       = require "engine.game.roads"
 local Catalog     = require "engine.editor.catalog"
 
 -- The map open in the editor: the map table of engine/game/map_file.lua plus
@@ -26,6 +27,7 @@ local function copy(t)
 end
 
 local function type_key(map_type)
+    if map_type.pickup then return "pickup|" .. map_type.pickup .. "|" .. tostring(map_type.weapon) end
     local keys = {}
     for k in pairs(map_type.set or {}) do keys[#keys + 1] = k end
     table.sort(keys)
@@ -42,6 +44,7 @@ function Document:init(map, name)
     self.undo     = {}
     self.redo     = {}
     self.batch    = nil
+    self.built    = { revision = -1, roads = nil }
     self:_drop_unused_types()
     self:_index()
 end
@@ -461,7 +464,54 @@ function Document:remove_line(line)
         function() table.insert(lines, index, line) end)
 end
 
--- Replace the points of a route or a line (and a line's colour).
+-- roads
+
+-- Add a road { points, width, pitch, edge, across, down }; its id is given here.
+function Document:add_road(road)
+    road.id = road.id or self:new_id()
+    local roads = self.map.roads
+    self:_run("ADD ROAD", function() roads[#roads + 1] = road end, function()
+        for i, r in ipairs(roads) do
+            if r == road then table.remove(roads, i); break end
+        end
+    end)
+    return road
+end
+
+function Document:remove_road(road)
+    local roads = self.map.roads
+    local index
+    for i, r in ipairs(roads) do
+        if r == road then index = i end
+    end
+    if not index then return end
+    self:_run("DELETE ROAD", function() table.remove(roads, index) end,
+        function() table.insert(roads, index, road) end)
+end
+
+-- Set one field of a road (width, pitch).
+function Document:set_road(road, field, value, label)
+    local before = road[field]
+    if before == value then return end
+    self:_run(label or "ROAD", function() road[field] = value end, function() road[field] = before end)
+end
+
+-- The roads as border segments and centre marks (engine/game/roads.lua),
+-- rebuilt when the map changed.
+function Document:built_roads()
+    if self.built.revision ~= self.revision then
+        self.built = { revision = self.revision, roads = Roads.build(self.map.roads, self.map.size) }
+    end
+    return self.built.roads
+end
+
+-- Something drawn from the map changed without a recorded step (a point
+-- dragged by a tool before the drag is recorded): views drop what they cached.
+function Document:refresh()
+    self.revision = self.revision + 1
+end
+
+-- Replace the points of a route, a line or a road (and a line's colour).
 function Document:set_points(shape, points, color, label)
     local before, before_color = shape.points, shape.color
     self:_run(label or "EDIT POINTS", function()
@@ -482,7 +532,7 @@ function Document:set_map(field, value, label)
         function() self.map[field] = before end)
 end
 
--- Change the wrap period. Objects, route and line points and objective places
+-- Change the wrap period. Objects, route, line and road points and objective places
 -- past the new edge wrap around; the history is cleared, since it holds positions of the old size.
 function Document:resize(size)
     if size == self.map.size then return end
@@ -490,7 +540,7 @@ function Document:resize(size)
     for _, o in ipairs(self.map.objects) do
         o.x, o.y = o.x % size, o.y % size
     end
-    for _, shapes in ipairs({ self.map.routes, self.map.lines }) do
+    for _, shapes in ipairs({ self.map.routes, self.map.lines, self.map.roads }) do
         for _, shape in ipairs(shapes) do
             for _, p in ipairs(shape.points) do p[1], p[2] = p[1] % size, p[2] % size end
         end

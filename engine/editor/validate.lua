@@ -36,11 +36,21 @@ function Validate.run(doc)
     local home = doc:home()
     local missing, targets, commanders, people, drop_pads = {}, {}, {}, 0, 0
     local loose, enemies, huts, riders, stranded = {}, 0, {}, {}, {}
+    -- The vehicle the map fixes, and the ammunition laid out that it cannot load.
+    local vehicle = map.loadout and map.loadout.vehicle or map.vehicle
+    local useless = {}
     for _, o in ipairs(map.objects) do
         local info = doc:info(o)
         local cls  = info.cls
         if not info.ok then
             missing[#missing + 1] = o
+        elseif info.kind_name == "pickup" then
+            local weapon = map.types[o.t].weapon
+            local fits   = not (weapon and vehicle)
+            for _, user in ipairs(weapon and Catalog.weapon_users(weapon) or {}) do
+                if user == vehicle then fits = true end
+            end
+            if not fits then useless[#useless + 1] = o end
         else
             local owner = o.owner and doc.by_id[o.owner]
             if cls.is_target then
@@ -125,6 +135,10 @@ function Validate.run(doc)
 
     if #loose > 0 then
         issue("warn", string.format("%d OBJECTIVE MARKS BELONG TO NO BUILDING AND ARE ONLY SCENERY", #loose), loose)
+    end
+    if #useless > 0 then
+        issue("warn", string.format("%d PICKUPS HOLD AMMUNITION THE %s CANNOT USE AND ARE LEFT OUT", #useless,
+            vehicle:upper()), useless)
     end
     if #stranded > 0 then
         issue("warn", string.format("%d UNITS ARE ON A ROUTE WITH FEWER THAN TWO POINTS", #stranded), stranded)

@@ -3,6 +3,7 @@
 
 local json    = require "lib.json"
 local MapFile = require "engine.game.map_file"
+local Roads   = require "engine.game.roads"
 
 -- Turns a map (engine/game/map_file.lua) into the stage table World:load
 -- builds a phase from, and a pack stage into a map (a clone to edit).
@@ -104,7 +105,7 @@ end
 -- class index that no longer carries the type's sprite (another edition of the
 -- data) falls back to a class of that sprite.
 function MapCompiler.type_source(map_type)
-    local pack = MapCompiler.pack_stage(map_type.from)
+    local pack = map_type.from and MapCompiler.pack_stage(map_type.from)
     if not pack then return nil end
     local cls = pack.classes[(map_type.class or -1) + 1]
     if cls and (not map_type.sprite or MapCompiler.asset_stem(pack, cls) == map_type.sprite) then
@@ -131,7 +132,8 @@ end
 
 -- map -> stage. Returns nil and the reason when the pack lacks the base stage.
 -- Objects whose type this pack cannot resolve are left out and counted in
--- stage.missing.
+-- stage.missing. A pickup type is no class: its objects are no entities and
+-- go to stage.pickups, which engine/game/powerups.lua lays out.
 function MapCompiler.compile(map)
     local base = MapCompiler.pack_stage(map.base)
     if not base then return nil, "needs the game data of " .. tostring(map.base) end
@@ -159,19 +161,21 @@ function MapCompiler.compile(map)
         return cls.index
     end
 
-    local type_class = {}   -- type index -> class index, false when unresolved
-    for i, map_type in ipairs(map.types) do
+    -- The class of a map type, added to the stage: false when this pack cannot resolve it.
+    local function class_of(map_type)
         local src, pack = MapCompiler.type_source(map_type)
-        if src then
-            local cls = sourced(src, pack.name)
-            if cls == src then cls = copy(src) end
-            for k, v in pairs(map_type.set or {}) do cls[k] = v end
-            cls.asset = asset_index(pack, src)
-            if is_linked_kind(cls.kind) then cls.parent_class = -1 end
-            type_class[i] = add_class(cls)
-        else
-            type_class[i] = false
-        end
+        if not src then return false end
+        local cls = sourced(src, pack.name)
+        if cls == src then cls = copy(src) end
+        for k, v in pairs(map_type.set or {}) do cls[k] = v end
+        cls.asset = asset_index(pack, src)
+        if is_linked_kind(cls.kind) then cls.parent_class = -1 end
+        return add_class(cls)
+    end
+
+    local type_class = {}   -- type index -> class index, false when unresolved or a pickup
+    for i, map_type in ipairs(map.types) do
+        type_class[i] = not map_type.pickup and class_of(map_type)
     end
 
     -- Entity order is object order, except that a POW flag follows its building.
@@ -188,9 +192,12 @@ function MapCompiler.compile(map)
             table.insert(flags_of[o.owner], o)
         end
     end
-    local order, missing = {}, 0
+    local order, pickups, missing = {}, {}, 0
     for _, o in ipairs(map.objects) do
-        if not type_class[o.t] then
+        local map_type = map.types[o.t]
+        if map_type.pickup then
+            pickups[#pickups + 1] = { kind = map_type.pickup, weapon = map_type.weapon, x = o.x, y = o.y }
+        elseif not type_class[o.t] then
             missing = missing + 1
         elseif not is_flag(o) then
             order[#order + 1] = o
@@ -242,6 +249,20 @@ function MapCompiler.compile(map)
         end
     end
 
+    -- The roads: their borders join the ground lines, their centre marks are
+    -- decals after everything the map places.
+    local roads, mark_class = Roads.build(map.roads, map.size), {}
+    for _, s in ipairs(roads.segments) do
+        segments[#segments + 1] = { x1 = s.x1, y1 = s.y1, x2 = s.x2, y2 = s.y2, value = 0, color = s.color }
+    end
+    for _, mark in ipairs(roads.marks) do
+        local key = table.concat({ tostring(mark.type.from), tostring(mark.type.class), tostring(mark.type.sprite) }, "/")
+        if mark_class[key] == nil then mark_class[key] = class_of(mark.type) end
+        if mark_class[key] then
+            entities[#entities + 1] = { class = mark_class[key], x = mark.x, y = mark.y }
+        end
+    end
+
     local globals = copy(base.globals or {})
     globals[HOLD_SLOT] = map.hold_agents and HOLD_ALL or 0
 
@@ -284,6 +305,7 @@ function MapCompiler.compile(map)
         routes      = routes,
         entities    = entities,
         segments    = segments,
+        pickups     = pickups,
         environment = map.environment,
         objectives  = {
             destroy           = targets > 0,

@@ -31,6 +31,9 @@ Gameplay.mouse_steering = true
 -- the same tick every run for a recording to replay it (co-op uses the same beat).
 local RESPAWN_TICKS = 48
 
+-- World px a start away from the home pad keeps clear of solid objects.
+local START_CLEAR = 16
+
 function Gameplay:enter()
     local app = self.app
     self:reload_stage()   -- a phase starts from a fresh stage (recordings depend on it)
@@ -108,8 +111,13 @@ function Gameplay:spawn_player(carry)
     local settings = app.settings
     local replay_vehicle, replay_skin, replay_tank = self:replay_vehicle(1)
     local sx, sy = world:player_start()
+    -- A map tried from the editor may start away from its home pad.
+    local start  = app.play_return and app.play_return.start
+    local px, py = sx, sy
+    if start then px, py = world:free_spot(start.x, start.y, START_CLEAR) end
+    self.start_x, self.start_y = px, py
     local prev   = self.player
-    local player = Player:new(sx, sy)
+    local player = Player:new(px, py)
     self.player = player
     if carry and prev then
         player.lives           = prev.lives
@@ -259,15 +267,16 @@ function Gameplay:on_phase_failed()
     self:restart(true)
 end
 
--- Respawn at the home base after a crash without reloading the stage, so the
--- world keeps its progress. The mission flipped to "failed" while the vehicle was
+-- Respawn where the phase started (the home base, unless a map is tried from
+-- somewhere else) after a crash without reloading the stage, so the world
+-- keeps its progress. The mission flipped to "failed" while the vehicle was
 -- down (every player dead); with a spare vehicle it is cleared back to "active" so
 -- the remaining objectives can still be finished.
 function Gameplay:respawn_at_base()
     local app    = self.app
     local player = self.player
     self.respawn_tick = nil
-    player:respawn(player.home_x or player.x, player.home_y or player.y)
+    player:respawn(self.start_x or player.x, self.start_y or player.y)
     if self.mission and self.mission.state == "failed" then
         self.mission.state = "active"
     end

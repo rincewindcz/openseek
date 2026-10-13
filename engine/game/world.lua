@@ -110,6 +110,10 @@ local PAD_PICKUP = 1
 -- body one leaves when shot (0x2039e0): the same sheet, from frame 128.
 local WALKER_CLASS = 20
 
+-- World:free_spot looks this far around a blocked place: rings of squares.
+local FREE_STEP  = 8
+local FREE_RINGS = 64
+
 function World:init()
     self.stage       = nil   -- decoded JSON table
     self.stage_name  = nil
@@ -754,6 +758,28 @@ function World:blocked(x, y, radius, ignore)
     end
     if best then return true, objects[best] end
     return false
+end
+
+-- The free spot for a circle of the given radius at or near (x, y): the place
+-- itself, else the nearest free one on the squares of FREE_STEP around it, ring
+-- by ring. (x, y) again when FREE_RINGS of them hold none.
+function World:free_spot(x, y, radius)
+    if not self:blocked(x, y, radius) then return x, y end
+    local size = self.stage.world_size
+    for ring = 1, FREE_RINGS do
+        local best_x, best_y, best_d2
+        for dy = -ring, ring do
+            for dx = -ring, ring do
+                local d2 = dx * dx + dy * dy
+                if math.max(math.abs(dx), math.abs(dy)) == ring and (not best_d2 or d2 < best_d2) then
+                    local cx, cy = (x + dx * FREE_STEP) % size, (y + dy * FREE_STEP) % size
+                    if not self:blocked(cx, cy, radius) then best_x, best_y, best_d2 = cx, cy, d2 end
+                end
+            end
+        end
+        if best_x then return best_x, best_y end
+    end
+    return x, y
 end
 
 -- Call fn(ctx, e, a, b) in list order for every entry of list (decals or

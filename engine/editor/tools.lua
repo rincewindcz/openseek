@@ -9,7 +9,8 @@ local View    = require "engine.editor.view"
 -- with itself (editor) and the pointer's world position (unwrapped: a point past
 -- the seam stays past it): press, drag, release for the left button, cancel
 -- for the right button and Esc, keypressed, and draw for its overlay inside
--- the world pass. Tool state lives on editor.work, reset when the tool changes.
+-- the world pass (once per map copy in view for a tool with `poly` set). Tool
+-- state lives on editor.work, reset when the tool changes.
 local Tools = {}
 
 local DRAG_START  = 3     -- screen px the pointer travels before a press becomes a drag
@@ -20,7 +21,7 @@ local HALF_STEP_TAN = math.tan(math.rad(22.5))   -- between two rays 45 degrees 
 
 local ROUTE_KINDS = { tank = true, truck = true }
 
-Tools.ORDER = { "select", "place", "scatter", "erase", "route", "line" }
+Tools.ORDER = { "select", "place", "scatter", "erase", "route", "line", "road" }
 
 local function shift_down()
     return love.keyboard.isDown("lshift", "rshift")
@@ -160,8 +161,7 @@ local Place = { id = "place", icon = "place", label = "PLACE", key = "p",
                 tip = "PLACE THE PICKED OBJECT (P)" }
 
 local function entry_spacing(editor, entry)
-    local part = entry.parts[entry.main]
-    local info = Catalog.type_info({ from = part.from, class = part.class, sprite = part.sprite })
+    local info = Catalog.type_info(Catalog.part_type(entry.parts[entry.main]))
     local step = math.max(info.w, info.h, 4)
     if editor.grid.snap then step = math.ceil(step / editor.grid.step) * editor.grid.step end
     return step
@@ -218,7 +218,7 @@ function Place.draw(editor)
     if not entry or not editor.hover_world then return end
     local x, y = editor:snap(editor.hover_world[1], editor.hover_world[2])
     for _, part in ipairs(entry.parts) do
-        local info = Catalog.type_info({ from = part.from, class = part.class, sprite = part.sprite })
+        local info = Catalog.type_info(Catalog.part_type(part))
         View.draw_object({ info = function() return info end }, { x = x, y = y }, 0.6)
     end
 end
@@ -338,10 +338,59 @@ function Erase.draw(editor)
     draw_brush(editor, editor.erase.radius)
 end
 
--- routes and ground lines: polylines edited point by point
+-- routes, ground lines and roads: polylines edited point by point
+
+local EDIT_LABELS = { route = "EDIT ROUTE", line = "EDIT LINE", road = "EDIT ROAD" }
 
 local function shapes_of(editor, kind)
-    return kind == "route" and editor.doc.map.routes or editor.doc.map.lines
+    local map = editor.doc.map
+    if kind == "route" then return map.routes end
+    return kind == "road" and map.roads or map.lines
+end
+
+-- A road runs level or upright: (x, y) moved onto the nearer of the two from
+-- the anchor.
+local function square(editor, x, y, anchor)
+    if not anchor then return x, y end
+    local dx, dy = editor.doc:delta(x, y, anchor[1], anchor[2])
+    if math.abs(dx) >= math.abs(dy) then return anchor[1] + dx, anchor[2] end
+    return anchor[1], anchor[2] + dy
+end
+
+-- A road point on or near another road is put on that road's centre line, so
+-- the two join. With an anchor the point stays on its leg from it, and only a
+-- road across that leg takes it. skip is the road being edited.
+local function join(editor, x, y, anchor, skip)
+    local doc   = editor.doc
+    local size  = doc:size()
+    local px, py = x % size, y % size
+    local level  = anchor and anchor[2] == py
+    local upright = anchor and not level
+    local best_x, best_y, best_d = x, y, nil
+    for _, road in ipairs(doc.map.roads) do
+        local reach = (tonumber(road.width) or 0) / 2 + Catalog.data().roads.join
+        for i = 1, (road ~= skip) and #road.points - 1 or 0 do
+            local a, b = road.points[i], road.points[i + 1]
+            if a[2] == b[2] and not level and px >= math.min(a[1], b[1]) - reach and px <= math.max(a[1], b[1]) + reach then
+                local d = math.abs(a[2] - py)
+                if d <= reach and (not best_d or d < best_d) then best_x, best_y, best_d = x, y + a[2] - py, d end
+            elseif a[1] == b[1] and not upright and py >= math.min(a[2], b[2]) - reach
+            and py <= math.max(a[2], b[2]) + reach then
+                local d = math.abs(a[1] - px)
+                if d <= reach and (not best_d or d < best_d) then best_x, best_y, best_d = x + a[1] - px, y, d end
+            end
+        end
+    end
+    return best_x, best_y
+end
+
+-- Where a point of a shape goes for the pointer at (x, y): a route or line
+-- point by the Ctrl constraint, a road point square to the anchor and onto a
+-- road it meets.
+local function settle(editor, kind, x, y, anchor, skip)
+    if kind ~= "road" then return constrain(editor, x, y, anchor) end
+    x, y = square(editor, x, y, anchor)
+    return join(editor, x, y, anchor, skip)
 end
 
 local function copy_points(points)
@@ -388,7 +437,18 @@ local function finish_shape(editor, kind)
     editor.work = nil
     if not (work and work.points) or #work.points < 2 then return end
     local doc = editor.doc
-    if kind == "route" then
+    if kind == "road" then
+        local style = Catalog.road_style(doc:art())
+        local function mark(part)
+            return part and Catalog.part_type(part) or nil
+        end
+        editor.shape = doc:add_road({
+            points = work.points, width = editor.road.width or style.width,
+            pitch  = editor.road.marks and style.pitch or 0,
+            edge   = { { unpack(style.edge[1]) }, { unpack(style.edge[2]) } },
+            across = mark(style.across), down = mark(style.down),
+        })
+    elseif kind == "route" then
         doc:begin("ADD ROUTE")
         local route = doc:add_route(work.points)
         -- A route drawn for the selected units is theirs.
@@ -408,6 +468,7 @@ end
 
 local function poly_tool(kind, def)
     local tool = def
+    tool.poly  = true
 
     function tool.press(editor, wx, wy)
         local x, y = editor:snap(wx, wy)
@@ -416,7 +477,7 @@ local function poly_tool(kind, def)
         if work and work.points then
             local now  = love.timer.getTime()
             local last = work.points[#work.points]
-            x, y = constrain(editor, x, y, last)
+            x, y = settle(editor, kind, x, y, last)
             if now - (work.clicked or 0) < DOUBLE_TIME and last[1] == x % size and last[2] == y % size then
                 finish_shape(editor, kind)
                 return
@@ -425,21 +486,28 @@ local function poly_tool(kind, def)
             work.clicked = now
             return
         end
+        -- A click on a road's leg starts a road joined to it; Shift adds a point instead.
         local hover = poly_hover(editor, kind, wx, wy)
+        if hover and kind == "road" and hover.segment and not shift_down() then hover = nil end
         if hover then
             editor.shape = hover.shape
             local points = copy_points(hover.shape.points)
             local index  = hover.index
             if hover.segment then
+                -- A point added to a road lies on the leg it splits.
+                local a, b = points[index], points[index + 1]
+                if kind == "road" and a[2] == b[2] then y = a[2] elseif kind == "road" and a[1] == b[1] then x = a[1] end
                 index = index + 1
                 table.insert(points, index, { x % size, y % size })
             end
             editor.work = { edit = hover.shape, before = hover.shape.points, edited = points, index = index,
-                        inserted = hover.segment }
+                        origin = copy_points(points), inserted = hover.segment }
             hover.shape.points = points
+            editor.doc:refresh()
             return
         end
         editor.shape = nil
+        x, y = settle(editor, kind, x, y, nil)
         editor.work  = { points = { { x % size, y % size } }, clicked = love.timer.getTime() }
     end
 
@@ -448,10 +516,36 @@ local function poly_tool(kind, def)
         if not (work and work.edit) then return end
         local x, y = editor:snap(wx, wy)
         local size = editor.doc:size()
-        -- Ctrl: at a multiple of 45 degrees from the point before (or after).
-        x, y = constrain(editor, x, y, work.edited[work.index - 1] or work.edited[work.index + 1])
+        if kind == "road" then
+            -- An end of a road joins another road, the two ends of a ring
+            -- move as one, and the points beside the one dragged follow it, so
+            -- the legs to them stay level or upright.
+            local origin = work.origin
+            local last   = #origin
+            local ring   = last > 3 and origin[1][1] == origin[last][1] and origin[1][2] == origin[last][2]
+            local moved  = { work.index }
+            if ring and work.index == 1 then moved[2] = last
+            elseif ring and work.index == last then moved[2] = 1
+            elseif work.index == 1 or work.index == last then x, y = join(editor, x, y, nil, work.edit) end
+            for _, index in ipairs(moved) do
+                local here = origin[index]
+                for step = -1, 1, 2 do
+                    local was = origin[index + step]
+                    if was and was[2] == here[2] and was[1] ~= here[1] then
+                        work.edited[index + step] = { was[1], y % size }
+                    elseif was and was[1] == here[1] and was[2] ~= here[2] then
+                        work.edited[index + step] = { x % size, was[2] }
+                    end
+                end
+                work.edited[index] = { x % size, y % size }
+            end
+        else
+            -- Ctrl: at a multiple of 45 degrees from the point before (or after).
+            x, y = constrain(editor, x, y, work.edited[work.index - 1] or work.edited[work.index + 1])
+        end
         work.edited[work.index] = { x % size, y % size }
         work.moved = true
+        editor.doc:refresh()
     end
 
     function tool.release(editor)
@@ -459,8 +553,9 @@ local function poly_tool(kind, def)
         if not (work and work.edit) then return end
         editor.work = nil
         work.edit.points = work.before
+        editor.doc:refresh()
         if work.moved or work.inserted then
-            editor.doc:set_points(work.edit, work.edited, nil, kind == "route" and "EDIT ROUTE" or "EDIT LINE")
+            editor.doc:set_points(work.edit, work.edited, nil, EDIT_LABELS[kind])
         end
     end
 
@@ -471,6 +566,7 @@ local function poly_tool(kind, def)
         elseif work and work.edit then
             work.edit.points = work.before
             editor.work = nil
+            editor.doc:refresh()
         else
             editor:set_tool("select")
         end
@@ -493,7 +589,9 @@ local function poly_tool(kind, def)
                 editor.doc:set_points(hover.shape, points, nil, "DELETE POINT")
             elseif (hover and hover.shape) or editor.shape then
                 local shape = hover and hover.shape or editor.shape
-                if kind == "route" then editor.doc:remove_route(shape) else editor.doc:remove_line(shape) end
+                if kind == "route" then editor.doc:remove_route(shape)
+                elseif kind == "road" then editor.doc:remove_road(shape)
+                else editor.doc:remove_line(shape) end
                 editor.shape = nil
             end
             return true
@@ -519,19 +617,34 @@ local function poly_tool(kind, def)
             end
         end
         if work and work.points then
-            g.setColor(c[1], c[2], c[3], 1)
-            g.setLineWidth(1.5 / z)
             local points = work.points
-            for i = 1, #points - 1 do
-                g.line(points[i][1], points[i][2], points[i + 1][1], points[i + 1][2])
-            end
+            local ahead
             if editor.hover_world then
                 local x, y = editor:snap(editor.hover_world[1], editor.hover_world[2])
                 local last = points[#points]
-                x, y = constrain(editor, x, y, last)
+                x, y = settle(editor, kind, x, y, last)
                 local dx, dy = editor.doc:delta(x, y, last[1], last[2])
+                ahead = { last[1] + dx, last[2] + dy }
+            end
+            -- A road shows the ground it will take.
+            if kind == "road" then
+                local half = (editor.road.width or Catalog.road_style(editor.doc:art()).width) / 2
+                g.setColor(c[1], c[2], c[3], 0.16)
+                for i = 1, #points - (ahead and 0 or 1) do
+                    local a, b = points[i], points[i + 1] or ahead
+                    g.rectangle("fill", math.min(a[1], b[1]) - half, math.min(a[2], b[2]) - half,
+                        math.abs(b[1] - a[1]) + half * 2, math.abs(b[2] - a[2]) + half * 2)
+                end
+            end
+            g.setColor(c[1], c[2], c[3], 1)
+            g.setLineWidth(1.5 / z)
+            for i = 1, #points - 1 do
+                g.line(points[i][1], points[i][2], points[i + 1][1], points[i + 1][2])
+            end
+            if ahead then
+                local last = points[#points]
                 g.setColor(c[1], c[2], c[3], 0.6)
-                g.line(last[1], last[2], last[1] + dx, last[2] + dy)
+                g.line(last[1], last[2], ahead[1], ahead[2])
             end
             for _, p in ipairs(points) do
                 g.setColor(c[1], c[2], c[3], 1)
@@ -547,6 +660,8 @@ local Route = poly_tool("route", { id = "route", icon = "route", label = "ROUTE"
     tip = "DRAW AND EDIT PATROL ROUTES (R)" })
 local Line = poly_tool("line", { id = "line", icon = "line", label = "LINE", key = "l",
     tip = "DRAW AND EDIT GROUND LINES (L)" })
+local Road = poly_tool("road", { id = "road", icon = "road", label = "ROAD", key = "o",
+    tip = "DRAW AND EDIT ROADS (O)" })
 
 -- briefing picture: the square of the map a briefing card shows. Not on the
 -- tool strip; the BRIEFING page of the map settings hands over to it.
@@ -613,7 +728,7 @@ function Spot.draw(editor)
 end
 
 Tools.defs = { select = Select, place = Place, scatter = Scatter, erase = Erase, route = Route, line = Line,
-               card = Card, spot = Spot }
+               road = Road, card = Card, spot = Spot }
 
 Tools.ROUTE_KINDS = ROUTE_KINDS
 

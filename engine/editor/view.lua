@@ -1,8 +1,9 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class = require "engine.core.class"
-local World = require "engine.game.world"
+local Class   = require "engine.core.class"
+local World   = require "engine.game.world"
+local Catalog = require "engine.editor.catalog"
 
 -- The editor's view of a map: a free camera over the wrapped world inside a
 -- rect of the window, and the drawing of the document under it (ground,
@@ -154,7 +155,22 @@ end
 
 View.draw_object = draw_object
 
--- Draw the map. opts: hidden(o, info), show_lines, grid (step or nil).
+-- The roads as the phase will show them: centre marks, then the borders.
+local function draw_roads(doc)
+    local g     = love.graphics
+    local built = doc:built_roads()
+    g.setColor(1, 1, 1, 1)
+    for _, mark in ipairs(built.marks) do
+        local info = Catalog.type_info(mark.type)
+        if info.img then g.draw(info.img, mark.x, mark.y, 0, 1, 1, -info.ox, -info.oy) end
+    end
+    for _, s in ipairs(built.segments) do
+        g.setColor(s.color[1] / 255, s.color[2] / 255, s.color[3] / 255, 1)
+        g.line(s.x1, s.y1, s.x2, s.y2)
+    end
+end
+
+-- Draw the map. opts: hidden(o, info), show_lines, show_roads, grid (step or nil).
 function View:draw(doc, opts)
     local g    = love.graphics
     local r    = self.rect
@@ -172,8 +188,9 @@ function View:draw(doc, opts)
             g.push()
             g.translate(tile.ox, tile.oy)
             for _, o in ipairs(decals) do draw_object(doc, o) end
+            g.setLineWidth(math.max(1, 1 / z))
+            if opts.show_roads then draw_roads(doc) end
             if opts.show_lines then
-                g.setLineWidth(math.max(1, 1 / z))
                 for _, line in ipairs(doc.map.lines) do
                     local c = line.color
                     g.setColor(c[1] / 255, c[2] / 255, c[3] / 255, 1)
@@ -271,6 +288,7 @@ function View.draw_region(doc, x, y, size, px, py, pw, ph)
             g.push()
             g.translate(ox, oy)
             for _, o in ipairs(decals) do draw_object(doc, o) end
+            draw_roads(doc)
             for _, line in ipairs(doc.map.lines) do
                 local c = line.color
                 g.setColor(c[1] / 255, c[2] / 255, c[3] / 255, 1)

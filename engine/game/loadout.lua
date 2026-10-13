@@ -249,6 +249,21 @@ function Loadout.fixed(spec, weapons)
                       chars = { fuel = share(spec.fuel), armor = share(spec.armor) } }
 end
 
+-- Every weapon of a vehicle at its first level, one load of each, on the
+-- equip screen's starting split of fuel and armour: what a map without a
+-- loadout of its own is tried with from the editor, so the vehicle handles as
+-- it does for a player who takes the equip screen as it comes.
+function Loadout.everything(vehicle)
+    local list, counts, levels = {}, {}, {}
+    for i, name in ipairs(Vehicles.WEAPONS[vehicle]) do
+        list[i]      = name
+        counts[name] = 1
+        levels[name] = 1
+    end
+    local chars = Loadout:new().vehicles[vehicle].chars
+    return { list = list, counts = counts, levels = levels, chars = { fuel = chars.fuel, armor = chars.armor } }
+end
+
 -- The gameplay loadout: unique bay weapons in bay order plus the loaded
 -- special, each with its bay count as an ammo multiplier and its owned level.
 function Loadout:weapon_list(vehicle)

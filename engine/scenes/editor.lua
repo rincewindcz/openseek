@@ -51,6 +51,35 @@ local MAP_REFRESH  = 0.4    -- seconds between overview map redraws while editin
 local TEST_NAME    = "_playtest"
 local BRIEFINGS    = "assets/mission_text.json"
 local AUTO_PREFIX  = "_auto_"
+local ARROW_SIZE   = 5      -- window px of the arrowhead on a route segment
+local ARROW_MIN    = 28     -- window px a segment is long before it gets one
+
+-- ARRANGE: the menu's entries, which the select tool also shows as buttons
+-- while two objects or more are selected. ctrl / shift name the key.
+local ARRANGE = {
+    { label = "ALIGN LEFT", icon = "align_left", run = function(doc, list) Ops.align(doc, list, "left") end },
+    { label = "ALIGN CENTRES IN A COLUMN", icon = "align_center",
+      run = function(doc, list) Ops.align(doc, list, "center") end },
+    { label = "ALIGN RIGHT", icon = "align_right", run = function(doc, list) Ops.align(doc, list, "right") end },
+    { label = "ALIGN TOP", icon = "align_top", run = function(doc, list) Ops.align(doc, list, "top") end },
+    { label = "ALIGN CENTRES IN A ROW", icon = "align_middle",
+      run = function(doc, list) Ops.align(doc, list, "middle") end },
+    { label = "ALIGN BOTTOM", icon = "align_bottom", run = function(doc, list) Ops.align(doc, list, "bottom") end },
+    {},
+    { label = "EVEN GAPS ACROSS", icon = "gaps_across",
+      run = function(doc, list) return Ops.distribute(doc, list, "x") end },
+    { label = "EVEN GAPS DOWN", icon = "gaps_down",
+      run = function(doc, list) return Ops.distribute(doc, list, "y") end },
+    {},
+    { label = "TURN LEFT", icon = "turn_left", key = "CTRL+[", ctrl = "[",
+      run = function(doc, list) Ops.turn(doc, list, -1) end },
+    { label = "TURN RIGHT", icon = "turn_right", key = "CTRL+]", ctrl = "]",
+      run = function(doc, list) Ops.turn(doc, list, 1) end },
+    { label = "MIRROR LEFT TO RIGHT", icon = "mirror_across", key = "SHIFT+H", shift = "h",
+      run = function(doc, list) Ops.mirror(doc, list, "x") end },
+    { label = "MIRROR TOP TO BOTTOM", icon = "mirror_down", key = "SHIFT+V", shift = "v",
+      run = function(doc, list) Ops.mirror(doc, list, "y") end },
+}
 
 function Editor:init(app)
     Scene.init(self, app)
@@ -75,6 +104,7 @@ function Editor:init(app)
     self.erase   = { radius = Catalog.data().erase.radius, all = false }
     self.line_colors = Catalog.data().line_colors
     self.line_color  = self.line_colors[1]
+    self.road        = { width = nil, marks = true }   -- the next road: nil is the art set's own width
     self.dock_tab    = "objects"
     self.category    = "buildings"
     self.catalog_art = "0"
@@ -308,8 +338,19 @@ function Editor:exit()
     end)
 end
 
--- Play the map as it stands. Esc in the phase comes back here.
-function Editor:play_test()
+-- The place a key or a menu entry is about: under the pointer while it is
+-- over the map, else the middle of the view.
+function Editor:_here()
+    local size = self.doc:size()
+    local x, y = self.view.x, self.view.y
+    if self.hover_world then x, y = self.hover_world[1], self.hover_world[2] end
+    return math.floor(x) % size, math.floor(y) % size
+end
+
+-- Play the map as it stands. Esc in the phase comes back here. here: the
+-- vehicle starts at Editor:_here (or the nearest free spot) instead of on the
+-- home pad.
+function Editor:play_test(here)
     local app = self.app
     if Validate.errors(self:issues()) > 0 then
         self.dock_tab = "checks"
@@ -331,10 +372,14 @@ function Editor:play_test()
         settings.vehicle, settings.loadout = Loadout.fixed(map.loadout, app.combat.weapons)
     else
         -- Otherwise every weapon, in the vehicle the map asks for or the one picked for the try.
-        settings.loadout = nil
         settings.vehicle = map.vehicle or self.try.vehicle
+        settings.loadout = Loadout.everything(settings.vehicle)
     end
     app.play_return = { scene = "editor", test = true, god = self.try.god }
+    if here then
+        local x, y = self:_here()
+        app.play_return.start = { x = x, y = y }
+    end
     app.scenes:switch("gameplay")
 end
 
@@ -570,6 +615,12 @@ function Editor:nudge(dx, dy)
     self.doc:move(self.selection.list, dx * step, dy * step)
 end
 
+-- Run an entry of ARRANGE on the selection.
+function Editor:arrange(item)
+    if self.selection:count() < 2 then return end
+    if item.run(self.doc, self.selection.list) == false then self:say("EVEN GAPS NEED THREE OBJECTS OR MORE") end
+end
+
 -- layout
 
 -- Sizes in UI units: the window, and the view's rect between the panels.
@@ -680,7 +731,18 @@ function Editor:keypressed(key)
         elseif key == "g" then
             if shift then Ops.ungroup(self.doc, self.selection.list) else self.grid.snap = not self.grid.snap end
         end
+        for _, item in ipairs(ARRANGE) do
+            if item.ctrl == key then self:arrange(item) end
+        end
         return
+    end
+    if love.keyboard.isDown("lshift", "rshift") then
+        for _, item in ipairs(ARRANGE) do
+            if item.shift == key then
+                self:arrange(item)
+                return
+            end
+        end
     end
     if tool.keypressed and tool.keypressed(self, key) then return end
     if key == "escape" then
@@ -709,7 +771,7 @@ function Editor:keypressed(key)
         self:say(self.parts and "SELECTING SINGLE PARTS" or "SELECTING WHOLE GROUPS")
     elseif key == "home" then self:go_home()
     elseif key == "f" then self:frame_selection()
-    elseif key == "f5" then self:play_test()
+    elseif key == "f5" then self:play_test(love.keyboard.isDown("lshift", "rshift"))
     elseif key == "f6" then self:preview_briefing()
     elseif key == "f1" then self:open_dialog("help")
     elseif key == "=" or key == "+" or key == "kp+" then self.view:zoom_by(1, nil, nil, self.doc:size())
@@ -803,28 +865,50 @@ end
 
 -- drawing: the world
 
+-- The routes in hand: the one last touched and those of the selected units,
+-- as { [route] = true }.
+function Editor:_hot_routes()
+    local hot = {}
+    if self.shape and self.doc:route(self.shape.id) == self.shape then hot[self.shape] = true end
+    for _, o in ipairs(self.selection.list) do
+        local route = o.route and self.doc:route(o.route)
+        if route then hot[route] = true end
+    end
+    return hot
+end
+
+-- An arrowhead at the middle of the segment a -> b, pointing the way it is
+-- driven. Left out on a segment too short on screen to carry one.
+local function draw_heading(a, b, z)
+    local dx, dy = b[1] - a[1], b[2] - a[2]
+    local length = math.sqrt(dx * dx + dy * dy)
+    if length * z < ARROW_MIN then return end
+    local ux, uy = dx / length * ARROW_SIZE / z, dy / length * ARROW_SIZE / z
+    local mx, my = (a[1] + b[1]) / 2, (a[2] + b[2]) / 2
+    love.graphics.polygon("fill", mx + ux, my + uy, mx - ux - uy, my - uy + ux, mx - ux + uy, my - uy - ux)
+end
+
 function Editor:_draw_routes()
     if not self.layers.routes.visible then return end
     local g   = love.graphics
     local doc = self.doc
     local z   = self.view:zoom()
     local c   = self.kit.theme.accent
-    local used = {}
-    for _, o in ipairs(self.selection.list) do
-        if o.route then used[o.route] = true end
-    end
+    local in_hand = self:_hot_routes()
     g.setLineWidth(1.5 / z)
     for _, route in ipairs(doc.map.routes) do
         local points = route.points
-        local hot    = used[route.id] or route == self.shape
+        local hot    = in_hand[route]
         if hot then g.setColor(c[1], c[2], c[3], 0.95) else g.setColor(1, 1, 1, 0.5) end
         for i = 1, #points - 1 do
             g.line(points[i][1], points[i][2], points[i + 1][1], points[i + 1][2])
+            draw_heading(points[i], points[i + 1], z)
         end
         -- Back to the start: a route is driven round and round.
         if #points > 2 then
             if hot then g.setColor(c[1], c[2], c[3], 0.4) else g.setColor(1, 1, 1, 0.22) end
             g.line(points[#points][1], points[#points][2], points[1][1], points[1][2])
+            draw_heading(points[#points], points[1], z)
         end
         if points[1] then
             if hot then g.setColor(c[1], c[2], c[3], 1) else g.setColor(1, 1, 1, 0.8) end
@@ -907,6 +991,7 @@ function Editor:_draw_world()
     self.view:draw(doc, {
         hidden     = function(o, info) return self:hidden(o, info) end,
         show_lines = self.layers.lines.visible,
+        show_roads = self.layers.roads.visible,
         grid       = self.grid.show and self.grid.step or nil,
     })
     local tool = Tools.defs[self.tool]
@@ -916,11 +1001,11 @@ function Editor:_draw_world()
             g.push()
             g.translate(tile.ox, tile.oy)
             self:_draw_routes()
-            if tool.id == "route" or tool.id == "line" then tool.draw(self) end
+            if tool.poly then tool.draw(self) end
             g.pop()
         end
         self:_draw_marks()
-        if tool.draw and tool.id ~= "route" and tool.id ~= "line" then
+        if tool.draw and not tool.poly then
             g.setLineWidth(1 / self.view:zoom())
             tool.draw(self)
         end
@@ -973,6 +1058,41 @@ function Editor:_draw_badges()
     love.graphics.setScissor()
 end
 
+-- The place of each point in its route, beside the point: on the routes in
+-- hand, and on every route while the route tool is out.
+function Editor:_draw_route_numbers()
+    if not self.layers.routes.visible then return end
+    local kit   = self.kit
+    local theme = kit.theme
+    local doc   = self.doc
+    local s     = kit.scale
+    local r     = self.view.rect
+    local lists = {}
+    if self.tool == "route" then
+        if self.view:zoom() >= BADGE_ZOOM then
+            for _, route in ipairs(doc.map.routes) do lists[#lists + 1] = route.points end
+        end
+        if self.work and self.work.points then lists[#lists + 1] = self.work.points end
+    else
+        for route in pairs(self:_hot_routes()) do lists[#lists + 1] = route.points end
+    end
+    love.graphics.setScissor(r.x, r.y, r.w, r.h)
+    for _, points in ipairs(lists) do
+        for i, point in ipairs(points) do
+            local dx, dy = doc:delta(point[1], point[2], self.view.x, self.view.y)
+            local sx, sy = self.view:to_screen(self.view.x + dx, self.view.y + dy)
+            if self.view:contains(sx, sy) then
+                local text = tostring(i)
+                local w    = kit:text_width(text, theme.font_small) + 6
+                kit:rect(sx / s + 6, sy / s - 17, w, 13, { 0, 0, 0, 0.72 }, 3)
+                kit:label(text, sx / s + 6, sy / s - 17, w, 13,
+                    { align = "center", size = theme.font_small, color = theme.accent })
+            end
+        end
+    end
+    love.graphics.setScissor()
+end
+
 function Editor:_refresh_map_canvas(px)
     local g   = love.graphics
     local doc = self.doc
@@ -996,6 +1116,12 @@ function Editor:_refresh_map_canvas(px)
             g.line(line.points[i][1] * k, line.points[i][2] * k, line.points[i + 1][1] * k, line.points[i + 1][2] * k)
         end
     end
+    if self.layers.roads.visible then
+        for _, s in ipairs(doc:built_roads().segments) do
+            g.setColor(s.color[1] / 255, s.color[2] / 255, s.color[3] / 255, 0.8)
+            g.line(s.x1 * k, s.y1 * k, s.x2 * k, s.y2 * k)
+        end
+    end
     local spots = {}
     for _, o in ipairs(doc.map.objects) do
         local layer = doc:info(o).layer
@@ -1004,7 +1130,7 @@ function Editor:_refresh_map_canvas(px)
             table.insert(spots[layer], { o.x * k, o.y * k })
         end
     end
-    for _, layer in ipairs({ "scenery", "ground", "buildings", "base", "guns", "units", "objectives" }) do
+    for _, layer in ipairs({ "scenery", "ground", "buildings", "base", "guns", "units", "objectives", "pickups" }) do
         local list = spots[layer]
         if list then
             local c = Catalog.data().layer_colors[layer]
@@ -1082,6 +1208,12 @@ function Editor:_menus(kit, x)
         { label = "UNGROUP", key = "CTRL+SHIFT+G", icon = "ungroup", disabled = not chosen,
           action = function() Ops.ungroup(doc, self.selection.list) end },
     })
+    local arrange = {}
+    for i, item in ipairs(ARRANGE) do
+        arrange[i] = item.label and { label = item.label, icon = item.icon, key = item.key,
+            disabled = self.selection:count() < 2, action = function() self:arrange(item) end } or {}
+    end
+    menu("menu_arrange", "ARRANGE", arrange)
     local function scale_item(scale)
         return { label = string.format("INTERFACE SIZE %g X", scale), on = kit.scale == scale, action = function()
             self.ui_scale = scale
@@ -1106,6 +1238,8 @@ function Editor:_menus(kit, x)
         { label = "GENERATE GROUND", icon = "generate", action = function() self:open_dialog("generate") end },
         {},
         { label = "TRY THE MAP", key = "F5", icon = "play", action = function() self:play_test() end },
+        { label = "TRY FROM WHERE THE VIEW IS", key = "SHIFT+F5", icon = "pin",
+          action = function() self:play_test(true) end },
         { label = "TRY IN GOD MODE", on = self.try.god, action = function() self.try.god = not self.try.god end },
         { label = "PREVIEW THE BRIEFING", key = "F6", icon = "eye", action = function() self:preview_briefing() end },
     })
@@ -1164,6 +1298,9 @@ function Editor:_top_bar(kit, sw)
         }
     end
     kit:menu("try_menu", right, 4, 22, TOP_H - 8, { icon = "chevron_down", tip = "HOW THE MAP IS TRIED" }, {
+        { label = "TRY FROM WHERE THE VIEW IS", key = "SHIFT+F5", icon = "pin",
+          action = function() self:play_test(true) end },
+        {},
         { label = "GOD MODE: NOTHING RUNS OUT, NOTHING HURTS", on = self.try.god,
           action = function() self.try.god = not self.try.god end },
         vehicles[1], vehicles[2], vehicles[3],
@@ -1236,6 +1373,7 @@ local HINTS = {
     erase   = "PAINT OVER WHAT SHOULD GO.",
     route   = "CLICK POINTS, ENTER TO FINISH.  CTRL: 45 DEGREE STEPS.  DRAG A POINT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
     line    = "CLICK POINTS, ENTER TO FINISH.  CTRL: 45 DEGREE STEPS.  DRAG A POINT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
+    road    = "CLICK POINTS, ENTER TO FINISH.  A POINT ON ANOTHER ROAD JOINS IT.  DRAG A POINT, SHIFT + CLICK ADDS ONE, DEL REMOVES.",
     card    = "CLICK WHAT THE BRIEFING PICTURE SHOULD SHOW.  RIGHT CLICK: BACK TO THE SETTINGS.",
     spot    = "CLICK THE PLACE THE PLAYER HAS TO GET TO.  RIGHT CLICK: BACK TO THE SETTINGS.",
 }
@@ -1261,6 +1399,20 @@ function Editor:_options_bar(kit, vx, vw)
         self.parts = kit:check("opt_parts", x, ry, 150, "SINGLE PARTS", self.parts,
             { tip = "PICK ONE PART OF A GROUP INSTEAD OF THE WHOLE (TAB)" })
         x = x + 160
+        if self.selection:count() > 1 then
+            for i, item in ipairs(ARRANGE) do
+                if item.label then
+                    if kit:button("opt_arrange_" .. i, x, ry, 22, 22, { icon = item.icon, flat = true,
+                        tip = item.key and (item.label .. " (" .. item.key .. ")") or item.label }) then
+                        self:arrange(item)
+                    end
+                    x = x + 23
+                else
+                    x = x + 7
+                end
+            end
+            x = x + 8
+        end
     elseif self.tool == "place" then
         kit:label(self.placing and self.placing.label or "NOTHING PICKED", x, y, 220, OPTIONS_H,
             { color = self.placing and theme.text or theme.warn })
@@ -1283,6 +1435,26 @@ function Editor:_options_bar(kit, vx, vw)
         kit:label("SHOWS", x, y, 52, OPTIONS_H, { color = theme.text_dim, size = theme.font_small })
         self.card_pick.size = kit:choice("opt_card_size", x + 54, ry, 90, sizes, self.card_pick.size)
         x = x + 154
+    elseif self.tool == "road" then
+        -- The road in hand when there is one, else the next road drawn.
+        local style  = Catalog.road_style(self.doc:art())
+        local limits = Catalog.data().roads
+        local road   = self.shape and self.shape.width and self.shape or nil
+        local width  = road and road.width or self.road.width or style.width
+        local new_width = number("opt_road_width", "WIDTH", width,
+            { min = limits.min_width, max = limits.max_width, step = 2, big = 8 })
+        if new_width ~= width then
+            self.road.width = new_width
+            if road then self.doc:set_road(road, "width", new_width, "ROAD WIDTH") end
+        end
+        local marks = self.road.marks
+        if road then marks = (road.pitch or 0) > 0 end
+        local new_marks, marks_changed = kit:check("opt_road_marks", x, ry, 130, "CENTRE LINE", marks)
+        if marks_changed then
+            self.road.marks = new_marks
+            if road then self.doc:set_road(road, "pitch", new_marks and style.pitch or 0, "ROAD CENTRE LINE") end
+        end
+        x = x + 140
     elseif self.tool == "line" then
         for i, color in ipairs(self.line_colors) do
             local id = "opt_color_" .. i
@@ -1368,6 +1540,7 @@ function Editor:draw()
     self:_draw_minimap()
     kit:begin()
     self:_draw_badges()
+    self:_draw_route_numbers()
     self:_top_bar(kit, sw)
     self:_tool_strip(kit, sh)
     self:_options_bar(kit, vx, vw)

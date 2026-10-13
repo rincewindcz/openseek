@@ -48,12 +48,20 @@ local Log  = require "engine.core.log"
 --   commander    the commander building rule (stage special end)
 --   no_return    the phase ends with the last objective, without the flight home
 --   types        property sets: { from, class, sprite, set }: a class of a
---                pack stage and the fields changed on it
+--                pack stage and the fields changed on it; or { pickup, weapon }:
+--                a pickup lying there from the start ("fuel", "armor", "medal",
+--                or "ammo" for a weapon), whose objects are no entities
 --   objects      { id, t, x, y, route, owner, group }, in entity order;
 --                stored as rows [id, t, x, y, route, owner, group] with 0 for
 --                an unset link
 --   routes       { id, points = { { x, y }, ... } }
 --   lines        ground polylines { color = { r, g, b }, points }
+--   roads        { id, points, width, pitch, edge = { color, color }, across,
+--                down }: a road by its centre line; engine/game/roads.lua
+--                turns them into border lines (edge: the colour above and to
+--                the left, then below and to the right) and centre marks
+--                every pitch pixels (across / down: the mark's type for a
+--                level and an upright leg, { from, class, sprite })
 --   view         the editor's last view { x, y, zoom }
 local MapFile = {}
 
@@ -114,6 +122,7 @@ function MapFile.new(display_name, art, base)
         objects     = {},
         routes      = {},
         lines       = {},
+        roads       = {},
     }
 end
 
@@ -164,6 +173,7 @@ function MapFile.encode(map)
     out[#out + 1] = '  "types": '   .. rows(map.types, compact)
     out[#out + 1] = '  "routes": '  .. rows(map.routes, compact)
     out[#out + 1] = '  "lines": '   .. rows(map.lines, compact)
+    out[#out + 1] = '  "roads": '   .. rows(map.roads, compact)
     out[#out + 1] = '  "objects": ' .. rows(map.objects, object_row)
     return "{\n" .. table.concat(out, ",\n") .. "\n}\n"
 end
@@ -220,6 +230,14 @@ function MapFile.decode(text)
     map.time_limit  = (tonumber(map.time_limit) or 0) > 0 and tonumber(map.time_limit) or nil
     map.routes      = type(map.routes) == "table" and map.routes or {}
     map.lines       = type(map.lines) == "table" and map.lines or {}
+    local roads = {}
+    for _, road in ipairs(type(map.roads) == "table" and map.roads or {}) do
+        if type(road) == "table" and type(road.points) == "table" and type(road.edge) == "table"
+        and type(road.edge[1]) == "table" and type(road.edge[2]) == "table" then
+            roads[#roads + 1] = road
+        end
+    end
+    map.roads       = roads
     local objects, top = {}, 0
     for i, row in ipairs(map.objects) do
         if type(row) ~= "table" or type(row[1]) ~= "number" or not map.types[row[2]] then
@@ -230,8 +248,10 @@ function MapFile.decode(text)
         if row[1] > top then top = row[1] end
         if (row[7] or 0) > top then top = row[7] end
     end
-    for _, route in ipairs(map.routes) do
-        if type(route.id) == "number" and route.id > top then top = route.id end
+    for _, shapes in ipairs({ map.routes, map.roads }) do
+        for _, shape in ipairs(shapes) do
+            if type(shape.id) == "number" and shape.id > top then top = shape.id end
+        end
     end
     map.objects = objects
     map.next_id = math.max(tonumber(map.next_id) or 1, top + 1)
