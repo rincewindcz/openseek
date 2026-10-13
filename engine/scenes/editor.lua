@@ -6,7 +6,6 @@ local Class       = require "engine.core.class"
 local Scene       = require "engine.core.scene"
 local Log         = require "engine.core.log"
 local World       = require "engine.game.world"
-local Entity      = require "engine.game.entity"
 local Mission     = require "engine.game.mission"
 local MapFile     = require "engine.game.map_file"
 local MapCompiler = require "engine.game.map_compiler"
@@ -25,6 +24,7 @@ local Validate    = require "engine.editor.validate"
 local Generate    = require "engine.editor.generate"
 local Cards       = require "engine.editor.cards"
 local Goals       = require "engine.editor.goals"
+local Prefabs     = require "engine.editor.prefabs"
 local Loadout     = require "engine.game.loadout"
 
 -- The map editor: a free view of the map with a tool strip on the left, a
@@ -91,7 +91,8 @@ function Editor:init(app)
     self.work    = nil      -- the tool's state while it is at something
     self.shape   = nil      -- the route or line last touched
     self.parts   = false    -- pick single parts instead of groups
-    self.placing = nil      -- catalog entry the place tool puts down
+    self.placing = nil      -- what the place tool puts down: a catalog entry, or { prefab, label, key }
+    self.measure = nil      -- { x0, y0, x1, y1 }: the line the measure tool last dragged
     self.grid    = { show = false, snap = false, step = 16 }
     self.badges  = true
     self.minimap = true
@@ -138,6 +139,7 @@ function Editor:enter(opts)
     self.kit.scale = self.ui_scale or Kit.scale_for(select(2, love.graphics.getDimensions()))
     self.pan, self.right, self.work = nil, nil, nil
     self.previewing = nil
+    Prefabs.refresh()
     if MapFile.exists(TEST_NAME) then MapFile.delete(TEST_NAME) end
     if opts.map then
         self:open_map(opts.map)
@@ -177,6 +179,7 @@ function Editor:_set_doc(doc)
     self.placing     = nil
     self.shape       = nil
     self.work        = nil
+    self.measure     = nil
     self.scatter.set, self.scatter.list = {}, {}
     self.selection:clear()
     self.checked.revision = -1
@@ -278,9 +281,18 @@ function Editor:new_map(spec)
             return
         end
         map.name = spec.name
+        -- The stage's briefing comes along: each paragraph in its slot, and
+        -- beside it the card the stage shows there.
         local text = love.filesystem.getInfo(BRIEFINGS) and love.filesystem.read(BRIEFINGS)
         local info = text and json.decode(text)[spec.stage]
-        for i, paragraph in ipairs(info and info.paragraphs or {}) do map.briefing[i] = paragraph.text end
+        local last = 0
+        for i, paragraph in ipairs(info and info.paragraphs or {}) do
+            local slot = math.min(Cards.SLOTS, (paragraph.slot or i - 1) + 1)
+            map.briefing[slot] = paragraph.text
+            last = math.max(last, slot)
+        end
+        for i = 1, last do map.briefing[i] = map.briefing[i] or "" end
+        map.briefing_cards = Cards.of_stage(spec.stage)
     else
         map = MapFile.new(spec.name, tonumber(spec.art), spec.stage or Catalog.stages(spec.art)[1])
         map.size = spec.size
@@ -494,6 +506,17 @@ function Editor:pickable(_o, info)
     return layer.visible and not layer.locked
 end
 
+function Editor:roads_pickable()
+    return self.layers.roads.visible and not self.layers.roads.locked
+end
+
+-- The road under a world position, for the select tool.
+function Editor:road_at(wx, wy)
+    if not self:roads_pickable() then return nil end
+    local size = self.doc:size()
+    return self.doc:road_at(wx % size, wy % size)
+end
+
 function Editor:snap(wx, wy)
     if self.grid.snap then
         local step = self.grid.step
@@ -517,6 +540,7 @@ function Editor:set_tool(id)
     if self.work then Tools.defs[self.tool].cancel(self) end
     self.work = nil
     self.tool = id
+    self.selection:prune(self.doc)
     if id == "place" or id == "scatter" then self.dock_tab = "objects" end
     if id == "select" then self.dock_tab = "properties" end
 end
@@ -535,20 +559,56 @@ function Editor:pick_entry(entry)
     if self.tool ~= "place" then self:set_tool("place") end
 end
 
+-- A prefab was clicked: the place tool stamps it.
+function Editor:pick_prefab(prefab)
+    self.placing = { prefab = prefab.clip, label = prefab.label, key = "prefab/" .. prefab.name }
+    if self.tool ~= "place" then self:set_tool("place") end
+end
+
+-- Keep the selection as a prefab under a name.
+function Editor:save_prefab(label)
+    local clip = Ops.copy(self.doc, self.selection.list, self.selection.roads)
+    if not clip then return end
+    if Prefabs.save(label, Ops.centre(clip)) then
+        self.dock_tab, self.category, self.search = "objects", "prefabs", ""
+        self:say("PREFAB SAVED: " .. label)
+    else
+        self:say("COULD NOT SAVE THE PREFAB")
+    end
+end
+
+function Editor:delete_prefab(prefab)
+    self:ask("DELETE THE PREFAB?", "THE PREFAB " .. prefab.label .. " IS DELETED FOR EVERY MAP. WHAT WAS PLACED "
+        .. "FROM IT STAYS.", {
+        { label = "DELETE", danger = true, action = function()
+            if self.placing and self.placing.key == "prefab/" .. prefab.name then self.placing = nil end
+            Prefabs.delete(prefab.name)
+        end },
+        { label = "CANCEL" },
+    })
+end
+
 function Editor:delete_selection()
-    if self.selection:count() == 0 then return end
-    self.doc:remove(self.selection.list)
-    self.selection:prune(self.doc)
+    if not self.selection:any() then return end
+    local doc = self.doc
+    doc:begin("DELETE")
+    doc:remove(self.selection.list)
+    for _, road in ipairs(self.selection.roads) do
+        doc:remove_road(road)
+        if self.shape == road then self.shape = nil end
+    end
+    doc:commit()
+    self.selection:prune(doc)
 end
 
 function Editor:duplicate()
-    if self.selection:count() == 0 then return end
-    self.selection:replace(Ops.duplicate(self.doc, self.selection.list))
+    if not self.selection:any() then return end
+    self.selection:replace(Ops.duplicate(self.doc, self.selection.list, self.selection.roads))
 end
 
 function Editor:copy(cut)
-    if self.selection:count() == 0 then return end
-    self.clip = Ops.copy(self.doc, self.selection.list)
+    if not self.selection:any() then return end
+    self.clip = Ops.copy(self.doc, self.selection.list, self.selection.roads)
     if cut then self:delete_selection() end
 end
 
@@ -566,7 +626,7 @@ function Editor:select_all()
     for _, o in ipairs(self.doc.map.objects) do
         if self:pickable(o, self.doc:info(o)) then found[#found + 1] = o end
     end
-    self.selection:replace(found)
+    self.selection:replace(found, self:roads_pickable() and self.doc.map.roads or {})
 end
 
 function Editor:undo()
@@ -596,7 +656,12 @@ end
 
 function Editor:frame_selection()
     local first = self.selection.list[1]
-    if first then self.view:look_at(first.x, first.y, self.doc:size()) end
+    local road  = self.selection.roads[1]
+    if first then
+        self.view:look_at(first.x, first.y, self.doc:size())
+    elseif road and road.points[1] then
+        self.view:look_at(road.points[1][1], road.points[1][2], self.doc:size())
+    end
 end
 
 function Editor:go_home()
@@ -609,10 +674,14 @@ function Editor:go_home()
 end
 
 function Editor:nudge(dx, dy)
-    if self.selection:count() == 0 then return end
+    if not self.selection:any() then return end
     local step = love.keyboard.isDown("lshift", "rshift") and 8 or 1
     if self.grid.snap then step = self.grid.step end
-    self.doc:move(self.selection.list, dx * step, dy * step)
+    local doc = self.doc
+    doc:begin("MOVE")
+    if self.selection:count() > 0 then doc:move(self.selection.list, dx * step, dy * step) end
+    doc:move_roads(self.selection.roads, dx * step, dy * step)
+    doc:commit()
 end
 
 -- Run an entry of ARRANGE on the selection.
@@ -746,7 +815,7 @@ function Editor:keypressed(key)
     end
     if tool.keypressed and tool.keypressed(self, key) then return end
     if key == "escape" then
-        if self.work or self.tool ~= "select" or self.selection:count() > 0 then
+        if self.work or self.tool ~= "select" or self.selection:any() then
             tool.cancel(self)
         else
             self:exit()
@@ -966,20 +1035,25 @@ function Editor:_draw_marks()
             g.rectangle("line", x + info.ox - 1 / z, y + info.oy - 1 / z, info.w + 2 / z, info.h + 2 / z)
         end
     end
+    -- The ground of the selected roads.
+    if #self.selection.roads > 0 then
+        for _, leg in ipairs(doc:built_roads().legs) do
+            if self.selection:has_road(leg.road) then
+                local dx, dy = doc:delta(leg.left, leg.top, self.view.x, self.view.y)
+                local x, y   = self.view.x + dx, self.view.y + dy
+                local w, h   = leg.right - leg.left, leg.bottom - leg.top
+                g.setColor(c[1], c[2], c[3], 0.16)
+                g.rectangle("fill", x, y, w, h)
+                g.setColor(c[1], c[2], c[3], 1)
+                g.rectangle("line", x - 1 / z, y - 1 / z, w + 2 / z, h + 2 / z)
+            end
+        end
+    end
     -- What an armed unit sees and where it fires, for a single selection.
     if #self.selection.list > 0 and #self.selection.list <= 4 then
         for _, o in ipairs(self.selection.list) do
-            local td = Entity.type_for(doc:info(o).kind_name)
-            if td.armed and (td.detection_radius or 0) > 0 then
-                local dx, dy = doc:delta(o.x, o.y, self.view.x, self.view.y)
-                local x, y = self.view.x + dx, self.view.y + dy
-                g.setColor(1, 0.4, 0.3, 0.5)
-                g.circle("line", x, y, td.detection_radius, 64)
-                if (td.attack_range or 0) > 0 then
-                    g.setColor(1, 0.4, 0.3, 0.9)
-                    g.circle("line", x, y, td.attack_range, 64)
-                end
-            end
+            local dx, dy = doc:delta(o.x, o.y, self.view.x, self.view.y)
+            Tools.draw_ranges(doc:info(o).kind_name, self.view.x + dx, self.view.y + dy)
         end
     end
 end
@@ -1093,6 +1167,37 @@ function Editor:_draw_route_numbers()
     love.graphics.setScissor()
 end
 
+-- What the measured line comes to: its length, and the seconds each vehicle
+-- the map may be played in takes over it at full speed.
+function Editor:_measured()
+    local span   = self.measure
+    local dx, dy = span.x1 - span.x0, span.y1 - span.y0
+    local length = math.sqrt(dx * dx + dy * dy)
+    local parts  = { string.format("%d PX", math.floor(length + 0.5)) }
+    for _, vehicle in ipairs(Catalog.travel(self.doc.map)) do
+        parts[#parts + 1] = string.format("%s %.1f S", vehicle.label, length / vehicle.speed)
+    end
+    return parts
+end
+
+-- The measure beside the end of its line.
+function Editor:_draw_measure()
+    local span = self.measure
+    if not span or self.tool ~= "measure" then return end
+    local kit   = self.kit
+    local theme = kit.theme
+    local s     = kit.scale
+    local r     = self.view.rect
+    local dx, dy = self.doc:delta(span.x0, span.y0, self.view.x, self.view.y)
+    local sx, sy = self.view:to_screen(self.view.x + dx + span.x1 - span.x0, self.view.y + dy + span.y1 - span.y0)
+    local text   = table.concat(self:_measured(), "   ")
+    local w      = kit:text_width(text, theme.font_small) + 12
+    love.graphics.setScissor(r.x, r.y, r.w, r.h)
+    kit:rect(sx / s + 10, sy / s - 22, w, 16, { 0, 0, 0, 0.78 }, 3)
+    kit:label(text, sx / s + 10, sy / s - 22, w, 16, { align = "center", size = theme.font_small, color = theme.accent })
+    love.graphics.setScissor()
+end
+
 function Editor:_refresh_map_canvas(px)
     local g   = love.graphics
     local doc = self.doc
@@ -1173,7 +1278,7 @@ end
 
 function Editor:_menus(kit, x)
     local doc = self.doc
-    local chosen = self.selection:count() > 0
+    local chosen = self.selection:any()
     local function menu(id, label, items)
         local w = kit:text_width(label) + 18
         kit:menu(id, x, 3, w, TOP_H - 6, { text = label }, items)
@@ -1205,8 +1310,11 @@ function Editor:_menus(kit, x)
         {},
         { label = "SELECT ALL", key = "CTRL+A", icon = "selection", action = function() self:select_all() end },
         { label = "GROUP", icon = "group", disabled = self.selection:count() < 2, action = function() Ops.group(doc, self.selection.list) end },
-        { label = "UNGROUP", key = "CTRL+SHIFT+G", icon = "ungroup", disabled = not chosen,
+        { label = "UNGROUP", key = "CTRL+SHIFT+G", icon = "ungroup", disabled = self.selection:count() == 0,
           action = function() Ops.ungroup(doc, self.selection.list) end },
+        {},
+        { label = "SAVE THE SELECTION AS A PREFAB", icon = "prefab", disabled = not chosen,
+          action = function() self:open_dialog("prefab") end },
     })
     local arrange = {}
     for i, item in ipairs(ARRANGE) do
@@ -1369,11 +1477,13 @@ end
 local HINTS = {
     select  = "CLICK OR DRAG A BOX TO SELECT.  DRAG THE SELECTION TO MOVE IT (CTRL: ALONG ONE AXIS).",
     place   = "CLICK TO PLACE, DRAG FOR A ROW.  RIGHT CLICK: BACK TO SELECT.",
+    stamp   = "CLICK TO PLACE THE PREFAB.  RIGHT CLICK: BACK TO SELECT.",
     scatter = "TICK OBJECTS ON THE RIGHT, THEN PAINT.",
     erase   = "PAINT OVER WHAT SHOULD GO.",
-    route   = "CLICK POINTS, ENTER TO FINISH.  CTRL: 45 DEGREE STEPS.  DRAG A POINT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
-    line    = "CLICK POINTS, ENTER TO FINISH.  CTRL: 45 DEGREE STEPS.  DRAG A POINT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
-    road    = "CLICK POINTS, ENTER TO FINISH.  A POINT ON ANOTHER ROAD JOINS IT.  DRAG A POINT, SHIFT + CLICK ADDS ONE, DEL REMOVES.",
+    route   = "CLICK POINTS, ENTER TO FINISH.  CTRL: 45 DEGREE STEPS.  CLICK AN END TO CARRY ON, DRAG A POINT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
+    line    = "CLICK POINTS, ENTER TO FINISH.  CTRL: 45 DEGREE STEPS.  CLICK AN END TO CARRY ON, DRAG A POINT, CLICK A LINE TO ADD ONE, DEL REMOVES.",
+    road    = "CLICK POINTS, ENTER TO FINISH.  A POINT ON ANOTHER ROAD JOINS IT.  CLICK AN END TO CARRY ON, DRAG A POINT, SHIFT + CLICK ADDS ONE, DEL REMOVES.",
+    measure = "DRAG FROM ONE PLACE TO ANOTHER.  CTRL: 45 DEGREE STEPS.  RIGHT CLICK CLEARS.",
     card    = "CLICK WHAT THE BRIEFING PICTURE SHOULD SHOW.  RIGHT CLICK: BACK TO THE SETTINGS.",
     spot    = "CLICK THE PLACE THE PLAYER HAS TO GET TO.  RIGHT CLICK: BACK TO THE SETTINGS.",
 }
@@ -1399,6 +1509,11 @@ function Editor:_options_bar(kit, vx, vw)
         self.parts = kit:check("opt_parts", x, ry, 150, "SINGLE PARTS", self.parts,
             { tip = "PICK ONE PART OF A GROUP INSTEAD OF THE WHOLE (TAB)" })
         x = x + 160
+        if self.selection:any() and kit:button("opt_prefab", x, ry, 22, 22, { icon = "prefab", flat = true,
+            tip = "SAVE THE SELECTION AS A PREFAB" }) then
+            self:open_dialog("prefab")
+        end
+        x = x + (self.selection:any() and 30 or 0)
         if self.selection:count() > 1 then
             for i, item in ipairs(ARRANGE) do
                 if item.label then
@@ -1455,6 +1570,13 @@ function Editor:_options_bar(kit, vx, vw)
             if road then self.doc:set_road(road, "pitch", new_marks and style.pitch or 0, "ROAD CENTRE LINE") end
         end
         x = x + 140
+    elseif self.tool == "measure" and self.measure then
+        local span = self.measure
+        local text = string.format("%s     ACROSS %d  DOWN %d", table.concat(self:_measured(), "   "),
+            math.abs(span.x1 - span.x0), math.abs(span.y1 - span.y0))
+        local tw   = kit:text_width(text) + 14
+        kit:label(text, x, y, tw, OPTIONS_H)
+        x = x + tw
     elseif self.tool == "line" then
         for i, color in ipairs(self.line_colors) do
             local id = "opt_color_" .. i
@@ -1472,7 +1594,9 @@ function Editor:_options_bar(kit, vx, vw)
         end
         x = x + 8
     end
-    kit:label(HINTS[self.tool], x, y, vx + vw - x - 8, OPTIONS_H, { color = theme.text_dim, size = theme.font_small })
+    local hint = HINTS[self.tool]
+    if self.tool == "place" and self.placing and self.placing.prefab then hint = HINTS.stamp end
+    kit:label(hint, x, y, vx + vw - x - 8, OPTIONS_H, { color = theme.text_dim, size = theme.font_small })
 end
 
 local DOCK_TABS = {
@@ -1509,7 +1633,7 @@ function Editor:_status_bar(kit, sw, sh)
         parts[#parts + 1] = string.format("X %d  Y %d", self.hover_world[1] % size, self.hover_world[2] % size)
     end
     parts[#parts + 1] = string.format("ZOOM %g X", self.view:zoom())
-    if self.selection:count() > 0 then parts[#parts + 1] = self.selection:count() .. " SELECTED" end
+    if self.selection:any() then parts[#parts + 1] = self.selection:total() .. " SELECTED" end
     parts[#parts + 1] = #self.doc.map.objects .. " OBJECTS"
     kit:label(table.concat(parts, "     "), sw * 0.5, y, sw * 0.5 - 8, STATUS_H,
         { align = "right", color = theme.text_dim, size = theme.font_small })
@@ -1541,6 +1665,7 @@ function Editor:draw()
     kit:begin()
     self:_draw_badges()
     self:_draw_route_numbers()
+    self:_draw_measure()
     self:_top_bar(kit, sw)
     self:_tool_strip(kit, sh)
     self:_options_bar(kit, vx, vw)

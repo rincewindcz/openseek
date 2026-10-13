@@ -26,7 +26,7 @@ local KIND_PAD        = 14
 -- A map's objective types as the mission knows them (Mission.TYPES).
 local GOAL_TYPES = {
     targets = "destroy_targets", rescue = "rescue_people", sabotage = "sabotage", destroy = "destroy",
-    reach = "reach", survive = "survive", collect = "collect", protect = "protect",
+    reach = "reach", survive = "survive", collect = "collect", protect = "protect", air = "air",
 }
 
 local PAD_PICKUP = 1       -- pad class behaviour: people run out to the vehicle
@@ -286,7 +286,7 @@ function MapCompiler.compile(map)
             spec.x, spec.y, spec.radius, spec.land = goal.x, goal.y, goal.radius, goal.land
         elseif goal.type == "survive" then
             spec.seconds = goal.seconds
-        elseif goal.type == "collect" then
+        elseif goal.type == "collect" or goal.type == "air" then
             spec.count = goal.count
         elseif goal.type == "protect" then
             spec.entities, spec.losses = placed(goal.objects), goal.losses

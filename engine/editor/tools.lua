@@ -1,6 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
+local Entity  = require "engine.game.entity"
+local Roads   = require "engine.game.roads"
 local Catalog = require "engine.editor.catalog"
 local Ops     = require "engine.editor.ops"
 local View    = require "engine.editor.view"
@@ -21,7 +23,7 @@ local HALF_STEP_TAN = math.tan(math.rad(22.5))   -- between two rays 45 degrees 
 
 local ROUTE_KINDS = { tank = true, truck = true }
 
-Tools.ORDER = { "select", "place", "scatter", "erase", "route", "line", "road" }
+Tools.ORDER = { "select", "place", "scatter", "erase", "route", "line", "road", "measure" }
 
 local function shift_down()
     return love.keyboard.isDown("lshift", "rshift")
@@ -34,19 +36,32 @@ end
 -- With Ctrl held, (x, y) moved onto the nearest ray from the anchor at a
 -- multiple of 45 degrees, as a drawing program constrains a segment. anchor
 -- is a map point { x, y }; the result lies on the pointer's own copy of the map.
+local function on_ray(dx, dy)
+    local ax, ay = math.abs(dx), math.abs(dy)
+    if ay < ax * HALF_STEP_TAN then return dx, 0 end
+    if ax < ay * HALF_STEP_TAN then return 0, dy end
+    local d = math.floor((ax + ay) / 2 + 0.5)
+    return dx < 0 and -d or d, dy < 0 and -d or d
+end
+
 local function constrain(editor, x, y, anchor)
     if not (anchor and ctrl_down()) then return x, y end
-    local dx, dy = editor.doc:delta(x, y, anchor[1], anchor[2])
-    local ax, ay = math.abs(dx), math.abs(dy)
-    if ay < ax * HALF_STEP_TAN then
-        dy = 0
-    elseif ax < ay * HALF_STEP_TAN then
-        dx = 0
-    else
-        local d = math.floor((ax + ay) / 2 + 0.5)
-        dx, dy = dx < 0 and -d or d, dy < 0 and -d or d
-    end
+    local dx, dy = on_ray(editor.doc:delta(x, y, anchor[1], anchor[2]))
     return anchor[1] + dx, anchor[2] + dy
+end
+
+-- What an armed kind sees (the faint ring) and where it fires (the strong
+-- one), around (x, y).
+function Tools.draw_ranges(kind_name, x, y)
+    local td = Entity.type_for(kind_name)
+    if not (td.armed and (td.detection_radius or 0) > 0) then return end
+    local g = love.graphics
+    g.setColor(1, 0.4, 0.3, 0.5)
+    g.circle("line", x, y, td.detection_radius, 64)
+    if (td.attack_range or 0) > 0 then
+        g.setColor(1, 0.4, 0.3, 0.9)
+        g.circle("line", x, y, td.attack_range, 64)
+    end
 end
 
 -- An object with what is placed with it, unless single parts are being picked.
@@ -63,20 +78,25 @@ local Select = { id = "select", icon = "select", label = "SELECT", key = "v",
 function Select.press(editor, wx, wy)
     local hits = editor.view:pick(editor.doc, wx, wy, function(o, info) return editor:pickable(o, info) end)
     local top  = hits[1]
+    local road = not top and editor:road_at(wx, wy) or nil
     local work = { x0 = wx, y0 = wy, x1 = wx, y1 = wy, dx = 0, dy = 0 }
-    if top then
+    local selection = editor.selection
+    if top or road then
         work.mode     = "move"
         work.hits     = hits
-        work.was_held = editor.selection:has(top)
+        work.was_held = top and selection:has(top) or (road ~= nil and selection:has_road(road))
         if shift_down() then
-            if work.was_held then editor.selection:remove(whole(editor, top)) else editor.selection:add(whole(editor, top)) end
+            if top and work.was_held then selection:remove(whole(editor, top))
+            elseif top then selection:add(whole(editor, top))
+            elseif work.was_held then selection:remove_roads({ road })
+            else selection:add_roads({ road }) end
             work.mode = nil
         elseif not work.was_held then
-            editor.selection:replace(whole(editor, top))
+            if top then selection:replace(whole(editor, top)) else selection:replace({}, { road }) end
         end
     else
         work.mode = "box"
-        if not shift_down() then editor.selection:clear() end
+        if not shift_down() then selection:clear() end
     end
     editor.work = work
 end
@@ -96,6 +116,7 @@ function Select.drag(editor, wx, wy)
     end
     if dx ~= work.dx or dy ~= work.dy then
         editor.doc:move(editor.selection.list, dx - work.dx, dy - work.dy, true)
+        editor.doc:move_roads(editor.selection.roads, dx - work.dx, dy - work.dy, true)
         work.dx, work.dy = dx, dy
     end
 end
@@ -104,9 +125,13 @@ function Select.release(editor)
     local work = editor.work
     editor.work = nil
     if not work or not work.mode then return end
+    local doc = editor.doc
     if work.mode == "move" then
         if work.moving then
-            editor.doc:record_move(editor.selection.list, work.dx, work.dy)
+            doc:begin("MOVE")
+            doc:record_move(editor.selection.list, work.dx, work.dy)
+            doc:record_road_move(editor.selection.roads, work.dx, work.dy)
+            doc:commit()
         elseif work.was_held and #work.hits > 1 then
             -- A second click on a selected object reaches the one under it.
             local next_hit = work.hits[1]
@@ -117,8 +142,8 @@ function Select.release(editor)
         end
         return
     end
-    -- Box: every pickable object whose anchor lies inside.
-    local doc = editor.doc
+    -- Box: every pickable object whose anchor lies inside, and every road
+    -- that lies inside with all its points.
     local cx, cy = (work.x0 + work.x1) / 2, (work.y0 + work.y1) / 2
     local hw, hh = math.abs(work.x1 - work.x0) / 2, math.abs(work.y1 - work.y0) / 2
     if hw * editor.view:zoom() < DRAG_START and hh * editor.view:zoom() < DRAG_START then return end
@@ -130,12 +155,23 @@ function Select.release(editor)
         end
     end
     editor.selection:add(found)
+    local roads = {}
+    for _, road in ipairs(editor:roads_pickable() and doc.map.roads or {}) do
+        local inside = #road.points > 0
+        for _, p in ipairs(road.points) do
+            local dx, dy = doc:delta(p[1], p[2], cx, cy)
+            if math.abs(dx) > hw or math.abs(dy) > hh then inside = false end
+        end
+        if inside then roads[#roads + 1] = road end
+    end
+    editor.selection:add_roads(roads)
 end
 
 function Select.cancel(editor)
     local work = editor.work
     if work and work.mode == "move" and work.moving then
         editor.doc:move(editor.selection.list, -work.dx, -work.dy, true)
+        editor.doc:move_roads(editor.selection.roads, -work.dx, -work.dy, true)
     elseif not work then
         editor.selection:clear()
     end
@@ -170,23 +206,28 @@ end
 local function place_at(editor, wx, wy)
     local entry = editor.placing
     local x, y  = editor:snap(wx, wy)
-    Ops.place(editor.doc, entry, x, y)
+    if entry.prefab then
+        Ops.paste(editor.doc, entry.prefab, x, y)
+    else
+        Ops.place(editor.doc, entry, x, y)
+    end
     editor.work.last_x, editor.work.last_y = x, y
 end
 
 function Place.press(editor, wx, wy)
-    if not editor.placing then
+    local entry = editor.placing
+    if not entry then
         editor:say("PICK AN OBJECT IN THE OBJECTS LIST FIRST")
         return
     end
-    editor.work = { spacing = entry_spacing(editor, editor.placing) }
-    editor.doc:begin("PLACE " .. editor.placing.label)
+    editor.work = { spacing = entry.parts and entry_spacing(editor, entry) or nil }
+    editor.doc:begin("PLACE " .. entry.label)
     place_at(editor, wx, wy)
 end
 
 function Place.drag(editor, wx, wy)
     local work = editor.work
-    if not work or not editor.placing or editor.placing.home then return end
+    if not work or not editor.placing or not work.spacing or editor.placing.home then return end
     local x, y = editor:snap(wx, wy)
     local dx, dy = x - work.last_x, y - work.last_y
     local dist   = math.sqrt(dx * dx + dy * dy)
@@ -213,13 +254,32 @@ function Place.cancel(editor)
     editor:set_tool("select")
 end
 
+local function ghost(map_type, x, y)
+    local info = Catalog.type_info(map_type)
+    View.draw_object({ info = function() return info end }, { x = x, y = y }, 0.6)
+    return info
+end
+
+-- What is about to be placed, under the pointer: a prefab with its roads, an
+-- object with the reach of its guns.
 function Place.draw(editor)
     local entry = editor.placing
     if not entry or not editor.hover_world then return end
+    local g    = love.graphics
     local x, y = editor:snap(editor.hover_world[1], editor.hover_world[2])
+    if entry.prefab then
+        local doc = editor.doc
+        for _, s in ipairs(Roads.build(Ops.lay_roads(doc, entry.prefab, x, y), doc:size()).segments) do
+            local dx, dy = doc:delta(s.x1, s.y1, x, y)
+            g.setColor(s.color[1] / 255, s.color[2] / 255, s.color[3] / 255, 0.7)
+            g.line(x + dx, y + dy, x + dx + s.x2 - s.x1, y + dy + s.y2 - s.y1)
+        end
+        for _, item in ipairs(entry.prefab.items) do ghost(item.map_type, x + item.dx, y + item.dy) end
+        return
+    end
     for _, part in ipairs(entry.parts) do
-        local info = Catalog.type_info(Catalog.part_type(part))
-        View.draw_object({ info = function() return info end }, { x = x, y = y }, 0.6)
+        local info = ghost(Catalog.part_type(part), x, y)
+        Tools.draw_ranges(info.kind_name, x, y)
     end
 end
 
@@ -340,7 +400,8 @@ end
 
 -- routes, ground lines and roads: polylines edited point by point
 
-local EDIT_LABELS = { route = "EDIT ROUTE", line = "EDIT LINE", road = "EDIT ROAD" }
+local EDIT_LABELS   = { route = "EDIT ROUTE", line = "EDIT LINE", road = "EDIT ROAD" }
+local EXTEND_LABELS = { route = "EXTEND ROUTE", line = "EXTEND LINE", road = "EXTEND ROAD" }
 
 local function shapes_of(editor, kind)
     local map = editor.doc.map
@@ -384,13 +445,32 @@ local function join(editor, x, y, anchor, skip)
     return best_x, best_y
 end
 
+-- A road point whose leg from the anchor comes near the line of the road's
+-- first point is put on that line, so the road can come back to where it
+-- began and close as a ring.
+local function meet_start(editor, x, y, anchor, first)
+    if not (anchor and first) then return x, y end
+    local reach  = Catalog.data().roads.join
+    local dx, dy = editor.doc:delta(first[1], first[2], x, y)
+    if y == anchor[2] and math.abs(dx) <= reach then return x + dx, y end
+    if x == anchor[1] and math.abs(dy) <= reach then return x, y + dy end
+    return x, y
+end
+
 -- Where a point of a shape goes for the pointer at (x, y): a route or line
--- point by the Ctrl constraint, a road point square to the anchor and onto a
--- road it meets.
-local function settle(editor, kind, x, y, anchor, skip)
+-- point by the Ctrl constraint, a road point square to the anchor, onto the
+-- line of the road's first point when near it and onto a road it meets.
+local function settle(editor, kind, x, y, anchor, skip, first)
     if kind ~= "road" then return constrain(editor, x, y, anchor) end
     x, y = square(editor, x, y, anchor)
+    x, y = meet_start(editor, x, y, anchor, first)
     return join(editor, x, y, anchor, skip)
+end
+
+-- The first point of the shape being drawn, once coming back to it would
+-- close a ring.
+local function ring_start(work)
+    return #work.points >= 3 and work.points[1] or nil
 end
 
 local function copy_points(points)
@@ -437,7 +517,18 @@ local function finish_shape(editor, kind)
     editor.work = nil
     if not (work and work.points) or #work.points < 2 then return end
     local doc = editor.doc
-    if kind == "road" then
+    if work.extend then
+        -- A shape carried on from one of its ends: the points drawn join it.
+        if #work.points > work.keep then
+            local points = work.points
+            if work.reversed then
+                points = {}
+                for i = #work.points, 1, -1 do points[#points + 1] = work.points[i] end
+            end
+            doc:set_points(work.extend, points, nil, EXTEND_LABELS[kind])
+        end
+        editor.shape = work.extend
+    elseif kind == "road" then
         local style = Catalog.road_style(doc:art())
         local function mark(part)
             return part and Catalog.part_type(part) or nil
@@ -477,7 +568,7 @@ local function poly_tool(kind, def)
         if work and work.points then
             local now  = love.timer.getTime()
             local last = work.points[#work.points]
-            x, y = settle(editor, kind, x, y, last)
+            x, y = settle(editor, kind, x, y, last, work.extend, ring_start(work))
             if now - (work.clicked or 0) < DOUBLE_TIME and last[1] == x % size and last[2] == y % size then
                 finish_shape(editor, kind)
                 return
@@ -556,7 +647,20 @@ local function poly_tool(kind, def)
         editor.doc:refresh()
         if work.moved or work.inserted then
             editor.doc:set_points(work.edit, work.edited, nil, EDIT_LABELS[kind])
+            return
         end
+        -- A click on an end of a shape carries it on from there: the points
+        -- clicked next are added to it. A ring has no end.
+        local points = copy_points(work.before)
+        local last   = #points
+        local ring   = kind == "road" and last > 3 and points[1][1] == points[last][1] and points[1][2] == points[last][2]
+        if ring or (work.index ~= 1 and work.index ~= last) then return end
+        local reversed = work.index == 1 and last > 1
+        if reversed then
+            for i = 1, math.floor(last / 2) do points[i], points[last + 1 - i] = points[last + 1 - i], points[i] end
+        end
+        editor.work = { points = points, extend = work.edit, reversed = reversed, keep = last,
+                        clicked = love.timer.getTime() }
     end
 
     function tool.cancel(editor)
@@ -578,7 +682,7 @@ local function poly_tool(kind, def)
             if work and work.points then finish_shape(editor, kind) end
             return true
         elseif key == "backspace" and work and work.points then
-            table.remove(work.points)
+            if #work.points > (work.keep or 0) then table.remove(work.points) end
             if #work.points == 0 then editor.work = nil end
             return true
         elseif key == "delete" and not work then
@@ -622,13 +726,14 @@ local function poly_tool(kind, def)
             if editor.hover_world then
                 local x, y = editor:snap(editor.hover_world[1], editor.hover_world[2])
                 local last = points[#points]
-                x, y = settle(editor, kind, x, y, last)
+                x, y = settle(editor, kind, x, y, last, work.extend, ring_start(work))
                 local dx, dy = editor.doc:delta(x, y, last[1], last[2])
                 ahead = { last[1] + dx, last[2] + dy }
             end
             -- A road shows the ground it will take.
             if kind == "road" then
-                local half = (editor.road.width or Catalog.road_style(editor.doc:art()).width) / 2
+                local half = (work.extend and work.extend.width or editor.road.width
+                    or Catalog.road_style(editor.doc:art()).width) / 2
                 g.setColor(c[1], c[2], c[3], 0.16)
                 for i = 1, #points - (ahead and 0 or 1) do
                     local a, b = points[i], points[i + 1] or ahead
@@ -662,6 +767,59 @@ local Line = poly_tool("line", { id = "line", icon = "line", label = "LINE", key
     tip = "DRAW AND EDIT GROUND LINES (L)" })
 local Road = poly_tool("road", { id = "road", icon = "road", label = "ROAD", key = "o",
     tip = "DRAW AND EDIT ROADS (O)" })
+
+-- measure: a line dragged over the map, read as a distance and as travel time
+
+local Measure = { id = "measure", icon = "measure", label = "MEASURE", key = "u",
+                  tip = "MEASURE A DISTANCE AND THE TIME IT TAKES (U)" }
+
+function Measure.press(editor, wx, wy)
+    local x, y = editor:snap(wx, wy)
+    editor.measure = { x0 = x, y0 = y, x1 = x, y1 = y }
+    editor.work    = {}
+end
+
+function Measure.drag(editor, wx, wy)
+    local span = editor.measure
+    if not (editor.work and span) then return end
+    local x, y = editor:snap(wx, wy)
+    local dx, dy = x - span.x0, y - span.y0
+    if ctrl_down() then dx, dy = on_ray(dx, dy) end
+    span.x1, span.y1 = span.x0 + dx, span.y0 + dy
+end
+
+function Measure.release(editor)
+    editor.work = nil
+end
+
+function Measure.cancel(editor)
+    if editor.measure then editor.measure = nil else editor:set_tool("select") end
+    editor.work = nil
+end
+
+function Measure.draw(editor)
+    local span = editor.measure
+    if not span then return end
+    local g = love.graphics
+    local z = editor.view:zoom()
+    local c = editor.kit.theme.accent
+    -- The line was dragged on one copy of the map; it shows on the one in view.
+    local ox, oy = editor.doc:delta(span.x0, span.y0, editor.view.x, editor.view.y)
+    local x0, y0 = editor.view.x + ox, editor.view.y + oy
+    local x1, y1 = x0 + span.x1 - span.x0, y0 + span.y1 - span.y0
+    g.setLineWidth(3 / z)
+    g.setColor(0, 0, 0, 0.7)
+    g.line(x0, y0, x1, y1)
+    g.setLineWidth(1.5 / z)
+    g.setColor(c[1], c[2], c[3], 1)
+    g.line(x0, y0, x1, y1)
+    for _, p in ipairs({ { x0, y0 }, { x1, y1 } }) do
+        g.setColor(0, 0, 0, 0.7)
+        g.circle("fill", p[1], p[2], 4.5 / z, 12)
+        g.setColor(c[1], c[2], c[3], 1)
+        g.circle("fill", p[1], p[2], 3 / z, 12)
+    end
+end
 
 -- briefing picture: the square of the map a briefing card shows. Not on the
 -- tool strip; the BRIEFING page of the map settings hands over to it.
@@ -728,7 +886,7 @@ function Spot.draw(editor)
 end
 
 Tools.defs = { select = Select, place = Place, scatter = Scatter, erase = Erase, route = Route, line = Line,
-               road = Road, card = Card, spot = Spot }
+               road = Road, measure = Measure, card = Card, spot = Spot }
 
 Tools.ROUTE_KINDS = ROUTE_KINDS
 

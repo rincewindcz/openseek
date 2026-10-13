@@ -27,6 +27,8 @@ local Log     = require "engine.core.log"
 -- night mission's cards are drawn in its dark palette and are hard to read.
 local MissionMenu = Class()
 
+MissionMenu.SLOT_LINES = 6   -- lines of text that fill one box slot
+
 local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
 
 local TITLE_Y = 26
@@ -149,20 +151,38 @@ function MissionMenu:_icon_slot_edges(path)
     return edges
 end
 
--- Wraps text to width w (design px) using the CHARS advances.
-function MissionMenu:_wrap(text, w)
-    local lines, line = {}, ""
-    for word in text:gmatch("%S+") do
-        local try = (line == "") and word or (line .. " " .. word)
-        if line ~= "" and self.font:width(try) > w then
-            lines[#lines + 1] = line
-            line = word
-        else
-            line = try
+-- Wraps text to width w (design px) using the font's advances. A line break
+-- in the text (a map's own briefing may hold them) starts a new line.
+local function wrap(font, text, w)
+    local lines = {}
+    for part in (text .. "\n"):gmatch("([^\n]*)\n") do
+        local line = ""
+        for word in part:gmatch("%S+") do
+            local try = (line == "") and word or (line .. " " .. word)
+            if line ~= "" and font:width(try) > w then
+                lines[#lines + 1] = line
+                line = word
+            else
+                line = try
+            end
         end
+        lines[#lines + 1] = line
     end
-    if line ~= "" then lines[#lines + 1] = line end
+    while #lines > 0 and lines[#lines] == "" do table.remove(lines) end
     return lines
+end
+
+-- Where a paragraph's text starts: right of the art in its slot, whose
+-- rightmost pixel is `edge` (-1 for none).
+local function text_x(edge)
+    return math.max(TEXT_X0, ICON_X + (edge or -1) + TEXT_GAP)
+end
+
+-- The lines a paragraph is set in beside a card `card_w` pixels wide (nil for
+-- none), for the map editor to say how full a slot is. A slot holds
+-- MissionMenu.SLOT_LINES of them before the text runs into the next one.
+function MissionMenu.lines(text, card_w)
+    return wrap(Font.get("charstit"), tostring(text or ""):upper(), DW - text_x((card_w or 0) - 1) - TEXT_RIGHT)
 end
 
 -- stage_name is "stageMP": M = mission (0-4), P = phase (0-3). The backdrop,
@@ -216,11 +236,11 @@ function MissionMenu:open(stage_name, own)
     if info and info.paragraphs then
         for _, para in ipairs(info.paragraphs) do
             local slot = para.slot or (#self.paragraphs)
-            local x = math.max(TEXT_X0, ICON_X + (edges[slot] or -1) + TEXT_GAP)
+            local x = text_x(edges[slot])
             self.paragraphs[#self.paragraphs + 1] = {
                 slot  = slot,
                 x     = x,
-                lines = self:_wrap(para.text, DW - x - TEXT_RIGHT),
+                lines = wrap(self.font, para.text, DW - x - TEXT_RIGHT),
             }
         end
     end

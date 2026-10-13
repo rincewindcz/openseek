@@ -40,6 +40,7 @@ local Log  = require "engine.core.log"
 --                  "survive"   seconds to hold out
 --                  "collect"   count of medals to pick up
 --                  "protect"   objects (ids) to keep, losses allowed among them
+--                  "air"       count of enemy helicopters to shoot down
 --                The first three follow from what is on the map and need no
 --                entry; one gives them their wording and their place.
 --   ordered      an objective is worked on once those before it are done
@@ -76,7 +77,7 @@ local NAME_MAX = 40
 
 local OBJECTIVE_TYPES = {
     targets = true, rescue = true, sabotage = true, destroy = true, reach = true, survive = true,
-    collect = true, protect = true,
+    collect = true, protect = true, air = true,
 }
 -- The first files kept the three objectives of the original under these keys.
 local FIRST_OBJECTIVES = { { "destroy", "targets" }, { "rescue", "rescue" }, { "sabotage", "sabotage" } }

@@ -54,7 +54,9 @@ function HeliSystem:reset()
     self.helis  = {}
     self.posts  = {}
     self.kills  = 0
-    self.world.air_units = self.helis
+    self.world.air_units  = self.helis
+    self.world.air_kills  = 0
+    self.world.air_supply = 0
     self.sprite = nil
     self.points = DEFAULT_POINTS
     self.max_hp = MAX_HP
@@ -81,12 +83,25 @@ function HeliSystem:reset()
         self.posts[#self.posts + 1] = post
         self:_launch(post, post.x, post.y)
     end
+    self.world.air_supply = self:_supply()
+end
+
+-- How many helicopters the phase can ever put up, for an objective that asks
+-- for some (Mission): one a post, or without end when a post sends another
+-- after its own went down.
+function HeliSystem:_supply()
+    local default = self.combat.enemy_fire.data.helicopter.respawn
+    for _, post in ipairs(self.posts) do
+        if (post.respawn or default) >= 0 then return math.huge end
+    end
+    return #self.posts
 end
 
 function HeliSystem:clear()
     self.helis = {}
     self.posts = {}
-    self.world.air_units = self.helis
+    self.world.air_units  = self.helis
+    self.world.air_supply = 0
 end
 
 -- Put post's heli in the air at (x, y), nose on the nearest player.
@@ -152,6 +167,7 @@ function HeliSystem:hit(heli, dmg, shooter)
         heli.state = "dying"
         heli.die_t = 0
         self.kills = (self.kills or 0) + 1
+        self.world.air_kills = (self.world.air_kills or 0) + 1
         if shooter then
             Score.award(shooter, self.points or DEFAULT_POINTS)
             if shooter.stat_kills then

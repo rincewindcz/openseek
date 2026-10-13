@@ -10,7 +10,7 @@ local Menu  = require "engine.ui.menu"
 -- kept off the main menu so it stays short. Same Menu widget and backdrop as
 -- the main menu; BACK returns to it. Not to be confused with
 -- advanced_settings, which is the OPTIONS page. The map editor is a mouse and
--- keyboard tool, so the web and phone builds leave MAPS out.
+-- keyboard tool, so the web and phone builds leave EDITOR out.
 local AdvancedMenu = Class(Scene)
 
 AdvancedMenu.ui_pointer = true
@@ -19,7 +19,7 @@ local DESKTOP = { Linux = true, Windows = true, ["OS X"] = true }
 
 local ENTRIES = {
     { id = "mission", label = "MISSION" },
-    { id = "maps",    label = "MAPS" },
+    { id = "maps",    label = "EDITOR" },
     { id = "replays", label = "REPLAYS", gap_after = 8 },
     { id = "back",    label = "BACK" },
 }

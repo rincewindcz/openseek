@@ -155,12 +155,14 @@ local function marks_of(leg, legs, size, marks)
     end
 end
 
--- roads -> { segments = { { x1, y1, x2, y2, color } }, marks = { { x, y, type } } }:
--- the border lines and the centre mark decals (type: the map type of a mark,
--- the road's `across` or `down`). size is the map's wrap period.
+-- roads -> { segments = { { x1, y1, x2, y2, color } }, marks = { { x, y, type } },
+-- legs }: the border lines, the centre mark decals (type: the map type of a
+-- mark, the road's `across` or `down`) and the legs they were built from (each
+-- { road, left, top, right, bottom }, the ground a leg covers). size is the
+-- map's wrap period.
 function Roads.build(roads, size)
-    local built = { segments = {}, marks = {} }
     local legs  = legs_of(roads or {})
+    local built = { segments = {}, marks = {}, legs = legs }
     if #legs == 0 then return built end
     outline(legs, built.segments)
     for _, leg in ipairs(legs) do marks_of(leg, legs, size, built.marks) end

@@ -496,7 +496,51 @@ function Document:set_road(road, field, value, label)
     self:_run(label or "ROAD", function() road[field] = value end, function() road[field] = before end)
 end
 
--- The roads as border segments and centre marks (engine/game/roads.lua),
+local function shifted(points, dx, dy, size)
+    local out = {}
+    for i, p in ipairs(points) do out[i] = { (p[1] + dx) % size, (p[2] + dy) % size } end
+    return out
+end
+
+-- Move roads by a whole-pixel delta. live moves without recording (a drag in
+-- progress); the drag ends with Document:record_road_move of the total. A
+-- road gets a new point list each time: the history keeps the old ones.
+function Document:move_roads(roads, dx, dy, live)
+    if #roads == 0 or (dx == 0 and dy == 0) then return end
+    local function shift(sx, sy)
+        for _, road in ipairs(roads) do road.points = shifted(road.points, sx, sy, self.map.size) end
+    end
+    if live then
+        shift(dx, dy)
+        self.revision = self.revision + 1
+        return
+    end
+    self:_run("MOVE", function() shift(dx, dy) end, function() shift(-dx, -dy) end)
+end
+
+-- Record a finished live drag of roads by (dx, dy) in total, already applied.
+function Document:record_road_move(roads, dx, dy)
+    if #roads == 0 or (dx == 0 and dy == 0) then return end
+    local first = true
+    local function shift(sx, sy)
+        for _, road in ipairs(roads) do road.points = shifted(road.points, sx, sy, self.map.size) end
+    end
+    self:_run("MOVE", function()
+        if first then first = false else shift(dx, dy) end
+    end, function() shift(-dx, -dy) end)
+end
+
+-- The road whose ground holds the map point (x, y), the one drawn last first.
+function Document:road_at(x, y)
+    local legs = self:built_roads().legs
+    for i = #legs, 1, -1 do
+        local leg = legs[i]
+        if x >= leg.left and x <= leg.right and y >= leg.top and y <= leg.bottom then return leg.road end
+    end
+    return nil
+end
+
+-- The roads as border segments, centre marks and legs (engine/game/roads.lua),
 -- rebuilt when the map changed.
 function Document:built_roads()
     if self.built.revision ~= self.revision then

@@ -11,6 +11,7 @@ local Generate   = require "engine.editor.generate"
 local Cards      = require "engine.editor.cards"
 local Goals      = require "engine.editor.goals"
 local Validate   = require "engine.editor.validate"
+local MissionMenu = require "engine.ui.mission_menu"
 
 -- The dialogs of the map editor: map settings, new map, open, save as, ground
 -- generator, key help and the yes / no questions. editor.dialog holds the open
@@ -20,8 +21,8 @@ local Dialogs = {}
 local LABEL_W     = 150
 local PARAGRAPHS  = 3     -- briefing paragraphs: the briefing screen has three text slots
 local NAME_MAX    = 40
-local TEXT_MAX    = 260
-local CAPTION_MAX = 10    -- typed; Cards.caption cuts it to what fits across a card
+local TEXT_MAX    = 400
+local CAPTION_MAX = 16    -- typed; Cards.caption cuts it to what fits across a card
 local CARD_ZOOM   = 1.5   -- briefing cards shown this much larger in the settings
 local MAX_LIVES   = 9
 local GOAL_H      = 84    -- one objective in the settings' list
@@ -521,6 +522,19 @@ local function goal_card(editor, kit, rows, i, x, y, w, summary)
             return true
         end
         note("PICKED UP DURING THE PHASE")
+    elseif goal.type == "air" then
+        local range = limits.helicopters
+        local air   = Goals.air(doc)
+        if number("count", "HELICOPTERS", 100, goal.count or range.default, { min = range.min, max = range.max }) then
+            return true
+        end
+        if air.posts == 0 then
+            note("NO HELICOPTER POST ON THE MAP: THE OBJECTIVE IS LEFT OUT", theme.warn)
+        elseif air.returning then
+            note(air.posts .. (air.posts == 1 and " POST" or " POSTS") .. " ON THE MAP, AND THEY COME BACK")
+        else
+            note(air.posts .. " ON THE MAP, NONE COMES BACK", (goal.count or range.default) > air.posts and theme.warn or nil)
+        end
     end
     return false
 end
@@ -552,6 +566,8 @@ local function add_goal_menu(editor, kit, rows, x, y)
           action = function() add({ type = "survive", seconds = limits.seconds.default }) end },
         { label = "COLLECT MEDALS", icon = "ok",
           action = function() add({ type = "collect", count = limits.medals.default }) end },
+        { label = "SHOOT DOWN HELICOPTERS", icon = "helicopter",
+          action = function() add({ type = "air", count = limits.helicopters.default }) end },
     })
 end
 
@@ -642,20 +658,23 @@ local function settings_briefing(editor, kit, x, y, w, h)
                 { align = "center", color = theme.text_dim, size = theme.font_small })
         end
 
-        local text = doc.map.briefing[i] or ""
-        local new, _, done = kit:field("brief_" .. i, tx, top, tw, text,
-            { hint = "PARAGRAPH " .. i, max = TEXT_MAX, commit = true })
-        if done and new ~= text then
+        -- The paragraph, and how much of its slot it fills as the briefing sets it.
+        local text   = doc.map.briefing[i] or ""
+        local area_h = block - theme.row * 2 - 16
+        local new, _, done = kit:area("brief_" .. i, tx, top, tw, area_h, text,
+            { hint = "PARAGRAPH " .. i .. ". ENTER STARTS A NEW LINE.", max = TEXT_MAX })
+        if done and new:upper() ~= text then
             local briefing = {}
             for k = 1, PARAGRAPHS do briefing[k] = doc.map.briefing[k] or "" end
             briefing[i] = new:upper()
             while #briefing > 0 and briefing[#briefing] == "" do table.remove(briefing) end
             doc:set_map("briefing", briefing, "BRIEFING")
         end
-        kit:clip(tx, top + theme.row + 2, tw, block - theme.row * 2 - 16)
-        kit:paragraph(text, tx + theme.pad, top + theme.row + 4, tw - theme.pad * 2,
-            { color = theme.text_dim, size = theme.font_small })
-        kit:unclip()
+        local lines = #MissionMenu.lines(text, image and image.w or nil)
+        local room  = MissionMenu.SLOT_LINES
+        kit:label(lines > room and string.format("%d LINES: %d MORE THAN THE SLOT HOLDS, THE NEXT PARAGRAPH MOVES DOWN",
+            lines, lines - room) or string.format("%d OF %d LINES", lines, room), tx, top + area_h + 2, tw, theme.row - 4,
+            { color = lines > room and theme.warn or theme.text_dim, size = theme.font_small })
 
         local by = top + block - theme.row - 12
         local bx = tx
@@ -863,6 +882,33 @@ local function draw_save_as(editor, kit, dialog)
     end)
 end
 
+-- prefab
+
+local function draw_prefab(editor, kit, dialog)
+    dialog.name = dialog.name or ""
+    kit:dialog("SAVE AS A PREFAB", 460, 150, function(_, x, y, w, h)
+        local theme  = kit.theme
+        local bottom = y + h - theme.row - 2
+        local held   = editor.selection
+        labelled(kit, x, y, "NAME")
+        local name, _, done = kit:field("prefab_name", x + LABEL_W, y, w - LABEL_W, dialog.name,
+            { max = NAME_MAX, hint = "GUN NEST" })
+        dialog.name = name:upper()
+        local parts = {}
+        if held:count() > 0 then parts[#parts + 1] = held:count() .. (held:count() == 1 and " OBJECT" or " OBJECTS") end
+        if #held.roads > 0 then parts[#parts + 1] = #held.roads .. (#held.roads == 1 and " ROAD" or " ROADS") end
+        kit:label(table.concat(parts, " AND ") .. ", KEPT IN THE PREFABS FOLDER FOR EVERY MAP", x, y + theme.row + 8, w,
+            theme.row, { color = theme.text_dim, size = theme.font_small })
+        local ok = kit:button("prefab_ok", x + w - 100, bottom, 100, theme.row + 2,
+            { text = "SAVE", primary = true, disabled = dialog.name == "" })
+        if (ok or (done and love.keyboard.isDown("return", "kpenter"))) and dialog.name ~= "" then
+            close(editor)
+            editor:save_prefab(dialog.name)
+        end
+        if kit:button("prefab_cancel", x + w - 208, bottom, 100, theme.row + 2, { text = "CANCEL" }) then close(editor) end
+    end)
+end
+
 -- ground generator
 
 local function draw_generate(editor, kit, dialog)
@@ -932,7 +978,7 @@ end
 -- keys
 
 local KEYS = {
-    { "V  P  B  E  R  L  O", "SELECT, PLACE, SCATTER, ERASE, ROUTE, LINE, ROAD" },
+    { "V  P  B  E  R  L  O  U", "SELECT, PLACE, SCATTER, ERASE, ROUTE, LINE, ROAD, MEASURE" },
     { "WHEEL", "ZOOM ABOUT THE POINTER" },
     { "RIGHT OR MIDDLE DRAG, SPACE + DRAG", "MOVE THE VIEW" },
     { "W A S D", "MOVE THE VIEW" },
@@ -947,6 +993,7 @@ local KEYS = {
     { "G  /  CTRL + G", "GRID, SNAP TO GRID" },
     { "HOME  F  M", "GO TO THE HOME PAD, SHOW THE SELECTION, OVERVIEW MAP" },
     { "ENTER  /  BACKSPACE", "FINISH A ROUTE, LINE OR ROAD, TAKE BACK ITS LAST POINT" },
+    { "CLICK AN END", "CARRY A ROUTE, LINE OR ROAD ON FROM THERE" },
     { "CTRL WHILE DRAWING OR DRAGGING", "ROUTE AND LINE SEGMENTS IN 45 DEGREE STEPS; A MOVE ALONG ONE AXIS" },
     { "CTRL + [  ]  /  SHIFT + H  V", "TURN THE SELECTION A QUARTER, MIRROR IT" },
     { "F5  /  SHIFT + F5", "TRY THE MAP FROM THE HOME PAD, OR FROM HERE (ESC COMES BACK)" },
@@ -954,7 +1001,7 @@ local KEYS = {
 }
 
 local function draw_help(editor, kit)
-    kit:dialog("KEYS", 660, 564, function(_, x, y, w, h)
+    kit:dialog("KEYS", 660, 588, function(_, x, y, w, h)
         local theme = kit.theme
         for i, item in ipairs(KEYS) do
             local ry = y + (i - 1) * (theme.row + 2)
@@ -968,7 +1015,8 @@ local function draw_help(editor, kit)
 end
 
 local DRAW = { settings = draw_settings, cards = draw_cards, new = draw_new, open = draw_open,
-               save_as = draw_save_as, generate = draw_generate, ask = draw_ask, help = draw_help }
+               save_as = draw_save_as, prefab = draw_prefab, generate = draw_generate, ask = draw_ask,
+               help = draw_help }
 
 function Dialogs.draw(editor, kit)
     local dialog = editor.dialog

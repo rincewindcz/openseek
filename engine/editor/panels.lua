@@ -1,8 +1,10 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
+local Roads    = require "engine.game.roads"
 local Catalog  = require "engine.editor.catalog"
 local Ops      = require "engine.editor.ops"
+local Prefabs  = require "engine.editor.prefabs"
 local Validate = require "engine.editor.validate"
 
 -- The panels of the map editor's dock: OBJECTS (the catalog), PROPERTIES (the
@@ -51,6 +53,116 @@ end
 
 Panels.draw_entry = draw_entry
 
+local function by_depth(a, b)
+    if a.dy ~= b.dy then return a.dy < b.dy end
+    return a.dx < b.dx
+end
+
+-- A prefab drawn as it will stand on the map, fitted into a box: its roads'
+-- borders, the ground under its objects, then the objects.
+local function draw_prefab(clip, x, y, w, h)
+    local g = love.graphics
+    local x0, y0, x1, y1 = math.huge, math.huge, -math.huge, -math.huge
+    local decals, objects = {}, {}
+    for _, item in ipairs(clip.items) do
+        local info = Catalog.type_info(item.map_type)
+        local list = info.kind_name == "ground_decal" and decals or objects
+        list[#list + 1] = { info = info, dx = item.dx, dy = item.dy }
+        x0, y0 = math.min(x0, item.dx + info.ox), math.min(y0, item.dy + info.oy)
+        x1, y1 = math.max(x1, item.dx + info.ox + info.w), math.max(y1, item.dy + info.oy + info.h)
+    end
+    -- The roads are built where they lie from the prefab's middle, shifted
+    -- into the positive numbers the builder's grid wants.
+    local reach = 0
+    for _, road in ipairs(clip.roads) do
+        for _, p in ipairs(road.points) do
+            reach = math.max(reach, math.abs(p[1]) + road.width, math.abs(p[2]) + road.width)
+        end
+    end
+    local lanes = {}
+    for i, road in ipairs(clip.roads) do
+        local points = {}
+        for k, p in ipairs(road.points) do points[k] = { p[1] + reach, p[2] + reach } end
+        lanes[i] = { points = points, width = road.width, pitch = 0, edge = road.edge }
+    end
+    local segments = Roads.build(lanes, reach * 4 + 1).segments
+    for _, s in ipairs(segments) do
+        x0, y0 = math.min(x0, s.x1 - reach, s.x2 - reach), math.min(y0, s.y1 - reach, s.y2 - reach)
+        x1, y1 = math.max(x1, s.x1 - reach, s.x2 - reach), math.max(y1, s.y1 - reach, s.y2 - reach)
+    end
+    if x0 >= x1 or y0 >= y1 then return end
+    table.sort(decals, by_depth)
+    table.sort(objects, by_depth)
+    local k  = math.min(w / (x1 - x0), h / (y1 - y0), 2)
+    local cx = x + (w - (x1 - x0) * k) / 2 - x0 * k
+    local cy = y + (h - (y1 - y0) * k) / 2 - y0 * k
+    g.setLineWidth(1)
+    for _, s in ipairs(segments) do
+        g.setColor(s.color[1] / 255, s.color[2] / 255, s.color[3] / 255, 1)
+        g.line(cx + (s.x1 - reach) * k, cy + (s.y1 - reach) * k, cx + (s.x2 - reach) * k, cy + (s.y2 - reach) * k)
+    end
+    g.setColor(1, 1, 1, 1)
+    for _, list in ipairs({ decals, objects }) do
+        for _, item in ipairs(list) do
+            local info = item.info
+            if info.img then g.draw(info.img, cx + (item.dx + info.ox) * k, cy + (item.dy + info.oy) * k, 0, k, k) end
+        end
+    end
+end
+
+-- The prefabs: a button to save the selection as one, then the saved ones. A
+-- click arms the place tool with a prefab; the bin on a cell deletes it.
+local function prefab_list(editor, kit, x, y, w, h, needle)
+    local theme = kit.theme
+    local pad   = theme.pad
+    if kit:button("prefab_save", x + pad, y, w - pad * 2, theme.row + 2, { text = "SAVE THE SELECTION AS A PREFAB",
+        icon = "prefab", disabled = not editor.selection:any(),
+        tip = "THE SELECTED OBJECTS AND ROADS, TO PLACE AGAIN ON ANY MAP" }) then
+        editor:open_dialog("prefab")
+    end
+    local cy     = y + theme.row + 2 + theme.gap
+    local list_h = y + h - cy
+    local found  = {}
+    for _, prefab in ipairs(Prefabs.list()) do
+        if needle == "" or prefab.label:upper():find(needle, 1, true) then found[#found + 1] = prefab end
+    end
+    local cell_w = (w - pad * 2 - 4) / COLUMNS
+    local rows   = math.ceil(#found / COLUMNS)
+    local offset = kit:scroll_begin("prefab_list", x, cy, w, list_h, rows * CELL_H + pad)
+    for i, prefab in ipairs(found) do
+        local col, row = (i - 1) % COLUMNS, math.floor((i - 1) / COLUMNS)
+        local ex, ey = x + pad + col * cell_w, cy + row * CELL_H - offset
+        if ey + CELL_H > cy and ey < cy + list_h then
+            local id      = "prefab_" .. prefab.name
+            local current = editor.placing ~= nil and editor.placing.key == "prefab/" .. prefab.name
+            -- The bin sits on the cell and is asked first, so its click is its own.
+            local binned, bin_hover = kit:click(id .. "#bin", ex + cell_w - 22, ey + 2, 18, 18)
+            local clicked, hover    = kit:click(id, ex, ey, cell_w - 2, CELL_H - 2)
+            if bin_hover then kit:set_tip(id .. "#bin", "DELETE THIS PREFAB")
+            elseif hover then kit:set_tip(id, prefab.label) end
+            kit:rect(ex, ey, cell_w - 2, CELL_H - 2, (hover or bin_hover) and theme.widget_hot or theme.widget, 3)
+            if current then kit:frame(ex, ey, cell_w - 2, CELL_H - 2, theme.accent, 3) end
+            kit:clip(ex + 2, ey + 2, cell_w - 6, THUMB + 2)
+            draw_prefab(prefab.clip, ex + 4, ey + 3, cell_w - 10, THUMB)
+            kit:unclip()
+            kit:label(prefab.label, ex, ey + THUMB + 4, cell_w - 2, 14,
+                { align = "center", size = theme.font_small, color = current and theme.accent or theme.text, pad = 2 })
+            if hover or bin_hover then
+                kit:rect(ex + cell_w - 22, ey + 2, 18, 18, { 0, 0, 0, 0.6 }, 3)
+                kit:icon("trash", ex + cell_w - 21, ey + 3, 16, bin_hover and theme.danger or theme.text_dim)
+            end
+            if binned then editor:delete_prefab(prefab)
+            elseif clicked then editor:pick_prefab(prefab) end
+        end
+    end
+    if #found == 0 then
+        kit:paragraph(needle == "" and "NO PREFAB YET. SELECT WHAT BELONGS TOGETHER, A GUN NEST OR A COMPOUND WITH ITS "
+            .. "ROADS, AND SAVE IT HERE TO PLACE IT AGAIN." or "NO PREFAB OF THAT NAME", x + pad, cy + 8, w - pad * 2,
+            { color = theme.text_dim })
+    end
+    kit:scroll_end()
+end
+
 function Panels.objects(editor, kit, x, y, w, h)
     local theme = kit.theme
     local pad   = theme.pad
@@ -77,6 +189,10 @@ function Panels.objects(editor, kit, x, y, w, h)
 
     local entries = {}
     local needle  = editor.search:upper()
+    if editor.category == "prefabs" then
+        prefab_list(editor, kit, x, cy, w, y + h - cy, needle)
+        return
+    end
     local catalog = Catalog.entries(editor.catalog_art)
     for _, entry in ipairs(needle ~= "" and catalog.list or (catalog.by_category[editor.category] or {})) do
         if needle == "" or entry.label:find(needle, 1, true) then entries[#entries + 1] = entry end
@@ -374,6 +490,31 @@ function SECTIONS.pickup(editor, kit, x, y, w, objects)
     return y + kit:paragraph(text, x, y + 2, w, { color = theme.text_dim, size = theme.font_small }) + 4
 end
 
+-- The selected roads: their width and whether they carry a centre line.
+local function roads_section(editor, kit, x, y, w, roads)
+    local doc    = editor.doc
+    local limits = Catalog.data().roads
+    local style  = Catalog.road_style(doc:art())
+    local width, mixed = shared(roads, function(road) return road.width end)
+    local new, changed = kit:number("prop_road_width", x + LABEL_W, y, w - LABEL_W, mixed and roads[1].width or width,
+        { min = limits.min_width, max = limits.max_width, step = 2, big = 8 })
+    if changed then
+        doc:begin("ROAD WIDTH")
+        for _, road in ipairs(roads) do doc:set_road(road, "width", new) end
+        doc:commit()
+    end
+    if mixed then kit:label("MIXED", x + 62, y, 48, kit.theme.row, { size = kit.theme.font_small, color = kit.theme.warn }) end
+    y = row(kit, x, y, "WIDTH")
+    local marks = shared(roads, function(road) return (road.pitch or 0) > 0 end)
+    local new_marks, marks_changed = kit:check("prop_road_marks", x, y, w, "CENTRE LINE", marks == true)
+    if marks_changed then
+        doc:begin("ROAD CENTRE LINE")
+        for _, road in ipairs(roads) do doc:set_road(road, "pitch", new_marks and style.pitch or 0) end
+        doc:commit()
+    end
+    return y + kit.theme.row + 2
+end
+
 local KIND_TITLES = {
     structure = "BUILDING", flak_turret = "GUN", tank = "TANK HULL", truck = "TRUCK", soldier = "SOLDIER",
     soldier_aggressive = "SOLDIER", enemy_helicopter = "HELICOPTER POST", scenery = "SCENERY", tree = "TREE",
@@ -421,8 +562,29 @@ function Panels.properties(editor, kit, x, y, w, h)
     local doc   = editor.doc
     local pad   = theme.pad
     local ix, iw = x + pad, w - pad * 2
+    local roads = editor.selection.roads
     if editor.selection:count() == 0 then
-        map_summary(editor, kit, ix, y, iw)
+        if #roads == 0 then
+            map_summary(editor, kit, ix, y, iw)
+            return
+        end
+        -- Roads alone: their own rows, and what can be done with them.
+        local cy = kit:header(#roads == 1 and "ROAD" or (#roads .. " ROADS"), x, y, w) + 4
+        cy = roads_section(editor, kit, ix, cy, iw, roads) + 6
+        kit:separator(x, cy, w)
+        cy = cy + 6
+        local bw = (iw - 4) / 2
+        if kit:button("prop_road_dup", ix, cy, bw, theme.row + 2, { text = "COPY", icon = "duplicate",
+            tip = "DUPLICATE (CTRL+D)" }) then
+            editor:duplicate()
+        end
+        if kit:button("prop_road_delete", ix + bw + 4, cy, bw, theme.row + 2, { text = "DELETE", icon = "trash",
+            danger = true, tip = "DELETE (DEL)" }) then
+            editor:delete_selection()
+        end
+        cy = cy + theme.row + 10
+        kit:paragraph("DRAG A ROAD TO MOVE IT. ITS POINTS ARE EDITED WITH THE ROAD TOOL (O).", ix, cy, iw,
+            { color = theme.text_dim, size = theme.font_small })
         return
     end
 
@@ -473,6 +635,12 @@ function Panels.properties(editor, kit, x, y, w, h)
                 end
             end
         end
+    end
+
+    if #roads > 0 then
+        cy = cy + 2
+        cy = kit:header(#roads == 1 and "ROAD" or ("ROADS  X" .. #roads), x, cy, w, { color = theme.text }) + 4
+        cy = roads_section(editor, kit, ix, cy, iw, roads)
     end
 
     cy = cy + 6

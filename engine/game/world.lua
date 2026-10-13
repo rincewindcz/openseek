@@ -367,6 +367,8 @@ function World:load(name)
     self.route_states  = {}   -- route index -> {halts, finished}, shared by the units on it
     self.route_units   = {}   -- route units that give way to a player on the ground
     self.air_units     = {}   -- live enemy helicopters (owned by the heli system)
+    self.air_kills     = 0    -- enemy helicopters shot down this phase (counted by the heli system)
+    self.air_supply    = nil  -- how many the phase can put up, once the heli system has read the posts
     self.placed        = {}   -- stage entity index -> the entity it became (a turret: its hull)
     self.marks         = {}   -- { x, y }: places a mission shows on the radar (owned by Mission)
 

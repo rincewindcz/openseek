@@ -3,8 +3,10 @@
 
 local json        = require "lib.json"
 local Animation   = require "engine.core.animation"
+local Config      = require "engine.core.config"
 local MapCompiler = require "engine.game.map_compiler"
 local Vehicles    = require "engine.game.vehicles"
+local Loadout     = require "engine.game.loadout"
 
 -- What the map editor can place, read from the pack: one entry per sprite and
 -- kind of an art set (a mission's stages), with the classes the original sets
@@ -19,6 +21,7 @@ local DATA_PATH    = "data/editor.json"
 local RULES_PATH   = "data/enemy_weapons.json"
 local PICKUPS_PATH = "data/powerups.json"
 local PICKUP_CLIP  = "pickup"
+local VEHICLE_PATH = "data/vehicles/%s.json"
 
 local BASE_FLAG = 0x40
 
@@ -38,7 +41,8 @@ local KIND_LAYER = {
     ground_decal = "ground", powerup_marker = "objectives", unknown_14 = "objectives", civilian = "objectives",
 }
 
-local data, rules, pickups
+local data, rules, pickups, equip
+local top_speeds = {}   -- vehicle -> max_fwd of its data file, or false
 local images     = {}   -- path -> Image or false
 local by_art     = {}   -- art -> { list, by_category, by_key }
 local type_infos = setmetatable({}, { __mode = "k" })   -- map type -> info
@@ -126,6 +130,40 @@ end
 
 local function weapon_label(name)
     return Catalog.data().weapons[name] or tostring(name):upper():gsub("ENEMY_", ""):gsub("_", " ")
+end
+
+-- travel
+
+local function top_speed(vehicle)
+    if top_speeds[vehicle] == nil then
+        local path = string.format(VEHICLE_PATH, vehicle)
+        local raw  = love.filesystem.getInfo(path) and love.filesystem.read(path)
+        top_speeds[vehicle] = raw and tonumber(json.decode(raw).max_fwd) or false
+    end
+    return top_speeds[vehicle] or 0
+end
+
+-- How fast each vehicle a map may be played in covers ground at full speed:
+-- { { label, speed } }, speed in world pixels a second. The vehicle and its
+-- load of fuel and armour are the map's own when it fixes them, else both
+-- vehicles as the equip screen starts them (the rule is Player:_apply_config).
+function Catalog.travel(map)
+    local kinds, chars = Vehicles.KINDS, nil
+    if map.loadout then
+        local vehicle, load = Loadout.fixed(map.loadout)
+        kinds, chars = { vehicle }, load.chars
+    elseif map.vehicle then
+        kinds = { map.vehicle }
+    end
+    equip = equip or Loadout:new()
+    local out = {}
+    for _, vehicle in ipairs(kinds) do
+        local load   = chars or equip.vehicles[vehicle].chars
+        local factor = math.max(0.25, math.min(2.0, 2.0 - (load.fuel + load.armor) / 2))
+        local speed  = top_speed(vehicle) * factor * Config.speed_scale
+        if speed > 0 then out[#out + 1] = { label = vehicle:upper(), speed = speed } end
+    end
+    return out
 end
 
 -- pickups

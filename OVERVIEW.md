@@ -182,7 +182,7 @@ one full-window view from the first player's camera.
 |-------|--------------------|
 | `--selftest` | any simulation code |
 | `--verify` | any simulation code, with recordings from the same version at hand; on each platform before a release |
-| `luajit tools/sim_maps.lua` | `game/map_file`, `game/map_compiler`, `game/roads`, `World:load`, a map's placed pickups in `game/powerups`, `engine/editor/` (document, catalog, ops, validate, goals), a map's objectives in `game/mission`, the stage exporter |
+| `luajit tools/sim_maps.lua` | `game/map_file`, `game/map_compiler`, `game/roads`, `World:load`, a map's placed pickups in `game/powerups`, `engine/editor/` (document, catalog, ops, validate, goals, selection, prefabs), a map's objectives in `game/mission`, the helicopter count of `game/enemy_heli`, the stage exporter |
 
 ## 5. Architecture
 
@@ -217,7 +217,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 |-------|------|
 | `title` | Engine intro card on the first launch or while `engine_intro` is on (about 3 s; its riff rings on over TITLE and holds the menu music back; Enter, Space, Esc skip to TITLE), then the TITLE card; Enter, Space, Esc skip to `main_menu`, or to `style_select` until `Config.style_chosen` is set. |
 | `main_menu` | Main menu (NEW GAME, RESUME, OPTIONS, CREDITS, HIGH SCORES, LOAD, ADVANCED, EXIT, or FULLSCREEN on the web); pushed over a running game on Esc, where RESUME pops back to it. Otherwise RESUME reopens the campaign autosave at its briefing. NEW GAME replaces it with `new_game`. Under `--dev` the fresh menu takes the launch keys of section 4 (`MainMenu:_dev_key`). |
-| `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, MAPS, REPLAYS, BACK. Keeps the non-run entries off the main menu. MAPS is left out on the web and phone builds and under `--touch` (the editor is a mouse and keyboard tool). |
+| `advanced_menu` | ADVANCED submenu, same widget and backdrop: MISSION, EDITOR, REPLAYS, BACK. Keeps the non-run entries off the main menu. EDITOR (the map list and the map editor) is left out on the web and phone builds and under `--touch` (the editor is a mouse and keyboard tool). |
 | `new_game` | NEW GAME mode menu: SOLO CAMPAIGN, LOCAL COOP, CANCEL. |
 | `vehicle_select` | Per-player CHOPPER and TANK variant cards over the unused original `VSELECT` art (preview boxes, camo strips, OK / EXIT plates) with turntable previews; the active card names its variant in the gold `credchars` font, its letters closed up by up to 2 px when the name is wider than the gap between the arrows (the co-op columns). Campaign: START begins the run. Free (F7): the focused card is the vehicle; G toggles god mode. Two players: a CONTROLS line per column (`1` / `2` or a click cycles AUTO, KEYS, PAD 1, PAD 2 into `coop_device_1` / `_2`, showing what AUTO resolves to and a named pad that is missing); a pad steps the column of the player holding it. |
 | `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3 (the shareware: DEMO01..03 and DEMOOVER, no animation, with `extra_lines` appended under DEMOOVER). Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, preview, keep_music, on_done }`; `alternate` types VIC3's alternate ending, `preview` falls back to `data/ending.json` `preview` without a record (overview F11), `keep_music` leaves the end music playing into the credits (`Campaign.complete`). EXTRA `ending_stats` adds the run record under FIN01..03 (DEMO01..03). |
@@ -227,7 +227,7 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
 | `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. Co-op: once per player (tagged), EXIT steps back a player. |
 | `shop` | POWUP / POWUPT weapon shop. Co-op: once per player, each with their own purse. |
-| `map_select` | MAPS screen (menu ADVANCED), built like `saves` over an amber-tinted `MAINP`: the maps of `maps/` in the save directory, newest first, under a NEW MAP row. PLAY (Enter, or a click on the row) runs briefing, equip, phase and stats and comes back (`app.play_return`), with the MISSION mode medal purse and no high score entry; EDIT (`E`) opens the editor; COPY (`C`) duplicates; two-step delete; FOLDER (`F`) opens the directory. A map with a check error (section 6a) is listed but not played. A map file dropped on the window is imported (`Scene:filedropped`). |
+| `map_select` | MAPS screen (menu ADVANCED / EDITOR), built like `saves` over an amber-tinted `MAINP`: the maps of `maps/` in the save directory, newest first, under a NEW MAP row. PLAY (Enter, or a click on the row) runs briefing, equip, phase and stats and comes back (`app.play_return`), with the MISSION mode medal purse and no high score entry; EDIT (`E`) opens the editor; COPY (`C`) duplicates; two-step delete; FOLDER (`F`) opens the directory. A map with a check error (section 6a) is listed but not played. A map file dropped on the window is imported (`Scene:filedropped`). |
 | `editor` | Map editor (section 6a). Entered from `map_select` with `{ map = name }` or `{ new = true }`; with nothing it resumes the map already open (after a try). Key repeat is on while it is the top scene. Under `--dev` its DEV menu launches the sandbox, co-op free play, the replay panel, the galleries, the ending previews and the crash picture. |
 | `gameplay` | Player-locked rotating camera, combat. A phase played on its own returns to where it was started (`GameplayBase:leave_run`, `app.play_return`: the map list or the editor, else the menu); a map tried from the editor leaves on Esc and is not recorded. Under `--dev` `PgUp` / `PgDn` step the pack stage in free play. |
 | `sandbox` (F3 on the main menu, `--dev`) | Gameplay plus live vehicle parameter editor. |
@@ -264,7 +264,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/world` | Stage load (a pack stage, or a map compiled by `game/map_compiler`: `World.is_map`, `map_stage`, `stage_state`), entities, environment (`world.env`: art set, night, weather, look, music; section 6a), ground colour, collision (`blocked`), objectives, ground dust, `world.time`, `world.rng`, `world.params`. A map that cannot be loaded falls back to the first pack stage. |
 | `game/map_file` | Player-made maps: format, compact one-object-per-line encoding, read / write / list / import in `maps/` of the save directory, `hash` (the fingerprint a replay header carries as `map`). Section 6a. |
 | `game/map_compiler` | `compile`: map -> the stage table `World:load` builds a phase from. `decompile`: pack stage -> map (a clone). `pack_stage`: the cached class side of a pack stage (classes, assets, uses per class, classes sharing a spot). |
-| `game/roads` | `build(roads, size)`: a map's roads as border segments (the outline of all of them together) and centre marks, for the compiler and the editor's view. |
+| `game/roads` | `build(roads, size)`: a map's roads as border segments (the outline of all of them together), centre marks and the legs they were built from (the ground each covers), for the compiler and the editor's view and picking. |
 | `game/debris` | Explosion shards (`data/debris.json`), owned by the world as `world.debris`: `burst(name, x, y, opts)` throws the named burst, `update` flies the pieces (linear slow-down to rest, sinking through the size rows of their clip, smoke trail puffs, dust puff on landing through `World:add_ground_dust`, then lying on the ground with EXTRA `lying_shards`). Presentation only: fed through the one-way `World:spawn_debris`, random numbers from `math.random`, never read by the simulation. Flying pieces and puffs are drawn by `Renderer:draw_debris`, lying ones in the ground pass over the tread marks. |
 | `game/entity` | HP, state machine, damage smoke, hit effects, crater. |
 | `game/player` | Movement, collision, altitude, landing, tank turret, fuel, frames, rotors, ammo, death, skins, score, lives. A tank that drives into a solid object lying within `bump_arc` of its travel direction bounces off as in the original: its speed flips to the same share of the opposite top speed (times `bump_bounce`) and it is set back `bump_back` seconds of travel, after which the controls ease it out. Under `bump_min` of top speed, or on a glancing touch, it slides along instead, and stands still when it cannot. A tree it may crush (`explosive_trees`) never bounces it. `Player.draw_tank_variant` is shared with the select screen. |
@@ -272,7 +272,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/combat` | Weapons, projectiles, firing geometry, hits, AoE, effects, ground enemy AI. |
 | `game/enemy_fire` | Enemy firing rules as the original runs them (owned by `game/combat`, `data/enemy_weapons.json`): a gun's routine (volley, burst, reload per fire level), soldiers and their wander, proximity mines, a hangar tank's parked gun, the helicopters' weapon modes, and the homing missiles' bearing refresh with the radar / radio tower penalty. |
 | `game/air_strike` | Air strike (owned by `game/combat`): impact schedule drawn from `world.rng` at the call, detonated on `world.time`, damage in toughness units; EXTRA craft, rocket and bomb visuals with their shadows. |
-| `game/mission` | Objectives, progress, return to base. `Mission.for_stage(world, players, stage)`. A map's own objectives (section 6a), their order, the time limit; `order()` and `clock()` for the scene to show. |
+| `game/mission` | Objectives, progress, return to base. `Mission.for_stage(world, players, stage)`. A map's own objectives (section 6a), their order, the time limit; `order()` and `clock()` for the scene to show. Enemy helicopters are no entities: the helicopter system counts the ones shot down on the world (`air_kills`) and says how many the phase can put up (`air_supply`). |
 | `game/rescue` | People to pick up: buildings holding POWs, the crash-site crews, walkers, flung bodies. |
 | `game/saboteur` | Agent drop-off and recovery at the linked buildings. |
 | `game/powerups` | Power-ups as the original runs them (`data/powerups.json`, times in ticks of 1/70 s). A dying building's drop is drawn from a 16-entry table built per player at phase start: armor and fuel alternating, then `ammo_share` 10 entries split evenly among the carried weapons that have a pickup frame (chain gun and air strike have none), so ammo only drops for what the player carries; free play carries everything. Every other entry turns to fuel or armor while the nearest player is below `low` (fuel 20 %, armor 5), and below `critical` (10 %, 2) the drop is always that supply, fuel first. Medals only come from forced-drop classes. Lifetime `lifetime` 1220 / 976 / 732 ticks by `pickup_level`, blinking the last `blink` 300, frozen while every player is down. Taken inside a `reach` 16 px box around the vehicle centre, by fly-over unless the difficulty says to land on it (medals, fuel / armor); `F6` forces fly-over for everything. Fuel and armor add half the maximum, ammo its `ammo_pickup` up to `ammo_cap` 999. EXTRA `weapon_finds`: a drop is with `find.chance` a weapon of the vehicle that the player does not carry (its icon alternating with the unused GET / ME frames, over the pulsing `find.glow` halo); taking it adds the weapon to the player's list for the rest of the phase with `find.ammo` 15 % of its starting load (at least one round), rebuilds the table and stamps `Player.found_weapon` / `found_time` for the HUD notice. A map's own pickups (`stage.pickups`, section 6a) are laid out when the players are set: they never expire, ammunition for a weapon nobody carries is such a weapon to find, and what no vehicle in the phase can use is left out. |
@@ -299,10 +299,10 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/crash_fx` | EXTRA crash picture effects (`data/crash_fx.json`), the `fx` of the crash / game-over overlay: smoke, fire glow, embers and heat haze composed at the picture's resolution, flash and static entrance, static burst on a radio cue (`crash_fx`); the typed cause of the loss (`crash_cause`, from `Player.damage_cause`); the run's trivia (`crash_stats`, from `World.tally` and the campaign record via `GameplayBase:crash_stats`). `CrashFX.show` picks the picture and its timing for both gameplay scenes (the fx is nil with every extra off); `CrashFX.preview` is the overview's `Delete` key. |
 | `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse, greys levels the purse cannot pay for (not the selected one, whose COST reads red), slides the focus frame, marks the hovered box and dims LOADED while a higher level is selected. |
-| `ui/kit` | Immediate-mode widget kit of the map editor: panels, buttons, check boxes, text and number fields, drop-downs, tabs, scroll areas, menus, tooltips, one dialog; popups and the dialog are deferred to `finish()` and own the input while open. The shipped "Loaded" font, tinted icon masks from `content/editor/icons/`, theme from `data/editor.json`. UI units are window pixels divided by `kit.scale` (1, 1.25, 1.5 or 2; `Kit.scale_for` picks by window height). |
+| `ui/kit` | Immediate-mode widget kit of the map editor: panels, buttons, check boxes, text and number fields, a text box of several lines (`area`: wrapped, Enter breaks a line, the arrows move through the lines as shown), drop-downs, tabs, scroll areas, menus, tooltips, one dialog; a click from one text box into another ends the first edit before the second takes the keyboard; popups and the dialog are deferred to `finish()` and own the input while open. The shipped "Loaded" font, tinted icon masks from `content/editor/icons/`, theme from `data/editor.json`. UI units are window pixels divided by `kit.scale` (1, 1.25, 1.5 or 2; `Kit.scale_for` picks by window height). |
 | `ui/menu` | Main menu over `MAINP`, `main` font (`mainmen` on a pack exported before `main` existed). Also drives the `new_game` and `advanced_menu` submenus. `set_notice(id, text)` makes an entry answer with a line under the last row (`chars` font, 2.2 s) instead of being confirmed. |
 | `ui/player_tag` | Co-op player colours, `PLAYER n` badge for the shop / equip screens. |
-| `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. The icon under the pointer lights up: its art is added onto itself by as much as lifts the card's mean brightness to `HOVER_TARGET` (the dark night cards about 2.5 times, a day card barely). |
+| `ui/mission_menu` | Briefing menu, button row, objective icons, `assets/mission_text.json`. A paragraph wraps to its column and breaks where its text has a line break; `MissionMenu.lines` gives the lines a text takes beside a card (`SLOT_LINES` fill a slot). The icon under the pointer lights up: its art is added onto itself by as much as lifts the card's mean brightness to `HOVER_TARGET` (the dark night cards about 2.5 times, a day card barely). |
 | `ui/mission_select` | `STAGE0X_MPIC` carousel over the missions present, phase buttons. |
 | `ui/data_setup` | First-run screen without a usable pack: runs the converter, restarts into the game (section 2). |
 | `ui/error_screen` | `love.errorhandler`: writes `crashes/crash_<date>_<time>.txt` into the save directory (error, traceback, build, LOVE, OS, renderer, window, pack status and edition, the last log lines) and shows the error, the report path and the first traceback lines over the dimmed engine intro card, in the shipped TTF, so it works without the pack. `C` copies the report, `O` opens the folder, `R` (pad A) restarts, Esc (pad B) quits; a tap copies on touch builds. Under `--selftest` it prints and exits with status 1 instead. |
@@ -312,15 +312,16 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/hint` | Two-tone footer key hints: `{ENTER} LOAD` draws the braced key name gold and the action white. |
 | `ui/scroll_text` | Text held to a fixed width for typed values: clipped print with an offset, `tail` (the end in view, for a field being typed into) and `swing` (pans a text that does not fit to its end and back). |
 | `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Buttons draw their white icon from `content/mobileui/icon_<id>.png` (label when missing), tinted gold or white. MOBILE UI options: `touch_color`, `touch_opacity` (multiplies every alpha), `touch_button_scale`, `touch_stick_scale`, `touch_left_handed` (buttons measured from the left edge, stick on the right half). Drawn while the last input was touch (from the start under `--touch`). |
-| `editor/document` | The open map: lookups by id, group and owner, a 128 px grid for picking and culling, the undo history (every change is a recorded redo / undo pair, batched per action), type interning (`type_with`), the roads as built geometry (`built_roads`). |
+| `editor/document` | The open map: lookups by id, group and owner, a 128 px grid for picking and culling, the undo history (every change is a recorded redo / undo pair, batched per action), type interning (`type_with`), the roads as built geometry (`built_roads`), the road under a point (`road_at`), moving roads (`move_roads`, `record_road_move`). |
 | `editor/catalog` | What can be placed, read from the pack: one entry per sprite and kind of an art set, classes sharing a spot kept as one entry (`stack_share`), `feature` (flag, pad, person, home pad classes, from any art set when the own one lacks them), `type_info` (what a map type draws as), inspector choices (firing routines, soldier and helicopter modes, movements). The pickups a map lays out are entries of every art set (`pickup_choices`, `part_type`, `weapon_users`). `road_style`: how a road of an art set is drawn. |
 | `editor/view` | Free camera over the wrapped map in a window rect; draws the document (ground, decals, lines, objects, map copies past the seam shaded), picks under a point. |
-| `editor/tools` | SELECT, PLACE, SCATTER, ERASE, ROUTE, LINE, ROAD; off the strip, the one-click picks the map settings hand over to (a briefing picture's square, an objective's place). |
+| `editor/tools` | SELECT, PLACE, SCATTER, ERASE, ROUTE, LINE, ROAD, MEASURE; `draw_ranges` (what an armed kind sees and where it fires); off the strip, the one-click picks the map settings hand over to (a briefing picture's square, an objective's place). |
 | `editor/goals` | The editor's side of a map's objectives: the rows the settings list (the map's entries, then what its content asks for), changes to them as new lists for the undo history, the ids taken from a selection, kind choices, what the objectives mark on the map. |
-| `editor/ops` | Placing an entry, the objective marks of a building (people inside, agent target, waiting crew), copy / paste / duplicate, arranging a selection (`align`, `distribute`, `turn`, `mirror`), grouping, `auto_group` of a cloned stage. |
-| `editor/cards` | Briefing cards of a map as canvases: `compose` (a map square through `View.draw_region`, or a pack card), `for_map`, `originals` (every card of the pack's briefings). Also used by `scenes/mission_briefing`. |
+| `editor/ops` | Placing an entry, the objective marks of a building (people inside, agent target, waiting crew), copy / paste / duplicate of objects and roads (a copy also holds the routes its units drive; `centre` measures it from its middle, a `portable` one brings its routes along), arranging a selection (`align`, `distribute`, `turn`, `mirror`), grouping, `auto_group` of a cloned stage. |
+| `editor/cards` | Briefing cards of a map as canvases: `compose` (a map square through `View.draw_region`, or a pack card), `for_map`, `originals` (every card of the pack's briefings), `of_stage` (the cards a copy of a stage starts with), `caption` (a caption cut to what fits, in the pixel lettering of `data/editor.json` `cards`). Also used by `scenes/mission_briefing`. |
+| `editor/prefabs` | Prefabs: a copy (`Ops.copy`, centred) saved under a name as one JSON file in `prefabs/` of the save directory; `list`, `save`, `delete`, `encode` / `decode`. |
 | `editor/panels`, `editor/dialogs` | The dock (OBJECTS, PROPERTIES, LAYERS, CHECKS) and the dialogs (map settings, new, open, save as, ground generator, keys, questions). |
-| `editor/validate`, `editor/generate`, `editor/selection` | Map checks; ground cover at a pack stage's densities; the selected objects. |
+| `editor/validate`, `editor/generate`, `editor/selection` | Map checks; ground cover at a pack stage's densities; the selected objects and roads. |
 | `dev/debug_panel` | Entity inspector and type editor, saves `data/entity_types.json`. F2 in gameplay (`--dev`), also in a map being tried. |
 | `dev/selftest` | Scripted phase run three ways, compared per tick (`--selftest`); recordings played back against their checkpoints (`--verify`). |
 | `dev/photo_mode` | `--photo` only: holds the scene, puts a free view (focus offset, zoom multiplier, turn) on the scene's camera for the length of a draw, and captures the scene's `draw_world()` into a canvas of the output size (`data/photo.json`). Presentation only; steps whole ticks through the scene's update. |
@@ -360,7 +361,7 @@ A map is one phase made by a player: `maps/<name>.json` in the save directory
 (`game/map_file`), holding sprite names, class references into the pack's
 stages and coordinates, never pixels. Its stage name is `map_<name>`;
 `World:load` compiles it (`game/map_compiler`) instead of reading a stage. The
-map list and the editor are reached through ADVANCED / MAPS.
+map list and the editor are reached through ADVANCED / EDITOR.
 
 | Map field | Contents |
 |-----------|----------|
@@ -371,7 +372,7 @@ map list and the editor are reached through ADVANCED / MAPS.
 | `size` | Wrap period in world pixels (1024-4096; the editor offers 2048, 3072, 4096). |
 | `vehicle` | `tank` / `chopper` when forced (applies however the map is played). |
 | `loadout` | Set when the map decides what the player flies instead of the shop and equip screens: `vehicle`, `weapons` (name -> level; the chain gun is always aboard), `special`, `loads` (ammunition multiplier, 1-6, as that many bays), `fuel` / `armor` (0-100, the equip sliders), `lives`. `Loadout.fixed` turns it into the equip screen's snapshot. |
-| `briefing` | Up to three paragraphs. |
+| `briefing` | Up to three paragraphs, one per slot of the briefing screen; a paragraph may hold line breaks. |
 | `briefing_cards` | The picture beside each paragraph: `{ kind = "view", x, y, size, label }` (a square of the map, `size` world pixels a side, drawn from the map whenever it is shown), `{ kind = "card", stage, slot }` (a card of a pack stage's briefing) or `{ kind = "none" }`. |
 | `difficulty` | Set when the map is played on a difficulty of its own whatever the player's is: values of the difficulty keys (`game/difficulty`: `enemy_damage_level`, `enemy_damage`, `enemy_fire_level`, `enemy_fire_rate`, `enemy_aggression`, `pickup_level`, `land_for_medals`, `land_for_supplies`). |
 | `objectives` | The objectives in order, each `{ type, label, optional }` plus its own fields (table below). The first files held `{ destroy, rescue, sabotage }` by name, which is still read. |
@@ -394,6 +395,7 @@ map list and the editor are reached through ADVANCED / MAPS.
 | `survive` | `seconds` | That long has passed since the objective came up. |
 | `collect` | `count` | That many medals were picked up in the phase. |
 | `protect` | `objects`, `losses` | Never in the way of a win; the phase fails (OBJECTIVE LOST) once more than `losses` of the objects fell. |
+| `air` | `count` | That many enemy helicopters were shot down in the phase, by anybody. No more are asked for than the phase can put up: none without a helicopter post, the number of posts when no post sends another. |
 
 The three that follow from the content need no entry: an entry words them and
 places them in the order, one left out is added after the listed ones, and one
@@ -447,7 +449,8 @@ straight into the phase with it (SHOP does nothing) and starts with its
 `lives`; the replay header records all of it, as for any phase. The briefing
 shows the map's cards (`editor/cards`) in the icon column: a map square is
 composed in the original cards' shape (the art set's slot number, the frame, a
-caption in `chars`), a pack card is copied with the number of its new slot. Replays record the stage name and the map
+caption in small yellow pixel letters like the ones painted into the original's
+cards, about ten of them), a pack card is copied with the number of its new slot. Replays record the stage name and the map
 file's fingerprint (`map`); the replay list marks a recording whose map is
 gone (not playable) or changed since. Co-op on maps is not offered.
 
@@ -468,18 +471,19 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
 | Top bar | FILE, EDIT, ARRANGE, VIEW, MAP, (DEV,) HELP menus; map name (`*` when unsaved), art set, night / weather icons; the check state; TRY. |
 | Tool strip | The seven tools, undo / redo, grid, snap, home. |
 | Options bar | The active tool's settings and a one-line hint. |
-| Dock | OBJECTS (catalog by art set and category, search), PROPERTIES (the selection, or the map summary), LAYERS (show / lock per layer, view toggles), CHECKS. |
+| Dock | OBJECTS (catalog by art set and category, the prefabs, search), PROPERTIES (the selection, or the map summary), LAYERS (show / lock per layer, view toggles), CHECKS. |
 | Status line | Last message; pointer position, zoom, selection and object counts. |
 | View | The map unlit and north up, copies past the seam shaded, the seam outlined, routes with an arrowhead on each segment long enough for one (the way it is driven), owner links, objective badges (targets, people, the home pad, what an objective of the map's own names, its places as circles), the overview map. The points of a route are numbered on the routes in hand (the one last touched, those of the selected units) and, from zoom 1 x, on every route while the ROUTE tool is out. |
 
 | Tool | Behaviour |
 |------|-----------|
-| SELECT `V` | Click picks the topmost object, a second click on it the one beneath. Shift adds or removes. Dragging empty ground draws a box; dragging a selected object moves the selection (snapped when snap is on; along one axis with Ctrl held). Right click or Esc clears. A group is picked whole unless SINGLE PARTS (`Tab`) is on. With two objects or more selected the options bar shows the ARRANGE entries as buttons. |
-| PLACE `P` | The entry picked in OBJECTS follows the pointer; click places, drag lays a row at the sprite's pitch. The home pad is one of a kind and leads the entity order: placing it again moves it. |
+| SELECT `V` | Click picks the topmost object, a second click on it the one beneath. Shift adds or removes. Dragging empty ground draws a box; dragging a selected object moves the selection (snapped when snap is on; along one axis with Ctrl held). Right click or Esc clears. A group is picked whole unless SINGLE PARTS (`Tab`) is on. A road is picked by a click on its ground where no object lies, and by a box that holds all its points; selected roads move, nudge, copy, cut, paste, duplicate and delete with the objects, and PROPERTIES sets their WIDTH and CENTRE LINE. With anything selected the options bar offers to save it as a prefab; with two objects or more it shows the ARRANGE entries as buttons. |
+| PLACE `P` | The entry picked in OBJECTS follows the pointer; click places, drag lays a row at the sprite's pitch. An armed object shows what it will see and where it will fire while it follows the pointer. A prefab follows the pointer whole, roads included, and a click stamps it. The home pad is one of a kind and leads the entity order: placing it again moves it. |
 | SCATTER `B` | Paints the ticked entries at random inside the brush: RADIUS, PER DAB, GAP. One stroke is one undo step. |
 | ERASE `E` | Removes what the brush touches: scenery and ground, or everything visible. |
-| ROUTE `R`, LINE `L` | Click points, Enter or a double click finishes, Backspace takes the last back. A point drags, a click on a segment inserts one, `Delete` removes the point or shape under the pointer. A route drawn while units are selected is theirs. Lines take a colour from the options bar. With Ctrl held a new point, or a dragged one, sits at a multiple of 45 degrees from the point before it. |
-| ROAD `O` | Draws a road as the original's bases have them: two border lines and a dashed centre line. Click points along its middle, Enter or a double click finishes; a point goes level or upright from the one before, and the ground the road takes shows while it is drawn. A point on or near another road (half its width plus `roads.join`) is put on that road's centre line, so the two join; a road clicked back onto its first point is a ring. A point drags, the points beside it following so the legs stay level or upright (both ends of a ring as one); Shift + click on a road adds a point, `Delete` removes the point or road under the pointer. WIDTH and CENTRE LINE on the options bar set the road in hand, else the next one. Colours, width, mark spacing and mark sprites come from the map's art set (`Catalog.road_style`). |
+| ROUTE `R`, LINE `L` | Click points, Enter or a double click finishes, Backspace takes the last back. A point drags, a click on a segment inserts one, `Delete` removes the point or shape under the pointer. A click on an end of a shape carries it on from there: the points clicked next are added to it, before its first point when that is the end clicked (Enter or a right click ends it, Backspace takes back only what was added). A route drawn while units are selected is theirs. Lines take a colour from the options bar. With Ctrl held a new point, or a dragged one, sits at a multiple of 45 degrees from the point before it. |
+| ROAD `O` | Draws a road as the original's bases have them: two border lines and a dashed centre line. Click points along its middle, Enter or a double click finishes; a point goes level or upright from the one before, and the ground the road takes shows while it is drawn. A point on or near another road (half its width plus `roads.join`) is put on that road's centre line, so the two join. A click on an end of a road carries it on from there, as with a route. A point whose leg comes within `roads.join` of the line of the road's first point is put on that line, so a road is brought back onto its first point without aiming and closes as a ring. A point drags, the points beside it following so the legs stay level or upright (both ends of a ring as one); Shift + click on a road adds a point, `Delete` removes the point or road under the pointer. WIDTH and CENTRE LINE on the options bar set the road in hand, else the next one. Colours, width, mark spacing and mark sprites come from the map's art set (`Catalog.road_style`). |
+| MEASURE `U` | Drag from one place to another (Ctrl: 45 degree steps): the line's length in pixels, across and down, and the seconds each vehicle takes over it at full speed (`Catalog.travel`: the vehicle and the load of fuel and armour the map fixes, else both vehicles as the equip screen starts them, at the player's `speed_scale`). The line stays until the next one, a right click or Esc. |
 
 - Catalog entries are built from the pack per art set: one per sprite and kind,
   the classes the original sets on one spot kept together (tank hull and
@@ -492,6 +496,14 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   find, whatever `weapon_finds` says); for a weapon the vehicle cannot load it
   is left out of the phase, which the checks name when the map fixes the
   vehicle. PROPERTIES changes what a placed pickup holds.
+- PREFABS (the last tab of OBJECTS, the same on every map): SAVE THE SELECTION
+  AS A PREFAB (also EDIT, and a button on the SELECT options bar) keeps the
+  selected objects and roads under a name, with the groups, the owner links
+  and the routes the units drive, measured from their middle. A click on a
+  prefab hands it to PLACE; each stamp gets routes of its own. The bin on a
+  cell deletes the prefab after a question. A prefab is one JSON file in
+  `prefabs/` of the save directory and holds sprite names, never pixels; one
+  made on another art set places that art set's sprites.
 - ARRANGE works on the selection, a group moving as one: align the sprite
   boxes to the left, right, top or bottom edge of the box around them all, or
   their middles on a column or a row; EVEN GAPS ACROSS / DOWN between three or
@@ -513,14 +525,15 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
 - MAP / GENERATE GROUND scatters a pack stage's scenery over the map at that
   stage's densities, clear of everything else. NEW MAP starts blank (with a home
   pad and, if asked, ground cover) or as a copy of a pack stage, grouped
-  (`Ops.auto_group`).
+  (`Ops.auto_group`), with the stage's briefing: each paragraph in its slot
+  and beside it the card the stage shows there (`Cards.of_stage`).
 - CHECKS (`editor/validate`): errors keep a map from being played (no home pad,
   no objective, commander rule without its building or without other targets,
   sprites this pack lacks, base stage missing); warnings do not (loose
   objective marks, a route under two points, a hangar tank without a hangar,
   solid objects on the home pad, nothing armed, very many objects, an
-  objective with nothing to act on, every objective optional, ammunition the
-  map's vehicle cannot use). Every pack
+  objective with nothing to act on, helicopters asked for that no post sends,
+  every objective optional, ammunition the map's vehicle cannot use). Every pack
   stage clones without an error.
 - TRY (`F5`) writes the map aside (`maps/_playtest.json`), loads it and starts
   gameplay; Esc returns to the editor. The map's `loadout` is used when it has
@@ -539,22 +552,27 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   DIFFICULTY (the player's own setting, or a preset the map is always played
   on, each value then editable: enemy hit and fire tables, their scales, enemy
   sight, pickup time, the landing rules), OBJECTIVES and BRIEFING (per
-  paragraph its text and its picture: FROM THE MAP closes the settings for
-  one click on the map and a size of 44, 88 or 176 world pixels, with a
-  caption; GAME CARD picks one of the pack's cards; PREVIEW THE BRIEFING, also
+  paragraph its text, in a box of several lines where Enter breaks a line and
+  a note says how many of the slot's six lines the briefing sets it in, and
+  its picture: FROM THE MAP closes the settings for one click on the map and a
+  size of 44, 88 or 176 world pixels, with a caption; GAME CARD picks one of
+  the pack's cards; PREVIEW THE BRIEFING, also
   `F6`, shows the briefing screen as the player gets it until a key or click).
 - OBJECTIVES lists the map's objectives in order: wording (SHOWN AS), OPTIONAL,
   earlier / later, remove. ADD OBJECTIVE: destroy the selected objects, destroy
   enemies of a kind (`goals.kinds` of `data/editor.json`), keep the selected
   objects intact, get to a place (one click on the map, a radius, down or
-  stopped there), hold out for a time, collect medals. Objects are taken from
+  stopped there), hold out for a time, collect medals, shoot down helicopters
+  (a number; the row says how many posts the map has and whether they send
+  another). Objects are taken from
   the selection (USE THE SELECTION; one id per hull and turret) and found
   again with SHOW. Under the list: IN ORDER, TIME LIMIT, no flight home,
   agents together, commander rule.
 
 Limits: desktop with mouse and keyboard only. The briefing backdrop is the art
-set's own, mission number included. A paragraph is typed on one line. A route, line or road that crosses the seam is
+set's own, mission number included. A route, line or road that crosses the seam is
 drawn the long way round. A road has no slanted legs (the centre marks exist level and upright only).
+ARRANGE leaves selected roads where they are. Routes and ground lines are not picked by SELECT.
 
 ## 7. Combat
 
@@ -1011,7 +1029,7 @@ galleries, debug mission picker, headless checks.
 | `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `explosion`, `drop`. Empty at present. |
 | `data/enemy_weapons.json` | Enemy fire in the original's units (`tick_rate` 70): `turret` (settle, turn, arc), `homing` (bearing refresh per level, radar penalty), the 20 `routines`, `soldier` (with `wander`), `mine`, `helicopter` (with the respawn clearance), and `movement` (route modes, hangar rides, yield distance). Read once by `World` (`world.enemy_rules`). |
 | `data/missions.json` | Section 9. |
-| `data/editor.json` | Map editor: `theme` (colours and sizes of `ui/kit`), `art` (art set labels), `sizes`, `grid_steps`, `categories` and `layers` (kinds per catalog tab, `locked` by default), `layer_colors` (overview map dots), `line_colors` (ground line swatches), `stack_share`, `home_pad` (pad and mark sprite), `names` (sprite labels), `weapons` (labels of enemy weapons), `pickups` (the kinds a map can lay out besides ammunition, and their labels), `roads` (width limits, `join` reach, the sprite names of centre marks, and per art set a road's `width`, mark `pitch` and the two `edge` colours), `goals` (ranges and defaults of an objective's radius, seconds, medals and of the time limit; `kinds`: the kind groups an objective may ask for), `difficulty` (ranges of the percentages a map may set), `scatter` / `erase` brush defaults, `ground` (`min_uses`, `clear`), `autosave_seconds`. |
+| `data/editor.json` | Map editor: `theme` (colours and sizes of `ui/kit`), `art` (art set labels), `sizes`, `grid_steps`, `categories` and `layers` (kinds per catalog tab, `locked` by default), `layer_colors` (overview map dots), `line_colors` (ground line swatches), `stack_share`, `home_pad` (pad and mark sprite), `names` (sprite labels), `weapons` (labels of enemy weapons), `pickups` (the kinds a map can lay out besides ammunition, and their labels), `cards` (`caption`: colour, shadow, row and the glyphs of the briefing cards' pixel lettering, rows of `#` and `.`), `roads` (width limits, `join` reach, the sprite names of centre marks, and per art set a road's `width`, mark `pitch` and the two `edge` colours), `goals` (ranges and defaults of an objective's radius, seconds, medals, helicopters and of the time limit; `kinds`: the kind groups an objective may ask for), `difficulty` (ranges of the percentages a map may set), `scatter` / `erase` brush defaults, `ground` (`min_uses`, `clear`), `autosave_seconds`. |
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable); `armor_base` is the original's per-vehicle armor factor (chopper 20, tank 40). Tank only: `bump_bounce`, `bump_back`, `bump_arc`, `bump_min` (the bounce off a solid object). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
 | `data/credits.json` | Credits: `styles` (fonts, name offset, `color` tint of a mask font) and positioned `entries` (`heading` / `name`, or a label `text`), 320x240 design space. |
@@ -1177,7 +1195,7 @@ same bytes on every platform.
 | F12 | Screenshot (rebindable) |
 | Main menu, `--dev` | `F1` fly the loaded stage, `F3` sandbox, `F4` replay panel, `F7` co-op free play, `F8` / `F9` / `F10` animation / font / sound gallery, `F11` ending (`Shift`: VIC3's alternate ending), `Delete` game-over picture (`Shift`: the one before a respawn) |
 | Map list | Up / Down, Enter play, `E` edit, `N` new, `C` copy, `Delete` twice erase, `F` folder, Esc back |
-| Map editor | Tools `V` `P` `B` `E` `R` `L` `O`; wheel zoom; right or middle drag, Space + drag, `W A S D` move the view; arrows nudge (Shift 8 px); `Ctrl+C` / `X` / `V` / `D` copy, cut, paste, duplicate; `Delete`; `Ctrl+Z` / `Ctrl+Y` (or `Ctrl+Shift+Z`) undo / redo; `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+N`, `Ctrl+O`; `Ctrl+A` select all; `Ctrl+Shift+G` ungroup; `Ctrl+[` / `Ctrl+]` turn the selection a quarter, `Shift+H` / `Shift+V` mirror it; `G` grid, `Ctrl+G` snap; Ctrl while drawing or dragging constrains (45 degree steps, one axis); `Tab` single parts; `Home` home pad; `F` show the selection; `M` overview map; `+` / `-` zoom; `F5` try, `Shift+F5` try from the pointer or the view; `F6` briefing preview; `F1` keys; Esc cancel, then leave |
+| Map editor | Tools `V` `P` `B` `E` `R` `L` `O` `U`; wheel zoom; right or middle drag, Space + drag, `W A S D` move the view; arrows nudge (Shift 8 px); `Ctrl+C` / `X` / `V` / `D` copy, cut, paste, duplicate; `Delete`; `Ctrl+Z` / `Ctrl+Y` (or `Ctrl+Shift+Z`) undo / redo; `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+N`, `Ctrl+O`; `Ctrl+A` select all; `Ctrl+Shift+G` ungroup; `Ctrl+[` / `Ctrl+]` turn the selection a quarter, `Shift+H` / `Shift+V` mirror it; `G` grid, `Ctrl+G` snap; Ctrl while drawing or dragging constrains (45 degree steps, one axis); `Tab` single parts; `Home` home pad; `F` show the selection; `M` overview map; `+` / `-` zoom; `F5` try, `Shift+F5` try from the pointer or the view; `F6` briefing preview; `F1` keys; Esc cancel, then leave |
 | Esc | Back (menu in game) |
 | Gamepad | Left stick or d-pad: drive (stick turn is analog). Right stick: strafe / turret. A or RT fire, LB or LT strafe, B take off / land, Y or RB weapon, X radar zoom, BACK pause, START menu. Buttons rebindable (CONTROLS, DEVICE GAMEPAD); the sticks and START are fixed. Menus: d-pad or left stick, A / START confirm, B / BACK back. Co-op: per player, see `vehicle_select`. |
 | Mouse (`mouse_control`) | Pointer offset from the vehicle is the stick: sideways turns, ahead drives, behind reverses. Left button fire, right strafe, middle take off / land, wheel next weapon (instead of the view zoom). Single player. |

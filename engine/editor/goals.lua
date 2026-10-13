@@ -23,6 +23,7 @@ Goals.TYPES = {
     survive  = { title = "HOLD OUT", wording = "HOLD OUT" },
     collect  = { title = "COLLECT MEDALS", wording = "COLLECT MEDALS" },
     protect  = { title = "KEEP INTACT", wording = "KEEP INTACT" },
+    air      = { title = "SHOOT DOWN HELICOPTERS", wording = "SHOOT DOWN HELICOPTERS" },
 }
 
 local CONTENT = { "targets", "rescue", "sabotage" }
@@ -149,6 +150,20 @@ function Goals.count_kinds(doc, kinds)
         end
     end
     return n
+end
+
+-- The helicopter posts on the map, and whether a helicopter shot down comes
+-- back (a post with a negative respawn delay stays empty).
+function Goals.air(doc)
+    local posts, returning = 0, false
+    for _, o in ipairs(doc.map.objects) do
+        local info = doc:info(o)
+        if info.ok and info.kind_name == "enemy_helicopter" then
+            posts = posts + 1
+            if (info.cls.field_2c or 0) >= 0 then returning = true end
+        end
+    end
+    return { posts = posts, returning = returning }
 end
 
 -- What the objectives point at, for the editor to mark: by_id[object id] =

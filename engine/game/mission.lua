@@ -12,10 +12,10 @@ local defs = {}   -- stage_name -> mission def, loaded once
 -- Objective types. destroy / rescue are the data/missions.json forms (by
 -- sprite, kind or count); destroy_targets, rescue_people and sabotage follow
 -- from a stage's content; a player-made map adds destroy by its own pick,
--- reach, survive, collect and protect (engine/game/map_compiler.lua).
+-- reach, survive, collect, protect and air (engine/game/map_compiler.lua).
 Mission.TYPES = {
     destroy = true, rescue = true, sabotage = true, destroy_targets = true, rescue_people = true,
-    reach = true, survive = true, collect = true, protect = true,
+    reach = true, survive = true, collect = true, protect = true, air = true,
 }
 
 -- Half the side of the box around the home pad a vehicle has to be down in
@@ -239,6 +239,13 @@ function Mission:_make_objective(spec)
         o.target = math.max(0, spec.seconds or 0)
     elseif spec.type == "collect" then
         o.target = math.max(0, spec.count or 0)
+    elseif spec.type == "air" then
+        -- Enemy helicopters shot down. They are no entities: the helicopter
+        -- system counts them on the world, and says how many the phase can
+        -- ever put up (none without a post, no more than the posts when none
+        -- comes back).
+        local world = self.world
+        o.target = math.max(0, math.min(spec.count or 0, world.air_supply or #(world.heli_spawns or {})))
     elseif spec.type == "protect" then
         -- Never in the way of a win: the phase fails once more of them fell
         -- than the objective allows.
@@ -400,7 +407,8 @@ function Mission:_update_objective(o, dt)
     elseif o.type == "rescue_people"   then self:_update_rescue_people(o)
     elseif o.type == "reach"           then self:_update_reach(o)
     elseif o.type == "survive"         then self:_update_survive(o, dt)
-    elseif o.type == "collect"         then self:_update_collect(o) end
+    elseif o.type == "collect"         then self:_update_collect(o)
+    elseif o.type == "air"             then self:_update_air(o) end
 end
 
 -- A vehicle inside the place's circle; with land, one that is down or stopped.
@@ -428,6 +436,12 @@ function Mission:_update_collect(o)
     for _, p in ipairs(self.players) do medals = medals + (p.medals or 0) end
     o.progress = math.min(o.target, medals)
     if medals >= o.target then o.done = true end
+end
+
+-- Enemy helicopters shot down this phase, by anybody.
+function Mission:_update_air(o)
+    o.progress = math.min(o.target, self.world.air_kills or 0)
+    if o.progress >= o.target then o.done = true end
 end
 
 -- What a map wants kept: the phase is lost with one more of them than it allows.
@@ -543,6 +557,8 @@ function Mission:objective_label(o)
         return string.format("%s  %d/%d", s.label or "COLLECT MEDALS", o.progress, o.target)
     elseif o.type == "protect" then
         return string.format("%s  %d/%d", s.label or "KEEP INTACT", o.progress, o.target)
+    elseif o.type == "air" then
+        return string.format("%s  %d/%d", s.label or "SHOOT DOWN HELICOPTERS", o.progress, o.target)
     elseif o.type == "rescue" then
         return string.format("%s  %d/%d", s.label or "Rescue people", o.progress, o.target)
     elseif o.type == "sabotage" then

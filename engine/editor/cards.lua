@@ -1,14 +1,16 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Font = require "engine.core.font"
-local View = require "engine.editor.view"
+local Catalog = require "engine.editor.catalog"
+local View    = require "engine.editor.view"
 
 -- The pictures beside a map's briefing paragraphs (the "briefing_cards" of
 -- engine/game/map_file.lua), composed in the shape of the original's cards: a
 -- slot number, a framed square, a caption. A map never stores pixels: a card
 -- is either a square of the map itself, drawn from the map when it is shown,
--- or a reference to a card of a pack stage's briefing.
+-- or a reference to a card of a pack stage's briefing. A caption is set in
+-- small pixel letters like the ones painted into the original's cards
+-- (data/editor.json "cards").
 local Cards = {}
 
 local SLOT_PITCH = 54    -- vertical stride of the slots in a pack card strip
@@ -20,12 +22,11 @@ local FRAME_X    = 17    -- the frame's outer square, as on the original cards
 local FRAME_W    = 46
 local FRAME_H    = 45
 local SHADOW     = 2
-local LABEL_Y    = 34
-local LABEL_PAD  = 3
+local LABEL_PAD  = 3     -- from the frame's left edge to the caption
+local LABEL_ROOM = 41    -- pixels a caption may take: the original's widest, POW BUNKER, at its shadow's edge
 
 local FRAME_COLOR  = { 252 / 255, 252 / 255, 252 / 255 }
 local SHADOW_COLOR = { 80 / 255, 80 / 255, 96 / 255 }
-local LABEL_FONT   = "chars"
 
 Cards.W     = FRAME_X + FRAME_W + SHADOW
 Cards.H     = SLOT_H
@@ -118,14 +119,46 @@ local function number_art(art, slot)
     return nil
 end
 
--- A caption as a card shows it: upper case, cut to what fits across the frame
--- (four or five letters of the card font).
+-- The caption letters: rows of "#" and "." a glyph, a blank column between two.
+local function lettering()
+    return Catalog.data().cards.caption
+end
+
+local function caption_width(label)
+    local spec, width = lettering(), 0
+    for ch in label:gmatch(".") do
+        local glyph = spec.glyphs[ch]
+        width = width + (glyph and #glyph[1] or spec.space) + 1
+    end
+    return math.max(0, width - 1)
+end
+
+-- A caption as a card shows it: upper case, without the characters the
+-- lettering lacks, cut to what fits across the frame (about ten letters).
 function Cards.caption(text)
-    local label = tostring(text or ""):upper()
-    local font  = Font.get(LABEL_FONT)
-    local room  = FRAME_W - 2 - LABEL_PAD * 2
-    while #label > 0 and font:width(label) > room do label = label:sub(1, -2) end
-    return label
+    local spec  = lettering()
+    local label = tostring(text or ""):upper():gsub(".", function(ch)
+        return (ch == " " or spec.glyphs[ch]) and ch or ""
+    end)
+    label = label:gsub("^ +", "")
+    while #label > 0 and caption_width(label) > LABEL_ROOM do label = label:sub(1, -2) end
+    return (label:gsub(" +$", ""))
+end
+
+-- The caption's pixels at (x, y), in one colour.
+local function draw_caption(label, x, y, color)
+    local g    = love.graphics
+    local spec = lettering()
+    g.setColor(color[1] / 255, color[2] / 255, color[3] / 255, 1)
+    for ch in label:gmatch(".") do
+        local glyph = spec.glyphs[ch]
+        for row, line in ipairs(glyph or {}) do
+            for column = 1, #line do
+                if line:sub(column, column) == "#" then g.rectangle("fill", x + column - 1, y + row - 1, 1, 1) end
+            end
+        end
+        x = x + (glyph and #glyph[1] or spec.space) + 1
+    end
 end
 
 -- A card as a canvas (nearest filtered, one pixel per briefing design pixel),
@@ -159,13 +192,9 @@ function Cards.compose(doc, card, slot)
             FRAME_X + 1, 1, FRAME_W - 2, FRAME_H - 2)
         local label = Cards.caption(card.label)
         if label ~= "" then
-            local font = Font.get(LABEL_FONT)
-            g.setScissor(FRAME_X + 1, 1, FRAME_W - 2, FRAME_H - 2)
-            for _, offset in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 } }) do
-                font:print(label, FRAME_X + 1 + LABEL_PAD + offset[1], LABEL_Y + offset[2], { color = { 0, 0, 0, 1 } })
-            end
-            font:print(label, FRAME_X + 1 + LABEL_PAD, LABEL_Y)
-            g.setScissor()
+            local spec = lettering()
+            draw_caption(label, FRAME_X + LABEL_PAD + 1, spec.y + 1, spec.shadow)
+            draw_caption(label, FRAME_X + LABEL_PAD, spec.y, spec.color)
         end
     end
     local image, quad = number_art(doc:art(), slot)
@@ -175,6 +204,16 @@ function Cards.compose(doc, card, slot)
     end
     g.pop()
     return canvas
+end
+
+-- The cards a pack stage's briefing shows, as a map's "briefing_cards": what a
+-- copy of the stage starts with.
+function Cards.of_stage(stage)
+    local cards = {}
+    for slot = 0, SLOTS - 1 do
+        cards[slot + 1] = original(stage, slot) and { kind = "card", stage = stage, slot = slot } or { kind = "none" }
+    end
+    return cards
 end
 
 -- The cards of a map for its briefing: { [slot] = { image, w } }, slots 0-2.

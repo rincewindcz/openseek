@@ -104,6 +104,15 @@ function Validate.run(doc)
                 works = false
                 issue("warn", name .. " HAS NO OBJECT LEFT THAT CAN BE DESTROYED AND IS LEFT OUT")
             end
+        elseif goal.type == "air" then
+            local air = Goals.air(doc)
+            if air.posts == 0 then
+                works = false
+                issue("warn", name .. " ASKS FOR HELICOPTERS, BUT THE MAP HAS NO HELICOPTER POST: IT IS LEFT OUT")
+            elseif not air.returning and (goal.count or 0) > air.posts then
+                issue("warn", string.format("%s ASKS FOR %d HELICOPTERS; THE MAP HAS %d AND NONE COMES BACK, SO %d END IT",
+                    name, goal.count, air.posts, air.posts))
+            end
         end
         if works and goal.type ~= "protect" then
             feasible = feasible + 1

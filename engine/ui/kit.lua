@@ -81,6 +81,7 @@ function Kit:init()
     self.hot      = nil   -- widget under the pointer this frame
     self.active   = nil   -- widget the left button went down on
     self.edit     = nil   -- { id, text, caret, original } of the focused field
+    self.refocus  = nil   -- { id, frames }: the text box that takes the keyboard next frame
     self.layer       = 0
     self.input_layer = 0
     self.regions      = {}   -- pointer-opaque rects of this frame
@@ -154,8 +155,9 @@ function Kit:wants_keys()
 end
 
 function Kit:blur()
-    self.edit  = nil
-    self.input = {}
+    self.edit    = nil
+    self.refocus = nil
+    self.input   = {}
 end
 
 -- Window position over a panel, a popup or under the dialog.
@@ -228,6 +230,10 @@ function Kit:finish()
     self.had_modal    = modal ~= nil
     self.last_regions = self.regions
     if self.released[1] then self.active = nil end
+    if self.refocus then
+        self.refocus.frames = self.refocus.frames - 1
+        if self.refocus.frames <= 0 then self.refocus = nil end
+    end
     self.pressed, self.released = {}, {}
     self.wheel = 0
     if not self.edit then self.input = {} end
@@ -552,6 +558,22 @@ function Kit:check(id, x, y, w, text, value, opts)
     return value, false
 end
 
+-- Whether a text box takes the keyboard now. A press on it while another box
+-- is being edited first ends that edit, which reports its text when that box
+-- is drawn; this one takes over on the next frame.
+function Kit:_takes_focus(id, hover)
+    if self.refocus and self.refocus.id == id and not self.edit then
+        self.refocus = nil
+        return true
+    end
+    if not (hover and self.pressed[1]) then return false end
+    if self.edit then
+        self.refocus = { id = id, frames = 2 }
+        return false
+    end
+    return true
+end
+
 -- A single-line text field. opts: max (characters), hint (shown when empty),
 -- commit (report the text only on Enter or on losing focus), filter (pattern
 -- one typed character must match). Returns text, changed, committed.
@@ -564,7 +586,7 @@ function Kit:field(id, x, y, w, text, opts)
     local edit  = self.edit and self.edit.id == id and self.edit or nil
     local changed, committed = false, false
 
-    if hover and self.pressed[1] and not edit then
+    if not edit and self:_takes_focus(id, hover) then
         self.edit = { id = id, text = text, caret = #text, original = text }
         edit = self.edit
         self.input = {}
@@ -631,6 +653,173 @@ function Kit:field(id, x, y, w, text, opts)
         self:print(shown, x + theme.pad - shift, ty, { color = opts.color })
         if edit and not committed and (self.time % (CARET_BLINK * 2)) < CARET_BLINK then
             self:rect(x + theme.pad - shift + caret_x, y + 4, 1, h - 8, theme.accent)
+        end
+    end
+    self:unclip()
+    return text, changed, committed
+end
+
+-- The lines a text takes in a box `width` wide: each { first, last } (byte
+-- positions; an empty line has last = first - 1). A line break in the text
+-- ends a line and belongs to none; a line too long is broken after its last
+-- space that fits, which stays at the end of the line it closes.
+function Kit:_wrap(text, width, size)
+    local lines = {}
+    local n     = #text
+    local start = 1
+    while start <= n + 1 do
+        local stop = (text:find("\n", start, true) or (n + 1)) - 1
+        local from = start
+        repeat
+            local to = stop
+            if self:text_width(text:sub(from, to), size) > width then
+                local space
+                to = from
+                for i = from, stop do
+                    if i > from and self:text_width(text:sub(from, i), size) > width then break end
+                    if text:sub(i, i) == " " then space = i end
+                    to = i
+                end
+                if to < stop and space then to = space end
+            end
+            lines[#lines + 1] = { from, to }
+            from = to + 1
+        until from > stop
+        start = stop + 2
+    end
+    return lines
+end
+
+-- The line the caret is on: the last one it touches, so a caret where a long
+-- line was broken stands at the start of the next.
+local function caret_line(lines, caret)
+    local found = 1
+    for i, line in ipairs(lines) do
+        if caret >= line[1] - 1 and caret <= line[2] then found = i end
+    end
+    return found
+end
+
+-- A text box of several lines: the text wraps, Enter starts a new line, the
+-- arrows move the caret through the lines as they are shown. It reports the
+-- text once, on Tab or on losing focus; Esc puts the text back. opts: max
+-- (characters), hint (shown when empty). Returns text, changed, committed.
+function Kit:area(id, x, y, w, h, text, opts)
+    opts = opts or {}
+    local theme  = self.theme
+    local size   = opts.size
+    local line_h = self:text_height(size) + 2
+    local inner  = w - theme.pad * 2 - 4
+    text = tostring(text or "")
+    local hover = self:hover(id, x, y, w, h)
+    local edit  = self.edit and self.edit.id == id and self.edit or nil
+    local changed, committed = false, false
+
+    -- The caret nearest to the pointer, among the lines as shown.
+    local function caret_at(lines, top)
+        local row  = math.floor((self.my - y - 3) / line_h) + 1 + top
+        local line = lines[math.max(1, math.min(#lines, row))]
+        local best, best_d = line[1] - 1, math.huge
+        for caret = line[1] - 1, line[2] do
+            local d = math.abs(self:text_width(edit.text:sub(line[1], caret), size) - (self.mx - x - theme.pad))
+            if d < best_d then best, best_d = caret, d end
+        end
+        return best
+    end
+
+    if not edit and self:_takes_focus(id, hover) then
+        self.edit = { id = id, text = text, caret = #text, original = text, top = 0 }
+        edit = self.edit
+        self.input = {}
+        if hover then edit.caret = caret_at(self:_wrap(text, inner, size), 0) end
+    elseif edit and self.pressed[1] and hover then
+        edit.caret = caret_at(self:_wrap(edit.text, inner, size), edit.top)
+    elseif edit and self.pressed[1] then
+        committed = true
+    end
+
+    if edit then
+        local limit = opts.max or 1000
+        local function insert(piece)
+            piece      = piece:sub(1, math.max(0, limit - #edit.text))
+            edit.text  = edit.text:sub(1, edit.caret) .. piece .. edit.text:sub(edit.caret + 1)
+            edit.caret = edit.caret + #piece
+        end
+        -- Up or down a line, staying as near to the caret's column as the line allows.
+        local function step(dir)
+            local lines = self:_wrap(edit.text, inner, size)
+            local at    = caret_line(lines, edit.caret)
+            local line  = lines[at + dir]
+            if not line then return end
+            local column = self:text_width(edit.text:sub(lines[at][1], edit.caret), size)
+            local best, best_d = line[1] - 1, math.huge
+            for caret = line[1] - 1, line[2] do
+                local d = math.abs(self:text_width(edit.text:sub(line[1], caret), size) - column)
+                if d < best_d then best, best_d = caret, d end
+            end
+            edit.caret = best
+        end
+        for _, event in ipairs(self.input) do
+            local key = event.key
+            for ch in (event.text or ""):gmatch(".") do
+                if ch:byte() >= 32 and ch:byte() < 127 then insert(ch) end
+            end
+            if key == "backspace" and edit.caret > 0 then
+                edit.text  = edit.text:sub(1, edit.caret - 1) .. edit.text:sub(edit.caret + 1)
+                edit.caret = edit.caret - 1
+            elseif key == "delete" then
+                edit.text = edit.text:sub(1, edit.caret) .. edit.text:sub(edit.caret + 2)
+            elseif key == "left" then edit.caret = math.max(0, edit.caret - 1)
+            elseif key == "right" then edit.caret = math.min(#edit.text, edit.caret + 1)
+            elseif key == "up" then step(-1)
+            elseif key == "down" then step(1)
+            elseif key == "home" or key == "end" then
+                local lines = self:_wrap(edit.text, inner, size)
+                local line  = lines[caret_line(lines, edit.caret)]
+                edit.caret  = key == "home" and line[1] - 1 or line[2]
+            elseif key == "return" or key == "kpenter" then insert("\n")
+            elseif key == "v" and love.keyboard.isDown("lctrl", "rctrl") then
+                insert(((love.system.getClipboardText() or ""):gsub("\r\n", "\n"):gsub("[^\n\32-\126]", " ")))
+            elseif key == "tab" then
+                committed = true
+            elseif key == "escape" then
+                edit.text = edit.original
+                committed = true
+            end
+        end
+        self.input = {}
+        changed = committed and edit.text ~= edit.original
+        if committed then
+            text      = edit.text
+            self.edit = nil
+        end
+    end
+
+    self:rect(x, y, w, h, theme.field, 3)
+    self:frame(x, y, w, h, (edit and not committed) and theme.accent or (hover and theme.widget_down or theme.border), 3)
+    local shown = (edit and not committed) and edit.text or text
+    self:clip(x + 2, y + 2, w - 4, h - 4)
+    if shown == "" and opts.hint and not edit then
+        self:print(opts.hint, x + theme.pad, y + 3, { color = theme.text_dim, size = size })
+    else
+        local lines = self:_wrap(shown, inner, size)
+        local rows  = math.max(1, math.floor((h - 6) / line_h))
+        local top   = 0
+        local at    = edit and not committed and caret_line(lines, edit.caret) or nil
+        if at then
+            -- Keep the caret's line in view.
+            top      = math.max(at - rows, math.min(edit.top, at - 1))
+            top      = math.max(0, math.min(top, #lines - rows))
+            edit.top = top
+        end
+        for i = top + 1, math.min(#lines, top + rows + 1) do
+            local line = lines[i]
+            self:print(shown:sub(line[1], line[2]), x + theme.pad, y + 3 + (i - top - 1) * line_h,
+                { color = opts.color, size = size })
+        end
+        if at and (self.time % (CARET_BLINK * 2)) < CARET_BLINK then
+            local cx = self:text_width(shown:sub(lines[at][1], edit.caret), size)
+            self:rect(x + theme.pad + cx, y + 3 + (at - top - 1) * line_h, 1, line_h - 2, theme.accent)
         end
     end
     self:unclip()
