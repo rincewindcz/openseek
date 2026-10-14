@@ -15,7 +15,8 @@ local Log      = require "engine.core.log"
 -- plus the lives rule picked in OPTIONS when the run started: "separate" spare
 -- vehicles per player, or one "shared" pool (players' lives mirror it). A
 -- player left without a vehicle is `out` for the rest of the run; the run is
--- over when every player is.
+-- over when every player is. A map played by two on its own gets such a run
+-- for its one phase (Campaign.start_team), outside a campaign.
 --
 -- Every run also keeps a record (app.run_record) summed over its cleared
 -- phases and players: phases, simulated seconds, vehicles lost, and the stats
@@ -33,6 +34,25 @@ function Campaign.new_record()
              choppers = 0, rescues = 0, badges = 0 }
 end
 
+-- A co-op run at its start: `lives` vehicles a player (or that many each in
+-- one pool, by the lives rule of the options), and an inventory from
+-- new_loadout for each.
+local function new_team(lives, new_loadout)
+    local shared = Config.coop_lives == "shared"
+    local run    = { lives_mode = shared and "shared" or "separate", players = {} }
+    if shared then run.pool = lives * Campaign.PLAYERS end
+    for i = 1, Campaign.PLAYERS do
+        run.players[i] = {
+            score      = 0,
+            lives      = run.pool or lives,
+            bonus_life = Score.BONUS_LIFE_STEP,
+            out        = false,
+            loadout    = new_loadout(),
+        }
+    end
+    return run
+end
+
 function Campaign.start(app, players)
     app.play_return    = nil
     app.campaign       = true
@@ -43,21 +63,27 @@ function Campaign.start(app, players)
     app.coop_run       = nil
     app.run_record     = Campaign.new_record()
     if players == Campaign.PLAYERS then
-        local shared = Config.coop_lives == "shared"
-        local run    = { lives_mode = shared and "shared" or "separate", players = {} }
-        if shared then run.pool = Score.START_LIVES * Campaign.PLAYERS end
-        for i = 1, Campaign.PLAYERS do
-            run.players[i] = {
-                score      = 0,
-                lives      = run.pool or Score.START_LIVES,
-                bonus_life = Score.BONUS_LIFE_STEP,
-                out        = false,
-                loadout    = Loadout:new(),
-            }
-        end
-        app.coop_run = run
+        app.coop_run = new_team(Score.START_LIVES, function() return Loadout:new() end)
     end
     Log.info("game", "new %s campaign", app.coop_run and "co-op" or "solo")
+end
+
+-- Two players on a map played on its own (own is its stage.mission): a run of
+-- that one phase, each player with the single-mission inventory under the
+-- map's rules, and with the vehicles a map that fixes the loadout hands out.
+-- It lasts while the map is being played (app.play_return).
+function Campaign.start_team(app, own)
+    local fixed = own.loadout and tonumber(own.loadout.lives)
+    local lives = fixed and math.max(1, math.floor(fixed)) or Score.START_LIVES
+    app.coop_run = new_team(lives, function()
+        local loadout  = Loadout:new()
+        loadout.medals = Loadout.START_MEDALS
+        loadout:restrict(own.equip, app.combat.weapons)
+        return loadout
+    end)
+    app.coop_run.map = true
+    app.settings.coop.loadout = {}
+    Log.info("game", "co-op on a map")
 end
 
 -- Vehicle a phase forces (missions.json "vehicle": the original grounds the
@@ -71,9 +97,10 @@ function Campaign.required_vehicle(app, stage_name)
     return Mission.required_vehicle(stage_name)
 end
 
--- The co-op run in progress, or nil for a solo run / no run.
+-- The co-op run in progress (a campaign's, or the one of a map played by
+-- two), or nil for a solo run / no run.
 function Campaign.coop(app)
-    return app.campaign and app.coop_run or nil
+    return (app.campaign or app.play_return) and app.coop_run or nil
 end
 
 -- Player numbers still in the co-op run, in order.

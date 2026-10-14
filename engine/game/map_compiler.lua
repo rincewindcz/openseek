@@ -133,7 +133,8 @@ end
 -- map -> stage. Returns nil and the reason when the pack lacks the base stage.
 -- Objects whose type this pack cannot resolve are left out and counted in
 -- stage.missing. A pickup type is no class: its objects are no entities and
--- go to stage.pickups, which engine/game/powerups.lua lays out.
+-- go to stage.pickups, which engine/game/powerups.lua lays out. Nor is a
+-- player's start: the first placed for a player is stage.starts[player].
 function MapCompiler.compile(map)
     local base = MapCompiler.pack_stage(map.base)
     if not base then return nil, "needs the game data of " .. tostring(map.base) end
@@ -175,7 +176,7 @@ function MapCompiler.compile(map)
 
     local type_class = {}   -- type index -> class index, false when unresolved or a pickup
     for i, map_type in ipairs(map.types) do
-        type_class[i] = not map_type.pickup and class_of(map_type)
+        type_class[i] = not (map_type.pickup or map_type.start) and class_of(map_type)
     end
 
     -- Entity order is object order, except that a POW flag follows its building.
@@ -192,11 +193,13 @@ function MapCompiler.compile(map)
             table.insert(flags_of[o.owner], o)
         end
     end
-    local order, pickups, missing = {}, {}, 0
+    local order, pickups, starts, missing = {}, {}, {}, 0
     for _, o in ipairs(map.objects) do
         local map_type = map.types[o.t]
         if map_type.pickup then
             pickups[#pickups + 1] = { kind = map_type.pickup, weapon = map_type.weapon, x = o.x, y = o.y }
+        elseif map_type.start then
+            starts[map_type.start] = starts[map_type.start] or { x = o.x, y = o.y }
         elseif not type_class[o.t] then
             missing = missing + 1
         elseif not is_flag(o) then
@@ -275,9 +278,15 @@ function MapCompiler.compile(map)
         end
         return out
     end
+    -- An objective's event: its line, and what it brings in by entity place.
+    local function event(raw)
+        if type(raw) ~= "table" then return nil end
+        return { say = raw.say, show = placed(raw.show) }
+    end
     local goals = {}
     for _, goal in ipairs(map.objectives or {}) do
-        local spec = { type = GOAL_TYPES[goal.type], label = goal.label, optional = goal.optional }
+        local spec = { type = GOAL_TYPES[goal.type], label = goal.label, optional = goal.optional,
+                       on_open = event(goal.on_open), on_done = event(goal.on_done) }
         if goal.type == "destroy" then
             spec.mark  = true
             spec.count = goal.count
@@ -306,6 +315,7 @@ function MapCompiler.compile(map)
         entities    = entities,
         segments    = segments,
         pickups     = pickups,
+        starts      = starts,
         environment = map.environment,
         objectives  = {
             destroy           = targets > 0,
@@ -315,9 +325,10 @@ function MapCompiler.compile(map)
             n_target_entities = targets,
         },
         -- What the briefing and the mission read in place of data/missions.json.
-        mission     = { name = map.name, briefing = map.briefing, vehicle = map.vehicle, objectives = goals,
-                        loadout = map.loadout, difficulty = map.difficulty, ordered = map.ordered == true,
-                        time_limit = map.time_limit, no_return = map.no_return == true },
+        mission     = { name = map.name, author = map.author, briefing = map.briefing, vehicle = map.vehicle,
+                        players = map.players, objectives = goals, loadout = map.loadout, equip = map.equip,
+                        difficulty = map.difficulty, ordered = map.ordered == true, time_limit = map.time_limit,
+                        no_return = map.no_return == true },
         missing     = missing,
     }
 end

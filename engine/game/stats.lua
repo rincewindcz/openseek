@@ -50,10 +50,10 @@ function Stats.destructible_totals(world)
             or (e.max_hp or 0) > 0
         if destructible and cat == "ground" then
             ground_total = ground_total + 1
-            if not e:is_alive() then ground_down = ground_down + 1 end
+            if e:is_destroyed() then ground_down = ground_down + 1 end
         elseif destructible and cat == "building" then
             building_total = building_total + 1
-            if not e:is_alive() then building_down = building_down + 1 end
+            if e:is_destroyed() then building_down = building_down + 1 end
         end
         if e.has_turret then
             ground_total = ground_total + 1

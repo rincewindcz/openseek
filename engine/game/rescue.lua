@@ -140,7 +140,7 @@ function RescueSystem:_release_building(site)
 end
 
 function RescueSystem:_update_site(site, dt)
-    if site.inside > 0 and not site.building:is_alive() then
+    if site.inside > 0 and site.building:is_destroyed() then
         self.lost   = self.lost + site.inside   -- brought down with people still inside
         site.inside = 0
     end

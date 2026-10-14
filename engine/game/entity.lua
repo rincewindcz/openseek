@@ -70,8 +70,16 @@ end
 
 -- Entity is hittable and should be drawn while idle/animating/patrol/attack.
 -- Exploding entities are "logically gone"; projectiles pass through them.
+-- A map may hold an object back until an objective comes up or is done
+-- (held, set and lifted by the mission): until then it is not there. Nothing
+-- sees, hits or draws it, and it does nothing.
 function Entity:is_alive()
-    return self.state ~= "dead" and self.state ~= "exploding"
+    return not self.held and self.state ~= "dead" and self.state ~= "exploding"
+end
+
+-- Destroyed, as the objectives and the stats count it: gone, not held back.
+function Entity:is_destroyed()
+    return self.state == "dead" or self.state == "exploding"
 end
 
 -- An armed enemy that engages the player: it has a weapon and a detection radius.

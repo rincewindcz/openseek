@@ -22,12 +22,14 @@ local Player    = require "engine.game.player"
 -- CHOPPER and a TANK card: a turntable preview of the variant in the preview
 -- box, and the variant name over the camo strip that matches it.
 --
--- enter() takes { players = 1 | 2, free = bool, return_to = <scene> }:
+-- enter() takes { players = 1 | 2, free = bool, return_to = <scene>, on_start }:
 --   * campaign (NEW GAME): each player picks a chopper and a tank variant; the
 --     equip screen still picks the vehicle per phase. START begins the run.
 --   * free (F7 on a developer run's main menu, two players): the focused card is the vehicle the
 --     player drives, and G toggles god mode. START drops
 --     into split-screen co-op on the current stage.
+--   * on_start (a map played by two): the variants are picked as for a
+--     campaign, and START calls it instead of beginning one.
 -- Two players drive their own card column with their own keys (P1 W/S/A/D, P2
 -- arrows); a single player uses either set. Enter starts, Esc goes back. With
 -- two players each column also has a CONTROLS line (keys 1 / 2, or a click):
@@ -119,6 +121,7 @@ function VehicleSelect:enter(opts)
     local app = self.app
     self.players   = (opts.players == 2) and 2 or 1
     self.free      = opts.free or false
+    self.on_start  = opts.on_start
     self.return_to = opts.return_to or "new_game"
     self.t         = 0
     self.pressed   = nil
@@ -219,6 +222,11 @@ function VehicleSelect:_start()
         app.campaign               = false
         app.settings.death_enabled = true
         app.scenes:switch("coop_gameplay")
+        return
+    end
+
+    if self.on_start then
+        self.on_start()
         return
     end
 

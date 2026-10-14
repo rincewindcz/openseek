@@ -14,16 +14,21 @@ local Loadout     = require "engine.game.loadout"
 -- its base, a tank under its hangar). Also resolves a map type to what the
 -- editor draws and lists for it. Labels, categories and layers come from
 -- data/editor.json. The pickups a map lays out (fuel, armour, medals,
--- ammunition) are entries of every art set; their types name no class.
+-- ammunition) and the places its players start at are entries of every art
+-- set; their types name no class.
 local Catalog = {}
 
 local DATA_PATH    = "data/editor.json"
 local RULES_PATH   = "data/enemy_weapons.json"
 local PICKUPS_PATH = "data/powerups.json"
 local PICKUP_CLIP  = "pickup"
+local START_CLIP   = "choppit%d"   -- a player's start shows that player's chopper
+local START_FRAME  = 8             -- its level frame (1-based)
 local VEHICLE_PATH = "data/vehicles/%s.json"
 
 local BASE_FLAG = 0x40
+
+Catalog.PLAYERS = 2   -- players a map may place a start for
 
 -- Which class of a stack an entry is filed under.
 local KIND_RANK = { tank = 5, structure = 4, flak_turret = 3, radar = 2, ground_decal = 1 }
@@ -174,9 +179,10 @@ local function pickup_data()
 end
 
 -- The type of a catalog entry's part: a pack class with fields changed on it,
--- or a pickup.
+-- a pickup, or a player's start.
 function Catalog.part_type(part, set)
     if part.pickup then return { pickup = part.pickup, weapon = part.weapon } end
+    if part.start then return { start = part.start } end
     return { from = part.from, class = part.class, sprite = part.sprite, set = set }
 end
 
@@ -245,6 +251,17 @@ local function pickup_info(map_type)
              ox = -math.floor(w / 2), oy = -math.floor(h / 2), w = w, h = h, label = pickup_label(map_type) }
 end
 
+-- Where a player's vehicle is put at the start of the phase, shown as that
+-- player's chopper.
+local function start_info(map_type)
+    local clip = Animation.clip(START_CLIP:format(map_type.start)) or Animation.clip(START_CLIP:format(1))
+    local img  = clip and (clip.frames[START_FRAME] or clip.frames[1]) or nil
+    local w, h = 16, 16
+    if img then w, h = img:getDimensions() end
+    return { ok = true, cls = {}, kind_name = "start", stem = "start", layer = "base", img = img, start = map_type.start,
+             ox = -math.floor(w / 2), oy = -math.floor(h / 2), w = w, h = h, label = "START OF PLAYER " .. map_type.start }
+end
+
 -- What a map type resolves to: its class fields with the type's changes, its
 -- sprite and the layer it is filed under. ok is false when this pack lacks it.
 function Catalog.type_info(map_type)
@@ -253,6 +270,8 @@ function Catalog.type_info(map_type)
     local cls, pack = MapCompiler.type_source(map_type)
     if map_type.pickup then
         info = pickup_info(map_type)
+    elseif map_type.start then
+        info = start_info(map_type)
     elseif not cls then
         info = { ok = false, cls = {}, kind_name = "missing", stem = map_type.sprite or "?", layer = "scenery",
                  w = 16, h = 16, ox = -8, oy = -8, label = (map_type.sprite or "?"):upper() }
@@ -428,6 +447,15 @@ function Catalog.entries(art)
         found[entry.key]    = entry
         list[#list + 1]     = entry
         table.insert(by_category.pickups, entry)
+    end
+    -- So are the places the players start at, filed with the base.
+    by_category.base = by_category.base or {}
+    for number = 1, Catalog.PLAYERS do
+        local entry = { key = "start/" .. number, label = "START OF PLAYER " .. number, category = "base",
+                        kind_name = "start", parts = { { start = number } }, main = 1, art = art }
+        found[entry.key] = entry
+        list[#list + 1]  = entry
+        table.insert(by_category.base, entry)
     end
     by_art[art] = { list = list, by_category = by_category, by_key = found }
     return by_art[art]

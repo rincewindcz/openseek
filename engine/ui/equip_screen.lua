@@ -19,7 +19,10 @@ local Layout  = require "engine.ui.layout"
 -- shared fade and call self.on_select(id); the TANK / CHOP button flips the
 -- edited vehicle in place. The caller passes the campaign Loadout and the
 -- combat weapon table (a weapon without a def is not implemented yet and
--- shows permanently darkened).
+-- shows permanently darkened). An area a map closed (loadout.locked: the bays,
+-- the specials, the fuel and armour sliders) shows what the map put there,
+-- the rest of it darkened, and takes no click; so does a weapon a map keeps
+-- out (loadout.banned).
 local EquipScreen = Class()
 
 local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
@@ -31,6 +34,7 @@ local CONFIRM_TIME = 0.3   -- fade-through-black before OK / EXIT fires
 local KNOB_W       = 3     -- slider knob (EQPTNKF f3) width
 local TRACK_L      = 1     -- slider track's left bevel, excluded from knob travel
 local TRACK_R      = 2     -- and its right shadow
+local LOCKED_DIM   = 0.45  -- brightness of the sliders a map closed
 
 local LAYOUT_PATH = "assets/equip/layout.json"
 
@@ -99,8 +103,9 @@ function EquipScreen:_build()
     self.knob      = self:_img("assets/equip/slider_knob.png")
     self.track     = self:_img("assets/equip/slider_track.png")
 
+    local locked = self.loadout.locked
     self.zones = {}
-    for bi, bay in ipairs(L.bays) do
+    for bi, bay in ipairs(locked.bays and {} or L.bays) do
         for _, row in ipairs(bay.rows or {}) do
             local sprite = self:_row_img(row.weapon, "normal")
             if sprite then
@@ -112,7 +117,7 @@ function EquipScreen:_build()
             end
         end
     end
-    for _, sp in ipairs(L.specials) do
+    for _, sp in ipairs(locked.special and {} or L.specials) do
         local sprite = self:_row_img(sp.weapon, "normal")
         if sprite then
             self.zones[#self.zones + 1] = {
@@ -137,7 +142,7 @@ function EquipScreen:_build()
     end
     for _, s in ipairs(L.characteristics or {}) do
         self.zones[#self.zones + 1] = {
-            kind = "slider", char = s.char, readonly = s.readonly or false,
+            kind = "slider", char = s.char, readonly = s.readonly or locked.chars or false,
             x = s.x, y = s.y, w = s.w, h = s.h,
         }
     end
@@ -153,19 +158,22 @@ function EquipScreen:_level(weapon)
     return self.loadout:level(self.vehicle, weapon)
 end
 
--- Draw state of a bay row: darkened when not owned (or not implemented),
--- selected when loaded in that bay, normal otherwise.
+-- Draw state of a bay row: selected when loaded in that bay, darkened when not
+-- owned (or not implemented, or kept out by a map) and, in bays a map closed,
+-- whatever the bay does not hold; normal otherwise.
 function EquipScreen:row_state(bay_index, weapon)
-    if self:_level(weapon) < 1 then return "dark" end
-    if self.loadout.vehicles[self.vehicle].bays[bay_index] == weapon then
+    if self.loadout.vehicles[self.vehicle].bays[bay_index] == weapon and self:_level(weapon) >= 1 then
         return "sel"
     end
+    if self.loadout.locked.bays or self:_level(weapon) < 1 then return "dark" end
     return "normal"
 end
 
--- All three specials are always selectable (only one loads at a time).
+-- All three specials are always selectable (only one loads at a time), unless
+-- a map keeps one out or closed the bank, which then shows what it holds.
 function EquipScreen:special_state(weapon)
     if self.loadout.vehicles[self.vehicle].special == weapon then return "sel" end
+    if self.loadout.locked.special or self.loadout.banned[weapon] then return "dark" end
     return "normal"
 end
 
@@ -368,7 +376,8 @@ function EquipScreen:draw()
     -- The knob's top edge lines up with the track's, like the baked art.
     for _, s in ipairs(L.characteristics or {}) do
         local frac = self.loadout:char(self.vehicle, s.char)
-        g.setColor(1, 1, 1, fade)
+        local dim  = self.loadout.locked.chars and LOCKED_DIM or 1
+        g.setColor(dim, dim, dim, fade)
         if self.track then g.draw(self.track, s.x, s.y) end
         if self.knob then
             local x_min, x_max = self:_slider_bounds(s)

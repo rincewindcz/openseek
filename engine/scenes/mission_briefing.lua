@@ -35,8 +35,9 @@ function MissionBriefing:enter(stage_name)
     stage_name  = stage_name or world.stage_name or world.stages[1]
     -- A player-made map briefs with its own text over its art set's backdrop.
     local own = world.stage_name == stage_name and world.stage.mission
-    self.own  = own and { mission = world:mission(), name = own.name, paragraphs = own.briefing,
-                          cards = self:_cards(stage_name) } or nil
+    self.own  = own and { mission = world:mission(), name = own.name, author = own.author, paragraphs = own.briefing,
+                          cards = self:_cards(stage_name), disabled = MissionBriefing.closed(own) }
+                or nil
     self.menu:open(stage_name, self.own)
     if self.app.campaign then Savegame.autosave(self.app) end
     Sound.play_music("menu")   -- back after a phase, as the original restarts it
@@ -47,6 +48,18 @@ function MissionBriefing:_cards(stage_name)
     local map = MapFile.read(World.map_name(stage_name) or "")
     if not map or not next(map.briefing_cards) then return nil end
     return Cards.for_map(Document:new(map))
+end
+
+-- A map closes the shop by saying so, or by fixing the loadout: there is
+-- nothing to buy for it.
+function MissionBriefing.shop_closed(own)
+    return own.loadout ~= nil or (type(own.equip) == "table" and own.equip.no_shop == true)
+end
+
+-- The buttons the briefing of a map (own is its stage.mission) shows closed:
+-- a map played on its own is no run, so there is nothing to save or load.
+function MissionBriefing.closed(own)
+    return { save = true, load = true, shop = MissionBriefing.shop_closed(own) }
 end
 
 function MissionBriefing:leave()
@@ -63,7 +76,15 @@ function MissionBriefing:_select(id)
         local own = self.app.world.stage.mission
         if own and own.loadout then
             local settings = self.app.settings
-            settings.vehicle, settings.loadout = Loadout.fixed(own.loadout, self.app.combat.weapons)
+            local weapons  = self.app.combat.weapons
+            if Campaign.coop(self.app) then
+                for i = 1, Campaign.PLAYERS do
+                    settings.coop.vehicle[i], settings.coop.loadout[i] = Loadout.fixed(own.loadout, weapons)
+                end
+                self.app.scenes:switch("coop_gameplay")
+                return
+            end
+            settings.vehicle, settings.loadout = Loadout.fixed(own.loadout, weapons)
             self.app.scenes:switch("gameplay")
             return
         end
@@ -75,9 +96,9 @@ function MissionBriefing:_select(id)
             self.app.scenes:switch("gameplay")
         end
     elseif id == "shop" then
-        -- Nothing to buy for a loadout the map fixes.
+        -- The button is closed on such a map; this is for whatever reaches here all the same.
         local own = self.app.world.stage.mission
-        if own and own.loadout then
+        if own and MissionBriefing.shop_closed(own) then
             self.menu:open(self.app.world.stage_name, self.own)
             return
         end
@@ -85,7 +106,7 @@ function MissionBriefing:_select(id)
     elseif id == "save" or id == "load" then
         -- The briefing is the one point where a run is between phases, so it is
         -- what a slot stores and what a loaded slot reopens. A map played on its
-        -- own is no run: there is nothing to store.
+        -- own is no run: there is nothing to store, and its buttons are closed.
         if self.app.play_return then
             self.menu:open(self.app.world.stage_name, self.own)
             return

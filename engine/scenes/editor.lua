@@ -26,6 +26,8 @@ local Cards       = require "engine.editor.cards"
 local Goals       = require "engine.editor.goals"
 local Prefabs     = require "engine.editor.prefabs"
 local Loadout     = require "engine.game.loadout"
+local Campaign    = require "engine.game.campaign"
+local PlayerTag   = require "engine.ui.player_tag"
 
 -- The map editor: a free view of the map with a tool strip on the left, a
 -- dock on the right (objects, properties, layers, checks), menus on top and a
@@ -121,7 +123,7 @@ function Editor:init(app)
     self.map_stamp   = { revision = -1, at = 0 }
     self.auto_timer  = 0
     self.time        = 0
-    self.try         = { god = false, vehicle = "chopper" }   -- how TRY flies the map
+    self.try         = { god = false, vehicle = "chopper", players = 1 }   -- how TRY flies the map
     self.card_pick   = nil      -- { slot, size, label } while a briefing picture is being picked
     self.card_cache  = { revision = -1, cards = {} }
     self.place_pick  = nil      -- { index, radius } while an objective's place is being picked
@@ -359,9 +361,14 @@ function Editor:_here()
     return math.floor(x) % size, math.floor(y) % size
 end
 
+-- How many players a try is flown by: what the map asks for, else the TRY choice.
+function Editor:try_players()
+    return self.doc.map.players or self.try.players
+end
+
 -- Play the map as it stands. Esc in the phase comes back here. here: the
--- vehicle starts at Editor:_here (or the nearest free spot) instead of on the
--- home pad.
+-- vehicles start at Editor:_here (or the nearest free spot) instead of where
+-- the map starts them. Two players fly it on the split screen.
 function Editor:play_test(here)
     local app = self.app
     if Validate.errors(self:issues()) > 0 then
@@ -377,21 +384,32 @@ function Editor:play_test(here)
     app.after_stage_load()
     local settings = app.settings
     local map      = self.doc.map
+    local weapons  = app.combat.weapons
     app.campaign           = false
+    app.coop_run           = nil
     settings.death_enabled = true   -- as a map plays from the list: vehicles can be lost
-    if map.loadout then
-        -- The loadout the map fixes, as the player will get it.
-        settings.vehicle, settings.loadout = Loadout.fixed(map.loadout, app.combat.weapons)
-    else
-        -- Otherwise every weapon, in the vehicle the map asks for or the one picked for the try.
-        settings.vehicle = map.vehicle or self.try.vehicle
-        settings.loadout = Loadout.everything(settings.vehicle)
+    -- The loadout the map fixes, as the player will get it. Otherwise every
+    -- weapon the map allows, in the vehicle it asks for or the one picked for
+    -- the try, with what it closes on the equip screen as it set that.
+    local function equipped()
+        if map.loadout then return Loadout.fixed(map.loadout, weapons) end
+        local vehicle = map.vehicle or self.try.vehicle
+        return vehicle, Loadout.everything(vehicle, map.equip, weapons)
     end
     app.play_return = { scene = "editor", test = true, god = self.try.god }
     if here then
         local x, y = self:_here()
         app.play_return.start = { x = x, y = y }
     end
+    if self:try_players() == Campaign.PLAYERS then
+        Campaign.start_team(app, app.world.stage.mission)
+        for i = 1, Campaign.PLAYERS do
+            settings.coop.vehicle[i], settings.coop.loadout[i] = equipped()
+        end
+        app.scenes:switch("coop_gameplay")
+        return
+    end
+    settings.vehicle, settings.loadout = equipped()
     app.scenes:switch("gameplay")
 end
 
@@ -481,8 +499,10 @@ function Editor:preview_briefing()
     self.kit:close_popups()
     self.kit:blur()
     self.dialog = nil
-    self.briefing:open("", { mission = tonumber(self.doc:art()) or 0, name = map.name, paragraphs = map.briefing,
-                             cards = self:card_images() })
+    self.briefing:open("", { mission = tonumber(self.doc:art()) or 0, name = map.name, author = map.author,
+                             paragraphs = map.briefing, cards = self:card_images(),
+                             disabled = { save = true, load = true, shop = map.loadout ~= nil
+                                          or (map.equip ~= nil and map.equip.no_shop == true) } })
 end
 
 function Editor:close_preview()
@@ -1088,7 +1108,8 @@ function Editor:_draw_world()
 end
 
 -- Small marks over what matters to the objectives: targets, people, the home
--- pad, and what an objective of the map's own names.
+-- pad, what an objective of the map's own names and what one of its events
+-- holds back; and whose start a start is.
 function Editor:_draw_badges()
     if not self.badges or self.view:zoom() < BADGE_ZOOM then return end
     local kit   = self.kit
@@ -1100,15 +1121,23 @@ function Editor:_draw_badges()
     local marks = self:goal_marks()
     love.graphics.setScissor(r.x, r.y, r.w, r.h)
     for _, o in ipairs(self.view.drawn.objects) do
-        local cls  = doc:info(o).cls
+        local info = doc:info(o)
+        local cls  = info.cls
         local mark = marks.by_id[o.id]
         local icon, color
-        if cls.kind_name == "structure" and cls.behaviour == 2 and cls.is_target then icon, color = "flag", theme.danger
+        if info.start then
+            local dx, dy = doc:delta(o.x, o.y, self.view.x, self.view.y)
+            local sx, sy = self.view:to_screen(self.view.x + dx, self.view.y + dy)
+            kit:rect(sx / s - 9, sy / s - 9, 18, 18, { 0, 0, 0, 0.72 }, 9)
+            kit:label(tostring(info.start), sx / s - 9, sy / s - 9, 18, 18,
+                { align = "center", color = PlayerTag.color(info.start), size = theme.font_small })
+        elseif cls.kind_name == "structure" and cls.behaviour == 2 and cls.is_target then icon, color = "flag", theme.danger
         elseif cls.is_target then icon, color = "target", theme.danger
         elseif mark and mark.type == "protect" then icon, color = "lock", theme.ok
         elseif mark then icon, color = "crosshair", theme.warn
         elseif (cls.pows or 0) > 0 then icon, color = "people", theme.ok
-        elseif cls.kind_name == "structure" and Catalog.has_flag(cls.flags, 0x40) then icon, color = "base", theme.text end
+        elseif cls.kind_name == "structure" and Catalog.has_flag(cls.flags, 0x40) then icon, color = "base", theme.text
+        elseif marks.held[o.id] then icon, color = "eye", theme.text_dim end
         if icon then
             local dx, dy = doc:delta(o.x, o.y, self.view.x, self.view.y)
             local sx, sy = self.view:to_screen(self.view.x + dx, self.view.y + dy)
@@ -1349,6 +1378,8 @@ function Editor:_menus(kit, x)
         { label = "TRY FROM WHERE THE VIEW IS", key = "SHIFT+F5", icon = "pin",
           action = function() self:play_test(true) end },
         { label = "TRY IN GOD MODE", on = self.try.god, action = function() self.try.god = not self.try.god end },
+        { label = "TRY WITH TWO PLAYERS", on = self:try_players() == 2, disabled = doc.map.players ~= nil,
+          action = function() self.try.players = 3 - self.try.players end },
         { label = "PREVIEW THE BRIEFING", key = "F6", icon = "eye", action = function() self:preview_briefing() end },
     })
     if self.app.dev then
@@ -1411,10 +1442,14 @@ function Editor:_top_bar(kit, sw)
         {},
         { label = "GOD MODE: NOTHING RUNS OUT, NOTHING HURTS", on = self.try.god,
           action = function() self.try.god = not self.try.god end },
+        { label = "TWO PLAYERS ON THE SPLIT SCREEN", on = self:try_players() == 2, disabled = doc.map.players ~= nil,
+          action = function() self.try.players = 3 - self.try.players end },
         vehicles[1], vehicles[2], vehicles[3],
     })
     right = right - 2 - 84
-    if kit:button("try", right, 4, 84, TOP_H - 8, { text = self.try.god and "TRY (GOD)" or "TRY", icon = "play",
+    local try_text = (self:try_players() == 2 and "TRY 2P" or "TRY") .. (self.try.god and " (GOD)" or "")
+    right = right - (self:try_players() == 2 and 24 or 0)
+    if kit:button("try", right, 4, 84 + (self:try_players() == 2 and 24 or 0), TOP_H - 8, { text = try_text, icon = "play",
         primary = true, tip = "PLAY THE MAP AS IT STANDS (F5)" }) then
         self:play_test()
     end

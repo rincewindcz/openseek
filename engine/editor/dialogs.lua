@@ -23,6 +23,7 @@ local PARAGRAPHS  = 3     -- briefing paragraphs: the briefing screen has three 
 local NAME_MAX    = 40
 local TEXT_MAX    = 400
 local CAPTION_MAX = 16    -- typed; Cards.caption cuts it to what fits across a card
+local SAY_MAX     = 80    -- a line of an objective's event
 local CARD_ZOOM   = 1.5   -- briefing cards shown this much larger in the settings
 local MAX_LIVES   = 9
 local GOAL_H      = 84    -- one objective in the settings' list
@@ -96,6 +97,13 @@ local function settings_general(editor, kit, x, y, w)
     labelled(kit, x, y, "AUTHOR")
     local author, _, author_done = kit:field("set_author", x + LABEL_W, y, fw, map.author, { max = NAME_MAX, commit = true })
     if author_done then doc:set_map("author", author) end
+    y = y + theme.row + 6
+    labelled(kit, x, y, "PLAYERS")
+    local teams = { { label = "ONE, OR TWO ON THE SPLIT SCREEN", value = 0 }, { label = "ONE ONLY", value = 1 },
+                    { label = "TWO ONLY", value = 2 } }
+    local players, players_changed = kit:choice("set_players", x + LABEL_W, y, fw, teams, map.players or 0,
+        { tip = "WHO THE MAP LIST LETS PLAY IT. EACH PLAYER'S START IS PLACED FROM THE BASE OBJECTS" })
+    if players_changed then doc:set_map("players", players > 0 and players or nil) end
     y = y + theme.row + 6
     labelled(kit, x, y, "MAP SIZE")
     local size, size_changed = kit:choice("set_size", x + LABEL_W, y, fw, size_choices(), map.size,
@@ -190,6 +198,183 @@ local function set_loadout(editor, key, value, weapon)
     editor.doc:set_map("loadout", new, "LOADOUT")
 end
 
+-- Replace one key of what the map changes about buying and equipping, as a
+-- single undo step; a map that changes nothing holds no table. With `inner`
+-- the key holds a table of its own (a level per weapon, the bays or the
+-- special per vehicle) and that entry of it is replaced.
+local function set_equip(editor, key, value, inner)
+    local equip = {}
+    for k, v in pairs(editor.doc.map.equip or {}) do equip[k] = v end
+    if inner then
+        local held = {}
+        for k, v in pairs(type(equip[key]) == "table" and equip[key] or {}) do held[k] = v end
+        held[inner] = value
+        value = next(held) and held or nil
+    end
+    equip[key] = value
+    editor.doc:set_map("equip", next(equip) and equip or nil, "EQUIPMENT")
+end
+
+local function top_level(weapons, name)
+    return math.max(1, weapons[name] and weapons[name].levels and #weapons[name].levels or 1)
+end
+
+-- What a map says about one weapon: a bay weapon is for sale as in the game
+-- (the starting weapon: aboard at its first level), kept out, or handed over
+-- at a level; a special is there or kept out.
+local function weapon_rule(editor, kit, id, x, y, w, name, special, start)
+    local weapons = editor.app.combat.weapons
+    local rules   = (editor.doc.map.equip or {}).weapons or {}
+    local choices = {}
+    if special then
+        choices = { { label = "TO PICK", value = -1 }, { label = "KEPT OUT", value = 0 } }
+    else
+        if not start then choices[1] = { label = "FOR SALE", value = -1 } end
+        choices[#choices + 1] = { label = "KEPT OUT", value = 0 }
+        local top = top_level(weapons, name)
+        for level = 1, top do
+            choices[#choices + 1] = { label = top == 1 and "OWNED" or ("OWNED AT LEVEL " .. level),
+                                      value = (start and level == 1) and -1 or level }
+        end
+    end
+    local current = math.floor(tonumber(rules[name]) or -1)
+    if special and current > 0 then current = -1 end
+    if start and current == 1 then current = -1 end
+    labelled(kit, x, y, weapon_label(name))
+    local rule, changed = kit:choice(id, x + LABEL_W, y, w - LABEL_W, choices, current, { disabled = not weapons[name] })
+    if changed then set_equip(editor, "weapons", rule >= 0 and rule or nil, name) end
+end
+
+-- The player buys and equips: what the map changes about that.
+local function settings_equip(editor, kit, x, y, w)
+    local theme   = kit.theme
+    local doc     = editor.doc
+    local map     = doc.map
+    local dialog  = editor.dialog
+    local equip   = map.equip or {}
+    local fw      = w - LABEL_W
+    local half    = (w - 16) / 2
+    local weapons = editor.app.combat.weapons
+
+    labelled(kit, x, y, "VEHICLE")
+    local vehicles = { { label = "PLAYER CHOOSES", value = "" }, { label = "CHOPPER ONLY", value = "chopper" },
+                       { label = "TANK ONLY", value = "tank" } }
+    local picked, picked_changed = kit:choice("set_vehicle", x + LABEL_W, y, fw, vehicles, map.vehicle or "")
+    if picked_changed then doc:set_map("vehicle", picked ~= "" and picked or nil) end
+    y = y + theme.row + 10
+
+    -- The shop before the phase, and the purse the player brings to it.
+    local open, open_changed = kit:check("equip_shop", x, y, half, "THE SHOP IS OPEN BEFORE THE PHASE",
+        not equip.no_shop, { tip = "CLOSED, THE BRIEFING'S SHOP BUTTON IS DARK AND THE PLAYER HAS WHAT THE MAP HANDS OVER" })
+    if open_changed then set_equip(editor, "no_shop", (not open) or nil) end
+    if not equip.no_shop then
+        local mx = x + half + 16
+        labelled(kit, mx, y, "MEDALS FOR THE SHOP")
+        local medals, medals_changed = kit:number("equip_medals", mx + LABEL_W, y, half - LABEL_W,
+            equip.medals or Loadout.START_MEDALS, { min = 0, max = Loadout.MAX_MEDALS, big = 5 })
+        if medals_changed then set_equip(editor, "medals", medals ~= Loadout.START_MEDALS and medals or nil) end
+    end
+    y = y + theme.row + 12
+
+    -- One vehicle's weapons at a time; a map that leaves the choice open rules both.
+    local vehicle = map.vehicle or dialog.equip_vehicle or "chopper"
+    kit:label("THE WEAPONS OF", x, y, LABEL_W, theme.row, { color = theme.accent, size = theme.font_small })
+    if map.vehicle then
+        kit:label("THE " .. vehicle:upper(), x + LABEL_W, y, fw, theme.row, { size = theme.font_small })
+    else
+        dialog.equip_vehicle = kit:choice("equip_vehicle", x + LABEL_W, y, half - LABEL_W,
+            { { label = "THE CHOPPER", value = "chopper" }, { label = "THE TANK", value = "tank" } }, vehicle)
+    end
+    y = y + theme.row + 6
+    local rules = {}
+    for _, name in ipairs(Vehicles.BAY_WEAPONS[vehicle]) do
+        if name ~= "chaingun" then rules[#rules + 1] = { name = name } end
+    end
+    for _, name in ipairs(Vehicles.SPECIAL_WEAPONS[vehicle]) do rules[#rules + 1] = { name = name, special = true } end
+    for i, rule in ipairs(rules) do
+        local column = (i - 1) % 2
+        weapon_rule(editor, kit, "rule_" .. rule.name, x + column * (half + 16), y, half, rule.name, rule.special,
+            rule.name == Vehicles.STARTING_WEAPON[vehicle])
+        if column == 1 or i == #rules then y = y + theme.row + 4 end
+    end
+    y = y + 8
+
+    kit:label("ON THE EQUIP SCREEN THE PLAYER SETS", x, y, w, theme.row, { color = theme.accent, size = theme.font_small })
+    y = y + theme.row + 2
+    local area_w = 176
+    local cx     = x + area_w + 8
+    local banned = function(name)
+        return tonumber((equip.weapons or {})[name]) == 0
+    end
+    local function area(key, label, tip)
+        local free, changed = kit:check("equip_" .. key, x, y, area_w, label, equip[key] ~= true, { tip = tip })
+        if changed then set_equip(editor, key, (not free) or nil) end
+        return equip[key] == true
+    end
+
+    if area("no_bays", "THE WEAPON BAYS", "CLOSED, EVERY BAY HOLDS WHAT IS SET HERE") then
+        local choices = {}
+        for _, name in ipairs(Vehicles.BAY_WEAPONS[vehicle]) do
+            -- A further bay of the chain gun adds nothing to it: an empty bay.
+            if weapons[name] and not banned(name) then
+                choices[#choices + 1] = { label = name == "chaingun" and "EMPTY" or weapon_label(name), value = name }
+            end
+        end
+        local start = Vehicles.STARTING_WEAPON[vehicle]
+        local fresh = banned(start) and "chaingun" or start
+        local held  = type(equip.bays) == "table" and equip.bays[vehicle] or {}
+        local bays  = Vehicles.BAY_COUNT[vehicle]
+        local bw    = (x + w - cx - 16) / 3
+        for bay = 2, bays do
+            local column = (bay - 2) % 3
+            local bx     = cx + column * (bw + 8)
+            local now    = held[bay - 1]
+            if not now or banned(now) then now = fresh end
+            kit:label(tostring(bay), bx, y, 14, theme.row, { color = theme.text_dim, size = theme.font_small })
+            local name, changed = kit:choice("equip_bay_" .. bay, bx + 14, y, bw - 14, choices, now,
+                { tip = "BAY " .. bay .. ". SEVERAL BAYS OF ONE WEAPON CARRY THAT MUCH MORE OF ITS AMMUNITION" })
+            if changed then
+                local list = {}
+                for k = 2, bays do list[k - 1] = held[k - 1] or fresh end
+                list[bay - 1] = name
+                set_equip(editor, "bays", list, vehicle)
+            end
+            if column == 2 and bay < bays then y = y + theme.row + 4 end
+        end
+    end
+    y = y + theme.row + 4
+
+    if area("no_special", "A SPECIAL WEAPON", "CLOSED, THE VEHICLE CARRIES THE ONE SET HERE") then
+        local choices = { { label = "NONE", value = "" } }
+        local first
+        for _, name in ipairs(Vehicles.SPECIAL_WEAPONS[vehicle]) do
+            if weapons[name] and not banned(name) then
+                choices[#choices + 1] = { label = weapon_label(name), value = name }
+                first = first or name
+            end
+        end
+        local now = type(equip.special) == "table" and equip.special[vehicle] or nil
+        if now == nil or (now ~= "" and banned(now)) then now = first or "" end
+        local name, changed = kit:choice("equip_special", cx, y, 200, choices, now)
+        if changed then set_equip(editor, "special", name, vehicle) end
+    end
+    y = y + theme.row + 4
+
+    if area("no_chars", "FUEL AND ARMOUR", "CLOSED, THE VEHICLE HAS THE SPLIT SET HERE") then
+        local nw = 96
+        local function share(key, label, nx)
+            kit:label(label, nx, y, 60, theme.row, { color = theme.text_dim, size = theme.font_small })
+            local value, changed = kit:number("equip_" .. key, nx + 60, y, nw, equip[key] or 50,
+                { min = 0, max = 100, step = 5, big = 25 })
+            if changed then set_equip(editor, key, value ~= 50 and value or nil) end
+        end
+        share("fuel", "FUEL", cx)
+        share("armor", "ARMOUR", cx + 60 + nw + 16)
+        kit:label("MORE IS SLOWER", cx + (60 + nw) * 2 + 28, y, x + w - cx - (60 + nw) * 2 - 28, theme.row,
+            { color = theme.text_dim, size = theme.font_small })
+    end
+end
+
 local function settings_loadout(editor, kit, x, y, w)
     local theme   = kit.theme
     local doc     = editor.doc
@@ -205,14 +390,7 @@ local function settings_loadout(editor, kit, x, y, w)
     end
     y = y + theme.row + 6
     if not loadout then
-        labelled(kit, x, y, "VEHICLE")
-        local vehicles = { { label = "PLAYER CHOOSES", value = "" }, { label = "CHOPPER ONLY", value = "chopper" },
-                           { label = "TANK ONLY", value = "tank" } }
-        local vehicle, vehicle_changed = kit:choice("set_vehicle", x + LABEL_W, y, fw, vehicles, map.vehicle or "")
-        if vehicle_changed then doc:set_map("vehicle", vehicle ~= "" and vehicle or nil) end
-        y = y + theme.row + 14
-        kit:paragraph("THE PLAYER GETS " .. Loadout.START_MEDALS .. " MEDALS FOR THE SHOP AND LOADS THE BAYS ON THE "
-            .. "EQUIP SCREEN, AS FOR A SINGLE MISSION.", x, y, w, { color = theme.text_dim, size = theme.font_small })
+        settings_equip(editor, kit, x, y, w)
         return
     end
 
@@ -381,7 +559,7 @@ local function goal_card(editor, kit, rows, i, x, y, w, summary)
     local id     = "goal" .. i .. "_"
     kit:rect(x, y, w, GOAL_H - 6, theme.panel_head, 3)
 
-    kit:label(i .. ".  " .. def.title, x + pad, y + 2, w - 90, theme.row, { color = theme.accent, size = theme.font_small })
+    kit:label(i .. ".  " .. def.title, x + pad, y + 2, w - 170, theme.row, { color = theme.accent, size = theme.font_small })
     local bx = x + w - pad - 22
     if not def.count or summary[def.count] == 0 then
         if kit:button(id .. "remove", bx, y + 2, 22, theme.row, { icon = "trash", flat = true, tip = "REMOVE THIS OBJECTIVE" }) then
@@ -399,6 +577,15 @@ local function goal_card(editor, kit, rows, i, x, y, w, summary)
     if kit:button(id .. "up", bx, y + 2, 22, theme.row, { icon = "chevron_up", flat = true, disabled = i == 1,
         tip = "EARLIER IN THE ORDER" }) then
         Goals.move(doc, rows, i, -1)
+        return true
+    end
+    bx = bx - 76
+    if Goals.has_events(goal) and kit:button(id .. "events", bx, y + 2, 72, theme.row, { text = "EVENTS",
+        on = goal.on_open ~= nil or goal.on_done ~= nil,
+        tip = "WHAT IS SAID AND WHAT APPEARS AS THE OBJECTIVE COMES UP OR IS DONE" }) then
+        -- The events are the entry's own: an objective that follows from the map's content gets one.
+        if i > #doc.map.objectives then Goals.write(doc, rows) end
+        editor.dialog = { kind = "events", index = i }
         return true
     end
 
@@ -746,6 +933,75 @@ local function draw_cards(editor, kit, dialog)
     end)
 end
 
+local EVENT_TITLES = { on_open = "AS THE OBJECTIVE COMES UP", on_done = "ONCE THE OBJECTIVE IS DONE" }
+
+local function back_to_objectives(editor)
+    editor:open_dialog("settings")
+    editor.dialog.tab = "objectives"
+end
+
+-- The events of one objective: a line said, and objects that are not on the
+-- map until then (taken from the selection, as an objective takes its own).
+local function draw_events(editor, kit, dialog)
+    local doc  = editor.doc
+    local rows = Goals.rows(doc, Validate.summary(doc))
+    local goal = rows[dialog.index]
+    if not goal then
+        back_to_objectives(editor)
+        return
+    end
+    kit:dialog("EVENTS OF OBJECTIVE " .. dialog.index, 620, 330, function(_, x, y, w, h)
+        local theme  = kit.theme
+        local bottom = y + h - theme.row - 2
+        local picked = Goals.pick_held(doc, editor.selection.list)
+        kit:label(goal.label or Goals.TYPES[goal.type].wording, x, y, w, theme.row, { color = theme.text_dim })
+        y = y + theme.row + 8
+        for _, key in ipairs(Goals.EVENTS) do
+            local event = goal[key] or {}
+            local id    = "event_" .. key .. "_"
+            kit:label(EVENT_TITLES[key], x, y, w, theme.row, { color = theme.accent, size = theme.font_small })
+            y = y + theme.row + 2
+            kit:label("SAY", x, y, 96, theme.row, { color = theme.text_dim, size = theme.font_small })
+            local say, _, done = kit:field(id .. "say", x + 96, y, w - 96, event.say or "",
+                { hint = "A LINE SHOWN TO THE PLAYER", max = SAY_MAX, commit = true })
+            if done and say:upper() ~= (event.say or "") then
+                Goals.set_event(doc, rows, dialog.index, key, "say", say ~= "" and say:upper() or nil)
+                return
+            end
+            y = y + theme.row + 4
+            local found = Goals.held(doc, goal, key)
+            kit:label("THEN APPEAR", x, y, 96, theme.row, { color = theme.text_dim, size = theme.font_small })
+            kit:label(#found .. (#found == 1 and " OBJECT" or " OBJECTS"), x + 96, y, 90, theme.row,
+                { size = theme.font_small })
+            local bx = x + 190
+            if kit:button(id .. "take", bx, y, 172, theme.row, { text = "USE THE SELECTION", disabled = #picked == 0,
+                tip = "THE OBJECTS SELECTED ON THE MAP ARE HELD BACK UNTIL THEN" }) then
+                Goals.set_event(doc, rows, dialog.index, key, "show", picked)
+                return
+            end
+            bx = bx + 176
+            if kit:button(id .. "show", bx, y, 62, theme.row, { text = "SHOW", disabled = #found == 0,
+                tip = "SELECT THEM ON THE MAP" }) then
+                close(editor)
+                editor:show_objects(found)
+                return
+            end
+            bx = bx + 66
+            if kit:button(id .. "none", bx, y, 62, theme.row, { text = "NONE", disabled = #found == 0 }) then
+                Goals.set_event(doc, rows, dialog.index, key, "show", nil)
+                return
+            end
+            y = y + theme.row + 14
+        end
+        kit:paragraph("WHAT APPEARS IS NOT ON THE MAP UNTIL ITS EVENT: IT IS NOT SEEN, DOES NOTHING AND CANNOT BE HIT. "
+            .. "SELECT THE OBJECTS ON THE MAP FIRST, THEN COME BACK HERE. HELICOPTER POSTS, PICKUPS AND THE MARKS OF "
+            .. "THE PEOPLE OBJECTIVES CANNOT BE HELD BACK.", x, y, w, { color = theme.text_dim, size = theme.font_small })
+        if kit:button("events_back", x + w - 100, bottom, 100, theme.row + 2, { text = "BACK", primary = true }) then
+            back_to_objectives(editor)
+        end
+    end)
+end
+
 local SETTINGS_PAGES = {
     general = settings_general, environment = settings_environment, loadout = settings_loadout,
     difficulty = settings_difficulty, objectives = settings_objectives, briefing = settings_briefing,
@@ -996,7 +1252,7 @@ local KEYS = {
     { "CLICK AN END", "CARRY A ROUTE, LINE OR ROAD ON FROM THERE" },
     { "CTRL WHILE DRAWING OR DRAGGING", "ROUTE AND LINE SEGMENTS IN 45 DEGREE STEPS; A MOVE ALONG ONE AXIS" },
     { "CTRL + [  ]  /  SHIFT + H  V", "TURN THE SELECTION A QUARTER, MIRROR IT" },
-    { "F5  /  SHIFT + F5", "TRY THE MAP FROM THE HOME PAD, OR FROM HERE (ESC COMES BACK)" },
+    { "F5  /  SHIFT + F5", "TRY THE MAP FROM ITS START, OR FROM HERE (ESC COMES BACK)" },
     { "F6", "PREVIEW THE BRIEFING" },
 }
 
@@ -1016,7 +1272,7 @@ end
 
 local DRAW = { settings = draw_settings, cards = draw_cards, new = draw_new, open = draw_open,
                save_as = draw_save_as, prefab = draw_prefab, generate = draw_generate, ask = draw_ask,
-               help = draw_help }
+               help = draw_help, events = draw_events }
 
 function Dialogs.draw(editor, kit)
     local dialog = editor.dialog

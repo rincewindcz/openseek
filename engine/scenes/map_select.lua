@@ -12,6 +12,9 @@ local Log        = require "engine.core.log"
 local World      = require "engine.game.world"
 local MapFile    = require "engine.game.map_file"
 local Loadout    = require "engine.game.loadout"
+local Campaign   = require "engine.game.campaign"
+local Records    = require "engine.game.records"
+local Replay     = require "engine.game.replay"
 local Difficulty = require "engine.game.difficulty"
 local Sound      = require "engine.game.sound"
 local Catalog    = require "engine.editor.catalog"
@@ -20,11 +23,14 @@ local Validate   = require "engine.editor.validate"
 
 -- MAPS screen: the player-made maps (maps/ in the save directory), built like
 -- the SAVE / LOAD and REPLAYS panels but tinted amber. A map is played from
--- here (briefing, equip, phase, stats, back here) or opened in the editor; the
--- first row starts a new one. A map file dropped on the window is imported.
+-- here (briefing, equip, phase, stats, back here), by one player or by two on
+-- the split screen as the map allows, or opened in the editor; the first row
+-- starts a new one. Under the list the highlighted map's records
+-- (engine/game/records.lua): the fastest win and the highest score, whose
+-- recording BEST plays back. A map file dropped on the window is imported.
 -- Reached from the ADVANCED submenu.
 --
--- enter() takes { return_to = <scene name> }.
+-- enter() takes { return_to = <scene name>, note = <a line to show> }.
 local MapSelect = Class(Scene)
 
 MapSelect.ui_pointer = true
@@ -38,13 +44,14 @@ local TITLE_Y     = 32
 local ROW_Y0      = 50
 local ROW_DY      = 16
 local ROW_H       = 12
-local MAX_ROWS    = 8
+local MAX_ROWS    = 7
 local NAME_X      = 32
 local NAME_GAP    = 12
 local ART_RX      = 290    -- right edge of the row's art set column
 local HIT_X0      = 22
 local HIT_X1      = 300
-local DETAIL_Y    = 178
+local DETAIL_Y    = 164
+local RECORD_Y    = 178
 local INFO_Y      = 194
 local ARROW_GAP   = 8
 local FOOTER_Y    = 222
@@ -55,10 +62,13 @@ local GOLD = { 1, 0.8, 0.2 }
 
 -- The words under the list, each a widget: what to do with the highlighted map.
 local ACTIONS = {
-    { id = "play", label = "PLAY" }, { id = "edit", label = "EDIT" }, { id = "copy", label = "COPY" },
-    { id = "folder", label = "FOLDER" }, { id = "exit", label = "EXIT" },
+    { id = "play", label = "PLAY" }, { id = "coop", label = "2P" }, { id = "best", label = "BEST" },
+    { id = "edit", label = "EDIT" }, { id = "copy", label = "COPY" }, { id = "folder", label = "FOLDER" },
+    { id = "exit", label = "EXIT" },
 }
-local ACTION_GAP = 14
+local ACTION_GAP = 12
+
+local PLAYERS = { [1] = "1 PLAYER", [2] = "2 PLAYERS" }
 
 function MapSelect:init(app)
     Scene.init(self, app)
@@ -83,13 +93,14 @@ function MapSelect:enter(opts)
     self.app.play_return = nil
     Sound.play_music("menu")
     self:_refresh()
+    if opts.note then self:_say(opts.note) end
 end
 
 -- Rows: NEW MAP first, then the maps, newest first.
 function MapSelect:_refresh()
     self.rows = { { kind = "new" } }
     for _, item in ipairs(MapFile.list()) do
-        self.rows[#self.rows + 1] = { kind = "map", name = item.name, map = item.map }
+        self.rows[#self.rows + 1] = { kind = "map", name = item.name, map = item.map, hash = item.hash }
     end
     self.cursor = math.max(1, math.min(self.cursor, #self.rows))
     self:_scroll_to(self.cursor)
@@ -156,23 +167,65 @@ function MapSelect:_problem(row)
     return row.problem or nil
 end
 
-function MapSelect:_play(row)
+-- Play a map: by one player, or by two on the split screen, who first pick
+-- their vehicles' looks and controls as a co-op campaign does.
+function MapSelect:_play(row, players)
     local app = self.app
     if self:_problem(row) then
         Audio.play_event("ui.back")
         self:_say("NOT PLAYABLE YET: OPEN IT IN THE EDITOR")
         return
     end
+    if row.map.players and row.map.players ~= players then
+        Audio.play_event("ui.back")
+        self:_say("THIS MAP IS FOR " .. PLAYERS[row.map.players])
+        return
+    end
     Audio.play_event("ui.confirm")
-    Log.info("game", "map %s", row.name)
+    Log.info("game", "map %s, %d", row.name, players)
     local stage = World.map_stage(row.name)
-    app.campaign     = false
-    app.loadout_free = nil     -- a fresh MISSION-mode inventory, as for a single stage
-    Loadout.active(app)
+    app.campaign = false
+    app.coop_run = nil
     app.world:load(stage)
     app.after_stage_load()
-    app.play_return = { scene = "map_select" }
-    app.scenes:switch("mission_briefing", stage)
+    local own = app.world.stage.mission
+    -- A fresh MISSION-mode inventory, as for a single stage, under the map's own rules for it.
+    Loadout.for_map(app, own and own.equip)
+    if players ~= Campaign.PLAYERS then
+        app.play_return = { scene = "map_select" }
+        app.scenes:switch("mission_briefing", stage)
+        return
+    end
+    app.scenes:switch("vehicle_select", { players = Campaign.PLAYERS, return_to = "map_select", on_start = function()
+        app.play_return = { scene = "map_select" }
+        Campaign.start_team(app, own)
+        app.scenes:switch("mission_briefing", stage)
+    end })
+end
+
+-- Play back the recording of the map's fastest win: the lone player's, else the team's.
+function MapSelect:_watch(row)
+    local app = self.app
+    local path
+    for _, mode in ipairs(Records.MODES) do
+        path = path or Records.replay(row.name, row.hash, mode)
+    end
+    local replay = path and Replay.load(path)
+    if not replay then
+        Audio.play_event("ui.back")
+        self:_say("NO RECORDING OF A BEST RUN YET")
+        return
+    end
+    Audio.play_event("ui.confirm")
+    Log.info("replay", "playing %s", path)
+    app.campaign         = false
+    app.settings.loadout = nil
+    app.replay_play      = replay
+    app.replay_verify    = false
+    app.replay_result    = nil
+    app.replay_return    = "map_select"
+    replay:rewind()
+    app.scenes:switch(replay.header.mode == "coop" and "coop_gameplay" or "gameplay")
 end
 
 function MapSelect:_edit(row)
@@ -203,7 +256,9 @@ function MapSelect:_act(id)
     elseif id == "folder" then self:_open_folder()
     elseif not row then return
     elseif row.kind == "new" then self:_edit(row)
-    elseif id == "play" then self:_play(row)
+    elseif id == "play" then self:_play(row, row.map.players or 1)
+    elseif id == "coop" then self:_play(row, Campaign.PLAYERS)
+    elseif id == "best" then self:_watch(row)
     elseif id == "edit" then self:_edit(row)
     elseif id == "copy" then self:_copy(row)
     end
@@ -219,6 +274,7 @@ function MapSelect:_delete()
     end
     self.pending_delete = nil
     MapFile.delete(row.name)
+    Records.forget(row.name)
     Audio.play_event("ui.back")
     self:_refresh()
 end
@@ -227,6 +283,8 @@ function MapSelect:keypressed(key)
     if     key == "up"     then self:_move(-1)
     elseif key == "down"   then self:_move(1)
     elseif key == "return" or key == "space" or key == "kpenter" then self:_act("play")
+    elseif key == "2"      then self:_act("coop")
+    elseif key == "b"      then self:_act("best")
     elseif key == "e"      then self:_act("edit")
     elseif key == "c"      then self:_act("copy")
     elseif key == "f"      then self:_act("folder")
@@ -348,17 +406,45 @@ end
 
 local WEATHER = { snow = "SNOW", rain = "RAIN" }
 
+-- A map's records as its file stands, looked up once per row.
+function MapSelect:_records(row)
+    if not row.records then row.records = Records.of(row.name, row.hash) end
+    return row.records
+end
+
+-- Whether an action word does anything for the highlighted row.
+function MapSelect:_usable(id, row)
+    if id == "exit" or id == "folder" then return true end
+    if not row then return false end
+    if row.kind ~= "map" then return id == "edit" end
+    if id == "play" then return row.map.players ~= Campaign.PLAYERS end
+    if id == "coop" then return row.map.players ~= 1 end
+    if id == "best" then
+        for _, mode in ipairs(Records.MODES) do
+            if Records.replay(row.name, row.hash, mode) then return true end
+        end
+        return false
+    end
+    return true
+end
+
+-- Two lines under the list: what the highlighted map is, and its records
+-- (per way of playing it the fastest win and the highest score).
 function MapSelect:_draw_detail(fade)
     local row = self.rows[self.cursor]
     local col = { 1, 1, 1, 0.55 * fade }
-    local text
+    local text, best = "", nil
     if self.note then
         text = self.note.text
     elseif self.pending_delete then
         text = "PRESS DEL AGAIN TO ERASE THIS MAP"
+    elseif row and row.kind == "map" and self:_problem(row) then
+        text = "NOT PLAYABLE YET: OPEN IT IN THE EDITOR"
     elseif row and row.kind == "map" then
-        local map   = row.map
-        local parts = { string.format("%d OBJECTS", #map.objects) }
+        local map    = row.map
+        local author = map.author:upper()
+        local parts  = { author:match("%S") and ("BY " .. author) or nil }
+        parts[#parts + 1] = PLAYERS[map.players] or "1-2 PLAYERS"
         if map.environment.night == true then parts[#parts + 1] = "NIGHT" end
         if WEATHER[map.environment.weather] then parts[#parts + 1] = WEATHER[map.environment.weather] end
         if map.difficulty then
@@ -366,14 +452,24 @@ function MapSelect:_draw_detail(fade)
             parts[#parts + 1] = preset and ("ALWAYS " .. preset) or "OWN DIFFICULTY"
         end
         if map.based_on then parts[#parts + 1] = "COPY OF " .. map.based_on:upper() end
-        if self:_problem(row) then parts = { "NOT PLAYABLE YET: OPEN IT IN THE EDITOR" } end
         text = table.concat(parts, "   ")
+        local records, wins = self:_records(row), {}
+        for _, mode in ipairs(Records.MODES) do
+            local won = records[mode]
+            if won then
+                wins[#wins + 1] = string.format("%s %s %d", mode == "coop" and "2P" or "1P",
+                    Records.clock(won.time), won.score)
+            end
+        end
+        best = #wins > 0 and table.concat(wins, "   ") or "NOT WON YET"
     elseif row then
         text = "START A MAP OF YOUR OWN IN THE EDITOR"
-    else
-        text = ""
     end
     self.font:print(fit(self.font, text, ART_RX - NAME_X), NAME_X, DETAIL_Y, { color = col })
+    if best then
+        self.font:print(fit(self.font, best, ART_RX - NAME_X), NAME_X, RECORD_Y,
+            { color = { GOLD[1], GOLD[2], GOLD[3], 0.75 * fade } })
+    end
 end
 
 function MapSelect:draw()
@@ -412,15 +508,14 @@ function MapSelect:draw()
 
     local row = self.rows[self.cursor]
     for _, span in ipairs(self:_action_spans()) do
-        local usable = span.id == "exit" or span.id == "folder" or (row and row.kind == "map")
-            or (row and span.id == "edit")
-        local hot = usable and self.hot_action == span.id
+        local usable = self:_usable(span.id, row)
+        local hot    = usable and self.hot_action == span.id
         local col = hot and { GOLD[1], GOLD[2], GOLD[3], fade } or { 1, 1, 1, (usable and 0.65 or 0.25) * fade }
         self.font:print(span.label, span.x, INFO_Y, { color = col })
     end
 
     Hint.print_centered(self.hint_font,
-        "{ENTER} PLAY   {E} EDIT   {C} COPY   {DEL} ERASE   {F} FOLDER   {ESC} BACK",
+        "{ENTER} PLAY  {2} CO-OP  {B} BEST RUN  {E} EDIT  {C} COPY  {DEL} ERASE  {ESC} BACK",
         DESIGN_W, FOOTER_Y, { alpha = fade })
 
     g.pop()

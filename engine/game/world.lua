@@ -114,6 +114,10 @@ local WALKER_CLASS = 20
 local FREE_STEP  = 8
 local FREE_RINGS = 64
 
+-- World px a vehicle put down away from the home pad (a map's start for a
+-- player, a try from the editor) keeps clear of solid objects.
+World.START_CLEAR = 16
+
 function World:init()
     self.stage       = nil   -- decoded JSON table
     self.stage_name  = nil
@@ -704,6 +708,15 @@ function World:player_start()
     if self.home_entity then return self.home_entity.x, self.home_entity.y end
     local c = self.stage.world_size / 2
     return c, c
+end
+
+-- Where a map puts the vehicle of player `number` at the start of the phase
+-- and after a crash (the free spot at or near the start it places for that
+-- player), or nil: the stage has none and the player starts on the base pad.
+function World:start_of(number)
+    local start = (self.stage.starts or {})[number]
+    if not start then return nil end
+    return self:free_spot(start.x, start.y, World.START_CLEAR)
 end
 
 -- Restart the simulation randomness from a known seed. Called at the start of

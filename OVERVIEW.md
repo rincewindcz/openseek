@@ -223,16 +223,16 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `ending` | The original's ending after the last stage (`Campaign.complete`): `assets/ending/reganim.flc` (CD release only) through `core/flic` at `anim.frame_time` with its frame cues and two fading engine loops, then the `ending` music under FIN01..03 and VIC1..3 (the shareware: DEMO01..03 and DEMOOVER, no animation, with `extra_lines` appended under DEMOOVER). Each picture fades in, holds, types `assets/ending/ending.json` lines in `fonts/endstory` at fixed 8 px pitch (`char_time` per letter, a tab pauses `tab_pause`), shows the prompt and waits. A key completes the picture's text, then moves on; a key skips the animation; Esc skips everything. `enter{ alternate, record, scores, preview, keep_music, on_done }`; `alternate` types VIC3's alternate ending, `preview` falls back to `data/ending.json` `preview` without a record (overview F11), `keep_music` leaves the end music playing into the credits (`Campaign.complete`). EXTRA `ending_stats` adds the run record under FIN01..03 (DEMO01..03). |
 | `credits`, `hiscores` | Info screens over `ui/info_screen.lua`. Credits: `data/credits.json`, openSEEK first in the large style (`main` heading, `credchars` name), then the original team under a `credchars` label in the small style (`credchars` heading, `chars` name); `enter(on_exit)` replaces EXIT's return to the menu (the ending passes the high scores). High scores: top-10 table in the gold `credchars` font (`hichars` fallback) with name entry (up to 40 characters), one per qualifying player after a co-op run; a name is held to the column left of its score through `ui/scroll_text`, following the caret while typed and panning to its end and back when stored. The shipped table (`data/highscores.json`) is the original's own default names and scores under the port's author. |
 | `advanced_settings` | OPTIONS: STYLE (the GAME STYLE row, and PREVIEW STYLES opening `style_select`, dimmed and inert while a game is suspended underneath), DISPLAY, VIDEO, EFFECTS, AUDIO, CONTROLS, MOBILE UI, GAMEPLAY, DIFFICULTY, EXTRAS. MOBILE UI only where `TouchControls.available` (web, Android, iOS, `--touch`); the web build drops DISPLAY's FULLSCREEN and WINDOW SIZE. The sidebar packs tighter when it holds more than nine entries. Rows scroll when a category holds more than `MAX_ROWS` (9). CONTROLS: a DEVICE row switches the action rows between KEYBOARD and GAMEPAD, each with two binding columns (Enter captures the next key or pad button, Del clears a slot), RESET TO DEFAULTS restores the shown device, then STICK DEAD ZONE, MOUSE STEERING and MOUSE SPEED. Over a suspended game the footer of a row the phase holds its own value of (`Replay.PARAMS`, the difficulty preset, the game style) says that it takes effect next game. |
-| `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. Rewrites the autosave on every open in a campaign run. A map briefs with its own name and paragraphs over the backdrop of its art set's mission, without the icon column, and has no SAVE / LOAD. |
+| `mission_briefing` | Briefing text, phase selectors, SAVE / LOAD / SHOP / PLAY. Rewrites the autosave on every open in a campaign run. A map briefs with its own name and paragraphs over the backdrop of its art set's mission, without the icon column, and under its name stands its author. A closed button is darkened and skipped by pointer and keys: SAVE and LOAD on every map (a map played on its own is no run), SHOP on a map that fixes the loadout or sets `equip.no_shop` (`MissionBriefing.closed`). |
 | `mission_select` | Debug mission / phase picker with a separate medal purse. |
 | `equip` | Vehicle and weapon-bay selection; skipped without `assets/equip/`. One special is always loaded. Co-op: once per player (tagged), EXIT steps back a player. |
 | `shop` | POWUP / POWUPT weapon shop. Co-op: once per player, each with their own purse. |
-| `map_select` | MAPS screen (menu ADVANCED / EDITOR), built like `saves` over an amber-tinted `MAINP`: the maps of `maps/` in the save directory, newest first, under a NEW MAP row. PLAY (Enter, or a click on the row) runs briefing, equip, phase and stats and comes back (`app.play_return`), with the MISSION mode medal purse and no high score entry; EDIT (`E`) opens the editor; COPY (`C`) duplicates; two-step delete; FOLDER (`F`) opens the directory. A map with a check error (section 6a) is listed but not played. A map file dropped on the window is imported (`Scene:filedropped`). |
+| `map_select` | MAPS screen (menu ADVANCED / EDITOR), built like `saves` over an amber-tinted `MAINP`: the maps of `maps/` in the save directory, newest first, under a NEW MAP row. PLAY (Enter, or a click on the row) runs briefing, equip, phase and stats and comes back (`app.play_return`), with the MISSION mode medal purse and no high score entry; 2P (`2`) plays it with two on the split screen, through the vehicle select; BEST (`B`) plays back the recording of the fastest win. A map made for one or for two players only (`players`) offers that way alone. Two lines under the list describe the highlighted map (author, players, night, weather, difficulty) and give its records (`game/records`); a new record is announced on the way back. EDIT (`E`) opens the editor; COPY (`C`) duplicates; two-step delete; FOLDER (`F`) opens the directory. A map with a check error (section 6a) is listed but not played. A map file dropped on the window is imported (`Scene:filedropped`). |
 | `editor` | Map editor (section 6a). Entered from `map_select` with `{ map = name }` or `{ new = true }`; with nothing it resumes the map already open (after a try). Key repeat is on while it is the top scene. Under `--dev` its DEV menu launches the sandbox, co-op free play, the replay panel, the galleries, the ending previews and the crash picture. |
 | `gameplay` | Player-locked rotating camera, combat. A phase played on its own returns to where it was started (`GameplayBase:leave_run`, `app.play_return`: the map list or the editor, else the menu); a map tried from the editor leaves on Esc and is not recorded. Under `--dev` `PgUp` / `PgDn` step the pack stage in free play. |
 | `sandbox` (F3 on the main menu, `--dev`) | Gameplay plus live vehicle parameter editor. |
 | `style_select` | Style selection screen, a `gameplay` subclass: three style cards (CLASSIC, ENHANCED, OVERKILL, on the VSELECT camo strip the style's `camo` names), the chosen style's one `about` line, a DIFFICULTY row, a fixed line pointing at the options for a style of one's own, and the OK plate over a live phase, unrecorded, silent and in god mode. The phase is flown by the scripted runs of `data/styles.json` `preview` in turn, each entered as a new phase on its own stage and started inside an enemy base. Nothing holds the replay parameters fixed during a run, so a choice is written to `Config` and shows at once. Opened by `title` until confirmed once (starts on the `default` style, no way out but OK), and by OPTIONS with `return_to`, where Esc restores every `Config` scalar. Leaving reloads the stage that was loaded before. |
-| `coop_gameplay` (F7, LOCAL COOP) | Split-screen two-player co-op; full screen when one player is left in a campaign. |
+| `coop_gameplay` (F7, LOCAL COOP, a map's 2P) | Split-screen two-player co-op; full screen when one player is left in a campaign. |
 | `replays` (F4 on the main menu, `--dev`) | Dev replay panel: play back, verify, toggle recording, delete. |
 | `replay_select` | REPLAYS screen (menu ADVANCED), built like `saves` over a blue-tinted `MAINP`: watch a recording, two-step delete, left / right (or the label) step the order between newest, oldest and by progress, stage / mode / players / running time of the highlighted one, flagged when it was recorded on another version of the game or on another platform. Playback returns here through `app.replay_return`. |
 | `saves` | SAVE / LOAD slots over the green-tinted `MAINP` backdrop: unlimited named slots, scrolling, name entry (up to 40 characters; the field follows the caret, the highlighted slot's name pans when wider than its column, `ui/scroll_text`), two-step delete. Opened from the briefing (both modes) and from the menu LOAD entry. |
@@ -288,8 +288,9 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
 | `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
 | `game/vehicles` | Free-play weapon cycles, equip bay and special lists, variants (`data/vehicle_variants.json`, loaded on first use), labels. |
-| `game/campaign` | NEW GAME run state: solo run fields or `app.coop_run` (per-player score, lives, threshold, out flag, `Loadout`; lives rule and pool), active players, `advance`, `finish` (out of vehicles), `complete` (last stage cleared: ending, credits, high scores), `resume` (reopen a slot or the autosave at its briefing). `app.run_record` sums each cleared phase over all players (`record_phase`, from the gameplay scenes: phases, simulated time, vehicles lost, stats screen kills, rescues, badges). |
-| `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. `Loadout.info` (cost, description lines) from `assets/pow/weapon_info.json`; `price` = list cost minus `trade_in` (`data/shop.json`) of the owned level's cost. `Loadout.active(app, player)` picks a co-op player's own. |
+| `game/campaign` | NEW GAME run state: solo run fields or `app.coop_run` (per-player score, lives, threshold, out flag, `Loadout`; lives rule and pool), active players, `advance`, `finish` (out of vehicles), `complete` (last stage cleared: ending, credits, high scores), `resume` (reopen a slot or the autosave at its briefing). `start_team` gives a map played by two a co-op run of its one phase; `coop(app)` is the run in progress, a campaign's or such a map's (while `app.play_return` is set). `app.run_record` sums each cleared phase over all players (`record_phase`, from the gameplay scenes: phases, simulated time, vehicles lost, stats screen kills, rescues, badges). |
+| `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. `Loadout.info` (cost, description lines) from `assets/pow/weapon_info.json`; `price` = list cost minus `trade_in` (`data/shop.json`) of the owned level's cost. `Loadout.active(app, player)` picks a co-op player's own. `Loadout.for_map` starts a map's fresh inventory under its `equip` rules (`restrict`: the purse, `banned` weapons, weapons handed over at a level, and `locked` areas holding what the map put there); `everything(vehicle, rules, weapons)` is what a try from the editor flies. |
+| `game/records` | Records of the player-made maps, on this machine: `records/maps.json` holds per map file its fingerprint and per way of playing (`single`, `coop`) the fastest win, the highest score of a win and whether the fastest run's recording is kept (`records/<map>-<mode>.osr`). `submit` returns what a win beat; `of(name, hash)` is empty once the map's file changed, and the first win on the new one starts over; `forget` goes with an erased map. |
 | `game/score` | Kill values, phase bonus weights, bonus-life ladder, `Score.award`. |
 | `game/stats` | Destruction categories and stage totals. |
 | `game/replay` | Replay header (platform `build`, game `version`), delta input, checksums, `.osr` files; on playback a checkpoint where only the player part disagrees is a drift (`is_drift`), played through and reported, anything more ends it; hands each finished recording to the hosting page when the web build ships `build.json` with `replay_upload`. `Replay.Hold` is a phase's hold on the simulation parameters: the held values go back into `Config` at the start of every tick, the player's own while a menu is up and when the phase ends, edits included. |
@@ -297,7 +298,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/hud` | Gauges, weapon icon, radar (with per-player auto zoom, home base, pickup, air strike and mission place blips), weapon sights (the air strike's rests on its target), counters, OVERKILL banner, weapon find notice, rolling score. `set_mission` picks the mission's HUD art (gauges, weapon icons, radar, cursor box, lives icon: `assets/hud/stage{m}/` over `assets/hud/`) and `font()` its text font: the night mission's readouts, in-game messages and FPS counter draw in its green CHARS, as in the original. |
 | `ui/end_stats` | DESTRUCTION STATS screen: lines count up (icons filling), then wind back down as each pays its bonus into TOTAL SCORE; per-player columns in co-op. |
 | `ui/crash_fx` | EXTRA crash picture effects (`data/crash_fx.json`), the `fx` of the crash / game-over overlay: smoke, fire glow, embers and heat haze composed at the picture's resolution, flash and static entrance, static burst on a radio cue (`crash_fx`); the typed cause of the loss (`crash_cause`, from `Player.damage_cause`); the run's trivia (`crash_stats`, from `World.tally` and the campaign record via `GameplayBase:crash_stats`). `CrashFX.show` picks the picture and its timing for both gameplay scenes (the fx is nil with every extra off); `CrashFX.preview` is the overview's `Delete` key. |
-| `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. |
+| `ui/equip_screen` | Equip widgets over `assets/equip/layout.json`. An area a map closed (`loadout.locked`: bays, specials, the fuel and armour sliders) has no zones and shows what the map put there (its weapon per bay and its special selected, the rest darkened, the sliders dimmed on its split); a weapon a map keeps out (`loadout.banned`) is darkened. |
 | `ui/shop_screen` | Original shop flow over `data/shop.json`: select a level icon (description, trade-in COST), PURCHASE buys it. LOADED on the owned level, lower levels darkened and unselectable, medal purse bottom-left (digits, large medal per 10, small per 1). Arrows move over the grid, Enter purchases, Tab switches vehicle, Esc is DONE. `shop_fx` (EXTRA.md) animates the purse, greys levels the purse cannot pay for (not the selected one, whose COST reads red), slides the focus frame, marks the hovered box and dims LOADED while a higher level is selected. |
 | `ui/kit` | Immediate-mode widget kit of the map editor: panels, buttons, check boxes, text and number fields, a text box of several lines (`area`: wrapped, Enter breaks a line, the arrows move through the lines as shown), drop-downs, tabs, scroll areas, menus, tooltips, one dialog; a click from one text box into another ends the first edit before the second takes the keyboard; popups and the dialog are deferred to `finish()` and own the input while open. The shipped "Loaded" font, tinted icon masks from `content/editor/icons/`, theme from `data/editor.json`. UI units are window pixels divided by `kit.scale` (1, 1.25, 1.5 or 2; `Kit.scale_for` picks by window height). |
 | `ui/menu` | Main menu over `MAINP`, `main` font (`mainmen` on a pack exported before `main` existed). Also drives the `new_game` and `advanced_menu` submenus. `set_notice(id, text)` makes an entry answer with a line under the last row (`chars` font, 2.2 s) instead of being confirmed. |
@@ -371,16 +372,18 @@ map list and the editor are reached through ADVANCED / EDITOR.
 | `environment` | `art` (mission digit 0-4: sprites, ground, HUD art, tracers, dust), and optionally `night`, `weather` (`none` / `snow` / `rain`), `look` (POST FX grade of a mission), `music` (track of a mission). Unset keys follow the art set. |
 | `size` | Wrap period in world pixels (1024-4096; the editor offers 2048, 3072, 4096). |
 | `vehicle` | `tank` / `chopper` when forced (applies however the map is played). |
+| `players` | 1 or 2 when the map is for one player only, or for two on the split screen only. Absent: either. |
+| `equip` | What the map changes when the player buys and equips (no `loadout`; `Loadout:restrict`): `medals` (the purse for the shop, 0-99; `Loadout.START_MEDALS` when absent), `no_shop` (the briefing's SHOP is closed), `weapons` (name -> level: 0 keeps a weapon out of the shop and off the vehicle, 1 and up hands it over at that level), and the areas of the equip screen that are closed, each holding what the map put there: `no_bays` with `bays` (per vehicle the weapon of bay 2, 3, ...; the chain gun for an empty bay), `no_special` with `special` (per vehicle a name, `""` for none), `no_chars` with `fuel` / `armor` (0-100). A closed area the map names nothing for holds what the equip screen starts with. Absent when nothing is changed. |
 | `loadout` | Set when the map decides what the player flies instead of the shop and equip screens: `vehicle`, `weapons` (name -> level; the chain gun is always aboard), `special`, `loads` (ammunition multiplier, 1-6, as that many bays), `fuel` / `armor` (0-100, the equip sliders), `lives`. `Loadout.fixed` turns it into the equip screen's snapshot. |
 | `briefing` | Up to three paragraphs, one per slot of the briefing screen; a paragraph may hold line breaks. |
 | `briefing_cards` | The picture beside each paragraph: `{ kind = "view", x, y, size, label }` (a square of the map, `size` world pixels a side, drawn from the map whenever it is shown), `{ kind = "card", stage, slot }` (a card of a pack stage's briefing) or `{ kind = "none" }`. |
 | `difficulty` | Set when the map is played on a difficulty of its own whatever the player's is: values of the difficulty keys (`game/difficulty`: `enemy_damage_level`, `enemy_damage`, `enemy_fire_level`, `enemy_fire_rate`, `enemy_aggression`, `pickup_level`, `land_for_medals`, `land_for_supplies`). |
-| `objectives` | The objectives in order, each `{ type, label, optional }` plus its own fields (table below). The first files held `{ destroy, rescue, sabotage }` by name, which is still read. |
+| `objectives` | The objectives in order, each `{ type, label, optional, on_open, on_done }` plus its own fields (table below). `on_open` / `on_done` are the objective's events, as it comes up and once it is done: `{ say, show }`, a line shown to the player and the objects (ids) that are not on the map until then. The first files held `{ destroy, rescue, sabotage }` by name, which is still read. |
 | `ordered` | An objective is worked on once every required one before it is done. |
 | `time_limit` | Seconds the required objectives have to be done in. |
 | `hold_agents`, `commander` | Stage global 5 (agents wait until all are in) and the special end. |
 | `no_return` | The phase is won with the last objective, without the flight home. |
-| `types` | `{ from, class, sprite, set }`: a class of a pack stage and the class fields changed on it. Or `{ pickup, weapon }`: a pickup lying on the ground from the start, `pickup` being `fuel`, `armor`, `medal` or `ammo` (then of `weapon`); its objects are no entities. |
+| `types` | `{ from, class, sprite, set }`: a class of a pack stage and the class fields changed on it. Or `{ pickup, weapon }`: a pickup lying on the ground from the start, `pickup` being `fuel`, `armor`, `medal` or `ammo` (then of `weapon`); its objects are no entities. Or `{ start = player }`: where that player's vehicle is put at the start of the phase and after a crash (the first one placed counts). |
 | `objects` | Rows `[id, t, x, y, route, owner, group]` in entity order, 0 for no link. `owner`: the building a POW flag, a landing pad or a waiting person belongs to. `group`: parts placed as one thing. |
 | `routes`, `lines` | `{ id, points }`; ground polylines `{ color, points }`. |
 | `roads` | `{ id, points, width, pitch, edge, across, down }`: a road by its centre line. `edge` is the border colour above and to the left, then below and to the right; `pitch` the spacing of the centre marks (0 for none); `across` / `down` the mark's type on a level and an upright leg (`{ from, class, sprite }`). |
@@ -413,8 +416,8 @@ Compiling:
   gets `parent_class` = its owner's entity index (one class per owner), and a
   POW flag is emitted right after its building.
 - `stage.environment` feeds `World:_set_environment`; `stage.mission` (name,
-  briefing, vehicle, loadout, difficulty, objectives, `ordered`, `time_limit`,
-  `no_return`) replaces `data/missions.json`. An objective's object ids become
+  briefing, author, vehicle, players, loadout, equip, difficulty, objectives,
+  `ordered`, `time_limit`, `no_return`) replaces `data/missions.json`. An objective's object ids become
   places in the entity list, which `World.placed` resolves (a turret to its
   hull); `Mission.for_stage` merges the listed objectives with the ones the
   content asks for.
@@ -429,7 +432,11 @@ Compiling:
   other way covers the spot.
 - Objects of a pickup type are left out of the entity list and become
   `stage.pickups` (`{ kind, weapon, x, y }` in object order), which
-  `Powerups:set_players` lays out.
+  `Powerups:set_players` lays out. So are the starts: `stage.starts[player]`
+  is the first one placed for that player, and `World:start_of(player)` the
+  free spot at or near it (nil on a stage without one: the base pad).
+- An objective's events keep their line and get their objects as places in
+  the entity list (`spec.on_open`, `spec.on_done`).
 - `World:_fit_wrap_period` is skipped: a map's `size` is its period. A clone
   states the period the fit gives its stage.
 - `tools/sim_maps.lua` holds the contract: every pack stage decompiled, encoded,
@@ -444,15 +451,44 @@ always lit by the light map.
 
 Playing: PLAY in the map list loads the map, sets `app.play_return` and opens
 the briefing; the phase ends back in the list. No campaign state, no high
-score, the MISSION mode purse. A map with a `loadout` goes from the briefing
-straight into the phase with it (SHOP does nothing) and starts with its
-`lives`; the replay header records all of it, as for any phase. The briefing
+score, a fresh MISSION mode inventory under the map's `equip` rules
+(`Loadout.for_map`: its purse, the weapons it keeps out or hands over, the
+areas of the equip screen it closes and what they hold). The
+briefing names the map's author under its name and shows SAVE and LOAD closed. A map with a `loadout` goes
+from the briefing straight into the phase with it (SHOP is closed) and starts
+with its `lives`; the replay header records all of it, as for any phase. The briefing
 shows the map's cards (`editor/cards`) in the icon column: a map square is
 composed in the original cards' shape (the art set's slot number, the frame, a
 caption in small yellow pixel letters like the ones painted into the original's
 cards, about ten of them), a pack card is copied with the number of its new slot. Replays record the stage name and the map
 file's fingerprint (`map`); the replay list marks a recording whose map is
-gone (not playable) or changed since. Co-op on maps is not offered.
+gone (not playable) or changed since.
+
+Two players (2P in the map list): the vehicle select, then
+`Campaign.start_team` makes a co-op run of the one phase, each player with the
+single-mission inventory under the map's rules and `Score.START_LIVES`
+vehicles (a fixed loadout's `lives`), under the lives rule of the options.
+Briefing, SHOP and equip go once per player as in a co-op campaign; a fixed
+loadout is given to both. The phase ends back in the list, a game over too.
+A player starts on the map's start for that player (`World:start_of`) and
+comes back to it after a crash; without one the team starts side by side on
+the base pad, which stays the place to return to and to refuel at.
+
+Records (`game/records`): a win of a map played from the list (not a try, a
+playback or a god mode run) is submitted with its simulated time and the
+team's score, `single` or `coop` (`GameplayBase:record_map_run`). The fastest
+win keeps its recording, which BEST plays back through the replay path
+(`app.replay_return = "map_select"`). They belong to the map's file as it
+stood: a changed map starts over.
+
+Events: an objective of a map may hold objects back until it comes up or is
+done (`Mission:_fire`). A held entity (`Entity.held`) is not there: it is not
+alive to anything that sees, hits, blocks or draws (`Entity:is_alive`), does
+nothing, and is no kill either (`Entity:is_destroyed` is what the objectives,
+the stats and the rescue count). Once brought in it is marked for the open
+objective it belongs to. An objective with nothing to do never comes up and
+holds nothing. The lines the events say are queued in `Mission.messages`; the
+scene shows each for 6 seconds under the objective line.
 
 In the phase of a map (`Mission.def.announce`) the objective at hand is shown
 for 4 seconds whenever its line changes, worded as the map words it, and a
@@ -533,22 +569,32 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   objective marks, a route under two points, a hangar tank without a hangar,
   solid objects on the home pad, nothing armed, very many objects, an
   objective with nothing to act on, helicopters asked for that no post sends,
-  every objective optional, ammunition the map's vehicle cannot use). Every pack
+  every objective optional, ammunition the map's vehicle cannot use, a second
+  start for a player, a start of player 2 on a map for one, an objective that
+  has to destroy what only appears once it is done). Every pack
   stage clones without an error.
 - TRY (`F5`) writes the map aside (`maps/_playtest.json`), loads it and starts
   gameplay; Esc returns to the editor. The map's `loadout` is used when it has
-  one, else every weapon in the vehicle picked beside TRY, on the equip
+  one, else every weapon the map allows in the vehicle picked beside TRY, on the equip
   screen's starting split of fuel and armour (`Loadout.everything`), so the
-  vehicle is as fast as a player's who takes that screen as it comes. GOD MODE there
+  vehicle is as fast as a player's who takes that screen as it comes; an area the map's `equip` closes carries exactly what the map put there. TWO PLAYERS
+  beside TRY (always on a map for two) flies it on the split screen
+  (`Campaign.start_team`), both players equipped that way. GOD MODE there
   (`app.play_return.god`) starts the vehicle with nothing running out and
   nothing hurting. TRY FROM WHERE THE VIEW IS (`Shift+F5`: under the pointer
   while it is over the map) starts and respawns the vehicle there instead of
   on the home pad (`app.play_return.start`), moved to the nearest free spot
   when something solid stands there (`World:free_spot`); the home pad stays
   the place to fly back to.
-- MAP SETTINGS: GENERAL (name, author, size), ENVIRONMENT, LOADOUT (the
-  player buys and equips, with an optional forced vehicle, or the map sets
-  vehicle, vehicles, ammunition, fuel, armour, weapon levels and special),
+- MAP SETTINGS: GENERAL (name, author, players: one or two, one only, two
+  only; size), ENVIRONMENT, LOADOUT (the
+  player buys and equips, with an optional forced vehicle, the shop open or
+  closed, the medals for it, per weapon of the vehicle shown whether it is for
+  sale, kept out or owned at a level (a special: to pick or kept out), and each
+  of the equip screen's areas left to the player or closed with its content:
+  the weapon of every bay, the special or none, the split of fuel and armour;
+  or the map sets vehicle, vehicles, ammunition, fuel, armour, weapon levels
+  and special),
   DIFFICULTY (the player's own setting, or a preset the map is always played
   on, each value then editable: enemy hit and fire tables, their scales, enemy
   sight, pickup time, the landing rules), OBJECTIVES and BRIEFING (per
@@ -566,8 +612,15 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   (a number; the row says how many posts the map has and whether they send
   another). Objects are taken from
   the selection (USE THE SELECTION; one id per hull and turret) and found
-  again with SHOW. Under the list: IN ORDER, TIME LIMIT, no flight home,
+  again with SHOW. EVENTS on an objective (not one to keep intact) opens its
+  two events, as it comes up and once it is done: a line to SAY, and the
+  objects that THEN APPEAR, taken from the selection (anything that is an
+  entity of the phase and no mark of the people objectives; helicopter posts
+  and pickups cannot be held back). Such an object wears an eye on the map and
+  says so in PROPERTIES. Under the list: IN ORDER, TIME LIMIT, no flight home,
   agents together, commander rule.
+- The BASE objects hold START OF PLAYER 1 / 2: a player's chopper with the
+  player's number, placed, moved and copied like any object.
 
 Limits: desktop with mouse and keyboard only. The briefing backdrop is the art
 set's own, mission number included. A route, line or road that crosses the seam is
@@ -855,6 +908,8 @@ ticks, 2 a bullet every 31; 1 also turns twice as fast. Fires inside `range`
 
 ## 9. Co-op
 
+- A map is played by two from the map list (2P) or the editor's TRY: a co-op
+  run of that one phase (section 6a).
 - NEW GAME > LOCAL COOP: a campaign for two. Vehicle select (a chopper and a
   tank variant per player), then the solo flow: briefing, SHOP and equip once
   per player, each with their own medals, owned weapons and bays. Score, lives,
@@ -883,7 +938,7 @@ ticks, 2 a bullet every 31; 1 also turns twice as fast. Fires inside `range`
   every player still flying has to be parked on the home pad
   (`Mission:player_home`), and a half already parked blinks WAIT FOR TEAMMATE. A
   wrecked or out player is not waited for; going down on the way home only wins
-  the phase when nobody is left to fly it home. Respawn on the base pad; failure
+  the phase when nobody is left to fly it home. Respawn on the base pad (on a map: the player's start, if it places one); failure
   when both are down. Per-player score, bonus threshold and stats column, credited by
   `proj.shooter`.
 - Slots (input, replay) follow spawn order; `p.number` is the player (colour,
@@ -1013,11 +1068,11 @@ Options:
 | `fullscreen`, `vsync`, `window_size`, `show_fps` | DISPLAY | Window mode, letterboxing. `show_fps` draws the counter in the `chars` font on the HUD's pixel grid, under the score readout. |
 | `data/keybinds.json` | CONTROLS | Rebindable gameplay actions. |
 
-Modes and tools: split-screen co-op (free play and campaign), vehicle select
+Modes and tools: split-screen co-op (free play, campaign and maps), vehicle select
 screen (unused `VSELECT` art), replays, chopper skins 2 and 3 (`CHOP*2`,
 `CHOP*3`, unused in the original), tank variants from the enemy tanks, runtime
 sprite rotation, weather, runtime
-shadows, shrapnel / dust / craters, map editor and player-made maps, type editor, vehicle sandbox, asset
+shadows, shrapnel / dust / craters, map editor and player-made maps with their records, type editor, vehicle sandbox, asset
 galleries, debug mission picker, headless checks.
 
 ## 12. Data files

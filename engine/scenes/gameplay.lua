@@ -5,6 +5,7 @@ local Class        = require "engine.core.class"
 local GameplayBase = require "engine.scenes.gameplay_base"
 local Player       = require "engine.game.player"
 local Mission      = require "engine.game.mission"
+local World        = require "engine.game.world"
 local Stats        = require "engine.game.stats"
 local Vehicles     = require "engine.game.vehicles"
 local Campaign     = require "engine.game.campaign"
@@ -30,9 +31,6 @@ Gameplay.mouse_steering = true
 -- simulation ticks, not by the crash picture's fade: the respawn has to land on
 -- the same tick every run for a recording to replay it (co-op uses the same beat).
 local RESPAWN_TICKS = 48
-
--- World px a start away from the home pad keeps clear of solid objects.
-local START_CLEAR = 16
 
 function Gameplay:enter()
     local app = self.app
@@ -111,10 +109,12 @@ function Gameplay:spawn_player(carry)
     local settings = app.settings
     local replay_vehicle, replay_skin, replay_tank = self:replay_vehicle(1)
     local sx, sy = world:player_start()
-    -- A map tried from the editor may start away from its home pad.
+    -- A map may start its player away from the home pad, and one tried from
+    -- the editor anywhere.
     local start  = app.play_return and app.play_return.start
-    local px, py = sx, sy
-    if start then px, py = world:free_spot(start.x, start.y, START_CLEAR) end
+    local px, py = world:start_of(1)
+    if start then px, py = world:free_spot(start.x, start.y, World.START_CLEAR) end
+    if not px then px, py = sx, sy end
     self.start_x, self.start_y = px, py
     local prev   = self.player
     local player = Player:new(px, py)
@@ -294,6 +294,7 @@ end
 function Gameplay:on_stats_done()
     local app = self.app
     if not app.campaign then
+        self:record_map_run("single", { self.player })
         self:leave_run()   -- single stage done: back to the menu, the map list or the editor
         return
     end

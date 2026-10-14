@@ -11,6 +11,8 @@ local Difficulty  = require "engine.game.difficulty"
 local Score       = require "engine.game.score"
 local Sound       = require "engine.game.sound"
 local Campaign    = require "engine.game.campaign"
+local Records     = require "engine.game.records"
+local World       = require "engine.game.world"
 local Log         = require "engine.core.log"
 local Config      = require "engine.core.config"
 local Version     = require "engine.core.version"
@@ -53,6 +55,9 @@ end
 local ORDER_TIME  = 4.0   -- seconds a map's objective line stays up after it changes
 local ORDER_FADE  = 0.6   -- of which the last ones fade it out
 local ORDER_SCALE = 3
+local SAY_TIME    = 6.0   -- seconds a line of a map's objective event stays up
+local SAY_SCALE   = 2
+local SAY_WIDTH   = 0.8   -- of the window, before the line is broken
 local CLOCK_LOW   = 10    -- seconds left from which the clock blinks
 local CLOCK_BLINK = 2     -- times a second
 
@@ -90,9 +95,26 @@ function GameplayBase:draw_notice(text)
     print_lines(self.app.hud:font(), { text }, 3, love.graphics.getHeight() * 0.2)
 end
 
+-- A line broken into as many as fit the width at a scale.
+local function broken(font, text, width, scale)
+    local lines, line = {}, ""
+    for word in text:gmatch("%S+") do
+        local try = line == "" and word or (line .. " " .. word)
+        if line ~= "" and font:width(try, scale) > width then
+            lines[#lines + 1] = line
+            line = word
+        else
+            line = try
+        end
+    end
+    if line ~= "" then lines[#lines + 1] = line end
+    return lines
+end
+
 -- The objective at hand on a player-made map (Mission:order), for a moment
 -- whenever it changes: a map words objectives the original never had. Over it
--- the phase's clock while one runs, blinking on its last seconds.
+-- the phase's clock while one runs, blinking on its last seconds; under it
+-- what the map's objective events say (Mission.messages), one after another.
 function GameplayBase:draw_orders(mission)
     local g    = love.graphics
     local font = self.app.hud:font()
@@ -107,6 +129,20 @@ function GameplayBase:draw_orders(mission)
     if left > 0 and not mission.notice then
         font:print(text, (screen_w - font:width(text, ORDER_SCALE)) / 2, y,
             { scale = ORDER_SCALE, color = { 1, 1, 1, math.min(1, left / ORDER_FADE) } })
+    end
+    if self.said_mission ~= mission then self.said_mission, self.said, self.said_since = mission, 0, now end
+    if self.said < #mission.messages and (self.said == 0 or now - self.said_since >= SAY_TIME) then
+        self.said, self.said_since = self.said + 1, now
+    end
+    local said = mission.messages[self.said]
+    left = said and SAY_TIME - (now - self.said_since) or 0
+    if left > 0 then
+        local sy = y + font.line_height * ORDER_SCALE + 14
+        for _, line in ipairs(broken(font, said, screen_w * SAY_WIDTH, SAY_SCALE)) do
+            font:print(line, (screen_w - font:width(line, SAY_SCALE)) / 2, sy,
+                { scale = SAY_SCALE, color = { 1, 0.85, 0.3, math.min(1, left / ORDER_FADE) } })
+            sy = sy + font.line_height * SAY_SCALE + 6
+        end
     end
     local seconds = mission:clock()
     if seconds and (seconds > CLOCK_LOW or math.floor(now * CLOCK_BLINK * 2) % 2 == 0) then
@@ -627,6 +663,7 @@ end
 
 function GameplayBase:reset_end_stats()
     self.order_text           = nil
+    self.said_mission         = nil
     self.fail_timer           = nil
     self.phase_fail_handled   = false
     self.won_timer            = nil
@@ -653,13 +690,40 @@ function GameplayBase:crash_stats()
     return out
 end
 
+-- A map played from the map list was won: its time and the team's score go
+-- to the map's records (engine/game/records.lua), with the recording when it
+-- is the fastest win. A try from the editor, a playback and a run in god mode
+-- set none. mode is "single" or "coop".
+function GameplayBase:record_map_run(mode, players)
+    local app  = self.app
+    local name = World.map_name(app.world.stage_name)
+    local back = app.play_return
+    if not name or not back or back.test or self.playback then return end
+    local score = 0
+    for _, p in ipairs(players) do
+        if p.unlimited then return end
+        score = score + (p.score or 0)
+    end
+    local seconds = self.phase_time or app.world.time
+    local text    = self.recording and self.recording:serialize() or nil
+    local beat    = Records.submit(name, app.world.stage.map_hash, mode, seconds, score, text)
+    if not beat then return end
+    if beat.time and beat.score then
+        back.note = "NEW BEST TIME " .. Records.clock(seconds) .. " AND SCORE"
+    elseif beat.time then
+        back.note = "NEW BEST TIME " .. Records.clock(seconds)
+    else
+        back.note = "NEW BEST SCORE " .. score
+    end
+end
+
 -- Leave a phase played on its own for where it was started from: the map
 -- list or the editor (app.play_return), else the menu.
 function GameplayBase:leave_run()
     local app  = self.app
     local back = app.play_return
     app.play_return = nil
-    app.scenes:switch(back and back.scene or "main_menu")
+    app.scenes:switch(back and back.scene or "main_menu", back and back.note and { note = back.note } or nil)
 end
 
 -- Where to go once the stats screen is dismissed. Base returns to where the

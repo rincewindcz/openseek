@@ -32,6 +32,9 @@ MissionMenu.SLOT_LINES = 6   -- lines of text that fill one box slot
 local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
 
 local TITLE_Y = 26
+local AUTHOR_Y   = 37      -- a map's author, under its name
+local AUTHOR_DIM = 0.7     -- drawn this much darker than the name
+local CLOSED_DIM = 0.35    -- a button a map closed
 local ICON_X, ICON_Y = 6, 52
 local TEXT_Y = 54          -- top of the first box slot's text
 local SLOT_PITCH = 54      -- vertical stride between box slots (matches the icon squares)
@@ -79,6 +82,7 @@ function MissionMenu:init()
     self.pressed    = nil              -- button held down (mouse/touch/key), or nil
     self.confirming = nil              -- id of the button whose fade-out is playing
     self.confirm_t  = 0
+    self.disabled   = {}               -- button id -> closed by the map being briefed
     self.font       = Font.get("charstit")
 
     self.buttons = {}
@@ -188,9 +192,11 @@ end
 -- stage_name is "stageMP": M = mission (0-4), P = phase (0-3). The backdrop,
 -- phase title and objective icons are 1-based on the phase, and the mission
 -- text is keyed by the raw stage name in mission_text.json.
--- A player-made map passes own = { mission, name, paragraphs, cards }: the
--- backdrop of its art set's mission, its name for a title, its own text, and
--- for icons its own cards ({ [slot] = { image, w } }, slots 0-2), if any.
+-- A player-made map passes own = { mission, name, author, paragraphs, cards,
+-- disabled }: the backdrop of its art set's mission, its name for a title with
+-- its author under it, its own text, for icons its own cards ({ [slot] =
+-- { image, w } }, slots 0-2), if any, and the buttons it closes ({ shop =
+-- true }): those are drawn darkened and take neither pointer nor keys.
 function MissionMenu:open(stage_name, own)
     local m = own and own.mission or tonumber(stage_name:sub(6, 6)) or 0
     local p = tonumber(stage_name:sub(7, 7)) or 0
@@ -199,6 +205,9 @@ function MissionMenu:open(stage_name, own)
     self.backdrop   = self:_img(string.format("assets/fullscreen/STAGE0%d_MS.png", m))
     self.title      = not own and self:_img(string.format("assets/mission/title_phase0%d.png", p + 1)) or nil
     self.title_text = own and tostring(own.name or ""):upper() or nil
+    local author    = own and tostring(own.author or ""):upper() or ""
+    self.author     = author:match("%S") and ("BY " .. author) or nil
+    self.disabled   = own and own.disabled or {}
     self.icon       = not own and self:_img(icon_path) or nil
 
     -- Original briefing text: one paragraph per box slot, carrying its slot index
@@ -264,7 +273,7 @@ end
 -- Index of the button under a design-space point, or nil.
 function MissionMenu:_button_at(dx, dy)
     for i, b in ipairs(self.buttons) do
-        if b.up and dx >= b.x and dx <= b.x + b.w and dy >= BTN_Y and dy <= BTN_Y + b.h then
+        if b.up and not self.disabled[b.id] and dx >= b.x and dx <= b.x + b.w and dy >= BTN_Y and dy <= BTN_Y + b.h then
             return i
         end
     end
@@ -317,12 +326,20 @@ function MissionMenu:release(x, y)
     end
 end
 
+-- Move the focus to the next button that is not closed.
+function MissionMenu:_step(dir)
+    for _ = 1, #self.buttons do
+        self.cursor = (self.cursor - 1 + dir) % #self.buttons + 1
+        if not self.disabled[self.buttons[self.cursor].id] then return end
+    end
+end
+
 function MissionMenu:keypressed(key)
     if not self.active or self.confirming then return end
     if key == "left" then
-        self.cursor = (self.cursor - 2) % #self.buttons + 1
+        self:_step(-1)
     elseif key == "right" then
-        self.cursor = self.cursor % #self.buttons + 1
+        self:_step(1)
     elseif key == "return" or key == "space" or key == "kpenter" then
         self:_confirm(self.buttons[self.cursor].id, self.cursor)
     elseif key == "escape" then
@@ -377,6 +394,10 @@ function MissionMenu:draw()
         g.draw(self.title, (DW - self.title:getWidth()) / 2, TITLE_Y)
     elseif self.title_text then
         self.font:print(self.title_text, (DW - self.font:width(self.title_text)) / 2, TITLE_Y)
+        if self.author then
+            self.font:print(self.author, (DW - self.font:width(self.author)) / 2, AUTHOR_Y,
+                { color = { AUTHOR_DIM, AUTHOR_DIM, AUTHOR_DIM, fade } })
+        end
     end
     for slot, card in pairs(self.own_cards or {}) do
         g.draw(card.image, ICON_X, ICON_Y + slot * SLOT_PITCH)
@@ -409,7 +430,8 @@ function MissionMenu:draw()
     for i, b in ipairs(self.buttons) do
         local sprite = (self.pressed == i) and b.down or b.up
         if sprite then
-            g.setColor(1, 1, 1, fade)
+            local dim = self.disabled[b.id] and CLOSED_DIM or 1
+            g.setColor(dim, dim, dim, fade)
             g.draw(sprite, b.x, BTN_Y)
         end
     end

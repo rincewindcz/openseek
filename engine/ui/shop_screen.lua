@@ -214,8 +214,9 @@ end
 function ShopScreen:_level(weapon) return self.loadout:level(self.vehicle, weapon) end
 
 -- "loaded" for the owned level, "below" for the darkened levels under it,
--- "available" for the levels above.
+-- "available" for the levels above. A weapon a map keeps out is darkened whole.
 function ShopScreen:box_state(weapon, level)
+    if self.loadout.banned[weapon] then return "below" end
     local owned = self:_level(weapon)
     if level == owned then return "loaded" end
     if level < owned then return "below" end

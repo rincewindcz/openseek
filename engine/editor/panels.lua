@@ -515,15 +515,23 @@ local function roads_section(editor, kit, x, y, w, roads)
     return y + kit.theme.row + 2
 end
 
+-- A player's start: nothing to set, only what it is for.
+function SECTIONS.start(editor, kit, x, y, w, objects)
+    local number = editor.doc:info(objects[1]).start
+    return y + kit:paragraph("THE VEHICLE OF PLAYER " .. number .. " IS PUT HERE AT THE START AND AFTER A CRASH. "
+        .. "WITHOUT ONE THE PLAYER STARTS ON THE HOME PAD, WHICH STAYS THE PLACE TO RETURN TO.", x, y, w,
+        { color = kit.theme.text_dim, size = kit.theme.font_small }) + 4
+end
+
 local KIND_TITLES = {
     structure = "BUILDING", flak_turret = "GUN", tank = "TANK HULL", truck = "TRUCK", soldier = "SOLDIER",
     soldier_aggressive = "SOLDIER", enemy_helicopter = "HELICOPTER POST", scenery = "SCENERY", tree = "TREE",
     ground_decal = "GROUND", radar = "RADAR DISH", powerup_marker = "POW FLAG", unknown_14 = "LANDING PAD",
-    civilian = "WAITING PERSON", pickup = "PICKUP", missing = "MISSING SPRITE",
+    civilian = "WAITING PERSON", pickup = "PICKUP", start = "PLAYER START", missing = "MISSING SPRITE",
 }
 
 local KIND_ORDER = { "structure", "tank", "truck", "flak_turret", "radar", "soldier", "soldier_aggressive",
-                     "enemy_helicopter", "powerup_marker", "unknown_14", "civilian", "pickup", "ground_decal",
+                     "enemy_helicopter", "powerup_marker", "unknown_14", "civilian", "pickup", "start", "ground_decal",
                      "scenery", "tree", "missing" }
 
 local function map_summary(editor, kit, x, y, w)
@@ -613,6 +621,12 @@ function Panels.properties(editor, kit, x, y, w, h)
         { min = 0, max = doc:size() - 1 })
     if x_changed or y_changed then doc:move(editor.selection.list, nx - first.x, ny - first.y) end
     cy = row(kit, ix, cy, "POSITION")
+    local held = editor.selection:count() == 1 and editor:goal_marks().held[first.id]
+    if held then
+        kit:label("NOT ON THE MAP UNTIL AN EVENT OF OBJECTIVE " .. held, ix, cy, iw, theme.row,
+            { color = theme.warn, size = theme.font_small })
+        cy = cy + theme.row
+    end
 
     for _, kind in ipairs(KIND_ORDER) do
         local objects = by_kind[kind]

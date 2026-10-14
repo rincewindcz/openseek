@@ -35,6 +35,7 @@ function Validate.run(doc)
 
     local home = doc:home()
     local missing, targets, commanders, people, drop_pads = {}, {}, {}, 0, 0
+    local starts, spare = {}, {}
     local loose, enemies, huts, riders, stranded = {}, 0, {}, {}, {}
     -- The vehicle the map fixes, and the ammunition laid out that it cannot load.
     local vehicle = map.loadout and map.loadout.vehicle or map.vehicle
@@ -51,6 +52,8 @@ function Validate.run(doc)
                 if user == vehicle then fits = true end
             end
             if not fits then useless[#useless + 1] = o end
+        elseif info.kind_name == "start" then
+            if starts[info.start] then spare[#spare + 1] = o else starts[info.start] = o end
         else
             local owner = o.owner and doc.by_id[o.owner]
             if cls.is_target then
@@ -114,6 +117,15 @@ function Validate.run(doc)
                     name, goal.count, air.posts, air.posts))
             end
         end
+        -- What an objective has to destroy cannot wait for that objective to be done.
+        local waiting = {}
+        for _, o in ipairs(goal.type == "destroy" and Goals.held(doc, goal, "on_done") or {}) do waiting[o.id] = true end
+        for _, o in ipairs(goal.objects and Goals.objects(doc, goal) or {}) do
+            if waiting[o.id] then
+                issue("warn", name .. " HAS TO DESTROY AN OBJECT THAT ONLY APPEARS ONCE IT IS DONE", { o })
+                break
+            end
+        end
         if works and goal.type ~= "protect" then
             feasible = feasible + 1
             if not goal.optional then required = required + 1 end
@@ -142,6 +154,12 @@ function Validate.run(doc)
         issue("warn", "A COMMANDERS BUILDING IS SET, BUT THE COMMANDER RULE IS OFF", commanders)
     end
 
+    if #spare > 0 then
+        issue("warn", "A PLAYER HAS MORE THAN ONE START: THE FIRST ONE PLACED COUNTS", spare)
+    end
+    if map.players == 1 and starts[2] then
+        issue("warn", "THE MAP IS FOR ONE PLAYER: THE START OF PLAYER 2 IS NOT USED", { starts[2] })
+    end
     if #loose > 0 then
         issue("warn", string.format("%d OBJECTIVE MARKS BELONG TO NO BUILDING AND ARE ONLY SCENERY", #loose), loose)
     end

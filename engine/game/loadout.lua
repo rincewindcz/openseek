@@ -48,13 +48,16 @@ Loadout.START_MEDALS = 16
 -- Most a map's fixed loadout may multiply the ammunition by (the chopper's bay count).
 Loadout.MAX_LOADS = 6
 
+-- Most medals a map may hand the player for the shop.
+Loadout.MAX_MEDALS = 99
+
 -- The loadout for the current run: the persistent campaign inventory (NEW GAME,
 -- earned from pickups) or the single-mission inventory (MISSION mode, seeded
 -- with START_MEDALS). Created on first use; the shop and equip screens share it.
--- A co-op campaign keeps one per player (engine/game/campaign.lua); player
--- picks it (default 1).
+-- A co-op run keeps one per player (engine/game/campaign.lua, Campaign.coop);
+-- player picks it (default 1).
 function Loadout.active(app, player)
-    if app.campaign and app.coop_run then
+    if app.coop_run and (app.campaign or app.play_return) then
         return app.coop_run.players[player or 1].loadout
     end
     if app.campaign then
@@ -68,9 +71,20 @@ function Loadout.active(app, player)
     return app.loadout_free
 end
 
+-- The fresh single-mission inventory of a map played on its own, under the
+-- map's rules for it (Loadout:restrict).
+function Loadout.for_map(app, rules)
+    app.loadout_free = nil
+    local loadout = Loadout.active(app)
+    loadout:restrict(rules, app.combat and app.combat.weapons)
+    return loadout
+end
+
 function Loadout:init()
     self.medals   = 0
     self.vehicle  = "chopper"   -- vehicle picked on the equip screen
+    self.locked   = {}          -- areas of the equip screen a map closed: bays, special, chars
+    self.banned   = {}          -- weapon name -> a map keeps it out of the shop and off the vehicle
     self.vehicles = {}
     for vehicle, n in pairs(Vehicles.BAY_COUNT) do
         local start = Vehicles.STARTING_WEAPON[vehicle]
@@ -88,6 +102,69 @@ function Loadout:init()
     end
 end
 
+local function top_level(weapons, name)
+    local def = weapons and weapons[name]
+    return math.max(1, def and def.levels and #def.levels or 1)
+end
+
+-- Put the inventory under a map's rules (the "equip" of
+-- engine/game/map_file.lua): the purse it hands out, the weapons it keeps out
+-- or hands over at a level, and the areas of the equip screen it closes. A
+-- closed area holds what the map put there: its weapon per bay, its special,
+-- its split of fuel and armour; where the map names nothing, what the equip
+-- screen starts with. weapons is the combat weapon table (the top levels).
+function Loadout:restrict(rules, weapons)
+    rules = type(rules) == "table" and rules or {}
+    local medals = tonumber(rules.medals)
+    if medals then self.medals = math.max(0, math.min(Loadout.MAX_MEDALS, math.floor(medals))) end
+    self.locked = { bays = rules.no_bays == true, special = rules.no_special == true, chars = rules.no_chars == true }
+    self.banned = {}
+    local levels = type(rules.weapons) == "table" and rules.weapons or {}
+    for name, level in pairs(levels) do
+        if name ~= "chaingun" and tonumber(level) == 0 then self.banned[name] = true end
+    end
+    local share = function(value)
+        return math.max(0, math.min(100, tonumber(value) or 50)) / 100
+    end
+    for vehicle, v in pairs(self.vehicles) do
+        local sold = {}
+        for _, list in ipairs({ Vehicles.BAY_WEAPONS[vehicle], Vehicles.SPECIAL_WEAPONS[vehicle] }) do
+            for _, name in ipairs(list) do
+                local level = math.floor(tonumber(levels[name]) or 0)
+                if self.banned[name] then
+                    v.owned[name] = nil
+                elseif level >= 1 then
+                    v.owned[name] = math.max(v.owned[name] or 0, math.min(level, top_level(weapons, name)))
+                end
+            end
+        end
+        for _, name in ipairs(Vehicles.BAY_WEAPONS[vehicle]) do sold[name] = not self.banned[name] end
+        local start = Vehicles.STARTING_WEAPON[vehicle]
+        local fixed = self.locked.bays and type(rules.bays) == "table" and rules.bays[vehicle] or {}
+        for i = 2, #v.bays do
+            local name = type(fixed) == "table" and fixed[i - 1] or nil
+            if not sold[name] then name = sold[v.bays[i]] and v.bays[i] or (sold[start] and start or "chaingun") end
+            v.bays[i]     = name
+            v.owned[name] = math.max(v.owned[name] or 0, 1)
+        end
+        local special = v.special
+        if self.locked.special and type(rules.special) == "table" and rules.special[vehicle] ~= nil then
+            special = rules.special[vehicle]
+        end
+        v.special = nil
+        for _, name in ipairs(Vehicles.SPECIAL_WEAPONS[vehicle]) do
+            if name == special and not self.banned[name] then v.special = name end
+        end
+        -- An open bank always carries one; a closed one may be left empty.
+        if not v.special and not (self.locked.special and special == "") then
+            for _, name in ipairs(Vehicles.SPECIAL_WEAPONS[vehicle]) do
+                if not v.special and not self.banned[name] then v.special = name end
+            end
+        end
+        if self.locked.chars then v.chars = { fuel = share(rules.fuel), armor = share(rules.armor) } end
+    end
+end
+
 -- Owned level of a weapon (0 = not owned).
 function Loadout:level(vehicle, weapon)
     return self.vehicles[vehicle].owned[weapon] or 0
@@ -96,13 +173,14 @@ end
 -- Load bay i with an owned weapon; bay 1 is fixed to the chain gun.
 function Loadout:set_bay(vehicle, i, weapon)
     local v = self.vehicles[vehicle]
-    if i < 2 or i > #v.bays then return end
+    if i < 2 or i > #v.bays or self.locked.bays then return end
     if (v.owned[weapon] or 0) < 1 then return end
     v.bays[i] = weapon
 end
 
 -- Load a special in place of the current one. There is no way to unload it.
 function Loadout:set_special(vehicle, weapon)
+    if self.locked.special or self.banned[weapon] then return end
     self.vehicles[vehicle].special = weapon
 end
 
@@ -114,7 +192,7 @@ function Loadout:char(vehicle, which)
 end
 
 function Loadout:set_char(vehicle, which, value)
-    if which == "speed" then return end   -- read-only (derived)
+    if which == "speed" or self.locked.chars then return end   -- derived, or closed by a map
     self.vehicles[vehicle].chars[which] = math.max(0, math.min(1, value))
 end
 
@@ -134,11 +212,11 @@ end
 
 -- Medal cost to buy `level` now: its list price less the trade-in share of the
 -- owned level's price (the original's rule). nil when the level is owned,
--- below the owned one, or not sold.
+-- below the owned one, not sold, or kept out by a map.
 function Loadout:price(vehicle, weapon, level)
     local entry = Loadout.info(vehicle, weapon, level)
     local owned = self:level(vehicle, weapon)
-    if not entry or level <= owned then return nil end
+    if not entry or level <= owned or self.banned[weapon] then return nil end
     local current = Loadout.info(vehicle, weapon, owned)
     local credit  = current and math.floor(current.cost * trade_in) or 0
     return math.max(0, entry.cost - credit)
@@ -249,19 +327,34 @@ function Loadout.fixed(spec, weapons)
                       chars = { fuel = share(spec.fuel), armor = share(spec.armor) } }
 end
 
--- Every weapon of a vehicle at its first level, one load of each, on the
--- equip screen's starting split of fuel and armour: what a map without a
--- loadout of its own is tried with from the editor, so the vehicle handles as
--- it does for a player who takes the equip screen as it comes.
-function Loadout.everything(vehicle)
+-- What a map without a loadout of its own is tried with from the editor:
+-- every weapon of the vehicle, one load of each at the level the map hands it
+-- over at (the first, else), on the equip screen's starting split of fuel and
+-- armour, so the vehicle handles as it does for a player who takes the equip
+-- screen as it comes. rules (the map's "equip") take out the weapons the map
+-- keeps out, and a closed area carries exactly what the map put there.
+function Loadout.everything(vehicle, rules, weapons)
+    local loadout = Loadout:new()
+    loadout:restrict(rules, weapons)
+    local v = loadout.vehicles[vehicle]
+    local held, held_counts, held_levels = loadout:weapon_list(vehicle)
+    local aboard, closed = {}, {}
+    for _, name in ipairs(held) do aboard[name] = true end
+    for _, name in ipairs(Vehicles.BAY_WEAPONS[vehicle]) do closed[name] = loadout.locked.bays end
+    for _, name in ipairs(Vehicles.SPECIAL_WEAPONS[vehicle]) do closed[name] = loadout.locked.special end
     local list, counts, levels = {}, {}, {}
-    for i, name in ipairs(Vehicles.WEAPONS[vehicle]) do
-        list[i]      = name
-        counts[name] = 1
-        levels[name] = 1
+    for _, name in ipairs(Vehicles.WEAPONS[vehicle]) do
+        if closed[name] and aboard[name] then
+            list[#list + 1] = name
+            counts[name]    = held_counts[name]
+            levels[name]    = held_levels[name]
+        elseif not closed[name] and not loadout.banned[name] then
+            list[#list + 1] = name
+            counts[name]    = 1
+            levels[name]    = math.max(1, v.owned[name] or 1)
+        end
     end
-    local chars = Loadout:new().vehicles[vehicle].chars
-    return { list = list, counts = counts, levels = levels, chars = { fuel = chars.fuel, armor = chars.armor } }
+    return { list = list, counts = counts, levels = levels, chars = { fuel = v.chars.fuel, armor = v.chars.armor } }
 end
 
 -- The gameplay loadout: unique bay weapons in bay order plus the loaded

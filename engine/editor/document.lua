@@ -28,6 +28,7 @@ end
 
 local function type_key(map_type)
     if map_type.pickup then return "pickup|" .. map_type.pickup .. "|" .. tostring(map_type.weapon) end
+    if map_type.start then return "start|" .. map_type.start end
     local keys = {}
     for k in pairs(map_type.set or {}) do keys[#keys + 1] = k end
     table.sort(keys)

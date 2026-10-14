@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Catalog = require "engine.editor.catalog"
+local Catalog     = require "engine.editor.catalog"
+local MapCompiler = require "engine.game.map_compiler"
 
 -- The editor's side of a map's objectives (the "objectives" of
 -- engine/game/map_file.lua): the rows the map settings list, the changes made
@@ -10,6 +11,17 @@ local Catalog = require "engine.editor.catalog"
 local Goals = {}
 
 local BASE_FLAG = 0x40   -- class flag of the home base building (World:load)
+
+-- The events of an objective, in the order the settings show them.
+Goals.EVENTS = { "on_open", "on_done" }
+
+-- What an event cannot hold back: it is no entity of the phase (a pickup, a
+-- start, a helicopter post), or another system owns it (the marks of the
+-- people objectives).
+local NEVER_HELD = { pickup = true, start = true, enemy_helicopter = true, missing = true }
+local MARK_KINDS = {
+    [MapCompiler.KIND_POW_MARKER] = true, [MapCompiler.KIND_PERSON] = true, [MapCompiler.KIND_PAD] = true,
+}
 
 -- title names the objective in the settings; wording is what the phase shows
 -- when the author gives none (Mission:objective_label); count is the map
@@ -110,6 +122,48 @@ function Goals.objects(doc, goal)
     return found
 end
 
+-- events
+
+-- Whether an objective can carry events: one that is kept rather than done
+-- never comes up.
+function Goals.has_events(goal)
+    return goal.type ~= "protect"
+end
+
+function Goals.holdable(doc, o)
+    local info = doc:info(o)
+    return info.ok and not NEVER_HELD[info.kind_name] and not MARK_KINDS[info.cls.kind]
+end
+
+-- The ids an event takes from a set of objects: everything it can hold back.
+function Goals.pick_held(doc, objects)
+    local ids = {}
+    for _, o in ipairs(objects) do
+        if Goals.holdable(doc, o) then ids[#ids + 1] = o.id end
+    end
+    return ids
+end
+
+-- The objects an event of an objective brings in that are still on the map.
+function Goals.held(doc, goal, key)
+    local found = {}
+    for _, id in ipairs((goal[key] or {}).show or {}) do
+        local o = doc.by_id[id]
+        if o and Goals.holdable(doc, o) then found[#found + 1] = o end
+    end
+    return found
+end
+
+-- Row i with one field of one of its events changed; an event that says and
+-- shows nothing is dropped.
+function Goals.set_event(doc, rows, i, key, field, value)
+    local event = {}
+    for k, v in pairs(rows[i][key] or {}) do event[k] = v end
+    event[field] = value
+    if event.show and #event.show == 0 then event.show = nil end
+    Goals.set(doc, rows, i, key, next(event) and event or nil)
+end
+
 -- The kinds an objective may ask for, as choices, and the id of the choice a
 -- stored list of kind names is.
 function Goals.kind_choices()
@@ -167,11 +221,15 @@ function Goals.air(doc)
 end
 
 -- What the objectives point at, for the editor to mark: by_id[object id] =
--- { type, index } and places = { { x, y, radius, index } }, index being the
+-- { type, index }, held[object id] = index (what an event of that objective
+-- holds back) and places = { { x, y, radius, index } }, index being the
 -- objective's place in the list.
 function Goals.marks(doc)
-    local marks = { by_id = {}, places = {} }
+    local marks = { by_id = {}, held = {}, places = {} }
     for i, goal in ipairs(doc.map.objectives) do
+        for _, key in ipairs(Goals.EVENTS) do
+            for _, o in ipairs(Goals.held(doc, goal, key)) do marks.held[o.id] = i end
+        end
         if goal.type == "reach" then
             marks.places[#marks.places + 1] = { x = goal.x or 0, y = goal.y or 0,
                 radius = goal.radius or Goals.limits().radius.default, index = i }

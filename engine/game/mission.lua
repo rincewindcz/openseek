@@ -50,7 +50,9 @@ end
 -- picked up (0x290e4a) and every agent back aboard (0x290e76).
 -- A map (stage.mission, engine/game/map_compiler.lua) lists objectives of its
 -- own among them, in the order it wants them, and words them all; one its
--- content asks for and it does not list follows the listed ones.
+-- content asks for and it does not list follows the listed ones. An objective
+-- of a map may carry events (spec.on_open, spec.on_done: { say, show }): a
+-- line said as it comes up or is done, and objects held back until then.
 local function objectives_from_stage(world)
     local own = world.stage.mission or {}
     local def = { objectives = {}, no_return = own.no_return, ordered = own.ordered,
@@ -144,12 +146,22 @@ function Mission:init(world, players, def)
     self.state       = "active"
     self.fail_lines  = nil
     self.notice      = nil        -- standing on-screen order (the commander's building)
+    self.messages    = {}         -- what a map's objective events said, in order (the scene shows each once)
     self.objectives  = {}
     self.guards      = {}         -- "protect" objectives: nothing to do, something to lose
     for _, spec in ipairs(def.objectives or {}) do
         local o = self:_make_objective(spec)
         self.objectives[#self.objectives + 1] = o
         if o.type == "protect" and o.target > 0 then self.guards[#self.guards + 1] = o end
+        -- What an event of the objective brings in is held back until it
+        -- fires. An objective with nothing to do never comes up: its events
+        -- hold nothing.
+        for _, event in ipairs(o.done and {} or { spec.on_open or {}, spec.on_done or {} }) do
+            for _, index in ipairs(event.show or {}) do
+                local e = world.placed[index]
+                if e then e.held = true end
+            end
+        end
     end
 
     -- The phase flagged with a special end (0x2909e8 bit 0) keeps its commander
@@ -270,16 +282,43 @@ function Mission:_open(o)
     o.open = true
     if o.type == "destroy" and o.spec.mark then
         o.marked = {}
-        for _, e in ipairs(o.matching) do
-            if e:is_alive() and not e.objective then
-                e.objective = true
-                o.marked[#o.marked + 1] = e
-            end
-        end
+        self:_mark(o)
     elseif o.type == "reach" then
         o.mark = { x = o.x, y = o.y }
         table.insert(self.world.marks, o.mark)
     end
+    self:_fire(o.spec.on_open)
+end
+
+-- Put what an open objective of a map is about on the radar: whatever of it
+-- is there and not marked yet.
+function Mission:_mark(o)
+    for _, e in ipairs(o.matching) do
+        if e:is_alive() and not e.objective then
+            e.objective = true
+            o.marked[#o.marked + 1] = e
+        end
+    end
+end
+
+-- An event of a map's objective: the objects it held back are there from now
+-- on, and its line is said.
+function Mission:_fire(event)
+    if not event then return end
+    local shown = false
+    for _, index in ipairs(event.show or {}) do
+        local e = self.world.placed[index]
+        if e and e.held then
+            e.held = nil
+            shown  = true
+        end
+    end
+    if shown then
+        for _, o in ipairs(self.objectives) do
+            if o.marked and not o.done then self:_mark(o) end
+        end
+    end
+    if event.say and event.say ~= "" then self.messages[#self.messages + 1] = event.say end
 end
 
 function Mission:_close(o)
@@ -320,7 +359,7 @@ function Mission:_update_commanders()
     if #self.commanders == 0 or self.notice then return end
     local left = 0
     for _, e in ipairs(self.world.targets) do
-        if e:is_alive() then left = left + 1 end
+        if not e:is_destroyed() then left = left + 1 end
     end
     if left > #self.commanders then return end
     for _, e in ipairs(self.commanders) do e.dormant, e.protected = nil, nil end
@@ -351,6 +390,7 @@ function Mission:update(dt)
             if o.done then
                 cleared = true
                 self:_close(o)
+                self:_fire(o.spec.on_done)
                 Log.info("mission", "objective done: %s", self:objective_label(o))
             end
         end
@@ -449,7 +489,7 @@ function Mission:_update_guards()
     for _, o in ipairs(self.guards) do
         local lost = 0
         for _, e in ipairs(o.matching) do
-            if not e:is_alive() then lost = lost + 1 end
+            if e:is_destroyed() then lost = lost + 1 end
         end
         o.progress = o.target - lost
         if lost > o.allowed then self:_fail_phase(FAIL_GUARD) end
@@ -459,7 +499,7 @@ end
 function Mission:_update_destroy_targets(o)
     local rem = 0
     for _, e in ipairs(o.list) do
-        if e:is_alive() then rem = rem + 1 end
+        if not e:is_destroyed() then rem = rem + 1 end
     end
     o.progress = o.target - rem
     if rem == 0 then o.done = true end
@@ -479,7 +519,7 @@ end
 
 function Mission:_update_destroy(o)
     for _, e in ipairs(o.matching) do
-        if not o.counted[e.id] and not e:is_alive() then
+        if not o.counted[e.id] and e:is_destroyed() then
             o.counted[e.id] = true
             o.progress = o.progress + 1
         end

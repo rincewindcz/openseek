@@ -6,6 +6,7 @@ local GameplayBase = require "engine.scenes.gameplay_base"
 local Camera       = require "engine.core.camera"
 local Player       = require "engine.game.player"
 local Mission      = require "engine.game.mission"
+local World        = require "engine.game.world"
 local Stats        = require "engine.game.stats"
 local Vehicles     = require "engine.game.vehicles"
 local Campaign     = require "engine.game.campaign"
@@ -27,7 +28,9 @@ local Gamepad      = require "engine.core.gamepad"
 -- (Config.friendly_fire_pows) is on, in either mode. A co-op campaign (NEW GAME > LOCAL COOP) plays each player's
 -- equip loadout and carries score, lives and medals through the run
 -- (engine/game/campaign.lua); a player out of the run is not spawned, and a
--- lone survivor gets the whole screen. Slots (input, replay) are numbered in
+-- lone survivor gets the whole screen. A map played by two is such a run of
+-- one phase, which ends where the map was started from; a map may place each
+-- player's start (World:start_of). Slots (input, replay) are numbered in
 -- play order; p.number is the player (colours, keys, HUD label).
 local CoopGameplay = Class(GameplayBase)
 
@@ -107,6 +110,8 @@ function CoopGameplay:make_player(slot, number, sx, sy)
         p.score, p.lives, p.next_bonus_life = state.score, state.lives, state.bonus_life
     end
     p.unlimited = (not run) and coop.god or false
+    -- A map tried from the editor may be flown in god mode.
+    if app.play_return and app.play_return.god then p.unlimited = true end
     self:apply_replay_player(p, slot)   -- playback: the recorded loadout wins
     return p
 end
@@ -194,12 +199,23 @@ function CoopGameplay:enter()
     local sx, sy    = world:player_start()
     local numbers   = self:_numbers()
     local spread    = (#numbers > 1) and 40 or 0
+    -- A map tried from the editor may start the team anywhere.
+    local try       = app.play_return and app.play_return.start
+    local tx, ty    = sx, sy
+    if try then tx, ty = world:free_spot(try.x, try.y, World.START_CLEAR) end
     self.players    = {}
     self.cameras    = {}
     self.lives_seen = {}
     for slot, number in ipairs(numbers) do
-        local p = self:make_player(slot, number, sx + (slot * 2 - 3) * spread, sy)
+        -- Side by side on the base pad, a crash bringing one back to its middle,
+        -- unless the map starts this player elsewhere.
+        local px, py = tx + (slot * 2 - 3) * spread, ty
+        local bx, by = tx, ty
+        local ox, oy = world:start_of(number)
+        if ox and not try then px, py, bx, by = ox, oy, ox, oy end
+        local p = self:make_player(slot, number, px, py)
         p.home_x, p.home_y    = sx, sy
+        p.start_x, p.start_y  = bx, by
         self.players[slot]    = p
         self.cameras[slot]    = Camera:new(world.stage.world_size)
         self.lives_seen[slot] = p.lives
@@ -332,7 +348,7 @@ function CoopGameplay:_update_down(idx, p, dt)
         return
     end
     Log.info("game", "P%d vehicle lost, %d left", p.number, p.lives)
-    p:respawn(p.home_x or p.x, p.home_y or p.y)
+    p:respawn(p.start_x or p.x, p.start_y or p.y)
     p:take_off()   -- no-op for the tank
     self:announce_start(p)
     local cam = self.cameras[idx]
@@ -501,15 +517,19 @@ function CoopGameplay:_game_over()
     self.game_over = true
     self:_carry_run()
     Log.info("game", "co-op game over")
-    local function finish() Campaign.finish(app) end
+    local on_map = self.run.map
+    local function finish()
+        if on_map then self:leave_run() else Campaign.finish(app) end   -- a map enters no high score
+    end
     CrashFX.show(app.screen, self.players[#self.players] or {}, true,
         { on_done = finish, on_cancel = finish, stats = self:crash_stats() })
 end
 
 -- Stats dismissed: a campaign carries the phase into the run and moves on; free
--- play goes back to the menu.
+-- play and a map go back to where they were started from.
 function CoopGameplay:on_stats_done()
-    if not self.run then
+    if not self.run or self.run.map then
+        if self.run then self:record_map_run("coop", self.players) end
         GameplayBase.on_stats_done(self)
         return
     end
@@ -641,6 +661,7 @@ function CoopGameplay:draw()
         elseif self.mission.notice then
             self:draw_notice(self.mission.notice)
         end
+        self:draw_orders(self.mission)
     end
     self:draw_replay_tag()
     if self.paused then self:draw_overlay_text("PAUSE") end
@@ -650,7 +671,13 @@ function CoopGameplay:keypressed(key)
     local app = self.app
     if app.end_stats:is_active() then self:end_stats_keypressed(key); return end
     if key == "escape" then
-        if self.playback then self:finish_playback("stopped") else app.scenes:push("main_menu") end
+        if self.playback then
+            self:finish_playback("stopped")
+        elseif app.play_return and app.play_return.test then
+            self:leave_run()   -- a map being tried from the editor goes straight back to it
+        else
+            app.scenes:push("main_menu")
+        end
         return
     end
     if key == "p" then self.paused = not self.paused; return end

@@ -18,9 +18,25 @@ local Log  = require "engine.core.log"
 --                digit) and what may be mixed over it (World:_set_environment)
 --   size         wrap period of the torus in world pixels
 --   vehicle      "tank" / "chopper" when the map forces one
+--   players      1 / 2 when the map is for one player only, or for two on the
+--                split screen only; absent when it can be played either way
 --   loadout      what the player flies when the map decides instead of the
 --                equip screen: { vehicle, weapons = { name = level }, special,
 --                loads (ammunition multiplier), fuel, armor (0-100), lives }
+--   equip        what the map changes when the player buys and equips
+--                (Loadout:restrict): {
+--                  medals      the purse for the shop (Loadout.START_MEDALS
+--                              when absent)
+--                  no_shop     the briefing's SHOP is closed
+--                  weapons     { name = level }: 0 keeps the weapon out of the
+--                              shop and off the vehicle, 1 and up hands it
+--                              over at that level
+--                  no_bays, no_special, no_chars  areas of the equip screen
+--                              that are closed, holding what the map put there:
+--                  bays        { vehicle = { the weapon of bay 2, 3, ... } }
+--                  special     { vehicle = name, "" for none }
+--                  fuel, armor 0-100
+--                }, what the equip screen starts with where the map names nothing
 --   briefing     paragraphs of the briefing text
 --   briefing_cards  the picture beside each paragraph: { kind = "view", x, y,
 --                size, label } (a square of the map itself, drawn when shown),
@@ -29,7 +45,10 @@ local Log  = require "engine.core.log"
 --   difficulty   the difficulty the map is played on whatever the player's own
 --                is: values of the keys of engine/game/difficulty.lua
 --   objectives   the objectives in the order they are listed (and, with
---                ordered, worked on), each { type, label, optional } and:
+--                ordered, worked on), each { type, label, optional, on_open,
+--                on_done } (an event as the objective comes up or is done:
+--                { say = a line shown then, show = objects (ids) that are
+--                not on the map until then }) and:
 --                  "targets"   every object that is a mission target
 --                  "rescue"    the people on the map
 --                  "sabotage"  the agents and their buildings
@@ -51,7 +70,10 @@ local Log  = require "engine.core.log"
 --   types        property sets: { from, class, sprite, set }: a class of a
 --                pack stage and the fields changed on it; or { pickup, weapon }:
 --                a pickup lying there from the start ("fuel", "armor", "medal",
---                or "ammo" for a weapon), whose objects are no entities
+--                or "ammo" for a weapon), whose objects are no entities; or
+--                { start = player }: where that player's vehicle is put at the
+--                start of the phase and after a crash (the first one placed
+--                counts; without one the player starts on the home pad)
 --   objects      { id, t, x, y, route, owner, group }, in entity order;
 --                stored as rows [id, t, x, y, route, owner, group] with 0 for
 --                an unset link
@@ -160,8 +182,8 @@ end
 
 -- Header keys in file order; the lists follow, one entry per line, so a map
 -- stays readable and diffable.
-local HEADER = { "format", "name", "author", "based_on", "base", "environment", "size", "vehicle", "loadout",
-                 "difficulty", "briefing", "briefing_cards", "objectives", "ordered", "time_limit", "hold_agents",
+local HEADER = { "format", "name", "author", "based_on", "base", "environment", "size", "vehicle", "players", "loadout",
+                 "equip", "difficulty", "briefing", "briefing_cards", "objectives", "ordered", "time_limit", "hold_agents",
                  "commander", "no_return", "view", "next_id" }
 
 function MapFile.encode(map)
@@ -223,7 +245,9 @@ function MapFile.decode(text)
     map.environment = type(map.environment) == "table" and map.environment or {}
     map.size        = math.max(MapFile.MIN_SIZE, math.min(MapFile.MAX_SIZE, tonumber(map.size) or MapFile.DEFAULT_SIZE))
     map.briefing    = type(map.briefing) == "table" and map.briefing or {}
+    map.players     = (map.players == 1 or map.players == 2) and map.players or nil
     map.loadout     = type(map.loadout) == "table" and map.loadout or nil
+    map.equip       = type(map.equip) == "table" and map.equip or nil
     map.difficulty  = type(map.difficulty) == "table" and map.difficulty or nil
     map.briefing_cards = type(map.briefing_cards) == "table" and map.briefing_cards or {}
     map.objectives  = objective_list(map.objectives)
@@ -303,7 +327,7 @@ function MapFile.import(text, file_name)
     return name
 end
 
--- Every readable map: { name, map, modified }, newest first. A name with a
+-- Every readable map: { name, map, hash, modified }, newest first. A name with a
 -- leading underscore is the editor's own (a map being tried, unsaved changes
 -- kept aside) and is not listed.
 function MapFile.list()
@@ -312,10 +336,10 @@ function MapFile.list()
     for _, item in ipairs(love.filesystem.getDirectoryItems(MapFile.DIR)) do
         local name = item:match("^([a-z0-9][a-z0-9_]*)%.json$")
         if name then
-            local map = MapFile.read(name)
+            local map, raw = MapFile.read(name)
             if map then
                 local info = love.filesystem.getInfo(MapFile.path(name))
-                out[#out + 1] = { name = name, map = map, modified = info and info.modtime or 0 }
+                out[#out + 1] = { name = name, map = map, hash = MapFile.hash(raw), modified = info and info.modtime or 0 }
             end
         end
     end
