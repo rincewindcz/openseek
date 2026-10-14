@@ -601,6 +601,7 @@ function CoopGameplay:_draw_view(i, vx, vw, vh, plain)
     app.combat.air_strike:draw() -- EXTRA (air_strike_fx): friendly craft and their rounds
     for _, pl in ipairs(air) do self:_draw_vehicle(pl, p, cam, plain) end
     if p:is_airborne() then p:draw_world_front() end
+    app.weather:draw_haze(cam, vw, vh)
     -- Night light map and flash layer per half, from this half's camera.
     app.lightfx:draw_night(cam)
     app.lightfx:draw_additive(cam)

@@ -479,6 +479,7 @@ function Gameplay:draw_world()
         self.player:draw()
         self.player:draw_world_front()
     end
+    app.weather:draw_haze(app.camera, love.graphics.getDimensions())
     app.weather:draw()
     app.lightfx:draw_night(app.camera)
     app.lightfx:draw_additive(app.camera)

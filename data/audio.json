@@ -41,6 +41,8 @@
     "explosion.fire":   { "clip": "kzexp", "gain": 0.45, "size_pitch": 1.50, "pitch_var": 0.10, "cooldown": 0.05, "max_dist": 800, "max_voices": 4 },
     "explosion.flak":   { "clip": "kzexp", "gain": 0.40, "size_pitch": 1.60, "pitch_var": 0.10, "cooldown": 0.05, "max_dist": 850, "max_voices": 4 },
 
+    "weather.thunder":  { "clip": "kzexp", "gain": 0.90, "pitch": 0.42, "pitch_var": 0.12, "cooldown": 0.5, "max_voices": 2 },
+
     "impact.ricochet":  { "clips": ["rico1_sfx", "rico2_sfx"], "gain": 0.40, "pitch_var": 0.12, "cooldown": 0.06, "max_dist": 600, "max_voices": 3 },
     "impact.player":    { "clip": "rico1_sfx", "gain": 0.70, "pitch_var": 0.10, "cooldown": 0.09, "max_dist": 600 },
     "impact.crush":     { "clip": "mine_sfx",  "gain": 0.55, "pitch_var": 0.12, "cooldown": 0.08, "max_dist": 500 },

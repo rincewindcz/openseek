@@ -156,7 +156,10 @@ local function settings_environment(editor, kit, x, y, w)
     y = y + theme.row + 6
     labelled(kit, x, y, "WEATHER")
     local weathers = { { label = "AS THE ART SET", value = "" }, { label = "CLEAR", value = "none", icon = "day" },
-                       { label = "SNOW", value = "snow", icon = "snow" }, { label = "RAIN", value = "rain", icon = "rain" } }
+                       { label = "SNOW", value = "snow", icon = "snow" }, { label = "RAIN", value = "rain", icon = "rain" },
+                       { label = "BLIZZARD", value = "blizzard", icon = "blizzard" },
+                       { label = "THUNDERSTORM", value = "storm", icon = "storm" },
+                       { label = "SANDSTORM", value = "sandstorm", icon = "sandstorm" } }
     local weather, weather_changed = kit:choice("set_weather", x + LABEL_W, y, fw, weathers, env.weather or "")
     if weather_changed then set_environment(editor, "weather", weather ~= "" and weather or nil) end
     y = y + theme.row + 6

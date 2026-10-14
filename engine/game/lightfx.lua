@@ -178,6 +178,7 @@ function LightFX:init()
     self.flashes      = {}      -- {r, g, b, a, t, dur}
     self.sources      = {}      -- {x, y, spec, strength}: live fire, rebuilt each tick
     self.source_count = 0
+    self.sky          = nil     -- lightning this frame: {r, g, b, wash, light}
     self.scene        = nil     -- the world view of a night stage, before lighting
     self.map          = nil
     self.cw           = 0
@@ -206,6 +207,7 @@ function LightFX:reset()
     self.flashes      = {}
     self.sources      = {}
     self.source_count = 0
+    self.sky          = nil
     self.scene_on     = false
 end
 
@@ -277,6 +279,17 @@ end
 function LightFX:flash(r, g, b, a, dur)
     if not self.enabled then return end
     self.flashes[#self.flashes + 1] = { r = r, g = g, b = b, a = a, t = 0, dur = dur }
+end
+
+-- Lightning, set every frame by the weather: a full-screen wash of colour at
+-- wash, and on a night stage the light map lifted by light (a multiple of the
+-- art's brightness) so the ground shows for a moment. color nil clears it.
+function LightFX:sky_flash(color, wash, light)
+    if not (color and (wash > 0 or light > 0)) then
+        self.sky = nil
+        return
+    end
+    self.sky = { r = color[1], g = color[2], b = color[3], wash = wash, light = light }
 end
 
 -- update
@@ -419,7 +432,13 @@ function LightFX:_draw_light_map(camera)
     local g  = love.graphics
     local a  = self.night.ambient
     local br = Config.night_brightness / LIGHT_RANGE   -- lifts the floor toward daylight
-    g.clear(a[1] * br, a[2] * br, a[3] * br, 1)
+    local sky = self.sky
+    if sky and Config.effects_flashes then
+        local lift = sky.light * Config.flash_intensity / LIGHT_RANGE
+        g.clear(a[1] * br + sky.r * lift, a[2] * br + sky.g * lift, a[3] * br + sky.b * lift, 1)
+    else
+        g.clear(a[1] * br, a[2] * br, a[3] * br, 1)
+    end
     g.setBlendMode("add")
     self:_headlights(camera)
     local z = camera:zoom()
@@ -501,7 +520,8 @@ end
 function LightFX:draw_additive(camera)
     if not (self.enabled and Config.effects_flashes) then return end
     local g = love.graphics
-    if #self.bursts == 0 and #self.flashes == 0 and self.source_count == 0 then return end
+    local sky = self.sky
+    if #self.bursts == 0 and #self.flashes == 0 and self.source_count == 0 and not sky then return end
     local fi = Config.flash_intensity   -- master brightness of the flash layer
     local z  = camera:zoom()
     g.setBlendMode("add")
@@ -524,6 +544,11 @@ function LightFX:draw_additive(camera)
     for _, f in ipairs(self.flashes) do
         local k = (1 - f.t / f.dur) * fi
         g.setColor(f.r * f.a * k, f.g * f.a * k, f.b * f.a * k, 1)
+        g.rectangle("fill", 0, 0, w, hgt)
+    end
+    if sky then
+        local k = sky.wash * fi
+        g.setColor(sky.r * k, sky.g * k, sky.b * k, 1)
         g.rectangle("fill", 0, 0, w, hgt)
     end
     g.setBlendMode("alpha")

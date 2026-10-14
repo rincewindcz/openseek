@@ -286,7 +286,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `game/detail_fx` | EXTRA details (`data/detail_fx.json`): tank recoil and muzzle smoke, chaingun casings, tread dust, wreck smoke, pickup glint (drawn from `Powerups:draw`), target glint (drawn from `Renderer:_draw_entity`). Fed by the `World:weapon_fired` / `:wreck` forwarders and the players after each tick; ground layer drawn in the renderer's ground pass, smoke by `Renderer:draw_detail_air`. |
 | `game/sound` | Listeners, panning, attenuation, engine loops, radio queue, situational callouts (section 10). |
 | `game/shadow` | Altitude-scaled silhouette shadows, off at night. |
-| `game/weather` | Snow (mission 1), rain (mission 2). Presentation, global RNG. |
+| `game/weather` | Snow (mission 1), rain (mission 2); for maps also blizzard, thunderstorm and sandstorm (`data/weather.json`): a gusting wind, a haze with drifting banks over the world view (`draw_haze`, fitted to the wrap period), lightning through `LightFX:sky_flash` and thunder after it. Presentation, global RNG. |
 | `game/vehicles` | Free-play weapon cycles, equip bay and special lists, variants (`data/vehicle_variants.json`, loaded on first use), labels. |
 | `game/campaign` | NEW GAME run state: solo run fields or `app.coop_run` (per-player score, lives, threshold, out flag, `Loadout`; lives rule and pool), active players, `advance`, `finish` (out of vehicles), `complete` (last stage cleared: ending, credits, high scores), `resume` (reopen a slot or the autosave at its briefing). `start_team` gives a map played by two a co-op run of its one phase; `coop(app)` is the run in progress, a campaign's or such a map's (while `app.play_return` is set). `app.run_record` sums each cleared phase over all players (`record_phase`, from the gameplay scenes: phases, simulated time, vehicles lost, stats screen kills, rescues, badges). |
 | `game/loadout` | Campaign inventory: levels, bays, special (always one, the vehicle's first by default), ammo multipliers, `buy`. `Loadout.info` (cost, description lines) from `assets/pow/weapon_info.json`; `price` = list cost minus `trade_in` (`data/shop.json`) of the owned level's cost. `Loadout.active(app, player)` picks a co-op player's own. `Loadout.for_map` starts a map's fresh inventory under its `equip` rules (`restrict`: the purse, `banned` weapons, weapons handed over at a level, and `locked` areas holding what the map put there); `everything(vehicle, rules, weapons)` is what a try from the editor flies. |
@@ -369,7 +369,7 @@ map list and the editor are reached through ADVANCED / EDITOR.
 | `format`, `name`, `author` | Format version (1), display name, free text. |
 | `based_on` | The pack stage a clone was copied from. The file then holds that stage's layout. |
 | `base` | The pack stage whose class table the compiled stage starts from. |
-| `environment` | `art` (mission digit 0-4: sprites, ground, HUD art, tracers, dust), and optionally `night`, `weather` (`none` / `snow` / `rain`), `look` (POST FX grade of a mission), `music` (track of a mission). Unset keys follow the art set. |
+| `environment` | `art` (mission digit 0-4: sprites, ground, HUD art, tracers, dust), and optionally `night`, `weather` (`none` / `snow` / `rain` / `blizzard` / `storm` / `sandstorm`; an unknown name is clear skies), `look` (POST FX grade of a mission), `music` (track of a mission). Unset keys follow the art set. |
 | `size` | Wrap period in world pixels (1024-4096; the editor offers 2048, 3072, 4096). |
 | `vehicle` | `tank` / `chopper` when forced (applies however the map is played). |
 | `players` | 1 or 2 when the map is for one player only, or for two on the split screen only. Absent: either. |
@@ -980,7 +980,8 @@ replay header `player.N.skin` / `player.N.tank`).
   `explosion_pitch`), `holexp` for the enemy cannon, `rico1` / `rico2` on a
   damaged enemy, `weapon1..6` / `*.spc` as the weapon announcements on
   selection. Not in the original: `missionc`, `powcomeo`, `powletsg`, `yea`
-  (objective cleared) and the player hit ricochet.
+  (objective cleared), the player hit ricochet and the thunder of a map's
+  storm (`weather.thunder`, `kzexp` pitched down).
 - Callouts (`game/sound`, thresholds in `callouts`): phase start ("cleared" /
   the tank's start line) on every spawn, weapon announcements (skipped within
   `select_guard` of the last selection, a newer one replaces the older),
@@ -1095,6 +1096,7 @@ galleries, debug mission picker, headless checks.
 | `data/photo.json` | Photo mode (`--photo`): `outputs` (label, `w`, `h`; an entry without a size is the window), zoom limits and wheel step, turn step (degrees) and drag rate (degrees per pixel), slow motion speed. |
 | `data/lightfx.json` | `night` per mission digit (or `default`, which a map's night over a day art set uses): `ambient` floor colour, `max_light` cap, `headlight` (`color`, `gap` of the lamp ahead of the vehicle centre, beam `length` in world units, `spread_deg` half-angle and `intensity`, `pool_radius` / `pool_ahead` / `pool_intensity` of the pool around the vehicle). `weapons` (a round in flight) and `effects` (an ignited effect clip) carry a light: `radius`, `intensity` and `color` in the night light map, `flicker` depth, `fade` over the round's range, `glow` and `glow_radius` of the additive glow shown on any stage. Intensities are multiples of the art's brightness. |
 | `data/postfx.json` | `look` (100% values), `missions` (per mission digit, look fields that differ, e.g. the cold grade of mission 1) and `presets`. |
+| `data/weather.json` | Weather presets by name. Particles: `area` (art pixels per particle), `wind` (world px/s), `speed` (per-particle factor range), `sway` / `sway_hz`, `size`, `large` (share one art pixel bigger), `streak` (trail in art pixels along the wind), `color`, `alpha`. Optional `gust` (`strength` of the wind's swing, `period` s), `haze` (`color`, flat `alpha`, `gust` alpha swing, `night` factor on a night stage, `banks`: noise layers with `alpha`, `scale` in world px per texel, `drift` as a share of the wind) and `lightning` (`interval`, `flickers`, `gap`, `duration`, `strength`, `color`, `wash` of the day flash, `night` light map lift, `thunder` event, its `delay` from near to far). |
 | `data/difficulty.json` | EASY / MEDIUM / HARD presets: values for each difficulty key. |
 | `data/styles.json` | `styles` (`name`, `label`, `about`: the one line shown under the cards, `camo`: the VSELECT camo row behind the card, `values` per owned Config key), `default` (the style the selection screen starts on) and `preview`: `fade` (ticks of fade in and out around a run) and `runs`, each a `stage`, a `vehicle`, a start `x`, `y`, `angle` and a `script` of segments (`ticks`, `held` actions, `events` on the first tick). |
 | `data/impact_fx.json` | Hit flash time / strength; camera shake per explosion size, per fired weapon (`fire`, the tank `shells`), player hit and player death (amount in world units, time, radius); `low_armor` (armor threshold, floor, fade, edge color and strength, pulse share and rate range, desaturation, edge radii, hit flash time and strength). |

@@ -1471,7 +1471,7 @@ function Editor:_top_bar(kit, sw)
     kit:label(Catalog.art_label(doc:art()), ix, 0, 120, TOP_H, { size = theme.font_small, color = theme.text_dim })
     ix = ix + kit:text_width(Catalog.art_label(doc:art()), theme.font_small) + 8
     if env.night == true then kit:icon("night", ix, (TOP_H - 16) / 2, 16, theme.text_dim); ix = ix + 20 end
-    if env.weather == "snow" or env.weather == "rain" then kit:icon(env.weather, ix, (TOP_H - 16) / 2, 16, theme.text_dim) end
+    if env.weather and env.weather ~= "none" then kit:icon(env.weather, ix, (TOP_H - 16) / 2, 16, theme.text_dim) end
 end
 
 function Editor:_tool_strip(kit, sh)

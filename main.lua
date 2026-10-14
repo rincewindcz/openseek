@@ -240,7 +240,6 @@ function love.load(args)
     app.hud.powerups = app.powerups   -- pickup blips on the radar
     app.rescue   = RescueSystem:new(world, app.combat)
     app.saboteur = SaboteurSystem:new(world, app.combat)
-    app.weather  = Weather:new()
     app.lightfx  = LightFX:new()
     world.lightfx = app.lightfx   -- lets combat / entity emitters reach it via the world
     app.impactfx  = ImpactFX:new()
@@ -253,6 +252,7 @@ function love.load(args)
     app.postfx   = PostFX:new()
     app.sound    = Sound:new(world)
     world.sound_sys = app.sound   -- same route for the audio emitters (World:sound / :say)
+    app.weather  = Weather:new(app.lightfx, app.sound)   -- lightning and thunder
 
     -- A 1x1 transparent hardware cursor, used to hide the pointer reliably (LOVE's
     -- setVisible(false) is flaky under some Wayland compositors).

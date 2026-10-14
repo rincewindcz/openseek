@@ -34,7 +34,7 @@ GameplayBase.holds_params = true
 -- the jungle world, whatever a map asks for); call from a scene's enter().
 -- leave() should clear it with self.app.weather:set(nil).
 function GameplayBase:enter_weather()
-    self.app.weather:set(self.app.world.env.weather)
+    self.app.weather:set(self.app.world.env.weather, self.app.world:is_night())
 end
 
 -- Centered title in the game's bitmap body font (same as the score readout)

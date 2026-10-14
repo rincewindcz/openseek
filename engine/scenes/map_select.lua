@@ -404,7 +404,7 @@ function MapSelect:_draw_row(i, y, fade)
     if sel then self:_draw_arrow(NAME_X, y, fade) end
 end
 
-local WEATHER = { snow = "SNOW", rain = "RAIN" }
+local WEATHER = { snow = "SNOW", rain = "RAIN", blizzard = "BLIZZARD", storm = "THUNDERSTORM", sandstorm = "SANDSTORM" }
 
 -- A map's records as its file stands, looked up once per row.
 function MapSelect:_records(row)
