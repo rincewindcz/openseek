@@ -547,6 +547,7 @@ function Gameplay:game_keys(key)
     if Input.pressed("radar_zoom", key) then app.hud:toggle_radar_zoom(self.player); return end
     if self.playback then
         if key == "escape" then self:finish_playback("stopped") end
+        if key == "t" then self:toggle_replay_tag() end
         return
     end
     if key == "r" and (app.dev or not app.campaign) then self.paused = false; self:restart(); return end

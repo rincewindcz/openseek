@@ -609,8 +609,15 @@ end
 
 -- A "REPLAY" tag over the game while a recording is being played back, with the
 -- tick counter so a divergence report can be lined up with what was on screen.
+-- Hidden for a clean picture until T shows it (toggle_replay_tag); always shown
+-- while verifying.
+function GameplayBase:toggle_replay_tag()
+    self.app.replay_tag = not self.app.replay_tag
+end
+
 function GameplayBase:draw_replay_tag()
     if not self.playback then return end
+    if not (self.app.replay_tag or self.app.replay_verify) then return end
     local g = love.graphics
     local text = string.format("REPLAY  %d / %d%s%s", self.app.tick, self.playback.length,
         self.app.replay_verify and "  (verifying)" or "",

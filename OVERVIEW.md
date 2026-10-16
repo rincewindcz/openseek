@@ -1250,6 +1250,7 @@ same bytes on every platform.
 | PgUp / PgDn | Free play: the pack stage before / after (`--dev`) |
 | F9 | Radar auto zoom (in game, rebindable). Co-op: P1 Tab, P2 keypad `.` |
 | F12 | Screenshot (rebindable) |
+| T | Replay playback: show / hide the REPLAY tick counter (hidden by default, always shown under `--verify`) |
 | Main menu, `--dev` | `F1` fly the loaded stage, `F3` sandbox, `F4` replay panel, `F7` co-op free play, `F8` / `F9` / `F10` animation / font / sound gallery, `F11` ending (`Shift`: VIC3's alternate ending), `Delete` game-over picture (`Shift`: the one before a respawn) |
 | Map list | Up / Down, Enter play, `E` edit, `N` new, `C` copy, `Delete` twice erase, `F` folder, Esc back |
 | Map editor | Tools `V` `P` `B` `E` `R` `L` `O` `U`; wheel zoom; right or middle drag, Space + drag, `W A S D` move the view; arrows nudge (Shift 8 px); `Ctrl+C` / `X` / `V` / `D` copy, cut, paste, duplicate; `Delete`; `Ctrl+Z` / `Ctrl+Y` (or `Ctrl+Shift+Z`) undo / redo; `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+N`, `Ctrl+O`; `Ctrl+A` select all; `Ctrl+Shift+G` ungroup; `Ctrl+[` / `Ctrl+]` turn the selection a quarter, `Shift+H` / `Shift+V` mirror it; `G` grid, `Ctrl+G` snap; Ctrl while drawing or dragging constrains (45 degree steps, one axis); `Tab` single parts; `Home` home pad; `F` show the selection; `M` overview map; `+` / `-` zoom; `F5` try, `Shift+F5` try from the pointer or the view; `F6` briefing preview; `F1` keys; Esc cancel, then leave |

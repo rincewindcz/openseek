@@ -685,7 +685,10 @@ function CoopGameplay:keypressed(key)
     for _, p in ipairs(self.players) do
         if key == p.controls.radar_zoom then app.hud:toggle_radar_zoom(p) end
     end
-    if self.playback then return end
+    if self.playback then
+        if key == "t" then self:toggle_replay_tag() end
+        return
+    end
     if key == "r" and (app.dev or not app.campaign) then
         -- Restart reloads the stage first, like single player, so destroyed
         -- entities and spent objectives come back. A campaign has none (it
