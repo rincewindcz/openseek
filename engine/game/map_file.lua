@@ -70,7 +70,8 @@ local Log  = require "engine.core.log"
 --   commander    the commander building rule (stage special end)
 --   no_return    the phase ends with the last objective, without the flight home
 --   types        property sets: { from, class, sprite, set }: a class of a
---                pack stage and the fields changed on it; or { pickup, weapon,
+--                pack stage and the fields changed on it (and across, of
+--                maps only: the sprite mirrored over its diagonal); or { pickup, weapon,
 --                ammo_only }: a pickup lying there from the start ("fuel",
 --                "armor", "medal", or "ammo" for a weapon, which gives the
 --                weapon to a vehicle without it unless ammo_only), whose

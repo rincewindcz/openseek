@@ -39,6 +39,10 @@ local PART_KINDS = { flak_turret = true, radar = true, ground_decal = true }
 -- Hangar huts by sprite (World HIDE_TANK_HANGARS).
 local HUTS = { shut = true, jhanger = true }
 
+-- Kinds whose sprite may be laid across: what stands still and keeps its
+-- sprite as drawn.
+local ACROSS_KINDS = { structure = true, tree = true, scenery = true, ground_decal = true }
+
 -- Kinds of the objective marks, which never count as part of a stack.
 local MARK_KINDS = {
     [MapCompiler.KIND_POW_MARKER] = true, [MapCompiler.KIND_PERSON] = true, [MapCompiler.KIND_PAD] = true,
@@ -293,6 +297,11 @@ function Catalog.type_info(map_type)
             img = img, ox = render and render.ox or -8, oy = render and render.oy or -8, w = w, h = h,
             layer = Catalog.layer_of(fields, stem), label = Catalog.label(stem, fields.kind_name),
         }
+        -- Laid across, the box is the sprite's mirrored over its diagonal.
+        if fields.across then
+            info.across = true
+            info.ox, info.oy, info.w, info.h = info.oy, info.ox, info.h, info.w
+        end
     end
     type_infos[map_type] = info
     return info
@@ -332,6 +341,25 @@ end
 -- A hangar hut, which hides the tank parked inside it and is drawn above it.
 function Catalog.is_hut(info)
     return info.kind_name == "structure" and HUTS[info.stem] == true
+end
+
+-- Whether an object's sprite may be laid across: mirrored over the diagonal
+-- from its top left, which turns it from upright to level and keeps the
+-- original's light from the top left and shadow to the lower right. A
+-- hangar hut keeps the side its tank rides out of.
+function Catalog.can_lay_across(info)
+    return ACROSS_KINDS[info.kind_name] == true and info.img ~= nil and not Catalog.is_hut(info)
+end
+
+-- Draw a type's sprite with its anchor at (x, y), scaled by k.
+function Catalog.draw_sprite(info, x, y, k, alpha)
+    k = k or 1
+    love.graphics.setColor(1, 1, 1, alpha or 1)
+    if info.across then
+        love.graphics.draw(info.img, x, y, math.pi / 2, k, -k, -info.oy, -info.ox)
+    else
+        love.graphics.draw(info.img, x, y, 0, k, k, -info.ox, -info.oy)
+    end
 end
 
 -- How plain a class is: the template of an entry is the variant without

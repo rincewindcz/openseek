@@ -57,7 +57,8 @@ local ARROW_SIZE   = 5      -- window px of the arrowhead on a route segment
 local ARROW_MIN    = 28     -- window px a segment is long before it gets one
 
 -- ARRANGE: the menu's entries, which the select tool also shows as buttons
--- while two objects or more are selected. ctrl / shift name the key.
+-- while two objects or more are selected. ctrl / shift name the key; single
+-- ones also work on one object.
 local ARRANGE = {
     { label = "ALIGN LEFT", icon = "align_left", run = function(doc, list) Ops.align(doc, list, "left") end },
     { label = "ALIGN CENTRES IN A COLUMN", icon = "align_center",
@@ -73,9 +74,9 @@ local ARRANGE = {
     { label = "EVEN GAPS DOWN", icon = "gaps_down",
       run = function(doc, list) return Ops.distribute(doc, list, "y") end },
     {},
-    { label = "TURN LEFT", icon = "turn_left", key = "CTRL+[", ctrl = "[",
+    { label = "TURN LEFT", icon = "turn_left", key = "CTRL+[", ctrl = "[", single = true,
       run = function(doc, list) Ops.turn(doc, list, -1) end },
-    { label = "TURN RIGHT", icon = "turn_right", key = "CTRL+]", ctrl = "]",
+    { label = "TURN RIGHT", icon = "turn_right", key = "CTRL+]", ctrl = "]", single = true,
       run = function(doc, list) Ops.turn(doc, list, 1) end },
     { label = "MIRROR LEFT TO RIGHT", icon = "mirror_across", key = "SHIFT+H", shift = "h",
       run = function(doc, list) Ops.mirror(doc, list, "x") end },
@@ -706,7 +707,7 @@ end
 
 -- Run an entry of ARRANGE on the selection.
 function Editor:arrange(item)
-    if self.selection:count() < 2 then return end
+    if self.selection:count() < (item.single and 1 or 2) then return end
     if item.run(self.doc, self.selection.list) == false then self:say("EVEN GAPS NEED THREE OBJECTS OR MORE") end
 end
 
@@ -1358,7 +1359,8 @@ function Editor:_menus(kit, x)
     local arrange = {}
     for i, item in ipairs(ARRANGE) do
         arrange[i] = item.label and { label = item.label, icon = item.icon, key = item.key,
-            disabled = self.selection:count() < 2, action = function() self:arrange(item) end } or {}
+            disabled = self.selection:count() < (item.single and 1 or 2), action = function() self:arrange(item) end }
+            or {}
     end
     menu("menu_arrange", "ARRANGE", arrange)
     local function scale_item(scale)

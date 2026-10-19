@@ -152,8 +152,7 @@ local function draw_object(doc, o, alpha)
     local g    = love.graphics
     local info = doc:info(o)
     if info.img then
-        g.setColor(1, 1, 1, alpha or 1)
-        g.draw(info.img, o.x, o.y, 0, 1, 1, -info.ox, -info.oy)
+        Catalog.draw_sprite(info, o.x, o.y, 1, alpha)
     else
         -- No sprite: a post the helicopter system flies from, or a type this
         -- pack cannot resolve.

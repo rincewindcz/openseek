@@ -295,7 +295,8 @@ function World:load(name)
             local dir = c.render.dir or name
             local img = load_img(dir, c.render.image)
             if img then
-                local entry = { img = img, ox = c.render.ox, oy = c.render.oy }
+                -- across: a map's class laid across, drawn mirrored over the diagonal.
+                local entry = { img = img, ox = c.render.ox, oy = c.render.oy, across = c.across or nil }
                 -- Unit kinds (soldiers) carry a sibling dead-pose frame, exported as
                 -- {stem}_f{frame_base + dead_frame_offset}.png; load it as the corpse.
                 local dead_frame_offset = Entity.type_for(c.kind_name).dead_frame_offset

@@ -358,7 +358,8 @@ end
 -- key names both the Config toggle and the data block. screen_rot is the
 -- sprite's total rotation on screen, so the sweep keeps one screen direction;
 -- t is a running time, offset by the position so sprites glint out of step.
-function DetailFX:draw_glint(key, img, x, y, rot, ox, oy, screen_rot, t)
+-- sy (default 1) is the sprite's scale down, -1 for one laid across.
+function DetailFX:draw_glint(key, img, x, y, rot, ox, oy, screen_rot, t, sy)
     local spec = self.data[key]
     if not Config[key] or not spec then return end
     local u = ((t + x * 0.137 + y * 0.311) % spec.period) / spec.sweep
@@ -370,13 +371,14 @@ function DetailFX:draw_glint(key, img, x, y, rot, ox, oy, screen_rot, t)
     local c      = spec.color or { 1, 1, 1 }
     self.glint_shader = self.glint_shader or g.newShader(GLINT_SRC)
     local shader = self.glint_shader
-    shader:send("dir", { math.cos(angle), math.sin(angle) })
+    sy = sy or 1
+    shader:send("dir", { math.cos(angle), sy * math.sin(angle) })
     shader:send("size", { w, h })
     shader:send("pos", reach * (2 * u - 1))
     shader:send("width", spec.width)
     g.setShader(shader)
     g.setColor(c[1], c[2], c[3], spec.strength)
-    g.draw(img, x, y, rot, 1, 1, ox, oy)
+    g.draw(img, x, y, rot, 1, sy, ox, oy)
     g.setShader()
     g.setColor(1, 1, 1)
 end

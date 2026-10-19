@@ -366,16 +366,24 @@ local function spread(doc, objects)
 end
 
 -- Turn a selection a quarter about its middle: dir 1 clockwise, -1 the other
--- way. Positions only; a sprite stands as it did.
+-- way. A sprite that can be laid across goes over to its other way
+-- (Catalog.can_lay_across); any other stands as it did.
 function Ops.turn(doc, objects, dir)
-    if #objects < 2 then return end
-    local at, x0, y0, x1, y1 = spread(doc, objects)
-    local cx, cy = math.floor((x0 + x1) / 2), math.floor((y0 + y1) / 2)
-    doc:begin(dir > 0 and "TURN RIGHT" or "TURN LEFT")
-    for i, o in ipairs(objects) do
-        local rx, ry = at[i][1] - cx, at[i][2] - cy
-        doc:move({ o }, cx - ry * dir - at[i][1], cy + rx * dir - at[i][2])
+    local across = {}
+    for _, o in ipairs(objects) do
+        if Catalog.can_lay_across(doc:info(o)) then across[#across + 1] = o end
     end
+    if #objects < 2 and #across == 0 then return end
+    doc:begin(dir > 0 and "TURN RIGHT" or "TURN LEFT")
+    if #objects > 1 then
+        local at, x0, y0, x1, y1 = spread(doc, objects)
+        local cx, cy = math.floor((x0 + x1) / 2), math.floor((y0 + y1) / 2)
+        for i, o in ipairs(objects) do
+            local rx, ry = at[i][1] - cx, at[i][2] - cy
+            doc:move({ o }, cx - ry * dir - at[i][1], cy + rx * dir - at[i][2])
+        end
+    end
+    for _, o in ipairs(across) do doc:set_class_fields({ o }, { across = not doc:info(o).across }) end
     doc:commit()
 end
 

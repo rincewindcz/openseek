@@ -252,7 +252,7 @@ function Document:type_with(t, changes)
     local src  = MapCompiler.type_source(base)
     local set  = copy(base.set or {})
     for k, v in pairs(changes) do
-        if src and src[k] == v then set[k] = nil else set[k] = v end
+        if src and (src[k] == v or (v == false and src[k] == nil)) then set[k] = nil else set[k] = v end
     end
     return self:intern({ from = base.from, class = base.class, sprite = base.sprite, set = set })
 end

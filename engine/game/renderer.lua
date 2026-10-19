@@ -25,11 +25,11 @@ function Renderer:_glow(img, x, y, rot, sx, sy, ox, oy)
 end
 
 -- EXTRA (target_glint): the light sweep across a mission objective's sprite,
--- just drawn at (x, y) with rotation rot and origin (ox, oy).
-function Renderer:_glint(img, x, y, rot, ox, oy)
+-- just drawn at (x, y) with rotation rot, origin (ox, oy) and scale sy down.
+function Renderer:_glint(img, x, y, rot, ox, oy, sy)
     if not self.detailfx then return end
     self.detailfx:draw_glint("target_glint", img, x, y, rot, ox, oy,
-        rot + (self.camera.angle or 0), self.world.time)
+        rot + (self.camera.angle or 0), self.world.time, sy)
 end
 
 -- draw
@@ -152,21 +152,25 @@ function Renderer:_draw_entity(e, vp, mode)
             -- Two-part tanks keep a fixed hull (turret does the aiming) unless they
             -- patrol, in which case the hull faces its travel heading; a hangar tank
             -- keeps its fixed facing; everything else rotates its sprite to face.
-            local rot
-            if e.hide_angle then
-                rot = e.hide_angle * math.pi / 180
+            -- A sprite laid across (a map's) is mirrored over its diagonal: a
+            -- quarter turn of the sprite flipped top to bottom.
+            local rot, sy
+            if r.across then
+                rot, sy = math.pi / 2, -1
+            elseif e.hide_angle then
+                rot, sy = e.hide_angle * math.pi / 180, 1
             elseif e.turret_render and not e.route_points then
-                rot = 0
+                rot, sy = 0, 1
             else
-                rot = e:draw_angle_rad(cls.angle_steps)
+                rot, sy = e:draw_angle_rad(cls.angle_steps), 1
             end
-            g.draw(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+            g.draw(r.img, e.x, e.y, rot, 1, sy, -r.ox, -r.oy)
             -- EXTRA (hit_flash)
             local impactfx = self.world.impactfx
-            if impactfx then impactfx:draw_flash(e, r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy) end
-            if e.objective then self:_glint(r.img, e.x, e.y, rot, -r.ox, -r.oy) end
+            if impactfx then impactfx:draw_flash(e, r.img, e.x, e.y, rot, 1, sy, -r.ox, -r.oy) end
+            if e.objective then self:_glint(r.img, e.x, e.y, rot, -r.ox, -r.oy, sy) end
             if e == self.highlight then
-                self:_glow(r.img, e.x, e.y, rot, 1, 1, -r.ox, -r.oy)
+                self:_glow(r.img, e.x, e.y, rot, 1, sy, -r.ox, -r.oy)
             end
         else
             g.setColor(1, 0, 1)

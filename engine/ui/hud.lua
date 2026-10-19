@@ -479,6 +479,7 @@ function Hud:_target_center(tgt)
         local r = self.world.images[tgt.class_idx + 1]
         if r and r.img then
             local iw, ih = r.img:getDimensions()
+            if r.across then return tgt.x + r.oy + ih / 2, tgt.y + r.ox + iw / 2 end
             return tgt.x + r.ox + iw / 2, tgt.y + r.oy + ih / 2
         end
     end

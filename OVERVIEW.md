@@ -384,7 +384,7 @@ map list and the editor are reached through ADVANCED / EDITOR.
 | `time_limit` | Seconds the required objectives have to be done in. |
 | `hold_agents`, `commander` | Stage global 5 (agents wait until all are in) and the special end. |
 | `no_return` | The phase is won with the last objective, without the flight home. |
-| `types` | `{ from, class, sprite, set }`: a class of a pack stage and the class fields changed on it. Or `{ pickup, weapon, ammo_only }`: a pickup lying on the ground from the start, `pickup` being `fuel`, `armor`, `medal` or `ammo` (then of `weapon`, which gives the weapon to a vehicle without it unless `ammo_only`); its objects are no entities. Or `{ start = player }`: where that player's vehicle is put at the start of the phase and after a crash (the first one placed counts). |
+| `types` | `{ from, class, sprite, set }`: a class of a pack stage and the class fields changed on it, and `across` (maps only: the sprite laid across). Or `{ pickup, weapon, ammo_only }`: a pickup lying on the ground from the start, `pickup` being `fuel`, `armor`, `medal` or `ammo` (then of `weapon`, which gives the weapon to a vehicle without it unless `ammo_only`); its objects are no entities. Or `{ start = player }`: where that player's vehicle is put at the start of the phase and after a crash (the first one placed counts). |
 | `objects` | Rows `[id, t, x, y, route, owner, group]` in entity order, 0 for no link. `owner`: the building a POW flag, a landing pad or a waiting person belongs to. `group`: parts placed as one thing. |
 | `routes`, `lines` | `{ id, points }`; ground polylines `{ color, points }`. A shape's first point is on the map, each next one where it lies from the one before: past the seam (outside 0 to `size`) when the shape crosses it. |
 | `roads` | `{ id, points, width, pitch, edge, across, down }`: a road by its centre line. `edge` is the border colour above and to the left, then below and to the right; `pitch` the spacing of the centre marks (0 for none); `across` / `down` the mark's type on a level and an upright leg (`{ from, class, sprite }`). |
@@ -573,8 +573,20 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   boxes to the left, right, top or bottom edge of the box around them all, or
   their middles on a column or a row; EVEN GAPS ACROSS / DOWN between three or
   more, the outermost staying; TURN LEFT / RIGHT (`Ctrl+[`, `Ctrl+]`) a quarter
-  about the middle of the anchors and MIRROR (`Shift+H`, `Shift+V`), which move
-  positions only: a sprite stands as it did.
+  about the middle of the anchors, and MIRROR (`Shift+H`, `Shift+V`), which
+  moves positions only. A turn also lays every sprite that can be laid across
+  the other way, and works on a single object.
+- LAID ACROSS (PROPERTIES, on buildings, trees, scenery and ground decals but
+  hangar huts): the sprite is mirrored over its diagonal from the top left, so
+  an upright one lies level. The original lights every sprite from the top
+  left and bakes its shadow to the lower right, both of which this keeps; the
+  details come out mirrored. Its arc frames are no other way of standing: frame
+  16 is frame 0 turned a quarter, shadow and all, and the arc has no 180 or
+  270 degree frame. A type field (`across`) the compiler carries to the class;
+  `World` marks the class's image and the renderer (with the hit flash, glint,
+  highlight and the lock sight's centre) draws it as a quarter turn flipped top
+  to bottom (`Catalog.draw_sprite` in the editor). Only drawing changes:
+  collision and hits are circles.
 - PROPERTIES edits class fields per kind: toughness, score, mission target,
   drops, missile guidance (radar / radio tower), own base building,
   commander's building, firing routine, movement, route, soldier and
@@ -1285,7 +1297,7 @@ same bytes on every platform.
 | T | Replay playback: show / hide the REPLAY tick counter (hidden by default, always shown under `--verify`) |
 | Main menu, `--dev` | `F1` fly the loaded stage, `F3` sandbox, `F4` replay panel, `F7` co-op free play, `F8` / `F9` / `F10` animation / font / sound gallery, `F11` ending (`Shift`: VIC3's alternate ending), `Delete` game-over picture (`Shift`: the one before a respawn) |
 | Map list | Up / Down, Enter play, `E` edit, `N` new, `C` copy, `Delete` twice erase, `F` folder, Esc back |
-| Map editor | Tools `V` `P` `B` `E` `R` `L` `O` `U`; wheel zoom; right or middle drag, Space + drag, `W A S D` move the view; arrows nudge (Shift 8 px); `Ctrl+C` / `X` / `V` / `D` copy, cut, paste, duplicate; `Delete`; `Ctrl+Z` / `Ctrl+Y` (or `Ctrl+Shift+Z`) undo / redo; `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+N`, `Ctrl+O`; `Ctrl+A` select all; `Ctrl+Shift+G` ungroup; `Ctrl+[` / `Ctrl+]` turn the selection a quarter, `Shift+H` / `Shift+V` mirror it; `G` grid, `Ctrl+G` snap; Ctrl while drawing or dragging constrains (45 degree steps, one axis); `Tab` single parts; `Home` home pad; `F` show the selection; `M` overview map; `+` / `-` zoom; `F5` try, `Shift+F5` try from the pointer or the view; `F6` briefing preview; `F1` keys; Esc cancel, then leave |
+| Map editor | Tools `V` `P` `B` `E` `R` `L` `O` `U`; wheel zoom; right or middle drag, Space + drag, `W A S D` move the view; arrows nudge (Shift 8 px); `Ctrl+C` / `X` / `V` / `D` copy, cut, paste, duplicate; `Delete`; `Ctrl+Z` / `Ctrl+Y` (or `Ctrl+Shift+Z`) undo / redo; `Ctrl+S` save, `Ctrl+Shift+S` save as, `Ctrl+N`, `Ctrl+O`; `Ctrl+A` select all; `Ctrl+Shift+G` ungroup; `Ctrl+[` / `Ctrl+]` turn the selection a quarter (and lay its sprites across), `Shift+H` / `Shift+V` mirror it; `G` grid, `Ctrl+G` snap; Ctrl while drawing or dragging constrains (45 degree steps, one axis); `Tab` single parts; `Home` home pad; `F` show the selection; `M` overview map; `+` / `-` zoom; `F5` try, `Shift+F5` try from the pointer or the view; `F6` briefing preview; `F1` keys; Esc cancel, then leave |
 | Esc | Back (menu in game) |
 | Gamepad | Left stick or d-pad: drive (stick turn is analog). Right stick: strafe / turret. A or RT fire, LB or LT strafe, B take off / land, Y or RB weapon, X radar zoom, BACK pause, START menu. Buttons rebindable (CONTROLS, DEVICE GAMEPAD); the sticks and START are fixed. Menus: d-pad or left stick, A / START confirm, B / BACK back. Co-op: per player, see `vehicle_select`. |
 | Mouse (`mouse_control`) | Pointer offset from the vehicle is the stick: sideways turns, ahead drives, behind reverses. Left button fire, right strafe, middle take off / land, wheel next weapon (instead of the view zoom). Single player. |

@@ -134,7 +134,7 @@ local function draw_prefab(clip, x, y, w, h)
     for _, list in ipairs({ decals, objects }) do
         for _, item in ipairs(list) do
             local info = item.info
-            if info.img then g.draw(info.img, cx + (item.dx + info.ox) * k, cy + (item.dy + info.oy) * k, 0, k, k) end
+            if info.img then Catalog.draw_sprite(info, cx + item.dx * k, cy + item.dy * k, k) end
         end
     end
 end
@@ -664,6 +664,17 @@ function Panels.properties(editor, kit, x, y, w, h)
         { min = 0, max = doc:size() - 1 })
     if x_changed or y_changed then doc:move(editor.selection.list, nx - first.x, ny - first.y) end
     cy = row(kit, ix, cy, "POSITION")
+    local across = {}
+    for _, o in ipairs(editor.selection.list) do
+        if Catalog.can_lay_across(doc:info(o)) then across[#across + 1] = o end
+    end
+    if #across > 0 then
+        local value = shared(across, function(o) return doc:info(o).across == true end)
+        local new, changed = kit:check("prop_across", ix, cy, iw, "LAID ACROSS", value == true,
+            { tip = "MIRRORED OVER ITS DIAGONAL: UPRIGHT TURNS LEVEL, THE SHADOW STAYS (CTRL+[ / CTRL+])" })
+        if changed then doc:set_class_fields(across, { across = new }, "LAY ACROSS") end
+        cy = cy + theme.row + 2
+    end
     local held = editor.selection:count() == 1 and editor:goal_marks().held[first.id]
     if held then
         kit:label("NOT ON THE MAP UNTIL " .. held, ix, cy, iw, theme.row,
