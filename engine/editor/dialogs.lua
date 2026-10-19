@@ -772,7 +772,13 @@ local function settings_objectives(editor, kit, x, y, w, h)
     and not kit:popup_open("goal_add") then
         add_goal_menu(editor, kit, rows, x, y + theme.row + 2)
     end
-    kit:label("TARGETS, PEOPLE AND AGENTS ARE SET ON THE OBJECTS THEMSELVES", x + 160, y, w - 160, theme.row + 2,
+    local timers = #(map.timers or {})
+    if kit:button("goal_timers", x + 156, y, 150, theme.row + 2, { text = "TIMED EVENTS", on = timers > 0,
+        tip = "WHAT IS SAID AND WHAT APPEARS AT A TIME OF THE PHASE" }) then
+        editor.dialog = { kind = "timers" }
+        return
+    end
+    kit:label("TARGETS, PEOPLE AND AGENTS ARE SET ON THE OBJECTS THEMSELVES", x + 316, y, w - 316, theme.row + 2,
         { color = theme.text_dim, size = theme.font_small })
     y = y + theme.row + 8
 
@@ -1000,6 +1006,102 @@ local function draw_events(editor, kit, dialog)
             .. "SELECT THE OBJECTS ON THE MAP FIRST, THEN COME BACK HERE. HELICOPTER POSTS, PICKUPS AND THE MARKS OF "
             .. "THE PEOPLE OBJECTIVES CANNOT BE HELD BACK.", x, y, w, { color = theme.text_dim, size = theme.font_small })
         if kit:button("events_back", x + w - 100, bottom, 100, theme.row + 2, { text = "BACK", primary = true }) then
+            back_to_objectives(editor)
+        end
+    end)
+end
+
+-- The map's timed events: at a time of the phase a line said and objects
+-- that are not on the map until then, as an objective's events.
+local TIMER_H = 64
+
+local function timer_card(editor, kit, list, i, x, y, w, picked)
+    local theme  = kit.theme
+    local doc    = editor.doc
+    local timer  = list[i]
+    local range  = Goals.limits().timer
+    local id     = "timer" .. i .. "_"
+    local pad    = theme.pad
+    kit:rect(x, y, w, TIMER_H - 6, theme.panel_head, 3)
+    kit:label("AT", x + pad, y + 2, 30, theme.row, { color = theme.accent, size = theme.font_small })
+    local at, at_changed = kit:number(id .. "at", x + pad + 30, y + 2, 120, timer.at,
+        { min = range.min, max = range.max, step = range.step, big = range.step * 12, suffix = " S" })
+    if at_changed then
+        Goals.set_timer(doc, list, i, "at", at)
+        return true
+    end
+    kit:label(Goals.clock(timer.at) .. " INTO THE PHASE", x + pad + 158, y + 2, 160, theme.row,
+        { color = theme.text_dim, size = theme.font_small })
+    if kit:button(id .. "remove", x + w - pad - 22, y + 2, 22, theme.row,
+        { icon = "trash", flat = true, tip = "REMOVE THIS TIMED EVENT" }) then
+        Goals.remove_timer(doc, list, i)
+        return true
+    end
+    local ry = y + theme.row + 6
+    kit:label("SAY", x + pad, ry, 40, theme.row, { color = theme.text_dim, size = theme.font_small })
+    local say, _, done = kit:field(id .. "say", x + pad + 40, ry, 250, timer.say or "",
+        { hint = "A LINE SHOWN TO THE PLAYER", max = SAY_MAX, commit = true })
+    if done and say:upper() ~= (timer.say or "") then
+        Goals.set_timer(doc, list, i, "say", say ~= "" and say:upper() or nil)
+        return true
+    end
+    local found = Goals.held_of(doc, timer)
+    local bx    = x + pad + 300
+    kit:label(#found .. (#found == 1 and " OBJECT" or " OBJECTS"), bx, ry, 110, theme.row,
+        { size = theme.font_small })
+    bx = bx + 112
+    if kit:button(id .. "take", bx, ry, 54, theme.row, { text = "TAKE", disabled = #picked == 0,
+        tip = "THE OBJECTS SELECTED ON THE MAP ARE HELD BACK UNTIL THEN" }) then
+        Goals.set_timer(doc, list, i, "show", picked)
+        return true
+    end
+    bx = bx + 58
+    if kit:button(id .. "show", bx, ry, 54, theme.row, { text = "SHOW", disabled = #found == 0,
+        tip = "SELECT THEM ON THE MAP" }) then
+        close(editor)
+        editor:show_objects(found)
+        return true
+    end
+    bx = bx + 58
+    if kit:button(id .. "none", bx, ry, 54, theme.row, { text = "NONE", disabled = #found == 0 }) then
+        Goals.set_timer(doc, list, i, "show", nil)
+        return true
+    end
+    return false
+end
+
+local function draw_timers(editor, kit)
+    local doc = editor.doc
+    kit:dialog("TIMED EVENTS", 660, 420, function(_, x, y, w, h)
+        local theme  = kit.theme
+        local list   = Goals.timers(doc)
+        local picked = Goals.pick_held(doc, editor.selection.list)
+        local bottom = y + h - theme.row - 2
+        if kit:button("timer_add", x, y, 170, theme.row + 2, { text = "ADD TIMED EVENT", icon = "plus" }) then
+            Goals.add_timer(doc, list)
+            return
+        end
+        y = y + theme.row + 8
+        local note_h = theme.row * 3
+        local list_h = bottom - y - note_h - 12
+        kit:rect(x, y, w, list_h, theme.field, 3)
+        local offset = kit:scroll_begin("timers_list", x, y, w, list_h, #list * TIMER_H + 2)
+        for i = 1, #list do
+            local cy = y + 4 + (i - 1) * TIMER_H - offset
+            if cy + TIMER_H > y and cy < y + list_h and timer_card(editor, kit, list, i, x + 4, cy, w - 16, picked) then
+                kit:blur()
+                break
+            end
+        end
+        if #list == 0 then
+            kit:label("NO TIMED EVENT YET", x, y, w, list_h, { align = "center", color = theme.text_dim })
+        end
+        kit:scroll_end()
+        kit:paragraph("THE TIME COUNTS FROM THE START OF THE PHASE. WHAT APPEARS IS NOT ON THE MAP UNTIL ITS EVENT: "
+            .. "SELECT THE OBJECTS ON THE MAP FIRST, THEN TAKE THEM HERE. HELICOPTER POSTS, PICKUPS AND THE MARKS OF "
+            .. "THE PEOPLE OBJECTIVES CANNOT BE HELD BACK.", x, y + list_h + 8, w,
+            { color = theme.text_dim, size = theme.font_small })
+        if kit:button("timers_back", x + w - 100, bottom, 100, theme.row + 2, { text = "BACK", primary = true }) then
             back_to_objectives(editor)
         end
     end)
@@ -1275,7 +1377,7 @@ end
 
 local DRAW = { settings = draw_settings, cards = draw_cards, new = draw_new, open = draw_open,
                save_as = draw_save_as, prefab = draw_prefab, generate = draw_generate, ask = draw_ask,
-               help = draw_help, events = draw_events }
+               help = draw_help, events = draw_events, timers = draw_timers }
 
 function Dialogs.draw(editor, kit)
     local dialog = editor.dialog

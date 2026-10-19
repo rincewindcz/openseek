@@ -197,7 +197,8 @@ function MapCompiler.compile(map)
     for _, o in ipairs(map.objects) do
         local map_type = map.types[o.t]
         if map_type.pickup then
-            pickups[#pickups + 1] = { kind = map_type.pickup, weapon = map_type.weapon, x = o.x, y = o.y }
+            pickups[#pickups + 1] = { kind = map_type.pickup, weapon = map_type.weapon,
+                                      ammo_only = map_type.ammo_only == true or nil, x = o.x, y = o.y }
         elseif map_type.start then
             starts[map_type.start] = starts[map_type.start] or { x = o.x, y = o.y }
         elseif not type_class[o.t] then
@@ -303,6 +304,12 @@ function MapCompiler.compile(map)
         if spec.type then goals[#goals + 1] = spec end
     end
     local rescue = MapFile.objective(map, "rescue")
+    local timers = {}
+    for _, timer in ipairs(map.timers or {}) do
+        local spec = event(timer)
+        spec.at = timer.at
+        timers[#timers + 1] = spec
+    end
 
     return {
         world_size  = map.size,
@@ -312,6 +319,7 @@ function MapCompiler.compile(map)
         assets      = assets,
         classes     = classes,
         routes      = routes,
+        wrap_routes = true,   -- a route may cross the seam (Entity:_patrol)
         entities    = entities,
         segments    = segments,
         pickups     = pickups,
@@ -328,7 +336,7 @@ function MapCompiler.compile(map)
         mission     = { name = map.name, author = map.author, briefing = map.briefing, vehicle = map.vehicle,
                         players = map.players, objectives = goals, loadout = map.loadout, equip = map.equip,
                         difficulty = map.difficulty, ordered = map.ordered == true, time_limit = map.time_limit,
-                        no_return = map.no_return == true },
+                        no_return = map.no_return == true, timers = timers },
         missing     = missing,
     }
 end

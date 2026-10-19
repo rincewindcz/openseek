@@ -154,6 +154,15 @@ function Validate.run(doc)
         issue("warn", "A COMMANDERS BUILDING IS SET, BUT THE COMMANDER RULE IS OFF", commanders)
     end
 
+    for _, timer in ipairs(map.timers or {}) do
+        local name = "THE TIMED EVENT AT " .. Goals.clock(timer.at)
+        if map.time_limit and timer.at >= map.time_limit then
+            issue("warn", name .. " COMES AFTER THE TIME LIMIT AND NEVER HAPPENS")
+        elseif not (timer.say and timer.say ~= "") and #Goals.held_of(doc, timer) == 0 then
+            issue("warn", name .. " SAYS NOTHING AND BRINGS NOTHING IN")
+        end
+    end
+
     if #spare > 0 then
         issue("warn", "A PLAYER HAS MORE THAN ONE START: THE FIRST ONE PLACED COUNTS", spare)
     end

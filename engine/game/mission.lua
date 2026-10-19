@@ -52,11 +52,13 @@ end
 -- own among them, in the order it wants them, and words them all; one its
 -- content asks for and it does not list follows the listed ones. An objective
 -- of a map may carry events (spec.on_open, spec.on_done: { say, show }): a
--- line said as it comes up or is done, and objects held back until then.
+-- line said as it comes up or is done, and objects held back until then. Its
+-- timed events (own.timers: { at, say, show }) fire once the phase is that
+-- many seconds old.
 local function objectives_from_stage(world)
     local own = world.stage.mission or {}
     local def = { objectives = {}, no_return = own.no_return, ordered = own.ordered,
-                  time_limit = own.time_limit, announce = world.stage.mission ~= nil }
+                  time_limit = own.time_limit, timers = own.timers, announce = world.stage.mission ~= nil }
     local asked = {
         destroy_targets = #world.targets > 0,
         rescue_people   = world.rescue ~= nil and world.rescue.total > 0,
@@ -146,7 +148,7 @@ function Mission:init(world, players, def)
     self.state       = "active"
     self.fail_lines  = nil
     self.notice      = nil        -- standing on-screen order (the commander's building)
-    self.messages    = {}         -- what a map's objective events said, in order (the scene shows each once)
+    self.messages    = {}         -- what a map's events said, in order (the scene shows each once)
     self.objectives  = {}
     self.guards      = {}         -- "protect" objectives: nothing to do, something to lose
     for _, spec in ipairs(def.objectives or {}) do
@@ -161,6 +163,14 @@ function Mission:init(world, players, def)
                 local e = world.placed[index]
                 if e then e.held = true end
             end
+        end
+    end
+    self.timers = {}              -- a map's timed events not fired yet
+    for _, timer in ipairs(def.timers or {}) do
+        self.timers[#self.timers + 1] = timer
+        for _, index in ipairs(timer.show or {}) do
+            local e = world.placed[index]
+            if e then e.held = true end
         end
     end
 
@@ -321,6 +331,15 @@ function Mission:_fire(event)
     if event.say and event.say ~= "" then self.messages[#self.messages + 1] = event.say end
 end
 
+-- Fire the timed events whose time has come, in the order the map lists them.
+function Mission:_update_timers()
+    local waiting = {}
+    for _, timer in ipairs(self.timers) do
+        if self.age >= timer.at then self:_fire(timer) else waiting[#waiting + 1] = timer end
+    end
+    self.timers = waiting
+end
+
 function Mission:_close(o)
     for _, e in ipairs(o.marked or {}) do e.objective = nil end
     o.marked = nil
@@ -369,6 +388,7 @@ end
 function Mission:update(dt)
     if self.state == "won" or self.state == "failed" or self.state == "phase_failed" then return end
     self.age = self.age + dt
+    self:_update_timers()
     if self:_all_dead() then self.state = "failed"; return end
     -- An agent killed leaves its pad open for good (0x1fe911).
     if self.world.saboteur and self.world.saboteur:mission_failed() then

@@ -57,7 +57,7 @@ local ORDER_FADE  = 0.6   -- of which the last ones fade it out
 local ORDER_SCALE = 3
 local SAY_TIME    = 6.0   -- seconds a line of a map's objective event stays up
 local SAY_SCALE   = 2
-local SAY_WIDTH   = 0.8   -- of the window, before the line is broken
+local SAY_WIDTH   = 0.8   -- of the view, before a line is broken
 local CLOCK_LOW   = 10    -- seconds left from which the clock blinks
 local CLOCK_BLINK = 2     -- times a second
 
@@ -115,7 +115,9 @@ end
 -- whenever it changes: a map words objectives the original never had. Over it
 -- the phase's clock while one runs, blinking on its last seconds; under it
 -- what the map's objective events say (Mission.messages), one after another.
-function GameplayBase:draw_orders(mission)
+-- Drawn centred in the strip from x, width wide (the window when nil): a view
+-- of the split screen calls it with its own.
+function GameplayBase:draw_orders(mission, x, width)
     local g    = love.graphics
     local font = self.app.hud:font()
     local now  = love.timer.getTime()
@@ -123,23 +125,30 @@ function GameplayBase:draw_orders(mission)
     if text ~= self.order_text then
         self.order_text, self.order_since = text, now
     end
-    local screen_w, screen_h = g.getDimensions()
-    local y    = screen_h * 0.2
-    local left = text and ORDER_TIME - (now - self.order_since) or 0
-    if left > 0 and not mission.notice then
-        font:print(text, (screen_w - font:width(text, ORDER_SCALE)) / 2, y,
-            { scale = ORDER_SCALE, color = { 1, 1, 1, math.min(1, left / ORDER_FADE) } })
-    end
     if self.said_mission ~= mission then self.said_mission, self.said, self.said_since = mission, 0, now end
     if self.said < #mission.messages and (self.said == 0 or now - self.said_since >= SAY_TIME) then
         self.said, self.said_since = self.said + 1, now
     end
+    local screen_w, screen_h = g.getDimensions()
+    x     = x or 0
+    width = width or screen_w
+    local y    = screen_h * 0.2
+    local sy   = y + font.line_height * ORDER_SCALE + 14
+    local left = text and ORDER_TIME - (now - self.order_since) or 0
+    if left > 0 and not mission.notice then
+        local color = { 1, 1, 1, math.min(1, left / ORDER_FADE) }
+        for i, line in ipairs(broken(font, text, width * SAY_WIDTH, ORDER_SCALE)) do
+            local ly = y + (i - 1) * (font.line_height * ORDER_SCALE + 6)
+            font:print(line, x + (width - font:width(line, ORDER_SCALE)) / 2, ly,
+                { scale = ORDER_SCALE, color = color })
+            sy = ly + font.line_height * ORDER_SCALE + 14
+        end
+    end
     local said = mission.messages[self.said]
     left = said and SAY_TIME - (now - self.said_since) or 0
     if left > 0 then
-        local sy = y + font.line_height * ORDER_SCALE + 14
-        for _, line in ipairs(broken(font, said, screen_w * SAY_WIDTH, SAY_SCALE)) do
-            font:print(line, (screen_w - font:width(line, SAY_SCALE)) / 2, sy,
+        for _, line in ipairs(broken(font, said, width * SAY_WIDTH, SAY_SCALE)) do
+            font:print(line, x + (width - font:width(line, SAY_SCALE)) / 2, sy,
                 { scale = SAY_SCALE, color = { 1, 0.85, 0.3, math.min(1, left / ORDER_FADE) } })
             sy = sy + font.line_height * SAY_SCALE + 6
         end
@@ -148,7 +157,7 @@ function GameplayBase:draw_orders(mission)
     if seconds and (seconds > CLOCK_LOW or math.floor(now * CLOCK_BLINK * 2) % 2 == 0) then
         local total = math.ceil(seconds)
         local clock = string.format("%d:%02d", math.floor(total / 60), total % 60)
-        font:print(clock, (screen_w - font:width(clock, ORDER_SCALE)) / 2,
+        font:print(clock, x + (width - font:width(clock, ORDER_SCALE)) / 2,
             y - font.line_height * ORDER_SCALE - 10, { scale = ORDER_SCALE })
     end
     g.setColor(1, 1, 1)
@@ -698,22 +707,25 @@ function GameplayBase:crash_stats()
 end
 
 -- A map played from the map list was won: its time and the team's score go
--- to the map's records (engine/game/records.lua), with the recording when it
--- is the fastest win. A try from the editor, a playback and a run in god mode
--- set none. mode is "single" or "coop".
+-- to the map's records (engine/game/records.lua) for the difficulty it was
+-- played on, with the recording when it is the fastest win. A try from the
+-- editor, a playback, a run in god mode and a run not recorded set none.
+-- mode is "single" or "coop".
 function GameplayBase:record_map_run(mode, players)
     local app  = self.app
     local name = World.map_name(app.world.stage_name)
     local back = app.play_return
-    if not name or not back or back.test or self.playback then return end
+    if not name or not back or back.test or self.playback or not self.recording then return end
     local score = 0
     for _, p in ipairs(players) do
         if p.unlimited then return end
         score = score + (p.score or 0)
     end
+    local own     = app.world.stage.mission
+    local level   = Records.level(own and own.difficulty, self.hold and self.hold.held)
     local seconds = self.phase_time or app.world.time
-    local text    = self.recording and self.recording:serialize() or nil
-    local beat    = Records.submit(name, app.world.stage.map_hash, mode, seconds, score, text)
+    local beat    = Records.submit(name, app.world.stage.map_hash, mode, level, seconds, score,
+        self.recording:serialize())
     if not beat then return end
     if beat.time and beat.score then
         back.note = "NEW BEST TIME " .. Records.clock(seconds) .. " AND SCORE"

@@ -662,7 +662,10 @@ function CoopGameplay:draw()
         elseif self.mission.notice then
             self:draw_notice(self.mission.notice)
         end
-        self:draw_orders(self.mission)
+        for i = 1, n do
+            local vx = (i - 1) * half_w
+            self:draw_orders(self.mission, vx, (i == n) and (W - vx) or half_w)
+        end
     end
     self:draw_replay_tag()
     if self.paused then self:draw_overlay_text("PAUSE") end

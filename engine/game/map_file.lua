@@ -62,15 +62,19 @@ local Log  = require "engine.core.log"
 --                  "air"       count of enemy helicopters to shoot down
 --                The first three follow from what is on the map and need no
 --                entry; one gives them their wording and their place.
+--   timers       events at a time of the phase: { at = seconds since the
+--                phase began, say, show }, as an objective's events
 --   ordered      an objective is worked on once those before it are done
 --   time_limit   seconds the required objectives have to be done in
 --   hold_agents  agents stay inside until every building has one
 --   commander    the commander building rule (stage special end)
 --   no_return    the phase ends with the last objective, without the flight home
 --   types        property sets: { from, class, sprite, set }: a class of a
---                pack stage and the fields changed on it; or { pickup, weapon }:
---                a pickup lying there from the start ("fuel", "armor", "medal",
---                or "ammo" for a weapon), whose objects are no entities; or
+--                pack stage and the fields changed on it; or { pickup, weapon,
+--                ammo_only }: a pickup lying there from the start ("fuel",
+--                "armor", "medal", or "ammo" for a weapon, which gives the
+--                weapon to a vehicle without it unless ammo_only), whose
+--                objects are no entities; or
 --                { start = player }: where that player's vehicle is put at the
 --                start of the phase and after a crash (the first one placed
 --                counts; without one the player starts on the home pad)
@@ -183,7 +187,7 @@ end
 -- Header keys in file order; the lists follow, one entry per line, so a map
 -- stays readable and diffable.
 local HEADER = { "format", "name", "author", "based_on", "base", "environment", "size", "vehicle", "players", "loadout",
-                 "equip", "difficulty", "briefing", "briefing_cards", "objectives", "ordered", "time_limit", "hold_agents",
+                 "equip", "difficulty", "briefing", "briefing_cards", "objectives", "timers", "ordered", "time_limit", "hold_agents",
                  "commander", "no_return", "view", "next_id" }
 
 function MapFile.encode(map)
@@ -223,6 +227,18 @@ local function objective_list(raw)
     return out
 end
 
+-- The timed events of a map, each at a time of none or more seconds; nil for none.
+local function timer_list(raw)
+    local out = {}
+    for _, timer in ipairs(type(raw) == "table" and raw or {}) do
+        if type(timer) == "table" and (tonumber(timer.at) or -1) >= 0 then
+            timer.at = tonumber(timer.at)
+            out[#out + 1] = timer
+        end
+    end
+    return #out > 0 and out or nil
+end
+
 -- The entry of a map's objectives of one type, or nil.
 function MapFile.objective(map, kind)
     for _, goal in ipairs(map.objectives) do
@@ -251,6 +267,7 @@ function MapFile.decode(text)
     map.difficulty  = type(map.difficulty) == "table" and map.difficulty or nil
     map.briefing_cards = type(map.briefing_cards) == "table" and map.briefing_cards or {}
     map.objectives  = objective_list(map.objectives)
+    map.timers      = timer_list(map.timers)
     map.ordered     = map.ordered == true or nil
     map.time_limit  = (tonumber(map.time_limit) or 0) > 0 and tonumber(map.time_limit) or nil
     map.routes      = type(map.routes) == "table" and map.routes or {}

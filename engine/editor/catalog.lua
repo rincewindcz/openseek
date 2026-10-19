@@ -32,6 +32,7 @@ Catalog.PLAYERS = 2   -- players a map may place a start for
 
 -- Which class of a stack an entry is filed under.
 local KIND_RANK = { tank = 5, structure = 4, flak_turret = 3, radar = 2, ground_decal = 1 }
+local KIND_OF   = { ground_decal = 15 }   -- class kind of a kind name a spare class is filed under
 -- Kinds that are not listed on their own when they mostly ride on another class.
 local PART_KINDS = { flak_turret = true, radar = true, ground_decal = true }
 
@@ -181,9 +182,9 @@ end
 -- The type of a catalog entry's part: a pack class with fields changed on it,
 -- a pickup, or a player's start.
 function Catalog.part_type(part, set)
-    if part.pickup then return { pickup = part.pickup, weapon = part.weapon } end
+    if part.pickup then return { pickup = part.pickup, weapon = part.weapon, ammo_only = part.ammo_only } end
     if part.start then return { start = part.start } end
-    return { from = part.from, class = part.class, sprite = part.sprite, set = set }
+    return { from = part.from, class = part.class, sprite = part.sprite, set = set or part.set }
 end
 
 -- A pickup as one value, for a choice: "fuel", "ammo/rockets".
@@ -401,6 +402,30 @@ local function add_stage(found, pack)
     end
 end
 
+-- Classes no entity of the stage uses that the editor offers all the same
+-- (data/editor.json "spare"): what the original only leaves behind (a
+-- crater, a shell hole, wreckage, a body) and objects no stage places. "as"
+-- files one under another kind, the crater and the wreckage with the ground.
+local function add_spare(found, pack)
+    for i, cls in ipairs(pack.classes) do
+        local index = i - 1
+        local stem  = cls.render and (pack.uses[index] or 0) == 0 and MapCompiler.asset_stem(pack, cls)
+        for _, spare in ipairs(stem and Catalog.data().spare or {}) do
+            local key = "spare/" .. tostring(stem) .. "/" .. (cls.frame_base or 0)
+            if spare.stem == stem and (not spare.frame or spare.frame == cls.frame_base) and not found[key] then
+                local part = part_of(pack, index)
+                local kind = spare.as or cls.kind_name
+                if spare.as then part.set = { kind = KIND_OF[spare.as], kind_name = spare.as } end
+                local category = category_of(kind)
+                if category then
+                    found[key] = { key = key, label = spare.label, category = category, kind_name = kind,
+                                   parts = { part }, main = 1, score = 0 }
+                end
+            end
+        end
+    end
+end
+
 -- The entries of an art set: { list, by_category = { id -> entries }, by_key }.
 function Catalog.entries(art)
     art = tostring(art)
@@ -408,7 +433,10 @@ function Catalog.entries(art)
     local found = {}
     for _, name in ipairs(Catalog.stages(art)) do
         local pack = MapCompiler.pack_stage(name)
-        if pack then add_stage(found, pack) end
+        if pack then
+            add_stage(found, pack)
+            add_spare(found, pack)
+        end
     end
     -- An art set whose stages never stamp a home pad borrows one.
     if not found["home"] then

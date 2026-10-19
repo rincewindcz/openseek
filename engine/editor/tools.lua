@@ -1,11 +1,12 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Entity  = require "engine.game.entity"
-local Roads   = require "engine.game.roads"
-local Catalog = require "engine.editor.catalog"
-local Ops     = require "engine.editor.ops"
-local View    = require "engine.editor.view"
+local Entity   = require "engine.game.entity"
+local Roads    = require "engine.game.roads"
+local Catalog  = require "engine.editor.catalog"
+local Document = require "engine.editor.document"
+local Ops      = require "engine.editor.ops"
+local View     = require "engine.editor.view"
 
 -- The map editor's tools. Each is a table of handlers the editor scene calls
 -- with itself (editor) and the pointer's world position (unwrapped: a point past
@@ -422,23 +423,23 @@ end
 -- the two join. With an anchor the point stays on its leg from it, and only a
 -- road across that leg takes it. skip is the road being edited.
 local function join(editor, x, y, anchor, skip)
-    local doc   = editor.doc
-    local size  = doc:size()
-    local px, py = x % size, y % size
-    local level  = anchor and anchor[2] == py
+    local doc     = editor.doc
+    local level   = anchor and anchor[2] == y
     local upright = anchor and not level
     local best_x, best_y, best_d = x, y, nil
     for _, road in ipairs(doc.map.roads) do
         local reach = (tonumber(road.width) or 0) / 2 + Catalog.data().roads.join
         for i = 1, (road ~= skip) and #road.points - 1 or 0 do
-            local a, b = road.points[i], road.points[i + 1]
-            if a[2] == b[2] and not level and px >= math.min(a[1], b[1]) - reach and px <= math.max(a[1], b[1]) + reach then
-                local d = math.abs(a[2] - py)
-                if d <= reach and (not best_d or d < best_d) then best_x, best_y, best_d = x, y + a[2] - py, d end
-            elseif a[1] == b[1] and not upright and py >= math.min(a[2], b[2]) - reach
-            and py <= math.max(a[2], b[2]) + reach then
-                local d = math.abs(a[1] - px)
-                if d <= reach and (not best_d or d < best_d) then best_x, best_y, best_d = x + a[1] - px, y, d end
+            -- The pointer and the leg's far end, both from the leg's near end.
+            local a, b   = road.points[i], road.points[i + 1]
+            local px, py = doc:delta(x, y, a[1], a[2])
+            local bx, by = b[1] - a[1], b[2] - a[2]
+            if by == 0 and not level and px >= math.min(0, bx) - reach and px <= math.max(0, bx) + reach then
+                local d = math.abs(py)
+                if d <= reach and (not best_d or d < best_d) then best_x, best_y, best_d = x, y - py, d end
+            elseif bx == 0 and not upright and py >= math.min(0, by) - reach and py <= math.max(0, by) + reach then
+                local d = math.abs(px)
+                if d <= reach and (not best_d or d < best_d) then best_x, best_y, best_d = x - px, y, d end
             end
         end
     end
@@ -569,11 +570,12 @@ local function poly_tool(kind, def)
             local now  = love.timer.getTime()
             local last = work.points[#work.points]
             x, y = settle(editor, kind, x, y, last, work.extend, ring_start(work))
-            if now - (work.clicked or 0) < DOUBLE_TIME and last[1] == x % size and last[2] == y % size then
+            x, y = Document.near(x, y, last, size)
+            if now - (work.clicked or 0) < DOUBLE_TIME and last[1] == x and last[2] == y then
                 finish_shape(editor, kind)
                 return
             end
-            work.points[#work.points + 1] = { x % size, y % size }
+            work.points[#work.points + 1] = { x, y }
             work.clicked = now
             return
         end
@@ -587,9 +589,10 @@ local function poly_tool(kind, def)
             if hover.segment then
                 -- A point added to a road lies on the leg it splits.
                 local a, b = points[index], points[index + 1]
+                x, y = Document.near(x, y, a, size)
                 if kind == "road" and a[2] == b[2] then y = a[2] elseif kind == "road" and a[1] == b[1] then x = a[1] end
                 index = index + 1
-                table.insert(points, index, { x % size, y % size })
+                table.insert(points, index, { x, y })
             end
             editor.work = { edit = hover.shape, before = hover.shape.points, edited = points, index = index,
                         origin = copy_points(points), inserted = hover.segment }
@@ -619,22 +622,25 @@ local function poly_tool(kind, def)
             elseif ring and work.index == last then moved[2] = 1
             elseif work.index == 1 or work.index == last then x, y = join(editor, x, y, nil, work.edit) end
             for _, index in ipairs(moved) do
-                local here = origin[index]
+                local here   = origin[index]
+                local hx, hy = Document.near(x, y, here, size)
                 for step = -1, 1, 2 do
                     local was = origin[index + step]
                     if was and was[2] == here[2] and was[1] ~= here[1] then
-                        work.edited[index + step] = { was[1], y % size }
+                        work.edited[index + step] = { was[1], hy }
                     elseif was and was[1] == here[1] and was[2] ~= here[2] then
-                        work.edited[index + step] = { x % size, was[2] }
+                        work.edited[index + step] = { hx, was[2] }
                     end
                 end
-                work.edited[index] = { x % size, y % size }
+                work.edited[index] = { hx, hy }
             end
+            x, y = Document.near(x, y, origin[work.index], size)
         else
             -- Ctrl: at a multiple of 45 degrees from the point before (or after).
             x, y = constrain(editor, x, y, work.edited[work.index - 1] or work.edited[work.index + 1])
+            x, y = Document.near(x, y, work.origin[work.index], size)
         end
-        work.edited[work.index] = { x % size, y % size }
+        work.edited[work.index] = { x, y }
         work.moved = true
         editor.doc:refresh()
     end

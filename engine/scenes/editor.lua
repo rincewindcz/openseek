@@ -993,11 +993,14 @@ function Editor:_draw_routes()
             g.line(points[i][1], points[i][2], points[i + 1][1], points[i + 1][2])
             draw_heading(points[i], points[i + 1], z)
         end
-        -- Back to the start: a route is driven round and round.
+        -- Back to the start: a route is driven round and round, the short way.
         if #points > 2 then
+            local last   = points[#points]
+            local dx, dy = doc:delta(points[1][1], points[1][2], last[1], last[2])
+            local back   = { last[1] + dx, last[2] + dy }
             if hot then g.setColor(c[1], c[2], c[3], 0.4) else g.setColor(1, 1, 1, 0.22) end
-            g.line(points[#points][1], points[#points][2], points[1][1], points[1][2])
-            draw_heading(points[#points], points[1], z)
+            g.line(last[1], last[2], back[1], back[2])
+            draw_heading(last, back, z)
         end
         if points[1] then
             if hot then g.setColor(c[1], c[2], c[3], 1) else g.setColor(1, 1, 1, 0.8) end
@@ -1008,8 +1011,9 @@ function Editor:_draw_routes()
     for _, o in ipairs(self.view.drawn.objects) do
         local route = o.route and doc:route(o.route)
         if route and route.points[1] then
+            local dx, dy = doc:delta(route.points[1][1], route.points[1][2], o.x, o.y)
             g.setColor(1, 1, 1, 0.3)
-            g.line(o.x, o.y, route.points[1][1], route.points[1][2])
+            g.line(o.x, o.y, o.x + dx, o.y + dy)
         end
     end
 end
@@ -1244,16 +1248,22 @@ function Editor:_refresh_map_canvas(px)
     g.origin()
     g.setScissor()
     g.clear(ground[1], ground[2], ground[3], 1)
-    for _, line in ipairs(doc.map.lines) do
-        g.setColor(line.color[1] / 255, line.color[2] / 255, line.color[3] / 255, 0.8)
-        for i = 1, #line.points - 1 do
-            g.line(line.points[i][1] * k, line.points[i][2] * k, line.points[i + 1][1] * k, line.points[i + 1][2] * k)
-        end
-    end
-    if self.layers.roads.visible then
-        for _, s in ipairs(doc:built_roads().segments) do
-            g.setColor(s.color[1] / 255, s.color[2] / 255, s.color[3] / 255, 0.8)
-            g.line(s.x1 * k, s.y1 * k, s.x2 * k, s.y2 * k)
+    -- A line or road over the seam goes on from the other edge.
+    for oy = -px, px, px do
+        for ox = -px, px, px do
+            for _, line in ipairs(doc.map.lines) do
+                g.setColor(line.color[1] / 255, line.color[2] / 255, line.color[3] / 255, 0.8)
+                for i = 1, #line.points - 1 do
+                    g.line(ox + line.points[i][1] * k, oy + line.points[i][2] * k,
+                        ox + line.points[i + 1][1] * k, oy + line.points[i + 1][2] * k)
+                end
+            end
+            if self.layers.roads.visible then
+                for _, s in ipairs(doc:built_roads().segments) do
+                    g.setColor(s.color[1] / 255, s.color[2] / 255, s.color[3] / 255, 0.8)
+                    g.line(ox + s.x1 * k, oy + s.y1 * k, ox + s.x2 * k, oy + s.y2 * k)
+                end
+            end
         end
     end
     local spots = {}

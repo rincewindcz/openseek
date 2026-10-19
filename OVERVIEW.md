@@ -379,13 +379,14 @@ map list and the editor are reached through ADVANCED / EDITOR.
 | `briefing_cards` | The picture beside each paragraph: `{ kind = "view", x, y, size, label }` (a square of the map, `size` world pixels a side, drawn from the map whenever it is shown), `{ kind = "card", stage, slot }` (a card of a pack stage's briefing) or `{ kind = "none" }`. |
 | `difficulty` | Set when the map is played on a difficulty of its own whatever the player's is: values of the difficulty keys (`game/difficulty`: `enemy_damage_level`, `enemy_damage`, `enemy_fire_level`, `enemy_fire_rate`, `enemy_aggression`, `pickup_level`, `land_for_medals`, `land_for_supplies`). |
 | `objectives` | The objectives in order, each `{ type, label, optional, on_open, on_done }` plus its own fields (table below). `on_open` / `on_done` are the objective's events, as it comes up and once it is done: `{ say, show }`, a line shown to the player and the objects (ids) that are not on the map until then. The first files held `{ destroy, rescue, sabotage }` by name, which is still read. |
+| `timers` | Timed events, `{ at, say, show }`: once the phase is `at` seconds old, a line said and the objects (ids) that are not on the map until then, as an objective's events. |
 | `ordered` | An objective is worked on once every required one before it is done. |
 | `time_limit` | Seconds the required objectives have to be done in. |
 | `hold_agents`, `commander` | Stage global 5 (agents wait until all are in) and the special end. |
 | `no_return` | The phase is won with the last objective, without the flight home. |
-| `types` | `{ from, class, sprite, set }`: a class of a pack stage and the class fields changed on it. Or `{ pickup, weapon }`: a pickup lying on the ground from the start, `pickup` being `fuel`, `armor`, `medal` or `ammo` (then of `weapon`); its objects are no entities. Or `{ start = player }`: where that player's vehicle is put at the start of the phase and after a crash (the first one placed counts). |
+| `types` | `{ from, class, sprite, set }`: a class of a pack stage and the class fields changed on it. Or `{ pickup, weapon, ammo_only }`: a pickup lying on the ground from the start, `pickup` being `fuel`, `armor`, `medal` or `ammo` (then of `weapon`, which gives the weapon to a vehicle without it unless `ammo_only`); its objects are no entities. Or `{ start = player }`: where that player's vehicle is put at the start of the phase and after a crash (the first one placed counts). |
 | `objects` | Rows `[id, t, x, y, route, owner, group]` in entity order, 0 for no link. `owner`: the building a POW flag, a landing pad or a waiting person belongs to. `group`: parts placed as one thing. |
-| `routes`, `lines` | `{ id, points }`; ground polylines `{ color, points }`. |
+| `routes`, `lines` | `{ id, points }`; ground polylines `{ color, points }`. A shape's first point is on the map, each next one where it lies from the one before: past the seam (outside 0 to `size`) when the shape crosses it. |
 | `roads` | `{ id, points, width, pitch, edge, across, down }`: a road by its centre line. `edge` is the border colour above and to the left, then below and to the right; `pitch` the spacing of the centre marks (0 for none); `across` / `down` the mark's type on a level and an upright leg (`{ from, class, sprite }`). |
 
 | Objective `type` | Fields | Done when |
@@ -436,7 +437,15 @@ Compiling:
   is the first one placed for that player, and `World:start_of(player)` the
   free spot at or near it (nil on a stage without one: the base pad).
 - An objective's events keep their line and get their objects as places in
-  the entity list (`spec.on_open`, `spec.on_done`).
+  the entity list (`spec.on_open`, `spec.on_done`); so do the timed events
+  (`mission.timers`).
+- Routes, ground lines and roads are compiled from their points as stored,
+  so a shape over the seam runs across it: the ground segments and road
+  borders reach past the edge (each map copy draws them), the road marks are
+  wrapped onto the map. The stage carries `wrap_routes`: a unit drives its
+  route the short way (`World:delta`) and its position wraps
+  (`Entity:_patrol`). A stage of the original drives its waypoints as they
+  are.
 - `World:_fit_wrap_period` is skipped: a map's `size` is its period. A clone
   states the period the fit gives its stage.
 - `tools/sim_maps.lua` holds the contract: every pack stage decompiled, encoded,
@@ -475,20 +484,27 @@ comes back to it after a crash; without one the team starts side by side on
 the base pad, which stays the place to return to and to refuel at.
 
 Records (`game/records`): a win of a map played from the list (not a try, a
-playback or a god mode run) is submitted with its simulated time and the
-team's score, `single` or `coop` (`GameplayBase:record_map_run`). The fastest
-win keeps its recording, which BEST plays back through the replay path
-(`app.replay_return = "map_select"`). They belong to the map's file as it
-stood: a changed map starts over.
+playback, a god mode run or a run not recorded) is submitted with its
+simulated time and the team's score, `single` or `coop`, under the level it
+was played on (`GameplayBase:record_map_run`, `Records.level`): the
+difficulty preset the phase's parameters match (`custom` for none), or `map`
+when the map sets its own. The fastest win keeps its recording. The list
+shows the records of the level the map would be played on now, with the
+preset's name; BEST plays the recording of the lone player or of the team,
+the one lit on the record line (left / right or a click on it picks the
+other) through the replay path (`app.replay_return = "map_select"`). They
+belong to the map's file as it stood: a changed map starts over.
 
 Events: an objective of a map may hold objects back until it comes up or is
-done (`Mission:_fire`). A held entity (`Entity.held`) is not there: it is not
+done (`Mission:_fire`), and a timed event until the phase is that old
+(`Mission:_update_timers`, on `Mission.age`, the clock of the time limit). A held entity (`Entity.held`) is not there: it is not
 alive to anything that sees, hits, blocks or draws (`Entity:is_alive`), does
 nothing, and is no kill either (`Entity:is_destroyed` is what the objectives,
 the stats and the rescue count). Once brought in it is marked for the open
 objective it belongs to. An objective with nothing to do never comes up and
 holds nothing. The lines the events say are queued in `Mission.messages`; the
-scene shows each for 6 seconds under the objective line.
+scene shows each for 6 seconds under the objective line. On the split screen
+the objective line, the clock and the events' lines are drawn in each half.
 
 In the phase of a map (`Mission.def.announce`) the objective at hand is shown
 for 4 seconds whenever its line changes, worded as the map words it, and a
@@ -529,9 +545,17 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   ammunition of each weapon, placed, scattered, moved and copied like any
   object. They lie there until taken, by the landing rules of the difficulty.
   Ammunition for a weapon that is not aboard gives the weapon (as a weapon
-  find, whatever `weapon_finds` says); for a weapon the vehicle cannot load it
+  find, whatever `weapon_finds` says); with GIVES THE WEAPON off in
+  PROPERTIES it is ammunition only, laid out when somebody carries the weapon
+  and left for a vehicle that does. For a weapon the vehicle cannot load it
   is left out of the phase, which the checks name when the map fixes the
   vehicle. PROPERTIES changes what a placed pickup holds.
+- Spare entries (`data/editor.json` `spare`): classes of a pack stage no
+  entity uses, rendered by the converter: what the original only leaves
+  behind (CRATER, SHELL HOLE, BODY, WRECKAGE 1-7, filed with the ground as
+  decals: the type sets `kind` 15) and objects no stage places (FUEL DUMP,
+  FIELD HOSPITAL, ROCKS, PIPELINE), with the class data the stage holds for
+  them. So a map can start with damage already done.
 - PREFABS (the last tab of OBJECTS, the same on every map): SAVE THE SELECTION
   AS A PREFAB (also EDIT, and a button on the SELECT options bar) keeps the
   selected objects and roads under a name, with the groups, the owner links
@@ -612,7 +636,10 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   (a number; the row says how many posts the map has and whether they send
   another). Objects are taken from
   the selection (USE THE SELECTION; one id per hull and turret) and found
-  again with SHOW. EVENTS on an objective (not one to keep intact) opens its
+  again with SHOW. TIMED EVENTS beside ADD OBJECTIVE lists the map's timed
+  events: AT (seconds into the phase), a line to SAY and the objects that
+  then appear (TAKE the selection, SHOW, NONE); the checks name one at or
+  past the time limit and one that does nothing. EVENTS on an objective (not one to keep intact) opens its
   two events, as it comes up and once it is done: a line to SAY, and the
   objects that THEN APPEAR, taken from the selection (anything that is an
   entity of the phase and no mark of the people objectives; helicopter posts
@@ -623,8 +650,8 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   player's number, placed, moved and copied like any object.
 
 Limits: desktop with mouse and keyboard only. The briefing backdrop is the art
-set's own, mission number included. A route, line or road that crosses the seam is
-drawn the long way round. A road has no slanted legs (the centre marks exist level and upright only).
+set's own, mission number included. A road over the seam does not join a road
+on the other side of it. A road has no slanted legs (the centre marks exist level and upright only).
 ARRANGE leaves selected roads where they are. Routes and ground lines are not picked by SELECT.
 
 ## 7. Combat
@@ -1207,13 +1234,13 @@ same bytes on every platform.
 
 | Tool | Output |
 |------|--------|
-| `export_love2d.py all` | `assets/stageMP.json`, `assets/stageMP/` for the missions present (`CLEAR_INDICES`: per-sprite palette indices exported transparent, the sand dune's black crest) |
+| `export_love2d.py all` | `assets/stageMP.json`, `assets/stageMP/` for the missions present, in the mission's in-game palette `PAL1.BIN` (`gamedata.stage_palette_path`, as every gameplay export; `PAL.BIN` holds magenta markers some sprites draw). Classes no entity uses are rendered too when their BIN is in their own `STAGE0N/` (the crater, wreckage, the fuel dump: the editor's spare entries). `CLEAR_INDICES`: per-sprite palette indices exported transparent, the sand dune's black crest |
 | `export_fullscreen.py` | `assets/fullscreen/`: every fullscreen BIN (`NAME.png`, `STAGE0N_NAME.png`) in its own palette |
 | `export_projectiles.py` | `assets/stage00/` projectiles; the crater `hole_f16.png` per mission into `assets/stage{M}0/` (STAGE00's HOLE4038 in the palette of missions 2 to 4, which have none of their own) |
 | `export_player.py` | `assets/player/`, plus `VARIANT_SPRITES` (the DESERT 2 turret in the day palette) |
 | `export_hud.py` | `assets/hud/` |
 | `export_animations.py` | `assets/effects/` |
-| `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its stage palette; `chars3`: the night mission's own green CHARS in its `PAL1.BIN`; `credchars`: HICHARS in the CREDITS palette) |
+| `export_fonts.py` | `assets/fonts/` (`overkill0`..`overkill4`: one OVERKILL banner per mission in its in-game palette; `chars3`: the night mission's own green CHARS in its `PAL1.BIN`; `credchars`: HICHARS in the CREDITS palette) |
 | `export_mainmen.py` | `assets/mainmen/` (words, generated arrow cursor), `assets/mainmen/font/`, `assets/fonts/mainmen.*`, `assets/fonts/main.*` (plus `content/fonts/main_synth/`); runtime menu palette in `MENU_PALETTE` |
 | `export_screens.py` | CREDANIM / HIANIM (CREDITS / HISCORE palette, fixed frame box via `menutitle.py`), POWCOUNT, OKBADGE, KILLICON, BURN, PHASE cards (in the palette of the briefing picture `MS.BIN` they are shown on) |
 | `export_mission.py` | `assets/mission/` |

@@ -475,17 +475,31 @@ function SECTIONS.pickup(editor, kit, x, y, w, objects)
     local doc   = editor.doc
     local theme = kit.theme
     local value = shared(objects, function(o) return Catalog.pickup_value(doc.map.types[o.t]) end)
+    local only  = shared(objects, function(o) return doc.map.types[o.t].ammo_only == true end)
     local new, changed = kit:choice("prop_pickup", x + LABEL_W, y, w - LABEL_W, Catalog.pickup_choices(), value,
         { empty = "MIXED", list_w = 200 })
-    if changed then doc:set_field(objects, "t", doc:intern(Catalog.pickup_type(new)), "PICKUP") end
+    if changed then
+        local map_type = Catalog.pickup_type(new)
+        map_type.ammo_only = map_type.weapon and only or nil
+        doc:set_field(objects, "t", doc:intern(map_type), "PICKUP")
+    end
     y = row(kit, x, y, "HOLDS")
     local weapon = value and Catalog.pickup_type(value).weapon
     local text   = "LIES THERE UNTIL IT IS TAKEN."
     if weapon then
+        local gives, gives_changed = kit:check("prop_pickup_gives", x, y, w, "GIVES THE WEAPON", only == false,
+            { tip = "TAKEN BY A VEHICLE WITHOUT THE WEAPON, IT GIVES THE WEAPON. OFF: AMMUNITION ONLY." })
+        if gives_changed then
+            local map_type = Catalog.pickup_type(value)
+            map_type.ammo_only = not gives or nil
+            doc:set_field(objects, "t", doc:intern(map_type), "PICKUP")
+        end
+        y = y + kit.theme.row + 2
         local users = {}
         for i, vehicle in ipairs(Catalog.weapon_users(weapon)) do users[i] = "THE " .. vehicle:upper() end
-        text = "AMMUNITION FOR " .. table.concat(users, " AND ") .. ". GIVES THE WEAPON WHEN IT IS NOT ABOARD. "
-            .. "LEFT OUT WHEN THE VEHICLE CANNOT USE IT."
+        text = "AMMUNITION FOR " .. table.concat(users, " AND ") .. ". "
+            .. (only == false and "GIVES THE WEAPON WHEN IT IS NOT ABOARD. LEFT OUT WHEN THE VEHICLE CANNOT USE IT."
+                or "LEFT OUT WHEN NOBODY CARRIES THE WEAPON.")
     end
     return y + kit:paragraph(text, x, y + 2, w, { color = theme.text_dim, size = theme.font_small }) + 4
 end
@@ -623,7 +637,7 @@ function Panels.properties(editor, kit, x, y, w, h)
     cy = row(kit, ix, cy, "POSITION")
     local held = editor.selection:count() == 1 and editor:goal_marks().held[first.id]
     if held then
-        kit:label("NOT ON THE MAP UNTIL AN EVENT OF OBJECTIVE " .. held, ix, cy, iw, theme.row,
+        kit:label("NOT ON THE MAP UNTIL " .. held, ix, cy, iw, theme.row,
             { color = theme.warn, size = theme.font_small })
         cy = cy + theme.row
     end

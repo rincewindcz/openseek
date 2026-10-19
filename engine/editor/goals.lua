@@ -144,14 +144,60 @@ function Goals.pick_held(doc, objects)
     return ids
 end
 
--- The objects an event of an objective brings in that are still on the map.
-function Goals.held(doc, goal, key)
+-- The objects an event brings in that are still on the map: event is an
+-- objective's event (goal[key]) or a timed event.
+local function held_of(doc, event)
     local found = {}
-    for _, id in ipairs((goal[key] or {}).show or {}) do
+    for _, id in ipairs((event or {}).show or {}) do
         local o = doc.by_id[id]
         if o and Goals.holdable(doc, o) then found[#found + 1] = o end
     end
     return found
+end
+
+Goals.held_of = held_of
+
+-- The objects an event of an objective brings in that are still on the map.
+function Goals.held(doc, goal, key)
+    return held_of(doc, goal[key])
+end
+
+-- timed events
+
+-- The map's timed events, as a list to change and write back.
+function Goals.timers(doc)
+    local list = {}
+    for i, timer in ipairs(doc.map.timers or {}) do list[i] = timer end
+    return list
+end
+
+function Goals.write_timers(doc, list, label)
+    doc:set_map("timers", #list > 0 and list or nil, label or "TIMED EVENTS")
+end
+
+-- Timed event i of the list with one field changed (nil clears it).
+function Goals.set_timer(doc, list, i, key, value)
+    local timer = {}
+    for k, v in pairs(list[i]) do timer[k] = v end
+    timer[key] = (key ~= "show" or (value and #value > 0)) and value or nil
+    list[i]    = timer
+    Goals.write_timers(doc, list)
+end
+
+function Goals.add_timer(doc, list)
+    local at = Goals.limits().timer.default
+    for _, timer in ipairs(list) do at = math.max(at, timer.at + Goals.limits().timer.default) end
+    list[#list + 1] = { at = math.min(at, Goals.limits().timer.max) }
+    Goals.write_timers(doc, list, "ADD TIMED EVENT")
+end
+
+function Goals.remove_timer(doc, list, i)
+    table.remove(list, i)
+    Goals.write_timers(doc, list, "REMOVE TIMED EVENT")
+end
+
+function Goals.clock(seconds)
+    return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
 end
 
 -- Row i with one field of one of its events changed; an event that says and
@@ -221,14 +267,17 @@ function Goals.air(doc)
 end
 
 -- What the objectives point at, for the editor to mark: by_id[object id] =
--- { type, index }, held[object id] = index (what an event of that objective
--- holds back) and places = { { x, y, radius, index } }, index being the
--- objective's place in the list.
+-- { type, index }, held[object id] = the event that holds it back, in words,
+-- and places = { { x, y, radius, index } }, index being the objective's place
+-- in the list.
 function Goals.marks(doc)
     local marks = { by_id = {}, held = {}, places = {} }
+    for _, timer in ipairs(doc.map.timers or {}) do
+        for _, o in ipairs(held_of(doc, timer)) do marks.held[o.id] = "THE EVENT AT " .. Goals.clock(timer.at) end
+    end
     for i, goal in ipairs(doc.map.objectives) do
         for _, key in ipairs(Goals.EVENTS) do
-            for _, o in ipairs(Goals.held(doc, goal, key)) do marks.held[o.id] = i end
+            for _, o in ipairs(Goals.held(doc, goal, key)) do marks.held[o.id] = "AN EVENT OF OBJECTIVE " .. i end
         end
         if goal.type == "reach" then
             marks.places[#marks.places + 1] = { x = goal.x or 0, y = goal.y or 0,

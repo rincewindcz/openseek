@@ -2,6 +2,7 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local Class       = require "engine.core.class"
+local Mathx       = require "engine.core.mathx"
 local MapFile     = require "engine.game.map_file"
 local MapCompiler = require "engine.game.map_compiler"
 local Roads       = require "engine.game.roads"
@@ -27,7 +28,9 @@ local function copy(t)
 end
 
 local function type_key(map_type)
-    if map_type.pickup then return "pickup|" .. map_type.pickup .. "|" .. tostring(map_type.weapon) end
+    if map_type.pickup then
+        return "pickup|" .. map_type.pickup .. "|" .. tostring(map_type.weapon) .. "|" .. tostring(map_type.ammo_only)
+    end
     if map_type.start then return "start|" .. map_type.start end
     local keys = {}
     for k in pairs(map_type.set or {}) do keys[#keys + 1] = k end
@@ -185,6 +188,31 @@ function Document:delta(ax, ay, bx, by)
     local dy = (ay - by) % s
     if dy > s / 2 then dy = dy - s end
     return dx, dy
+end
+
+-- A route, ground line or road keeps its points as drawn: the first on the
+-- map, each next one where it lies from the one before, past the seam when
+-- the shape crosses it. So a shape is drawn and compiled the short way
+-- across the seam, and a leg longer than half the map stays as it was laid.
+
+-- (x, y) moved by whole periods to lie nearest to the point ref.
+function Document.near(x, y, ref, size)
+    local dx = (x - ref[1]) % size
+    local dy = (y - ref[2]) % size
+    if dx > size / 2 then dx = dx - size end
+    if dy > size / 2 then dy = dy - size end
+    return ref[1] + dx, ref[2] + dy
+end
+
+-- points moved as one by whole periods, so the first lies on the map.
+function Document.anchored(points, size)
+    local first = points[1]
+    if not first then return points end
+    local sx, sy = first[1] - first[1] % size, first[2] - first[2] % size
+    if sx == 0 and sy == 0 then return points end
+    local out = {}
+    for i, p in ipairs(points) do out[i] = { p[1] - sx, p[2] - sy } end
+    return out
 end
 
 -- The object the world takes for the home pad: the heliport mark when the map
@@ -408,7 +436,7 @@ end
 -- routes and lines
 
 function Document:add_route(points)
-    local route  = { id = self:new_id(), points = points }
+    local route  = { id = self:new_id(), points = Document.anchored(points, self.map.size) }
     local routes = self.map.routes
     self:_run("ADD ROUTE", function()
         routes[#routes + 1] = route
@@ -446,6 +474,7 @@ function Document:remove_route(route)
 end
 
 function Document:add_line(line)
+    line.points = Document.anchored(line.points, self.map.size)
     local lines = self.map.lines
     self:_run("ADD LINE", function() lines[#lines + 1] = line end, function()
         for i, l in ipairs(lines) do
@@ -469,7 +498,8 @@ end
 
 -- Add a road { points, width, pitch, edge, across, down }; its id is given here.
 function Document:add_road(road)
-    road.id = road.id or self:new_id()
+    road.id     = road.id or self:new_id()
+    road.points = Document.anchored(road.points, self.map.size)
     local roads = self.map.roads
     self:_run("ADD ROAD", function() roads[#roads + 1] = road end, function()
         for i, r in ipairs(roads) do
@@ -499,8 +529,8 @@ end
 
 local function shifted(points, dx, dy, size)
     local out = {}
-    for i, p in ipairs(points) do out[i] = { (p[1] + dx) % size, (p[2] + dy) % size } end
-    return out
+    for i, p in ipairs(points) do out[i] = { p[1] + dx, p[2] + dy } end
+    return Document.anchored(out, size)
 end
 
 -- Move roads by a whole-pixel delta. live moves without recording (a drag in
@@ -534,9 +564,13 @@ end
 -- The road whose ground holds the map point (x, y), the one drawn last first.
 function Document:road_at(x, y)
     local legs = self:built_roads().legs
+    local size = self.map.size
     for i = #legs, 1, -1 do
         local leg = legs[i]
-        if x >= leg.left and x <= leg.right and y >= leg.top and y <= leg.bottom then return leg.road end
+        -- A leg past the seam is found from the map copy it lies in.
+        local lx = leg.left + (x - leg.left) % size
+        local ly = leg.top + (y - leg.top) % size
+        if lx <= leg.right and ly <= leg.bottom then return leg.road end
     end
     return nil
 end
@@ -558,6 +592,7 @@ end
 
 -- Replace the points of a route, a line or a road (and a line's colour).
 function Document:set_points(shape, points, color, label)
+    points = Document.anchored(points, self.map.size)
     local before, before_color = shape.points, shape.color
     self:_run(label or "EDIT POINTS", function()
         shape.points = points
@@ -588,6 +623,7 @@ function Document:resize(size)
     for _, shapes in ipairs({ self.map.routes, self.map.lines, self.map.roads }) do
         for _, shape in ipairs(shapes) do
             for _, p in ipairs(shape.points) do p[1], p[2] = p[1] % size, p[2] % size end
+            shape.points = Mathx.unwrap(shape.points, size)
         end
     end
     for _, goal in ipairs(self.map.objectives) do

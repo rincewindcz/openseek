@@ -339,7 +339,11 @@ function Entity:_patrol(dt)
 
     local tgt = pts[self.route_pt]
     if not tgt then self.route_pt = 1; return end
+    -- A player-made map's route may cross the seam: it is driven the short
+    -- way. A stage of the original drives its waypoints as they are.
+    local stage  = self.world.stage
     local dx, dy = tgt.x - self.x, tgt.y - self.y
+    if stage.wrap_routes then dx, dy = self.world:delta(tgt.x, tgt.y, self.x, self.y) end
     if dx * dx + dy * dy < 64 then           -- reached the waypoint (< 8 px, 0x201d01)
         self:_reach_waypoint(#pts)
         return
@@ -361,6 +365,9 @@ function Entity:_patrol(dt)
         local step = self.patrol_v * dt * Config.speed_scale
         self.x = self.x + StrictMath.cos(rad) * step
         self.y = self.y + StrictMath.sin(rad) * step
+        if stage.wrap_routes then
+            self.x, self.y = self.x % stage.world_size, self.y % stage.world_size
+        end
     end
 end
 

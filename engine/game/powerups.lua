@@ -28,7 +28,7 @@ function Powerups:init(world, camera, weapons)
     self.weapons   = weapons or {}
     self.player    = nil
     self.players   = {}   -- all players that can collect (1 normally, 2 in split)
-    self.list      = {}   -- {x, y, kind, weapon, frame, find, placed, age, ttl}
+    self.list      = {}   -- {x, y, kind, weapon, frame, find, placed (gives its weapon), ammo_only, age, ttl}
     self.tables    = {}   -- player -> its drop table
     -- F6 override: collect everything by flying over it, whatever the difficulty
     -- landing rules (Config.land_for_medals / land_for_supplies) say.
@@ -187,13 +187,13 @@ local function has(list, value)
 end
 
 -- Ammunition a map lays out, by who is in the phase: its PICKUPS frame, nil
--- when no vehicle there can use the weapon, and whether it is a weapon to
--- find (nobody who can use it carries it).
-function Powerups:_placed_ammo(weapon)
+-- when no vehicle there can use the weapon (ammo_only: nobody carries it),
+-- and whether it is a weapon to find (nobody who can use it carries it).
+function Powerups:_placed_ammo(weapon, ammo_only)
     local frame, carried = nil, false
     for _, p in ipairs(self.players) do
         local aboard = has(self:_carried(p), weapon)
-        if aboard or has(self:_missing_weapons(p), weapon) then
+        if aboard or (not ammo_only and has(self:_missing_weapons(p), weapon)) then
             frame   = frame or self:_ammo_frame(weapon, p.vehicle)
             carried = carried or aboard
         end
@@ -208,11 +208,12 @@ function Powerups:_lay_out()
     if #self.players == 0 or not (stage and stage.pickups) then return end
     for _, spot in ipairs(stage.pickups) do
         local frame, find = self.data.frames[spot.kind], false
-        if spot.kind == "ammo" then frame, find = self:_placed_ammo(spot.weapon) end
+        if spot.kind == "ammo" then frame, find = self:_placed_ammo(spot.weapon, spot.ammo_only) end
         if frame then
             self.list[#self.list + 1] = {
                 x = spot.x, y = spot.y, kind = spot.kind, weapon = spot.weapon, frame = frame,
-                find = find or nil, placed = true, age = 0, ttl = math.huge,
+                find = find or nil, placed = not spot.ammo_only or nil, ammo_only = spot.ammo_only,
+                age = 0, ttl = math.huge,
             }
         end
     end
@@ -253,7 +254,9 @@ function Powerups:update(dt)
         local taken = false
         for _, p in ipairs(self.players) do
             local dx, dy = self.world:delta(p.x, p.y, pu.x, pu.y)
-            if not p.death and math.abs(dx) < reach and math.abs(dy) < reach then
+            -- Ammunition a map lays out as ammunition only waits for a vehicle carrying the weapon.
+            local wanted = not pu.ammo_only or has(self:_carried(p), pu.weapon)
+            if wanted and not p.death and math.abs(dx) < reach and math.abs(dy) < reach then
                 -- A pickup the difficulty says to land on needs the chopper landed on
                 -- it (a tank is always grounded, so it collects either way); the rest
                 -- are collected by flying over.

@@ -2,6 +2,7 @@
 -- Copyright (c) 2026 Michal Genserek
 
 local MapCompiler = require "engine.game.map_compiler"
+local Document    = require "engine.editor.document"
 local Catalog     = require "engine.editor.catalog"
 
 -- Editing operations of the map editor above the document's primitives:
@@ -159,8 +160,8 @@ end
 
 local function placed(doc, points, x, y)
     local size, out = doc:size(), {}
-    for i, p in ipairs(points) do out[i] = { math.floor(x + p[1] + 0.5) % size, math.floor(y + p[2] + 0.5) % size } end
-    return out
+    for i, p in ipairs(points) do out[i] = { math.floor(x + p[1] + 0.5), math.floor(y + p[2] + 0.5) } end
+    return Document.anchored(out, size)
 end
 
 -- A copy of objects and roads as relative records, to paste any number of

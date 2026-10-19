@@ -26,8 +26,10 @@ local Validate   = require "engine.editor.validate"
 -- here (briefing, equip, phase, stats, back here), by one player or by two on
 -- the split screen as the map allows, or opened in the editor; the first row
 -- starts a new one. Under the list the highlighted map's records
--- (engine/game/records.lua): the fastest win and the highest score, whose
--- recording BEST plays back. A map file dropped on the window is imported.
+-- (engine/game/records.lua) on the difficulty it would be played on now: per
+-- way of playing it the fastest win and the highest score, whose recording
+-- BEST plays back (left / right pick one or two players when both are held).
+-- A map file dropped on the window is imported.
 -- Reached from the ADVANCED submenu.
 --
 -- enter() takes { return_to = <scene name>, note = <a line to show> }.
@@ -90,6 +92,7 @@ function MapSelect:enter(opts)
     self.scroll    = 0
     self.note      = nil
     self.pending_delete = nil
+    self.best_mode = self.best_mode or Records.MODES[1]
     self.app.play_return = nil
     Sound.play_music("menu")
     self:_refresh()
@@ -203,13 +206,44 @@ function MapSelect:_play(row, players)
     end })
 end
 
--- Play back the recording of the map's fastest win: the lone player's, else the team's.
-function MapSelect:_watch(row)
-    local app = self.app
-    local path
+-- The difficulty level a map's records are shown and played back for: the
+-- map's own, else the player's.
+local function level_of(row)
+    return Records.level(row.map.difficulty)
+end
+
+-- The way of playing whose best run BEST plays: the one picked when the map
+-- holds a recording of it, else whichever it holds.
+function MapSelect:_best_mode(row)
+    local level = level_of(row)
+    if Records.replay(row.name, row.hash, self.best_mode, level) then return self.best_mode end
     for _, mode in ipairs(Records.MODES) do
-        path = path or Records.replay(row.name, row.hash, mode)
+        if Records.replay(row.name, row.hash, mode, level) then return mode end
     end
+    return nil
+end
+
+-- Pick the way of playing BEST plays (the other one when `mode` is nil),
+-- when the map holds a recording of it.
+function MapSelect:_pick_best(mode)
+    local row = self.rows[self.cursor]
+    if not row or row.kind ~= "map" then return end
+    local level = level_of(row)
+    for _, other in ipairs(Records.MODES) do
+        if other ~= self.best_mode and (mode == nil or other == mode)
+            and Records.replay(row.name, row.hash, other, level) then
+            self.best_mode = other
+            Audio.play_event("ui.move")
+            return
+        end
+    end
+end
+
+-- Play back the recording of the map's fastest win (_best_mode).
+function MapSelect:_watch(row)
+    local app  = self.app
+    local mode = self:_best_mode(row)
+    local path = mode and Records.replay(row.name, row.hash, mode, level_of(row))
     local replay = path and Replay.load(path)
     if not replay then
         Audio.play_event("ui.back")
@@ -285,6 +319,7 @@ function MapSelect:keypressed(key)
     elseif key == "return" or key == "space" or key == "kpenter" then self:_act("play")
     elseif key == "2"      then self:_act("coop")
     elseif key == "b"      then self:_act("best")
+    elseif key == "left" or key == "right" then self:_pick_best()
     elseif key == "e"      then self:_act("edit")
     elseif key == "c"      then self:_act("copy")
     elseif key == "f"      then self:_act("folder")
@@ -340,6 +375,13 @@ end
 function MapSelect:mousepressed(x, y)
     local action = self:_action_at(x, y)
     if action then self:_act(action); return end
+    local dx, dy = Pointer.to_design(x, y, DESIGN_W, DESIGN_H)
+    if dy >= RECORD_Y - 3 and dy <= RECORD_Y + ROW_H then
+        for _, span in ipairs(self.win_spans or {}) do
+            if span.mode and dx >= span.x and dx <= span.x + span.w then self:_pick_best(span.mode) end
+        end
+        return
+    end
     local i = self:_index_at(x, y)
     if not i then return end
     self.cursor = i
@@ -406,10 +448,9 @@ end
 
 local WEATHER = { snow = "SNOW", rain = "RAIN", blizzard = "BLIZZARD", storm = "THUNDERSTORM", sandstorm = "SANDSTORM" }
 
--- A map's records as its file stands, looked up once per row.
+-- A map's records as its file stands, on the level it is played on now.
 function MapSelect:_records(row)
-    if not row.records then row.records = Records.of(row.name, row.hash) end
-    return row.records
+    return Records.of(row.name, row.hash, level_of(row))
 end
 
 -- Whether an action word does anything for the highlighted row.
@@ -419,21 +460,18 @@ function MapSelect:_usable(id, row)
     if row.kind ~= "map" then return id == "edit" end
     if id == "play" then return row.map.players ~= Campaign.PLAYERS end
     if id == "coop" then return row.map.players ~= 1 end
-    if id == "best" then
-        for _, mode in ipairs(Records.MODES) do
-            if Records.replay(row.name, row.hash, mode) then return true end
-        end
-        return false
-    end
+    if id == "best" then return self:_best_mode(row) ~= nil end
     return true
 end
 
--- Two lines under the list: what the highlighted map is, and its records
--- (per way of playing it the fastest win and the highest score).
+-- Two lines under the list: what the highlighted map is (with the difficulty
+-- it is played on now), and its records on that difficulty (per way of
+-- playing it the fastest win and the highest score, the one BEST plays
+-- brighter).
 function MapSelect:_draw_detail(fade)
     local row = self.rows[self.cursor]
     local col = { 1, 1, 1, 0.55 * fade }
-    local text, best = "", nil
+    local text, wins = "", nil
     if self.note then
         text = self.note.text
     elseif self.pending_delete then
@@ -450,25 +488,36 @@ function MapSelect:_draw_detail(fade)
         if map.difficulty then
             local preset = Difficulty.preset_label(Difficulty.match_preset(map.difficulty))
             parts[#parts + 1] = preset and ("ALWAYS " .. preset) or "OWN DIFFICULTY"
+        else
+            parts[#parts + 1] = "ON " .. (Difficulty.preset_label(level_of(row)) or "CUSTOM")
         end
         if map.based_on then parts[#parts + 1] = "COPY OF " .. map.based_on:upper() end
         text = table.concat(parts, "   ")
-        local records, wins = self:_records(row), {}
+        local records = self:_records(row)
+        local watched = self:_best_mode(row)
+        wins = {}
         for _, mode in ipairs(Records.MODES) do
             local won = records[mode]
             if won then
-                wins[#wins + 1] = string.format("%s %s %d", mode == "coop" and "2P" or "1P",
-                    Records.clock(won.time), won.score)
+                wins[#wins + 1] = { text = string.format("%s %s %d", mode == "coop" and "2P" or "1P",
+                    Records.clock(won.time), won.score), lit = mode == watched, mode = mode }
             end
         end
-        best = #wins > 0 and table.concat(wins, "   ") or "NOT WON YET"
+        if #wins == 0 then wins[1] = { text = "NOT WON YET", lit = true } end
     elseif row then
         text = "START A MAP OF YOUR OWN IN THE EDITOR"
     end
     self.font:print(fit(self.font, text, ART_RX - NAME_X), NAME_X, DETAIL_Y, { color = col })
-    if best then
-        self.font:print(fit(self.font, best, ART_RX - NAME_X), NAME_X, RECORD_Y,
-            { color = { GOLD[1], GOLD[2], GOLD[3], 0.75 * fade } })
+    local x = NAME_X
+    self.win_spans = {}
+    for _, win in ipairs(wins or {}) do
+        local shown = fit(self.font, win.text, ART_RX - x)
+        local w     = self.font:width(shown)
+        self.font:print(shown, x, RECORD_Y,
+            { color = { GOLD[1], GOLD[2], GOLD[3], (win.lit and 0.75 or 0.35) * fade } })
+        self.win_spans[#self.win_spans + 1] = { x = x, w = w, mode = win.mode }
+        x = x + w + self.font:width("  ")
+        if x >= ART_RX then break end
     end
 end
 
