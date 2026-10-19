@@ -161,7 +161,13 @@
     { "stem": "rocks20",  "frame": 64,  "label": "ROCKS 2" },
     { "stem": "pipes",    "label": "PIPELINE (UPRIGHT)" },
     { "stem": "pipes2",   "label": "PIPELINE (LEVEL)" },
-    { "stem": "chempipe", "label": "PIPELINE (LEVEL)" }
+    { "stem": "chempipe", "label": "PIPELINE (LEVEL)" },
+    { "stem": "lnchpad",  "label": "LAUNCH PAD" },
+    { "stem": "struck",   "label": "MISSILE TRUCK" },
+    { "stem": "stree",    "label": "SNOW PINE" },
+    { "stem": "srock3",   "label": "SNOW ROCK" },
+    { "stem": "jbox",     "label": "JUNGLE CRATE" },
+    { "stem": "hanger",   "label": "AIRCRAFT HANGAR" }
   ],
   "names": {
     "badheli":  "HELICOPTER POST",
@@ -197,6 +203,12 @@
     "pipes":    "PIPELINE",
     "pipes2":   "PIPELINE",
     "chempipe": "PIPELINE",
+    "lnchpad":  "LAUNCH PAD",
+    "struck":   "MISSILE TRUCK",
+    "stree":    "SNOW PINE",
+    "srock3":   "SNOW ROCK",
+    "jbox":     "JUNGLE CRATE",
+    "hanger":   "AIRCRAFT HANGAR",
     "metalsz":  "WRECKAGE",
     "metalrt":  "WRECKAGE",
     "metal8":   "WRECKAGE",

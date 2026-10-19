@@ -540,7 +540,9 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
 - Catalog entries are built from the pack per art set: one per sprite and kind,
   the classes the original sets on one spot kept together (tank hull and
   turret, gun and base, radar and dish, hangar tank with its hut). Any art
-  set's sprites can be placed on any map.
+  set's sprites can be placed on any map. A hut draws above the tank inside
+  it, as in play, on the map and under the pointer; the entry's picture shows
+  the tank part way out (`Catalog.ride_out`).
 - PICKUPS (the same on every art set): fuel, armour, a medal, and the
   ammunition of each weapon, placed, scattered, moved and copied like any
   object. They lie there until taken, by the landing rules of the difficulty.
@@ -555,7 +557,10 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   behind (CRATER, SHELL HOLE, BODY, WRECKAGE 1-7, filed with the ground as
   decals: the type sets `kind` 15) and objects no stage places (FUEL DUMP,
   FIELD HOSPITAL, ROCKS, PIPELINE), with the class data the stage holds for
-  them. So a map can start with damage already done.
+  them. So a map can start with damage already done. Sheets no class of any
+  stage points at are offered on classes the converter borrows (LAUNCH PAD,
+  MISSILE TRUCK, SNOW PINE, SNOW ROCK, JUNGLE CRATE, AIRCRAFT HANGAR): copies
+  of a class of the same kind and mission, marked `borrowed`.
 - PREFABS (the last tab of OBJECTS, the same on every map): SAVE THE SELECTION
   AS A PREFAB (also EDIT, and a button on the SELECT options bar) keeps the
   selected objects and roads under a name, with the groups, the owner links
@@ -1234,7 +1239,7 @@ same bytes on every platform.
 
 | Tool | Output |
 |------|--------|
-| `export_love2d.py all` | `assets/stageMP.json`, `assets/stageMP/` for the missions present, in the mission's in-game palette `PAL1.BIN` (`gamedata.stage_palette_path`, as every gameplay export; `PAL.BIN` holds magenta markers some sprites draw). Classes no entity uses are rendered too when their BIN is in their own `STAGE0N/` (the crater, wreckage, the fuel dump: the editor's spare entries). `CLEAR_INDICES`: per-sprite palette indices exported transparent, the sand dune's black crest |
+| `export_love2d.py all` | `assets/stageMP.json`, `assets/stageMP/` for the missions present, in the mission's in-game palette `PAL1.BIN` (`gamedata.stage_palette_path`, as every gameplay export; `PAL.BIN` holds magenta markers some sprites draw). Classes no entity uses are rendered too when their BIN is in their own `STAGE0N/` (the crater, wreckage, the fuel dump: the editor's spare entries). `BORROWED`: sheets no class points at get a copy of a donor class of their mission on every stage of it, with `borrowed` naming the donor and no `raw`; no entity places them. `CLEAR_INDICES`: per-sprite palette indices exported transparent, the sand dune's black crest |
 | `export_fullscreen.py` | `assets/fullscreen/`: every fullscreen BIN (`NAME.png`, `STAGE0N_NAME.png`) in its own palette |
 | `export_projectiles.py` | `assets/stage00/` projectiles; the crater `hole_f16.png` per mission into `assets/stage{M}0/` (STAGE00's HOLE4038 in the palette of missions 2 to 4, which have none of their own) |
 | `export_player.py` | `assets/player/`, plus `VARIANT_SPRITES` (the DESERT 2 turret in the day palette) |

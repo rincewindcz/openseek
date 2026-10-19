@@ -24,7 +24,8 @@ the entity position (ox, oy), derived from the engine's center anchors in
 the frame header (hdr+6, hdr+8) and the decoded pixel bounding box. Classes
 no entity of the stage uses (the crater, the fuel dump, the pipes) are
 rendered too when their BIN is in the class's own STAGE0{N}/ or the
-mission's, so the map editor can offer them.
+mission's, so the map editor can offer them. Sheets no class of any stage
+points at get a class borrowed from another (BORROWED).
 
 Each segment additionally gets a "color" entry [r, g, b]: the value field
 is the palette index the engine passes to its line drawer (0x1df450),
@@ -56,6 +57,38 @@ import gamedata
 CLEAR_INDICES = {
     "sanddune.bin": {0},
 }
+
+
+# Sheets no class of any stage points at, given a class on every stage of
+# their mission: a copy of a donor class (a stage of the mission, a class
+# index) drawn with the sheet's frame 0. The copy carries "borrowed" (the
+# donor) and no "raw"; no entity places it, the map editor offers it.
+BORROWED = {
+    0: [("lnchpad.bin", "00", 12)],   # a gun's base plate
+    1: [("struck.bin", "11", 17),     # the truck
+        ("stree.bin", "11", 50),      # a tree
+        ("srock3.bin", "11", 46)],    # a rock
+    2: [("jbox.bin", "20", 75)],      # a supply pack
+    4: [("hanger.bin", "40", 76)],    # a hut
+}
+
+
+def borrow_classes(game_dir: Path, mission: int, level: dict) -> None:
+    donors = {}
+    for sheet, donor_tag, donor_index in BORROWED.get(mission, []):
+        if not (game_dir / f"STAGE{mission:02d}" / sheet.upper()).exists():
+            continue
+        if donor_tag not in donors:
+            donor_bin = game_dir / "data" / f"STAGE{donor_tag}.BIN"
+            donors[donor_tag] = decode_level.parse_stage(donor_bin.read_bytes()) if donor_bin.exists() else None
+        donor = donors[donor_tag]
+        if donor is None or donor_index >= len(donor["classes"]):
+            continue
+        cls = {k: v for k, v in donor["classes"][donor_index].items() if k != "raw"}
+        cls.update(index=len(level["classes"]), asset=len(level["assets"]), frame_base=0,
+                   borrowed={"stage": f"stage{donor_tag}", "class": donor_index})
+        level["assets"].append({"index": cls["asset"], "file": sheet, "source_dir": mission, "dev_path": ""})
+        level["classes"].append(cls)
 
 
 # Kinds that draw a unit sprite (soldiers) carry a dead pose a fixed frame offset
@@ -123,6 +156,7 @@ def export_stage(game_dir: Path, mission: int, phase: int) -> None:
         i = seg["value"] * 3
         seg["color"] = [(c << 2) | (c >> 4) for c in palette[i:i + 3]]
 
+    borrow_classes(game_dir, mission, level)
     used_classes = sorted({e["class"] for e in level["entities"]})
     spare_classes = [ci for ci in range(len(level["classes"])) if ci not in set(used_classes)]
     dead_offsets = _dead_frame_offsets()
