@@ -119,6 +119,18 @@ local function by_depth(a, b)
     return a.id < b.id
 end
 
+-- Draw order of a pass: on one spot a hangar hut draws above the tank
+-- inside it, as in play.
+local function sort_pass(doc, list)
+    table.sort(list, function(a, b)
+        if a.y == b.y and a.x == b.x then
+            local hut_a, hut_b = Catalog.is_hut(doc:info(a)), Catalog.is_hut(doc:info(b))
+            if hut_a ~= hut_b then return hut_b end
+        end
+        return by_depth(a, b)
+    end)
+end
+
 -- The objects in view of one map copy, split into the ground pass and the
 -- object pass, each in draw order. hidden(o, info) leaves an object out.
 function View:collect(doc, tile, hidden)
@@ -132,7 +144,7 @@ function View:collect(doc, tile, hidden)
         end
     end)
     table.sort(decals, by_depth)
-    table.sort(objects, by_depth)
+    sort_pass(doc, objects)
     return decals, objects
 end
 
@@ -284,7 +296,7 @@ function View.draw_region(doc, x, y, size, px, py, pw, ph)
                 list[#list + 1] = o
             end)
             table.sort(decals, by_depth)
-            table.sort(objects, by_depth)
+            sort_pass(doc, objects)
             g.push()
             g.translate(ox, oy)
             for _, o in ipairs(decals) do draw_object(doc, o) end

@@ -278,10 +278,17 @@ function Place.draw(editor)
         for _, item in ipairs(entry.prefab.items) do ghost(item.map_type, x + item.dx, y + item.dy) end
         return
     end
+    -- A hangar hut goes over the tank inside it.
+    local huts = {}
     for _, part in ipairs(entry.parts) do
-        local info = ghost(Catalog.part_type(part), x, y)
-        Tools.draw_ranges(info.kind_name, x, y)
+        local map_type = Catalog.part_type(part)
+        if Catalog.is_hut(Catalog.type_info(map_type)) then
+            huts[#huts + 1] = map_type
+        else
+            Tools.draw_ranges(ghost(map_type, x, y).kind_name, x, y)
+        end
     end
+    for _, map_type in ipairs(huts) do ghost(map_type, x, y) end
 end
 
 -- scatter

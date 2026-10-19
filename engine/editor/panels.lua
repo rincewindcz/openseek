@@ -25,26 +25,55 @@ local COMMANDER   = 2    -- structure class behaviour of the commander building
 local MEDAL       = 1    -- structure class behaviour of a forced medal drop
 local MAX_PEOPLE  = 9
 local MAX_CREW    = 6
+local RIDE_SHOWN  = 0.7  -- share of its ride a hangar tank is shown out of its hut
 
 -- objects
 
--- The parts of an entry drawn as they stand on the map, fitted into a box.
+-- The parts of an entry drawn as they stand on the map, fitted into a box. A
+-- hangar tank, which its hut hides in place, is shown riding out of it.
 local function draw_entry(kit, entry, x, y, w, h)
-    local x0, y0, x1, y1 = 0, 0, 0, 0
-    local infos = {}
+    local poses, out = {}, nil
     for i, part in ipairs(entry.parts) do
         local info = Catalog.type_info(Catalog.part_type(part))
-        infos[i] = info
-        x0, y0 = math.min(x0, info.ox), math.min(y0, info.oy)
-        x1, y1 = math.max(x1, info.ox + info.w), math.max(y1, info.oy + info.h)
+        poses[i] = { info = info, dx = 0, dy = 0, angle = 0 }
+        out = out or Catalog.ride_out(info.cls)
+    end
+    if out then
+        local moved, still = {}, {}
+        for _, pose in ipairs(poses) do
+            local kind = pose.info.kind_name
+            if kind == "tank" or kind == "flak_turret" then
+                pose.dx, pose.dy = out.dx * RIDE_SHOWN, out.dy * RIDE_SHOWN
+                pose.angle = (kind == "tank" and out.facing or out.gun) * math.pi / 180
+                moved[#moved + 1] = pose
+            else
+                still[#still + 1] = pose
+            end
+        end
+        for _, pose in ipairs(still) do moved[#moved + 1] = pose end
+        poses = moved
+    end
+    local x0, y0, x1, y1 = 0, 0, 0, 0
+    for _, pose in ipairs(poses) do
+        local info = pose.info
+        local c, s = math.cos(pose.angle), math.sin(pose.angle)
+        for _, corner in ipairs({ { info.ox, info.oy }, { info.ox + info.w, info.oy },
+                                  { info.ox, info.oy + info.h }, { info.ox + info.w, info.oy + info.h } }) do
+            local px = pose.dx + corner[1] * c - corner[2] * s
+            local py = pose.dy + corner[1] * s + corner[2] * c
+            x0, y0 = math.min(x0, px), math.min(y0, py)
+            x1, y1 = math.max(x1, px), math.max(y1, py)
+        end
     end
     local k  = math.min(w / (x1 - x0), h / (y1 - y0), 2)
     local cx = x + (w - (x1 - x0) * k) / 2 - x0 * k
     local cy = y + (h - (y1 - y0) * k) / 2 - y0 * k
     love.graphics.setColor(1, 1, 1, 1)
-    for _, info in ipairs(infos) do
+    for _, pose in ipairs(poses) do
+        local info = pose.info
         if info.img then
-            love.graphics.draw(info.img, cx + info.ox * k, cy + info.oy * k, 0, k, k)
+            love.graphics.draw(info.img, math.floor(cx + pose.dx * k + 0.5), math.floor(cy + pose.dy * k + 0.5),
+                pose.angle, k, k, -info.ox, -info.oy)
         else
             kit:icon("helicopter", x + (w - 20) / 2, y + (h - 20) / 2, 20, kit.theme.accent)
         end

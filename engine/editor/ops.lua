@@ -425,7 +425,7 @@ function Ops.auto_group(doc)
             local spot = o.x * 8192 + o.y
             if at[spot] then join(at[spot], o) else at[spot] = o end
         end
-        if info.kind_name == "structure" and (info.stem == "shut" or info.stem == "jhanger") then
+        if Catalog.is_hut(info) then
             huts[#huts + 1] = o
         end
     end

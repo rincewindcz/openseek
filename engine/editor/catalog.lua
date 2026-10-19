@@ -36,6 +36,9 @@ local KIND_OF   = { ground_decal = 15 }   -- class kind of a kind name a spare c
 -- Kinds that are not listed on their own when they mostly ride on another class.
 local PART_KINDS = { flak_turret = true, radar = true, ground_decal = true }
 
+-- Hangar huts by sprite (World HIDE_TANK_HANGARS).
+local HUTS = { shut = true, jhanger = true }
+
 -- Kinds of the objective marks, which never count as part of a stack.
 local MARK_KINDS = {
     [MapCompiler.KIND_POW_MARKER] = true, [MapCompiler.KIND_PERSON] = true, [MapCompiler.KIND_PAD] = true,
@@ -304,10 +307,31 @@ local function category_of(kind_name)
     return nil
 end
 
-local function is_ride(cls)
+local function ride_mode(cls)
     local modes = enemy_rules().movement[cls.kind_name]
     local mode  = modes and modes[tostring(cls.behaviour or 0)]
-    return mode and mode.ride_heading ~= nil
+    return mode and mode.ride_heading and mode or nil
+end
+
+local function is_ride(cls)
+    return ride_mode(cls) ~= nil
+end
+
+-- How a hangar tank stands once it has ridden all the way out of its hut:
+-- its offset from the hut, the hull's heading and the parked gun's (see
+-- World:_setup_hangar). nil for any other class.
+function Catalog.ride_out(cls)
+    local mode = ride_mode(cls)
+    if not mode then return nil end
+    local ride  = enemy_rules().movement.ride
+    local reach = mode.ride_step * ride.ticks
+    local rad   = (mode.ride_heading - 90) * math.pi / 180
+    return { dx = reach * math.cos(rad), dy = reach * math.sin(rad), facing = mode.ride_facing, gun = ride.park }
+end
+
+-- A hangar hut, which hides the tank parked inside it and is drawn above it.
+function Catalog.is_hut(info)
+    return info.kind_name == "structure" and HUTS[info.stem] == true
 end
 
 -- How plain a class is: the template of an entry is the variant without
