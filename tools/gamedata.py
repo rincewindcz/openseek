@@ -70,6 +70,15 @@ def find_game_dir(hint=None):
     sys.exit("Could not find the game directory. Pass --game-dir.")
 
 
+def stage_palette_path(game_dir, mission):
+    """The palette a mission is played in: STAGE0{m}/PAL1.BIN, the only one
+    the game loads for a stage (load_palette, 0x1f6700). PAL.BIN, the art's
+    own, holds marker colours (magenta) on slots some sprites draw. Falls
+    back to PAL.BIN for a directory without PAL1.BIN."""
+    path = game_dir / f"STAGE{mission:02d}" / "PAL1.BIN"
+    return path if path.exists() else game_dir / f"STAGE{mission:02d}" / "PAL.BIN"
+
+
 def missions(game_dir):
     """Missions whose first stage is present: 0-1 in the shareware, 0-4 registered."""
     return [m for m in range(5) if (game_dir / "data" / f"STAGE{m}0.BIN").exists()]

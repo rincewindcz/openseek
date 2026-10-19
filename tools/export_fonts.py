@@ -86,13 +86,12 @@ FONTS = {
     "keysfont": {"src": "data/KEYSFONT.BIN",  "mode": "mask"},
     "savechar": {"src": "data/SAVECHAR.BIN",  "mode": "mask"},
 }
-# Each mission ships its own OVERKILL banner, drawn in that mission's stage
-# palette: PAL.BIN, else PAL1.BIN (the same choice export_love2d.py makes for
-# the stage sprites).
+# Each mission ships its own OVERKILL banner, drawn in that mission's in-game
+# palette: PAL1.BIN, else PAL.BIN (gamedata.stage_palette_path).
 for _m in range(5):
     FONTS[f"overkill{_m}"] = {
         "src": f"STAGE0{_m}/OVERKILL.BIN", "mode": "truecolor", "word": True,
-        "pal": [f"STAGE0{_m}/PAL.BIN", f"STAGE0{_m}/PAL1.BIN"],
+        "pal": [f"STAGE0{_m}/PAL1.BIN", f"STAGE0{_m}/PAL.BIN"],
     }
 
 # darkest ramp index still renders at this intensity, so shaded edges stay visible

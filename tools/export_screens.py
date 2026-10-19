@@ -74,8 +74,8 @@ JOBS = [
     ("data/POWCOUNT", "powcount", "pow",     "data/GOVPAL.BIN"),
     ("data/KILLICON", "killicon", "hud",     "data/PHASEPAL.BIN"),
     ("data/OKBADGE",  "okbadge",  "hud",     "data/PHASEPAL.BIN"),
-    ("STAGE00/BURN",  "burn",     "effects", "STAGE00/PAL.BIN"),
-    ("STAGE00/BURN2", "burn2",    "effects", "STAGE00/PAL.BIN"),
+    ("STAGE00/BURN",  "burn",     "effects", "STAGE00/PAL1.BIN"),
+    ("STAGE00/BURN2", "burn2",    "effects", "STAGE00/PAL1.BIN"),
 ]
 
 

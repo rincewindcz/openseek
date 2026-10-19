@@ -29,7 +29,7 @@ local Assets = {}
 
 -- Bump together with PACK_SCHEMA in tools/build_pack.py whenever the exporters
 -- change what the engine reads; an older pack is then rebuilt.
-Assets.SCHEMA = 7
+Assets.SCHEMA = 8
 
 local PACK     = "assets/"
 local CONTENT  = "content/"

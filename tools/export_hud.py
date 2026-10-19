@@ -19,7 +19,7 @@ import decode_planar as dp
 import gamedata
 
 # (source BIN stem relative to data/, output prefix, palette key)
-# palette key: "gov" = GOVPAL.BIN (menus/HUD), "stage" = STAGE00/PAL.BIN
+# palette key: "gov" = GOVPAL.BIN (menus/HUD), "stage" = STAGE00/PAL1.BIN
 HUD_SPRITES = [
     ("ARMOUR",   "armour",   "gov"),
     ("FUEL",     "fuel",     "gov"),
@@ -69,7 +69,7 @@ def main(argv=None):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     gov_pal   = (game_dir / "data" / "GOVPAL.BIN").read_bytes()
-    stage_pal = (game_dir / "STAGE00" / "PAL.BIN").read_bytes()
+    stage_pal = gamedata.stage_palette_path(game_dir, 0).read_bytes()
     palettes  = { "gov": gov_pal, "stage": stage_pal }
 
     print(f"Game dir: {game_dir}")

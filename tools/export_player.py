@@ -62,7 +62,7 @@ PLAYER_SPRITES = [
 # (data/vehicle_variants.json), usable on every mission. Cropped like the stage
 # sprites (export_love2d), so the variant's anchors match the enemy tank's.
 VARIANT_SPRITES = [
-    ("STAGE03/TANKT2.BIN", "STAGE00/PAL.BIN", "vtank_desert2_top_f0.png"),
+    ("STAGE03/TANKT2.BIN", "STAGE00/PAL1.BIN", "vtank_desert2_top_f0.png"),
 ]
 
 
@@ -140,7 +140,7 @@ def main(argv=None):
     out_dir  = gamedata.ASSETS / "player"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    pal_path = game_dir / "STAGE00" / "PAL.BIN"
+    pal_path = gamedata.stage_palette_path(game_dir, 0)
     if not pal_path.exists():
         pal_path = game_dir / "data" / "GOVPAL.BIN"
     palette = pal_path.read_bytes()

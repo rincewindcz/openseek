@@ -14,11 +14,17 @@ frame_base, drawn as-is with no rotation. Orientation variants of one asset
 (road pieces, rocks) are separate classes pointing at different frame_base
 values, so frame_base alone selects the right pose for every class.
 
+Sprites and segment colours use the mission's in-game palette PAL1.BIN
+(gamedata.stage_palette_path).
+
 Each exported frame is decoded with the exact blitter decoder into
 assets/stage{M}{P}/<name>_f<N>.png, and the stage JSON gets a
 per-class "render" entry: image name plus the top-left draw offset from
 the entity position (ox, oy), derived from the engine's center anchors in
-the frame header (hdr+6, hdr+8) and the decoded pixel bounding box.
+the frame header (hdr+6, hdr+8) and the decoded pixel bounding box. Classes
+no entity of the stage uses (the crater, the fuel dump, the pipes) are
+rendered too when their BIN is in the class's own STAGE0{N}/ or the
+mission's, so the map editor can offer them.
 
 Each segment additionally gets a "color" entry [r, g, b]: the value field
 is the palette index the engine passes to its line drawer (0x1df450),
@@ -62,13 +68,16 @@ def _dead_frame_offsets():
             if isinstance(v, dict) and "dead_frame_offset" in v}
 
 
-def find_bin(game_dir: Path, name: str, source_dir: int, mission: int) -> Path | None:
+def find_bin(game_dir: Path, name: str, source_dir: int, mission: int, strict=False) -> Path | None:
+    """The BIN of an asset. strict looks only in the class's own STAGE0{N}/
+    and the mission's: a file of another mission is drawn for its palette."""
     candidates = []
     if source_dir >= 0:
         candidates.append(game_dir / f"STAGE{source_dir:02d}" / name.upper())
     candidates.append(game_dir / f"STAGE{mission:02d}" / name.upper())
-    candidates.append(game_dir / "data" / name.upper())
-    candidates += [game_dir / f"STAGE{i:02d}" / name.upper() for i in range(5)]
+    if not strict:
+        candidates.append(game_dir / "data" / name.upper())
+        candidates += [game_dir / f"STAGE{i:02d}" / name.upper() for i in range(5)]
     for c in candidates:
         if c.exists():
             return c
@@ -106,38 +115,45 @@ def export_stage(game_dir: Path, mission: int, phase: int) -> None:
 
     level = decode_level.parse_stage(stage_bin.read_bytes())
 
-    pal_path = game_dir / f"STAGE{mission:02d}" / "PAL.BIN"
-    if not pal_path.exists():
-        pal_path = game_dir / f"STAGE{mission:02d}" / "PAL1.BIN"
-    palette = pal_path.read_bytes()
+    palette = gamedata.stage_palette_path(game_dir, mission).read_bytes()
 
     # segment value = palette color index of the line (passed to the line
-    # drawer at 0x1df450); resolve via the mission's in-game palette PAL1.BIN
-    pal1_path = game_dir / f"STAGE{mission:02d}" / "PAL1.BIN"
-    pal1 = pal1_path.read_bytes() if pal1_path.exists() else palette
+    # drawer at 0x1df450)
     for seg in level["segments"]:
         i = seg["value"] * 3
-        seg["color"] = [(c << 2) | (c >> 4) for c in pal1[i:i + 3]]
+        seg["color"] = [(c << 2) | (c >> 4) for c in palette[i:i + 3]]
 
     used_classes = sorted({e["class"] for e in level["entities"]})
+    spare_classes = [ci for ci in range(len(level["classes"])) if ci not in set(used_classes)]
     dead_offsets = _dead_frame_offsets()
     ok, failed = 0, []
     rendered = {}  # (asset, frame) -> render info
-    for ci in used_classes:
+    dead_done = set()  # (asset, frame) of the dead poses written
+    for ci in used_classes + spare_classes:
+        spare = ci in spare_classes
         cls = level["classes"][ci]
+        if not 0 <= cls["asset"] < len(level["assets"]):
+            continue
         asset = level["assets"][cls["asset"]]
         frame = max(0, cls["frame_base"])
         key = (cls["asset"], frame)
         if key not in rendered:
-            src = find_bin(game_dir, asset["file"], asset["source_dir"], mission)
+            src = find_bin(game_dir, asset["file"], asset["source_dir"], mission, strict=spare)
             if src is None:
-                failed.append((asset["file"], "file not found"))
+                if not spare:
+                    failed.append((asset["file"], "file not found"))
                 rendered[key] = None
             else:
                 clear = CLEAR_INDICES.get(asset["file"].lower(), ())
-                img, ox, oy = render_class_frame(src, frame, palette, clear)
+                try:
+                    img, ox, oy = render_class_frame(src, frame, palette, clear)
+                except Exception as err:   # a spare class may name a sheet the decoder cannot read
+                    if not spare:
+                        raise
+                    img, ox, oy = None, str(err), None
                 if img is None:
-                    failed.append((f"{asset['file']} f{frame}", ox))
+                    if not spare:
+                        failed.append((f"{asset['file']} f{frame}", ox))
                     rendered[key] = None
                 else:
                     stem = asset["file"].rsplit(".", 1)[0]
@@ -153,19 +169,24 @@ def export_stage(game_dir: Path, mission: int, phase: int) -> None:
             if off:
                 dframe = frame + off
                 dkey = (cls["asset"], dframe)
-                if dkey not in rendered:
-                    src = find_bin(game_dir, asset["file"], asset["source_dir"], mission)
+                if dkey not in dead_done:
+                    dead_done.add(dkey)
+                    src = find_bin(game_dir, asset["file"], asset["source_dir"], mission, strict=spare)
                     # Only export a real dead frame; skip assets whose arc is too
                     # short (e.g. mine.bin filed as a unit kind has no dead pose).
                     n = len(db.read_frames(src.read_bytes())) if src else 0
-                    dimg = render_class_frame(src, dframe, palette)[0] if dframe < n else None
+                    try:
+                        dimg = render_class_frame(src, dframe, palette)[0] if dframe < n else None
+                    except Exception:
+                        if not spare:
+                            raise
+                        dimg = None
                     if dimg is not None:
                         stem = asset["file"].rsplit(".", 1)[0]
                         dimg.save(sprite_dir / f"{stem}_f{dframe}.png")
-                    rendered[dkey] = bool(dimg)
 
     gamedata.write_text(out_json, json.dumps(level, indent=2))
-    print(f"{tag}: {ok} class frames, {len(level['entities'])} entities "
+    print(f"{tag}: {ok} class frames ({len(spare_classes)} classes unplaced), {len(level['entities'])} entities "
           f"-> {out_json}")
     for name, why in failed:
         print(f"  MISSING {name}: {why} (renderer draws a placeholder)")

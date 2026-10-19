@@ -126,13 +126,10 @@ def export_sprite(src_path, prefix, out_dir, palette, keep=None):
 
 
 def stage_palette(game_dir, mission):
-    """The mission's world palette: PAL.BIN, else PAL1.BIN (the night mission
-    has no PAL.BIN). None when the game copy lacks the mission."""
-    for name in ("PAL.BIN", "PAL1.BIN"):
-        path = game_dir / f"STAGE{mission:02d}" / name
-        if path.exists():
-            return path.read_bytes()
-    return None
+    """The mission's in-game palette (gamedata.stage_palette_path). None when
+    the game copy lacks the mission."""
+    path = gamedata.stage_palette_path(game_dir, mission)
+    return path.read_bytes() if path.exists() else None
 
 
 def main(argv=None):

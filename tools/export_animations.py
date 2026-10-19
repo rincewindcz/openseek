@@ -94,7 +94,7 @@ WALK_FPS     = 35
 def export_mission_anim(game_dir, out_dir, bin_stem, prefix, mission, keep):
     """Render a STAGE0{m} animation. Returns the written file names."""
     src      = game_dir / f"STAGE0{mission}" / (bin_stem + ".BIN")
-    pal_path = game_dir / f"STAGE0{mission}" / "PAL.BIN"
+    pal_path = gamedata.stage_palette_path(game_dir, mission)
     if not src.exists() or not pal_path.exists():
         return []
     names = render_sequence(src.read_bytes(), pal_path.read_bytes(), keep, out_dir, f"{prefix}{mission}")
@@ -137,10 +137,7 @@ def export_walkers(game_dir, out_dir):
     results = {}
     for m in gamedata.missions(game_dir):
         stage    = decode_level.parse_stage((game_dir / "data" / f"STAGE{m}0.BIN").read_bytes())
-        pal_path = game_dir / f"STAGE0{m}" / "PAL.BIN"
-        if not pal_path.exists():
-            pal_path = game_dir / f"STAGE0{m}" / "PAL1.BIN"
-        palette = pal_path.read_bytes()
+        palette  = gamedata.stage_palette_path(game_dir, m).read_bytes()
         stem    = None
         for cls_index, suffix, count, fps, loop in (
                 (WALKER_CLASS, "", WALK_FRAMES, WALK_FPS, True),
@@ -178,7 +175,7 @@ def main(argv=None):
     out_dir  = gamedata.ASSETS / "effects"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    pal_path = game_dir / "STAGE00" / "PAL.BIN"
+    pal_path = gamedata.stage_palette_path(game_dir, 0)
     if not pal_path.exists():
         sys.exit(f"Palette not found at {pal_path}")
     palette = pal_path.read_bytes()
