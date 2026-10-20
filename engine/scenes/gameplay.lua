@@ -418,6 +418,7 @@ function Gameplay:update(dt)
     end
     app.world:update(dt)
     self:update_audio({ player }, { app.camera }, nil, dt)
+    self:enter_weather()   -- a map's event may change it
     app.weather:update(dt, app.camera)
     app.lightfx:update(dt)
     app.impactfx:update(dt, { player })

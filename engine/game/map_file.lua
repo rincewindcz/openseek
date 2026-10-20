@@ -46,9 +46,8 @@ local Log  = require "engine.core.log"
 --                is: values of the keys of engine/game/difficulty.lua
 --   objectives   the objectives in the order they are listed (and, with
 --                ordered, worked on), each { type, label, optional, on_open,
---                on_done } (an event as the objective comes up or is done:
---                { say = a line shown then, show = objects (ids) that are
---                not on the map until then }) and:
+--                on_done } (an event as the objective comes up or is done)
+--                and:
 --                  "targets"   every object that is a mission target
 --                  "rescue"    the people on the map
 --                  "sabotage"  the agents and their buildings
@@ -62,8 +61,17 @@ local Log  = require "engine.core.log"
 --                  "air"       count of enemy helicopters to shoot down
 --                The first three follow from what is on the map and need no
 --                entry; one gives them their wording and their place.
---   timers       events at a time of the phase: { at = seconds since the
---                phase began, say, show }, as an objective's events
+--   timers       events at a time of the phase: an event with at = seconds
+--                since the phase began
+--                An event is { say = a line shown then, show = objects (ids)
+--                not on the map until then, hide = objects taken away then,
+--                destroy = objects blown up, drive = units standing until then
+--                and setting off on their routes, open_fire = guns silent until
+--                then, hold_fire = guns silent from then on, shell = { x, y,
+--                radius }: enemy shelling on a place, add_time = seconds added
+--                to the time limit (fewer when negative), weather = the
+--                weather from then on ("none": clear skies), ends = "win" or
+--                "fail": the phase ends so }
 --   ordered      an objective is worked on once those before it are done
 --   time_limit   seconds the required objectives have to be done in
 --   hold_agents  agents stay inside until every building has one
@@ -227,6 +235,9 @@ local function objective_list(raw)
     end
     return out
 end
+
+-- The fields of an event that list objects (ids), in the order they act.
+MapFile.EVENT_OBJECTS = { "show", "hide", "destroy", "drive", "open_fire", "hold_fire" }
 
 -- The timed events of a map, each at a time of none or more seconds; nil for none.
 local function timer_list(raw)

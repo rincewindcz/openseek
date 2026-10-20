@@ -97,6 +97,32 @@ function HeliSystem:_supply()
     return #self.posts
 end
 
+-- A map's event holds post k (its place in world.heli_spawns) back: its
+-- helicopter, if one is up, leaves the air until the post is brought in
+-- again, and none is sent from it meanwhile. A helicopter going down goes
+-- down all the same.
+function HeliSystem:hold(k)
+    local post = self.posts[k]
+    if not post or post.held then return end
+    post.held = true
+    for i, heli in ipairs(self.helis) do
+        if heli.post == post and heli.state == "alive" then
+            post.parked = table.remove(self.helis, i)
+            break
+        end
+    end
+end
+
+function HeliSystem:release(k)
+    local post = self.posts[k]
+    if not post or not post.held then return end
+    post.held = nil
+    if post.parked then
+        self.helis[#self.helis + 1] = post.parked
+        post.parked = nil
+    end
+end
+
 function HeliSystem:clear()
     self.helis = {}
     self.posts = {}
@@ -182,7 +208,7 @@ function HeliSystem:update(dt)
     if #self.posts == 0 then return end
 
     for _, post in ipairs(self.posts) do
-        if post.wait then
+        if post.wait and not post.held then
             post.wait = post.wait - dt
             if post.wait <= 0 then self:_respawn(post) end
         end

@@ -735,7 +735,7 @@ function CombatSystem:_update_ai(dt)
     local fire = self.enemy_fire
     self:_update_routes()
     for _, e in ipairs(self.world.combatants) do
-        local p = e:is_alive() and self:_nearest_player(e.x, e.y) or nil
+        local p = e:is_alive() and not e.silent and self:_nearest_player(e.x, e.y) or nil
         if e.hideable and e:is_alive() then self:_update_hangar(e, p, dt) end
         if p then
             local dx, dy = self.world:delta(p.x, p.y, e.x, e.y)
@@ -767,7 +767,7 @@ function CombatSystem:_update_ai(dt)
         end
     end
     for _, e in ipairs(self.world.mines) do
-        if e:is_alive() then fire:mine(e, self:_nearest_player(e.x, e.y), dt) end
+        if e:is_alive() and not e.silent then fire:mine(e, self:_nearest_player(e.x, e.y), dt) end
     end
 end
 

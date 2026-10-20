@@ -28,7 +28,7 @@ function Powerups:init(world, camera, weapons)
     self.weapons   = weapons or {}
     self.player    = nil
     self.players   = {}   -- all players that can collect (1 normally, 2 in split)
-    self.list      = {}   -- {x, y, kind, weapon, frame, find, placed (gives its weapon), ammo_only, age, ttl}
+    self.list      = {}   -- {x, y, kind, weapon, frame, find, placed (gives its weapon), ammo_only, age, ttl, spot}
     self.tables    = {}   -- player -> its drop table
     -- F6 override: collect everything by flying over it, whatever the difficulty
     -- landing rules (Config.land_for_medals / land_for_supplies) say.
@@ -54,6 +54,7 @@ function Powerups:set_players(players)
     self.players = players or {}
     self.player  = self.players[1]
     self.list    = {}
+    self.held    = {}   -- place in stage.pickups -> a laid out pickup a map's event holds back
     self.tables  = {}
     for _, p in ipairs(self.players) do self.tables[p] = self:_build_table(p) end
     self:_lay_out()
@@ -206,17 +207,35 @@ end
 function Powerups:_lay_out()
     local stage = self.world.stage
     if #self.players == 0 or not (stage and stage.pickups) then return end
-    for _, spot in ipairs(stage.pickups) do
+    for k, spot in ipairs(stage.pickups) do
         local frame, find = self.data.frames[spot.kind], false
         if spot.kind == "ammo" then frame, find = self:_placed_ammo(spot.weapon, spot.ammo_only) end
         if frame then
             self.list[#self.list + 1] = {
                 x = spot.x, y = spot.y, kind = spot.kind, weapon = spot.weapon, frame = frame,
                 find = find or nil, placed = not spot.ammo_only or nil, ammo_only = spot.ammo_only,
-                age = 0, ttl = math.huge,
+                age = 0, ttl = math.huge, spot = k,
             }
         end
     end
+end
+
+-- A map's event holds back the pickup laid out at place k of stage.pickups,
+-- or brings it in. One already taken stays taken.
+function Powerups:hold(k)
+    for i, pu in ipairs(self.list) do
+        if pu.spot == k then
+            self.held[k] = table.remove(self.list, i)
+            return
+        end
+    end
+end
+
+function Powerups:release(k)
+    local pu = self.held[k]
+    if not pu then return end
+    self.held[k] = nil
+    self.list[#self.list + 1] = pu
 end
 
 -- update

@@ -41,6 +41,7 @@
       "enemy_heli_homing": "CHOPPER MISSILE",
       "enemy_missile":     "MISSILE",
       "enemy_mine":        "MINE",
+      "enemy_shelling":    "ARTILLERY",
       "heli_blast":        "EXPLODING CHOPPER",
       "friendly_fire":     "FRIENDLY FIRE",
       "mine":              "OWN MINE"

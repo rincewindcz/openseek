@@ -34,6 +34,7 @@ local FAIL_ALLIES = { "ALLIES EXTERMINATED", "PHASE FAILED" }
 local FAIL_AGENT  = { "OBJECTIVE IMPOSSIBLE", "PHASE FAILED" }
 local FAIL_GUARD  = { "OBJECTIVE LOST", "PHASE FAILED" }
 local FAIL_TIME   = { "OUT OF TIME", "PHASE FAILED" }
+local FAIL_EVENT  = { "MISSION ABORTED", "PHASE FAILED" }
 local NOTICE_COMMANDER = "DESTROY THE COMMANDERS BUILDING"
 
 -- The objectives a stage's content asks for, in the original's order.
@@ -51,10 +52,10 @@ end
 -- A map (stage.mission, engine/game/map_compiler.lua) lists objectives of its
 -- own among them, in the order it wants them, and words them all; one its
 -- content asks for and it does not list follows the listed ones. An objective
--- of a map may carry events (spec.on_open, spec.on_done: { say, show }): a
--- line said as it comes up or is done, and objects held back until then. Its
--- timed events (own.timers: { at, say, show }) fire once the phase is that
--- many seconds old.
+-- of a map may carry events (spec.on_open, spec.on_done), fired as it comes
+-- up or is done, and its timed events (own.timers: an event with at) fire
+-- once the phase is that many seconds old. What an event does is
+-- Mission:_fire's.
 local function objectives_from_stage(world)
     local own = world.stage.mission or {}
     local def = { objectives = {}, no_return = own.no_return, ordered = own.ordered,
@@ -149,29 +150,23 @@ function Mission:init(world, players, def)
     self.fail_lines  = nil
     self.notice      = nil        -- standing on-screen order (the commander's building)
     self.messages    = {}         -- what a map's events said, in order (the scene shows each once)
+    self.time_limit  = def.time_limit   -- a map's events may move it
     self.objectives  = {}
     self.guards      = {}         -- "protect" objectives: nothing to do, something to lose
     for _, spec in ipairs(def.objectives or {}) do
         local o = self:_make_objective(spec)
         self.objectives[#self.objectives + 1] = o
         if o.type == "protect" and o.target > 0 then self.guards[#self.guards + 1] = o end
-        -- What an event of the objective brings in is held back until it
-        -- fires. An objective with nothing to do never comes up: its events
-        -- hold nothing.
-        for _, event in ipairs(o.done and {} or { spec.on_open or {}, spec.on_done or {} }) do
-            for _, index in ipairs(event.show or {}) do
-                local e = world.placed[index]
-                if e then e.held = true end
-            end
+        -- An objective with nothing to do never comes up: its events hold nothing.
+        if not o.done then
+            self:_prepare(spec.on_open)
+            self:_prepare(spec.on_done)
         end
     end
     self.timers = {}              -- a map's timed events not fired yet
     for _, timer in ipairs(def.timers or {}) do
         self.timers[#self.timers + 1] = timer
-        for _, index in ipairs(timer.show or {}) do
-            local e = world.placed[index]
-            if e then e.held = true end
-        end
+        self:_prepare(timer)
     end
 
     -- The phase flagged with a special end (0x2909e8 bit 0) keeps its commander
@@ -311,24 +306,102 @@ function Mission:_mark(o)
     end
 end
 
--- An event of a map's objective: the objects it held back are there from now
--- on, and its line is said.
+-- Hold back or bring in what is placed at index of the stage's entity list:
+-- an entity, or a helicopter post. Returns true when an entity came in.
+function Mission:_hold(index, held)
+    local world = self.world
+    local e     = world.placed[index]
+    if e then
+        if held and e:is_alive() then
+            e.held = true
+        elseif not held and e.held then
+            e.held = nil
+            return true
+        end
+    elseif world.placed_posts[index] and world.combat and world.combat.heli_sys then
+        local helis = world.combat.heli_sys
+        if held then helis:hold(world.placed_posts[index]) else helis:release(world.placed_posts[index]) end
+    end
+    return false
+end
+
+function Mission:_hold_pickup(index, held)
+    local powerups = self.world.powerups
+    if not powerups then return end
+    if held then powerups:hold(index) else powerups:release(index) end
+end
+
+-- What a map's event waits to do is kept from happening until it fires: what
+-- it brings in is not there, the units it sets off stand, the guns it opens
+-- fire with are silent.
+function Mission:_prepare(event)
+    if not event then return end
+    local world = self.world
+    for _, index in ipairs(event.show or {}) do self:_hold(index, true) end
+    for _, index in ipairs(event.show_pickups or {}) do self:_hold_pickup(index, true) end
+    for _, index in ipairs(event.drive or {}) do
+        if world.placed[index] then world.placed[index].parked = true end
+    end
+    for _, index in ipairs(event.open_fire or {}) do
+        if world.placed[index] then world.placed[index].silent = true end
+    end
+end
+
+-- An event of a map: in this order, objects come in (show) and go
+-- (hide), blow up (destroy), set off on their routes (drive), open or hold
+-- fire, shelling is called on a place (shell), the time limit moves
+-- (add_time), the weather changes, its line is said, and the phase may end
+-- won or lost (ends).
 function Mission:_fire(event)
     if not event then return end
+    local world = self.world
     local shown = false
-    for _, index in ipairs(event.show or {}) do
-        local e = self.world.placed[index]
-        if e and e.held then
-            e.held = nil
-            shown  = true
-        end
-    end
+    for _, index in ipairs(event.show or {}) do shown = self:_hold(index, false) or shown end
+    for _, index in ipairs(event.show_pickups or {}) do self:_hold_pickup(index, false) end
     if shown then
         for _, o in ipairs(self.objectives) do
             if o.marked and not o.done then self:_mark(o) end
         end
     end
+    for _, index in ipairs(event.hide or {}) do self:_hold(index, true) end
+    for _, index in ipairs(event.hide_pickups or {}) do self:_hold_pickup(index, true) end
+    for _, index in ipairs(event.destroy or {}) do
+        if world.placed[index] then world.placed[index]:blow_up() end
+    end
+    for _, index in ipairs(event.drive or {}) do
+        if world.placed[index] then world.placed[index].parked = nil end
+    end
+    for _, index in ipairs(event.open_fire or {}) do
+        if world.placed[index] then world.placed[index].silent = nil end
+    end
+    for _, index in ipairs(event.hold_fire or {}) do
+        if world.placed[index] then world.placed[index].silent = true end
+    end
+    if event.shell and world.combat then
+        world.combat.air_strike:shell(event.shell.x, event.shell.y, event.shell.radius)
+    end
+    if event.add_time and self.time_limit then
+        self.time_limit = math.max(self.age, self.time_limit + event.add_time)
+    end
+    if event.weather then world.env.weather = event.weather ~= "none" and event.weather or nil end
     if event.say and event.say ~= "" then self.messages[#self.messages + 1] = event.say end
+    if event.ends == "win" then
+        self:_win()
+    elseif event.ends == "fail" then
+        self:_fail_phase(FAIL_EVENT)
+    end
+end
+
+function Mission:_win()
+    if self.state == "phase_failed" or self.state == "won" then return end
+    self.state  = "won"
+    self.notice = nil
+    self.world:say("voice.mission_complete")
+end
+
+-- Whether the phase is over, won or lost for good.
+function Mission:_over()
+    return self.state == "won" or self.state == "phase_failed"
 end
 
 -- Fire the timed events whose time has come, in the order the map lists them.
@@ -389,6 +462,7 @@ function Mission:update(dt)
     if self.state == "won" or self.state == "failed" or self.state == "phase_failed" then return end
     self.age = self.age + dt
     self:_update_timers()
+    if self:_over() then return end
     if self:_all_dead() then self.state = "failed"; return end
     -- An agent killed leaves its pad open for good (0x1fe911).
     if self.world.saboteur and self.world.saboteur:mission_failed() then
@@ -419,8 +493,8 @@ function Mission:update(dt)
             if self.def.ordered then reachable = false end
         end
     end
-    if self.state == "phase_failed" then return end
-    if not all_done and self.def.time_limit and self.age >= self.def.time_limit then
+    if self:_over() then return end
+    if not all_done and self.time_limit and self.age >= self.time_limit then
         self:_fail_phase(FAIL_TIME)
         return
     end
@@ -431,9 +505,7 @@ function Mission:update(dt)
     if all_done then
         -- The special end, and a map that asks for no flight home.
         if self.special_end or self.def.no_return then
-            self.state  = "won"
-            self.notice = nil
-            self.world:say("voice.mission_complete")
+            self:_win()
             return
         end
         if self.state == "active" then
@@ -666,7 +738,7 @@ function Mission:clock()
     if self.state ~= "active" then return nil end
     local at_hand = self:_current()
     if at_hand and at_hand.type == "survive" and at_hand.open then return at_hand.target - at_hand.progress end
-    if self.def.time_limit then return math.max(0, self.def.time_limit - self.age) end
+    if self.time_limit then return math.max(0, self.time_limit - self.age) end
     for _, o in ipairs(self.objectives) do
         if o.type == "survive" and o.open and not o.done then return o.target - o.progress end
     end

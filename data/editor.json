@@ -241,6 +241,8 @@
     "helicopters": { "min": 1, "max": 99, "default": 3 },
     "time_limit": { "min": 30, "max": 7200, "step": 30, "default": 300 },
     "timer":      { "min": 0, "max": 7200, "step": 5, "default": 60 },
+    "shell":      { "min": 24, "max": 400, "step": 8, "default": 120 },
+    "add_time":   { "min": -3600, "max": 3600, "step": 5, "default": 60 },
     "kinds": [
       { "id": "units",     "label": "UNITS AND GUNS", "kinds": ["tank", "truck", "soldier", "soldier_aggressive", "flak_turret"] },
       { "id": "tanks",     "label": "TANKS",          "kinds": ["tank"] },

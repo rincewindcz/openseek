@@ -128,7 +128,7 @@ function Editor:init(app)
     self.try         = { god = false, vehicle = "chopper", players = 1 }   -- how TRY flies the map
     self.card_pick   = nil      -- { slot, size, label } while a briefing picture is being picked
     self.card_cache  = { revision = -1, cards = {} }
-    self.place_pick  = nil      -- { index, radius } while an objective's place is being picked
+    self.place_pick  = nil      -- { radius, hint, on_pick, on_back } while a place is being picked
     self.goal_cache  = { revision = -1, marks = nil }
     self.briefing    = nil      -- the briefing screen, once previewed
     self.previewing  = nil      -- { settings } while the briefing preview is up
@@ -461,34 +461,50 @@ function Editor:goal_marks()
     return self.goal_cache.marks
 end
 
--- Pick the place of objective `index` on the map: the settings close, the
--- next click sets it, and the settings come back.
-function Editor:start_place_pick(index)
-    local goal = self.doc.map.objectives[index]
-    if not goal then return end
-    self.place_pick = { index = index, radius = goal.radius or Goals.limits().radius.default }
+-- Hand the view over to picking a place inside a dialog: on_pick(x, y) gets
+-- the place clicked (snapped, on the map), then on_back() opens the dialog
+-- again, also when the pick is called off.
+function Editor:pick_place(radius, hint, on_pick, on_back)
+    self.place_pick = { radius = radius, hint = hint, on_pick = on_pick, on_back = on_back }
     Dialogs.close(self)
     self:set_tool("spot")
 end
 
 function Editor:finish_place_pick(wx, wy)
     local pick = self.place_pick
-    local doc  = self.doc
     self.place_pick = nil
     self.work       = nil
     self.tool       = "select"
-    if pick and wx and doc.map.objectives[pick.index] then
-        local size = doc:size()
+    if not pick then return end
+    if wx then
+        local size = self.doc:size()
         local x, y = self:snap(wx, wy)
-        local rows = {}
-        for i, goal in ipairs(doc.map.objectives) do rows[i] = goal end
-        doc:begin("OBJECTIVE PLACE")
-        Goals.set(doc, rows, pick.index, "x", x % size)
-        Goals.set(doc, rows, pick.index, "y", y % size)
-        doc:commit()
+        pick.on_pick(x % size, y % size)
     end
-    self:open_dialog("settings")
-    self.dialog.tab = "objectives"
+    pick.on_back()
+end
+
+-- Pick the place of objective `index` on the map: the settings close, the
+-- next click sets it, and the settings come back.
+function Editor:start_place_pick(index)
+    local doc  = self.doc
+    local goal = doc.map.objectives[index]
+    if not goal then return end
+    self:pick_place(goal.radius or Goals.limits().radius.default,
+        "CLICK THE PLACE THE PLAYER HAS TO GET TO.  RIGHT CLICK: BACK TO THE SETTINGS.",
+        function(x, y)
+            if not doc.map.objectives[index] then return end
+            local rows = {}
+            for i, item in ipairs(doc.map.objectives) do rows[i] = item end
+            doc:begin("OBJECTIVE PLACE")
+            Goals.set(doc, rows, index, "x", x)
+            Goals.set(doc, rows, index, "y", y)
+            doc:commit()
+        end,
+        function()
+            self:open_dialog("settings")
+            self.dialog.tab = "objectives"
+        end)
 end
 
 -- briefing preview
@@ -1042,13 +1058,14 @@ function Editor:_draw_marks()
             end
         end
     end
-    -- Where an objective asks the player to get to.
+    -- Where an objective asks the player to get to, and where shelling lands.
     if self.layers.objectives.visible then
         for _, place in ipairs(self:goal_marks().places) do
             local dx, dy = doc:delta(place.x, place.y, self.view.x, self.view.y)
-            g.setColor(c[1], c[2], c[3], 0.1)
+            local pc     = place.shell and self.kit.theme.danger or c
+            g.setColor(pc[1], pc[2], pc[3], 0.1)
             g.circle("fill", self.view.x + dx, self.view.y + dy, place.radius, 48)
-            g.setColor(c[1], c[2], c[3], 0.9)
+            g.setColor(pc[1], pc[2], pc[3], 0.9)
             g.circle("line", self.view.x + dx, self.view.y + dy, place.radius, 48)
         end
     end
@@ -1165,7 +1182,7 @@ function Editor:_draw_badges()
         local dx, dy = doc:delta(place.x, place.y, self.view.x, self.view.y)
         local sx, sy = self.view:to_screen(self.view.x + dx, self.view.y + dy)
         kit:rect(sx / s - 9, sy / s - 9, 18, 18, { 0, 0, 0, 0.72 }, 9)
-        kit:icon("pin", sx / s - 8, sy / s - 8, 16, theme.accent)
+        kit:icon(place.shell and "bomb" or "pin", sx / s - 8, sy / s - 8, 16, place.shell and theme.danger or theme.accent)
     end
     love.graphics.setScissor()
 end
@@ -1547,7 +1564,7 @@ local HINTS = {
     road    = "CLICK POINTS, ENTER TO FINISH.  A POINT ON ANOTHER ROAD JOINS IT.  CLICK AN END TO CARRY ON, DRAG A POINT, SHIFT + CLICK ADDS ONE, DEL REMOVES.",
     measure = "DRAG FROM ONE PLACE TO ANOTHER.  CTRL: 45 DEGREE STEPS.  RIGHT CLICK CLEARS.",
     card    = "CLICK WHAT THE BRIEFING PICTURE SHOULD SHOW.  RIGHT CLICK: BACK TO THE SETTINGS.",
-    spot    = "CLICK THE PLACE THE PLAYER HAS TO GET TO.  RIGHT CLICK: BACK TO THE SETTINGS.",
+    spot    = "CLICK THE PLACE.  RIGHT CLICK: BACK TO THE SETTINGS.",
 }
 
 function Editor:_options_bar(kit, vx, vw)
@@ -1658,6 +1675,7 @@ function Editor:_options_bar(kit, vx, vw)
     end
     local hint = HINTS[self.tool]
     if self.tool == "place" and self.placing and self.placing.prefab then hint = HINTS.stamp end
+    if self.tool == "spot" and self.place_pick then hint = self.place_pick.hint end
     kit:label(hint, x, y, vx + vw - x - 8, OPTIONS_H, { color = theme.text_dim, size = theme.font_small })
 end
 

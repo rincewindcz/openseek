@@ -31,8 +31,9 @@ GameplayBase.fixed_step = true
 GameplayBase.holds_params = true
 
 -- Activate the stage's weather (World.env: snow on the winter world, rain on
--- the jungle world, whatever a map asks for); call from a scene's enter().
--- leave() should clear it with self.app.weather:set(nil).
+-- the jungle world, whatever a map asks for); call from a scene's enter(),
+-- and each frame, since a map's event may change it (a no-op when it did
+-- not). leave() should clear it with self.app.weather:set(nil).
 function GameplayBase:enter_weather()
     self.app.weather:set(self.app.world.env.weather, self.app.world:is_night())
 end

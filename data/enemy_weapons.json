@@ -106,6 +106,18 @@
     }
   },
 
+  "shelling": {
+    "strike":        "artillery",
+    "radius":        120,
+    "delay":         3.0,
+    "impacts":       12,
+    "window":        2.4,
+    "impact_radius": 40,
+    "damage":        8,
+    "player_damage": [2, 3, 4],
+    "explosion":     "explosion_medium"
+  },
+
   "movement": {
     "yield": 100,
     "ride":  { "ticks": 40, "near": 100, "cone": 45, "park": 270 },

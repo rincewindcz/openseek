@@ -1,8 +1,9 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Catalog     = require "engine.editor.catalog"
+local Entity      = require "engine.game.entity"
 local MapCompiler = require "engine.game.map_compiler"
+local Catalog     = require "engine.editor.catalog"
 
 -- The editor's side of a map's objectives (the "objectives" of
 -- engine/game/map_file.lua): the rows the map settings list, the changes made
@@ -15,10 +16,9 @@ local BASE_FLAG = 0x40   -- class flag of the home base building (World:load)
 -- The events of an objective, in the order the settings show them.
 Goals.EVENTS = { "on_open", "on_done" }
 
--- What an event cannot hold back: it is no entity of the phase (a pickup, a
--- start, a helicopter post), or another system owns it (the marks of the
--- people objectives).
-local NEVER_HELD = { pickup = true, start = true, enemy_helicopter = true, missing = true }
+-- What an event cannot hold back: a start, which is no object of the phase,
+-- or what another system owns (the marks of the people objectives).
+local NEVER_HELD = { start = true, missing = true }
 local MARK_KINDS = {
     [MapCompiler.KIND_POW_MARKER] = true, [MapCompiler.KIND_PERSON] = true, [MapCompiler.KIND_PAD] = true,
 }
@@ -135,31 +135,97 @@ function Goals.holdable(doc, o)
     return info.ok and not NEVER_HELD[info.kind_name] and not MARK_KINDS[info.cls.kind]
 end
 
--- The ids an event takes from a set of objects: everything it can hold back.
-function Goals.pick_held(doc, objects)
-    local ids = {}
+-- What an event does, in the order it does it and the event editor lists it.
+-- objects names what of a selection the action takes (Goals.takes); the
+-- others have a setting of their own.
+Goals.ACTIONS = {
+    { key = "show", label = "APPEAR", objects = "held",
+      tip = "NOT ON THE MAP UNTIL THEN: NOT SEEN, DOING NOTHING, NOT TO BE HIT" },
+    { key = "hide", label = "VANISH", objects = "held", tip = "TAKEN OFF THE MAP THEN, WITHOUT A WRECK" },
+    { key = "destroy", label = "BLOW UP", objects = "destructible", tip = "BLOWN UP THEN, AS IF SHOT, FOR NO POINTS" },
+    { key = "drive", label = "SET OFF", objects = "routed",
+      tip = "UNITS ON A ROUTE STAND STILL UNTIL THEN, THEN DRIVE IT" },
+    { key = "open_fire", label = "OPEN FIRE", objects = "armed", tip = "GUNS AND MINES DO NOTHING UNTIL THEN" },
+    { key = "hold_fire", label = "HOLD FIRE", objects = "armed", tip = "GUNS AND MINES DO NOTHING FROM THEN ON" },
+    { key = "shell", label = "SHELLING", tip = "ENEMY ARTILLERY LANDS ON A PLACE A FEW SECONDS LATER" },
+    { key = "add_time", label = "TIME LIMIT", tip = "SECONDS ADDED TO THE TIME LIMIT, OR TAKEN OFF IT" },
+    { key = "weather", label = "WEATHER", tip = "THE WEATHER FROM THEN ON" },
+    { key = "ends", label = "END THE PHASE", tip = "THE PHASE IS WON OR LOST THERE AND THEN" },
+}
+
+Goals.ACTION = {}
+for _, action in ipairs(Goals.ACTIONS) do Goals.ACTION[action.key] = action end
+
+-- Whether an action of the kind (Goals.ACTIONS objects) can act on o.
+function Goals.takes(doc, o, kind)
+    local info = doc:info(o)
+    if kind == "held" then return Goals.holdable(doc, o) end
+    if not info.ok then return false end
+    if kind == "destructible" then return Goals.destructible(doc, o) end
+    if kind == "routed" then return o.route ~= nil end
+    if kind == "armed" then return Entity.type_for(info.kind_name).armed == true or info.kind_name == "mine" end
+    return false
+end
+
+-- The ids an action takes from a set of objects.
+function Goals.take(doc, objects, key)
+    local ids, kind = {}, Goals.ACTION[key].objects
     for _, o in ipairs(objects) do
-        if Goals.holdable(doc, o) then ids[#ids + 1] = o.id end
+        if Goals.takes(doc, o, kind) then ids[#ids + 1] = o.id end
     end
     return ids
 end
 
--- The objects an event brings in that are still on the map: event is an
--- objective's event (goal[key]) or a timed event.
-local function held_of(doc, event)
-    local found = {}
-    for _, id in ipairs((event or {}).show or {}) do
+-- The objects an action of an event acts on that are still on the map.
+function Goals.acted_on(doc, event, key)
+    local found, kind = {}, Goals.ACTION[key].objects
+    for _, id in ipairs((event or {})[key] or {}) do
         local o = doc.by_id[id]
-        if o and Goals.holdable(doc, o) then found[#found + 1] = o end
+        if o and Goals.takes(doc, o, kind) then found[#found + 1] = o end
     end
     return found
 end
 
-Goals.held_of = held_of
+-- The objects an event brings in that are still on the map: event is an
+-- objective's event (goal[key]) or a timed event.
+function Goals.held_of(doc, event)
+    return Goals.acted_on(doc, event, "show")
+end
 
 -- The objects an event of an objective brings in that are still on the map.
 function Goals.held(doc, goal, key)
-    return held_of(doc, goal[key])
+    return Goals.held_of(doc, goal[key])
+end
+
+-- A copy of an event with one field changed (nil clears it).
+function Goals.with(event, key, value)
+    local out = {}
+    for k, v in pairs(event or {}) do out[k] = v end
+    out[key] = value
+    return out
+end
+
+-- Whether an event does or says anything.
+function Goals.does_something(event)
+    if event.say and event.say ~= "" then return true end
+    for _, action in ipairs(Goals.ACTIONS) do
+        local value = event[action.key]
+        if value ~= nil and not (action.objects and #value == 0) then return true end
+    end
+    return false
+end
+
+-- What an event does, in a few words.
+function Goals.summary(event)
+    local parts = {}
+    for _, action in ipairs(Goals.ACTIONS) do
+        local value = event[action.key]
+        if value ~= nil then
+            parts[#parts + 1] = action.objects and (action.label .. " " .. #value) or action.label
+        end
+    end
+    if event.say and event.say ~= "" then parts[#parts + 1] = "A LINE SAID" end
+    return #parts > 0 and table.concat(parts, ", ") or "NOTHING YET"
 end
 
 -- timed events
@@ -175,12 +241,9 @@ function Goals.write_timers(doc, list, label)
     doc:set_map("timers", #list > 0 and list or nil, label or "TIMED EVENTS")
 end
 
--- Timed event i of the list with one field changed (nil clears it).
-function Goals.set_timer(doc, list, i, key, value)
-    local timer = {}
-    for k, v in pairs(list[i]) do timer[k] = v end
-    timer[key] = (key ~= "show" or (value and #value > 0)) and value or nil
-    list[i]    = timer
+-- Timed event i of the list replaced by timer.
+function Goals.set_timer(doc, list, i, timer)
+    list[i] = timer
     Goals.write_timers(doc, list)
 end
 
@@ -189,6 +252,7 @@ function Goals.add_timer(doc, list)
     for _, timer in ipairs(list) do at = math.max(at, timer.at + Goals.limits().timer.default) end
     list[#list + 1] = { at = math.min(at, Goals.limits().timer.max) }
     Goals.write_timers(doc, list, "ADD TIMED EVENT")
+    return #list
 end
 
 function Goals.remove_timer(doc, list, i)
@@ -200,14 +264,9 @@ function Goals.clock(seconds)
     return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
 end
 
--- Row i with one field of one of its events changed; an event that says and
--- shows nothing is dropped.
-function Goals.set_event(doc, rows, i, key, field, value)
-    local event = {}
-    for k, v in pairs(rows[i][key] or {}) do event[k] = v end
-    event[field] = value
-    if event.show and #event.show == 0 then event.show = nil end
-    Goals.set(doc, rows, i, key, next(event) and event or nil)
+-- Row i with one of its events (key) replaced; an empty event is dropped.
+function Goals.set_event(doc, rows, i, key, event)
+    Goals.set(doc, rows, i, key, event and next(event) and event or nil)
 end
 
 -- The kinds an objective may ask for, as choices, and the id of the choice a
@@ -266,18 +325,28 @@ function Goals.air(doc)
     return { posts = posts, returning = returning }
 end
 
--- What the objectives point at, for the editor to mark: by_id[object id] =
--- { type, index }, held[object id] = the event that holds it back, in words,
--- and places = { { x, y, radius, index } }, index being the objective's place
--- in the list.
+-- What the objectives and events point at, for the editor to mark:
+-- by_id[object id] = { type, index }, held[object id] = the event that holds
+-- it back, in words, and places = { { x, y, radius, index, shell } }: where an
+-- objective (index being its place in the list) sends the player, or where an
+-- event's shelling lands.
 function Goals.marks(doc)
     local marks = { by_id = {}, held = {}, places = {} }
+    local function shelling(event)
+        local shell = event and event.shell
+        if shell then
+            marks.places[#marks.places + 1] = { x = shell.x, y = shell.y,
+                radius = shell.radius or Goals.limits().shell.default, shell = true }
+        end
+    end
     for _, timer in ipairs(doc.map.timers or {}) do
-        for _, o in ipairs(held_of(doc, timer)) do marks.held[o.id] = "THE EVENT AT " .. Goals.clock(timer.at) end
+        for _, o in ipairs(Goals.held_of(doc, timer)) do marks.held[o.id] = "THE EVENT AT " .. Goals.clock(timer.at) end
+        shelling(timer)
     end
     for i, goal in ipairs(doc.map.objectives) do
         for _, key in ipairs(Goals.EVENTS) do
             for _, o in ipairs(Goals.held(doc, goal, key)) do marks.held[o.id] = "AN EVENT OF OBJECTIVE " .. i end
+            shelling(goal[key])
         end
         if goal.type == "reach" then
             marks.places[#marks.places + 1] = { x = goal.x or 0, y = goal.y or 0,

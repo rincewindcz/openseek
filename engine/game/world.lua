@@ -375,6 +375,7 @@ function World:load(name)
     self.air_kills     = 0    -- enemy helicopters shot down this phase (counted by the heli system)
     self.air_supply    = nil  -- how many the phase can put up, once the heli system has read the posts
     self.placed        = {}   -- stage entity index -> the entity it became (a turret: its hull)
+    self.placed_posts  = {}   -- stage entity index -> its helicopter post (index into heli_spawns)
     self.marks         = {}   -- { x, y }: places a mission shows on the radar (owned by Mission)
 
     -- First pass: build every entity and index hulls by exact position.
@@ -492,6 +493,7 @@ function World:load(name)
         elseif cls.kind_name == "enemy_helicopter" then
             -- Enemy helicopters are not placed units: each marks a spawn point for the
             -- airborne heli system and is never drawn or hit in place.
+            self.placed_posts[id] = #self.heli_spawns + 1
             self.heli_spawns[#self.heli_spawns + 1] = { x = raw.x, y = raw.y, behaviour = cls.behaviour,
                 respawn = cls.field_2c, leash = cls.field_2e }
         elseif pad_class[raw.class] and cls.behaviour == PAD_PICKUP and linked_structure(cls) then

@@ -194,11 +194,13 @@ function MapCompiler.compile(map)
         end
     end
     local order, pickups, starts, missing = {}, {}, {}, 0
+    local pickup_index = {}   -- object id -> place in pickups
     for _, o in ipairs(map.objects) do
         local map_type = map.types[o.t]
         if map_type.pickup then
             pickups[#pickups + 1] = { kind = map_type.pickup, weapon = map_type.weapon,
                                       ammo_only = map_type.ammo_only == true or nil, x = o.x, y = o.y }
+            pickup_index[o.id] = #pickups
         elseif map_type.start then
             starts[map_type.start] = starts[map_type.start] or { x = o.x, y = o.y }
         elseif not type_class[o.t] then
@@ -279,10 +281,27 @@ function MapCompiler.compile(map)
         end
         return out
     end
-    -- An objective's event: its line, and what it brings in by entity place.
+    local function placed_pickups(ids)
+        local out = {}
+        for _, id in ipairs(ids or {}) do
+            if pickup_index[id] then out[#out + 1] = pickup_index[id] end
+        end
+        return out
+    end
+    -- An event of the map (Mission:_fire): the objects it acts on by entity
+    -- place, those it brings in or takes away that are pickups by their place
+    -- in stage.pickups.
     local function event(raw)
         if type(raw) ~= "table" then return nil end
-        return { say = raw.say, show = placed(raw.show) }
+        local out = { say = raw.say, show_pickups = placed_pickups(raw.show), hide_pickups = placed_pickups(raw.hide),
+                      add_time = tonumber(raw.add_time), weather = type(raw.weather) == "string" and raw.weather or nil,
+                      ends = (raw.ends == "win" or raw.ends == "fail") and raw.ends or nil }
+        for _, key in ipairs(MapFile.EVENT_OBJECTS) do out[key] = placed(raw[key]) end
+        local shell = raw.shell
+        if type(shell) == "table" and tonumber(shell.x) and tonumber(shell.y) then
+            out.shell = { x = tonumber(shell.x), y = tonumber(shell.y), radius = tonumber(shell.radius) }
+        end
+        return out
     end
     local goals = {}
     for _, goal in ipairs(map.objectives or {}) do

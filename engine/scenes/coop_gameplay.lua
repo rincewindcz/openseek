@@ -452,6 +452,7 @@ function CoopGameplay:update(dt)
     -- One listener per half, each biased toward its own side of the stereo image
     -- so a blast on the right half is heard on the right (engine/game/sound.lua).
     self:update_audio(self.players, self.cameras, self:_biases(), dt)
+    self:enter_weather()   -- a map's event may change it
     app.weather:update(dt, self.cameras[1])   -- split screen: reacts to player 1's view
     app.lightfx:update(dt)
     app.impactfx:update(dt, self.players)

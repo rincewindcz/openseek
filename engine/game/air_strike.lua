@@ -6,6 +6,7 @@ local Config     = require "engine.core.config"
 local Animation  = require "engine.core.animation"
 local Shadow     = require "engine.game.shadow"
 local StrictMath = require "lib.strict_math"
+local Difficulty = require "engine.game.difficulty"
 
 -- Air strike, reimagined from the original (SEEK.EXE 0x1fa5d0). Calling one
 -- fixes a target point target_distance ahead of the vehicle and, delay seconds
@@ -25,6 +26,10 @@ local StrictMath = require "lib.strict_math"
 -- scheduled impacts. Craft positions are a pure function of the strike record
 -- and world.time; a strike stays listed until its craft have flown out of
 -- range, but only counts as pending until its last impact.
+--
+-- A map's event may call enemy shelling on a place (shell): the artillery
+-- pattern of data/enemy_weapons.json "shelling", which hits the players as well
+-- as whatever stands there, credited to nobody.
 local AirStrike = Class()
 
 local TWO_PI = math.pi * 2
@@ -47,7 +52,7 @@ end
 -- shooter's pending strike, or nil.
 function AirStrike:pending(shooter)
     for _, strike in ipairs(self.strikes) do
-        if strike.shooter == shooter and self:landing(strike) then return strike end
+        if strike.shooter == shooter and not strike.enemy and self:landing(strike) then return strike end
     end
     return nil
 end
@@ -154,6 +159,39 @@ function AirStrike:call(x, y, angle_deg, def, level_idx, shooter)
     return true
 end
 
+-- Enemy shelling on the circle of radius around (x, y), landing after the
+-- delay of its data.
+function AirStrike:shell(x, y, radius)
+    local spec = self.combat.enemy_fire.data.shelling
+    if not spec then return end
+    local size   = self.world.stage.world_size
+    local def    = { radius = radius or spec.radius, delay = spec.delay, incoming = spec.delay }
+    local strike = { enemy = true, def = def, spec = spec, x = x % size, y = y % size, angle = 0,
+                     t0 = self.world.time, next = 1, warned = true }
+    strike.impacts = self:_pattern(def, spec)
+    strike.until_t = strike.t0 + def.delay + strike.impacts[#strike.impacts].t
+    self.strikes[#self.strikes + 1] = strike
+end
+
+-- Shelling lands on the players inside the impact as well.
+function AirStrike:_hit_players(spec, x, y)
+    local r2     = spec.impact_radius * spec.impact_radius
+    local damage = spec.player_damage[Difficulty.damage_level()] * Config.enemy_damage
+    for _, p in ipairs(self.combat.players) do
+        if p.armor > 0 and not p.death then
+            local dx, dy = self.world:delta(p.x, p.y, x, y)
+            if dx * dx + dy * dy < r2 then
+                if not p.unlimited then
+                    p.armor        = math.max(0, p.armor - damage)
+                    p.damage_cause = "enemy_shelling"
+                    self.world:count("hits")
+                end
+                self.combat:_player_hit_fx(p)
+            end
+        end
+    end
+end
+
 -- Seconds until strike's first impact (negative once it is landing).
 function AirStrike:time_to_impact(strike)
     return strike.t0 + strike.def.delay - self.world.time
@@ -178,7 +216,11 @@ function AirStrike:_detonate(strike, impact)
             end
         end
     end
-    self.combat:_hurt_teammates(strike.shooter, x, y, spec.impact_radius, spec.damage)
+    if strike.enemy then
+        self:_hit_players(spec, x, y)
+    else
+        self.combat:_hurt_teammates(strike.shooter, x, y, spec.impact_radius, spec.damage)
+    end
 end
 
 function AirStrike:update()

@@ -154,12 +154,36 @@ function Validate.run(doc)
         issue("warn", "A COMMANDERS BUILDING IS SET, BUT THE COMMANDER RULE IS OFF", commanders)
     end
 
+    -- The events: what they cannot do, and what they undo.
+    local to_destroy = {}
+    for _, goal in ipairs(map.objectives) do
+        if goal.type == "destroy" and not goal.optional then
+            for _, o in ipairs(Goals.objects(doc, goal)) do to_destroy[o.id] = true end
+        end
+    end
+    local function check_event(name, event)
+        if event.add_time and not map.time_limit then
+            issue("warn", name .. " MOVES THE TIME LIMIT, BUT THE MAP HAS NONE")
+        end
+        for _, o in ipairs(Goals.acted_on(doc, event, "hide")) do
+            if to_destroy[o.id] then
+                issue("warn", name .. " TAKES AWAY AN OBJECT AN OBJECTIVE HAS TO DESTROY", { o })
+                break
+            end
+        end
+    end
     for _, timer in ipairs(map.timers or {}) do
         local name = "THE TIMED EVENT AT " .. Goals.clock(timer.at)
         if map.time_limit and timer.at >= map.time_limit then
             issue("warn", name .. " COMES AFTER THE TIME LIMIT AND NEVER HAPPENS")
-        elseif not (timer.say and timer.say ~= "") and #Goals.held_of(doc, timer) == 0 then
-            issue("warn", name .. " SAYS NOTHING AND BRINGS NOTHING IN")
+        elseif not Goals.does_something(timer) then
+            issue("warn", name .. " SAYS AND DOES NOTHING")
+        end
+        check_event(name, timer)
+    end
+    for i, goal in ipairs(map.objectives) do
+        for _, key in ipairs(Goals.EVENTS) do
+            if goal[key] then check_event("AN EVENT OF OBJECTIVE " .. i, goal[key]) end
         end
     end
 

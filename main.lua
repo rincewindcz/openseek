@@ -238,6 +238,7 @@ function love.load(args)
     Mission.load("data/missions.json")
     app.powerups = Powerups:new(world, camera, app.combat.weapons)
     app.hud.powerups = app.powerups   -- pickup blips on the radar
+    world.powerups   = app.powerups   -- lets a map's events hold back and lay out its pickups
     app.rescue   = RescueSystem:new(world, app.combat)
     app.saboteur = SaboteurSystem:new(world, app.combat)
     app.lightfx  = LightFX:new()

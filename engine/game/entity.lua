@@ -70,9 +70,10 @@ end
 
 -- Entity is hittable and should be drawn while idle/animating/patrol/attack.
 -- Exploding entities are "logically gone"; projectiles pass through them.
--- A map may hold an object back until an objective comes up or is done
--- (held, set and lifted by the mission): until then it is not there. Nothing
--- sees, hits or draws it, and it does nothing.
+-- A map's event may hold an object back until it fires, or take it away
+-- (held, set and lifted by the mission): while held it is not there. Nothing
+-- sees, hits or draws it, and it does nothing. An event may also keep a unit
+-- off its route (parked) or a gun from firing (silent) until it fires.
 function Entity:is_alive()
     return not self.held and self.state ~= "dead" and self.state ~= "exploding"
 end
@@ -182,6 +183,15 @@ function Entity:_debris_burst(explosion)
     if self.mine then return "blast" end
     if explosion == "fire" then return "scrap" end
     return self.crater_eligible and "building" or "wreck"
+end
+
+-- Blown up by a map's event: no hit and no kill to anybody, but its
+-- explosion, wreck and drop as if it had been shot.
+function Entity:blow_up()
+    if not self:is_alive() then return end
+    if self.turret_alive then self:_destroy_turret() end
+    self.hp = 0
+    self:_start_death()
 end
 
 function Entity:_start_death(dx, dy)
@@ -317,7 +327,7 @@ function Entity:_patrol(dt)
     local pts  = self.route_points
     local td   = self.type_data
     local base = td and td.patrol_speed or 0
-    if not pts or #pts < 2 or base <= 0 or self.route_done then return end
+    if not pts or #pts < 2 or base <= 0 or self.route_done or self.parked then return end
     if self.halted then
         self.patrol_v = 0
         return

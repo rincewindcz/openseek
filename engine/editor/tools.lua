@@ -870,10 +870,11 @@ function Card.draw(editor)
     g.rectangle("line", x - half, y - half, pick.size, pick.size)
 end
 
--- objective place: where a "get to a place" objective is met. Not on the tool
--- strip either; the OBJECTIVES page of the map settings hands over to it.
+-- place pick: where a "get to a place" objective is met, or where an event's
+-- shelling lands (Editor:pick_place). Not on the tool strip either; the
+-- dialogs hand over to it.
 
-local Spot = { id = "spot", icon = "pin", label = "OBJECTIVE" }
+local Spot = { id = "spot", icon = "pin", label = "PLACE" }
 
 function Spot.press(editor, wx, wy)
     editor:finish_place_pick(wx, wy)
