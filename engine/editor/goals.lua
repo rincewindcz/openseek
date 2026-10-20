@@ -228,40 +228,74 @@ function Goals.summary(event)
     return #parts > 0 and table.concat(parts, ", ") or "NOTHING YET"
 end
 
--- timed events
+-- the map's events
 
--- The map's timed events, as a list to change and write back.
-function Goals.timers(doc)
+-- The map's events, as a list to change and write back.
+function Goals.map_events(doc)
     local list = {}
-    for i, timer in ipairs(doc.map.timers or {}) do list[i] = timer end
+    for i, event in ipairs(doc.map.events or {}) do list[i] = event end
     return list
 end
 
-function Goals.write_timers(doc, list, label)
-    doc:set_map("timers", #list > 0 and list or nil, label or "TIMED EVENTS")
+function Goals.write_map_events(doc, list, label)
+    doc:set_map("events", #list > 0 and list or nil, label or "EVENTS")
 end
 
--- Timed event i of the list replaced by timer.
-function Goals.set_timer(doc, list, i, timer)
-    list[i] = timer
-    Goals.write_timers(doc, list)
+-- Event i of the list replaced by event.
+function Goals.set_map_event(doc, list, i, event)
+    list[i] = event
+    Goals.write_map_events(doc, list)
 end
 
-function Goals.add_timer(doc, list)
-    local at = Goals.limits().timer.default
-    for _, timer in ipairs(list) do at = math.max(at, timer.at + Goals.limits().timer.default) end
-    list[#list + 1] = { at = math.min(at, Goals.limits().timer.max) }
-    Goals.write_timers(doc, list, "ADD TIMED EVENT")
+-- A new event at a time, after the last one at a time.
+function Goals.add_map_event(doc, list)
+    local step = Goals.limits().timer.default
+    local at   = step
+    for _, event in ipairs(list) do
+        if event.when == "time" then at = math.max(at, event.at + step) end
+    end
+    list[#list + 1] = { when = "time", at = math.min(at, Goals.limits().timer.max) }
+    Goals.write_map_events(doc, list, "ADD EVENT")
     return #list
 end
 
-function Goals.remove_timer(doc, list, i)
+function Goals.remove_map_event(doc, list, i)
     table.remove(list, i)
-    Goals.write_timers(doc, list, "REMOVE TIMED EVENT")
+    Goals.write_map_events(doc, list, "REMOVE EVENT")
+end
+
+-- An event of the map set off another way, keeping what it does: by "time"
+-- at the time given, by "area" at the place given, by "destroyed" once the
+-- targets given are.
+function Goals.retrigger(event, when, at, place, targets)
+    local out = Goals.with(event, "when", when)
+    out.at, out.every, out.times, out.place, out.targets = nil, nil, nil, nil, nil
+    if when == "time" then out.at = at elseif when == "area" then out.place = place else out.targets = targets end
+    return out
+end
+
+-- The objects whose destruction sets off an event of the map that are still on the map.
+function Goals.targets(doc, event)
+    return Goals.objects(doc, { objects = event.targets })
 end
 
 function Goals.clock(seconds)
     return string.format("%d:%02d", math.floor(seconds / 60), seconds % 60)
+end
+
+-- What sets off an event of the map, in a few words.
+function Goals.when(doc, event)
+    if event.when == "area" then
+        return event.place.land and "WHEN A PLAYER IS DOWN AT A PLACE" or "WHEN A PLAYER GETS TO A PLACE"
+    elseif event.when == "destroyed" then
+        local n = #Goals.targets(doc, event)
+        return n == 1 and "ONCE AN OBJECT IS DESTROYED" or string.format("ONCE %d OBJECTS ARE DESTROYED", n)
+    end
+    if event.every then
+        return string.format("AT %s, THEN EVERY %s, %d TIMES IN ALL", Goals.clock(event.at), Goals.clock(event.every),
+            event.times or 1)
+    end
+    return "AT " .. Goals.clock(event.at)
 end
 
 -- Row i with one of its events (key) replaced; an empty event is dropped.
@@ -327,9 +361,9 @@ end
 
 -- What the objectives and events point at, for the editor to mark:
 -- by_id[object id] = { type, index }, held[object id] = the event that holds
--- it back, in words, and places = { { x, y, radius, index, shell } }: where an
--- objective (index being its place in the list) sends the player, or where an
--- event's shelling lands.
+-- it back, in words, and places = { { x, y, radius, index, shell, trigger } }:
+-- where an objective (index being its place in the list) sends the player,
+-- where an event's shelling lands, or where a player sets off an event.
 function Goals.marks(doc)
     local marks = { by_id = {}, held = {}, places = {} }
     local function shelling(event)
@@ -339,9 +373,14 @@ function Goals.marks(doc)
                 radius = shell.radius or Goals.limits().shell.default, shell = true }
         end
     end
-    for _, timer in ipairs(doc.map.timers or {}) do
-        for _, o in ipairs(Goals.held_of(doc, timer)) do marks.held[o.id] = "THE EVENT AT " .. Goals.clock(timer.at) end
-        shelling(timer)
+    for _, event in ipairs(doc.map.events or {}) do
+        local name = "THE EVENT " .. Goals.when(doc, event)
+        for _, o in ipairs(Goals.held_of(doc, event)) do marks.held[o.id] = name end
+        shelling(event)
+        if event.when == "area" then
+            marks.places[#marks.places + 1] = { x = event.place.x, y = event.place.y,
+                radius = event.place.radius or Goals.limits().radius.default, trigger = true }
+        end
     end
     for i, goal in ipairs(doc.map.objectives) do
         for _, key in ipairs(Goals.EVENTS) do

@@ -782,10 +782,9 @@ local function settings_objectives(editor, kit, x, y, w, h)
     and not kit:popup_open("goal_add") then
         add_goal_menu(editor, kit, rows, x, y + theme.row + 2)
     end
-    local timers = #(map.timers or {})
-    if kit:button("goal_timers", x + 156, y, 150, theme.row + 2, { text = "TIMED EVENTS", on = timers > 0,
-        tip = "WHAT IS SAID AND WHAT HAPPENS AT A TIME OF THE PHASE" }) then
-        editor.dialog = { kind = "timers" }
+    if kit:button("goal_map_events", x + 156, y, 150, theme.row + 2, { text = "EVENTS", icon = "flag",
+        on = map.events ~= nil, tip = "WHAT IS SAID AND WHAT HAPPENS AT A TIME, AT A PLACE OR ONCE OBJECTS FALL" }) then
+        editor.dialog = { kind = "map_events" }
         return
     end
     kit:label("TARGETS, PEOPLE AND AGENTS ARE SET ON THE OBJECTS THEMSELVES", x + 316, y, w - 316, theme.row + 2,
@@ -959,18 +958,18 @@ local function back_to_objectives(editor)
     editor.dialog.tab = "objectives"
 end
 
--- The event a dialog edits, by its ref: { timer = i } (a timed event) or
--- { goal = i, key } (an event of objective row i). Returns the event, a
+-- The event a dialog edits, by its ref: { event = i } (an event of the map)
+-- or { goal = i, key } (an event of objective row i). Returns the event, a
 -- function writing a new one, the title and a function going back; nil when
 -- the event is gone.
 local function event_ref(editor, ref)
     local doc = editor.doc
-    if ref.timer then
-        local list  = Goals.timers(doc)
-        local timer = list[ref.timer]
-        if not timer then return nil end
-        return timer, function(event) Goals.set_timer(doc, list, ref.timer, event) end,
-            "TIMED EVENT AT " .. Goals.clock(timer.at), function() editor.dialog = { kind = "timers" } end
+    if ref.event then
+        local list  = Goals.map_events(doc)
+        local event = list[ref.event]
+        if not event then return nil end
+        return event, function(new) Goals.set_map_event(doc, list, ref.event, new) end,
+            "EVENT " .. ref.event, function() editor.dialog = { kind = "map_events" } end
     end
     local rows = Goals.rows(doc, Validate.summary(doc))
     local goal = rows[ref.goal]
@@ -1086,28 +1085,136 @@ local function action_row(editor, kit, ref, event, write, action, x, y, w)
     return false
 end
 
--- One event: when it fires (a timed event), the line it says and what it does.
+local TRIGGERS = {
+    { label = "AT A TIME OF THE PHASE", value = "time", icon = "refresh" },
+    { label = "WHEN A PLAYER GETS TO A PLACE", value = "area", icon = "flag" },
+    { label = "WHEN OBJECTS ARE DESTROYED", value = "destroyed", icon = "target" },
+}
+
+-- What sets off an event of the map: the kind, then its settings. True when
+-- it changed the event.
+local function trigger_rows(editor, kit, ref, event, write, x, y, w)
+    local theme  = kit.theme
+    local doc    = editor.doc
+    local limits = Goals.limits()
+    local small  = { color = theme.text_dim, size = theme.font_small }
+    kit:label("WHEN", x, y, 96, theme.row, small)
+    local when, when_changed = kit:choice("event_when", x + 96, y, 300, TRIGGERS, event.when)
+    if when_changed then
+        local size = doc:size()
+        write(Goals.retrigger(event, when, limits.timer.default,
+            { x = math.floor(editor.view.x % size), y = math.floor(editor.view.y % size), radius = limits.radius.default },
+            Goals.pick(doc, editor.selection.list)))
+        return true
+    end
+    y = y + theme.row + 6
+    local cx = x + 96
+    if event.when == "time" then
+        local range = limits.timer
+        kit:label("AT", x, y, 96, theme.row, small)
+        local at, changed = kit:number("event_at", cx, y, 120, event.at,
+            { min = range.min, max = range.max, step = range.step, big = range.step * 12, suffix = " S" })
+        if changed then
+            write(Goals.with(event, "at", at))
+            return true
+        end
+        cx = cx + 128
+        local again, again_changed = kit:check("event_repeat", cx, y, 96, "REPEAT", event.every ~= nil,
+            { tip = "IT HAPPENS AGAIN EVERY SO MANY SECONDS, SO MANY TIMES IN ALL" })
+        if again_changed then
+            local out = Goals.with(event, "every", again and limits.every.default or nil)
+            write(Goals.with(out, "times", again and limits.times.default or nil))
+            return true
+        end
+        cx = cx + 104
+        if event.every then
+            kit:label("EVERY", cx, y, 44, theme.row, small)
+            range = limits.every
+            local every, every_changed = kit:number("event_every", cx + 46, y, 110, event.every,
+                { min = range.min, max = range.max, step = range.step, big = range.step * 12, suffix = " S" })
+            if every_changed then
+                write(Goals.with(event, "every", every))
+                return true
+            end
+            range = limits.times
+            local times, times_changed = kit:number("event_times", cx + 164, y, 80, event.times or range.min,
+                { min = range.min, max = range.max })
+            if times_changed then
+                write(Goals.with(event, "times", times))
+                return true
+            end
+            kit:label("TIMES", cx + 250, y, 50, theme.row, small)
+        else
+            kit:label(Goals.clock(event.at) .. " INTO THE PHASE", cx, y, x + w - cx, theme.row, small)
+        end
+    elseif event.when == "area" then
+        local place = event.place
+        if kit:button("event_place", cx, y, 150, theme.row, { text = "PICK ON THE MAP", icon = "pin",
+            tip = "CLICK THE PLACE ON THE MAP" }) then
+            editor:pick_place(place.radius or limits.radius.default,
+                "CLICK THE PLACE A PLAYER SETS THE EVENT OFF AT.  RIGHT CLICK: BACK TO THE EVENT.",
+                function(px, py)
+                    local current, rewrite = event_ref(editor, ref)
+                    if current and current.place then
+                        rewrite(Goals.with(current, "place",
+                            { x = px, y = py, radius = current.place.radius, land = current.place.land }))
+                    end
+                end,
+                function() editor.dialog = { kind = "event", ref = ref } end)
+            return true
+        end
+        cx = cx + 158
+        kit:label("WITHIN", cx, y, 50, theme.row, small)
+        local range = limits.radius
+        local radius, changed = kit:number("event_radius", cx + 52, y, 110, place.radius or range.default,
+            { min = range.min, max = range.max, step = range.step, big = range.step * 4, suffix = " PX" })
+        if changed then
+            write(Goals.with(event, "place", Goals.with(place, "radius", radius)))
+            return true
+        end
+        cx = cx + 170
+        local land, land_changed = kit:check("event_land", cx, y, x + w - cx, "DOWN OR STOPPED THERE", place.land == true,
+            { tip = "A CHOPPER HAS TO LAND IN THE PLACE, A TANK TO STOP IN IT" })
+        if land_changed then
+            write(Goals.with(event, "place", Goals.with(place, "land", land or nil)))
+            return true
+        end
+    else
+        local found  = Goals.targets(doc, event)
+        local picked = Goals.pick(doc, editor.selection.list)
+        kit:label(#found .. (#found == 1 and " OBJECT" or " OBJECTS"), cx, y, 84, theme.row,
+            { color = #found > 0 and theme.text or theme.warn, size = theme.font_small })
+        cx = cx + 88
+        if kit:button("event_targets", cx, y, 172, theme.row, { text = "USE THE SELECTION", disabled = #picked == 0,
+            tip = "THE EVENT HAPPENS ONCE THE LAST OF THEM IS DESTROYED" }) then
+            write(Goals.with(event, "targets", picked))
+            return true
+        end
+        cx = cx + 176
+        if kit:button("event_targets_select", cx, y, 120, theme.row, { text = "SELECT ON MAP", disabled = #found == 0,
+            tip = "SELECT THEM ON THE MAP" }) then
+            close(editor)
+            editor:show_objects(found)
+            return true
+        end
+    end
+    return false
+end
+
+-- One event: what sets it off (an event of the map), the line it says and
+-- what it does.
 local function draw_event(editor, kit, dialog)
     local event, write, title, back = event_ref(editor, dialog.ref)
     if not event then
         back_to_objectives(editor)
         return
     end
-    kit:dialog(title, 720, 500, function(_, x, y, w, h)
+    kit:dialog(title, 720, 540, function(_, x, y, w, h)
         local theme  = kit.theme
         local bottom = y + h - theme.row - 2
-        if dialog.ref.timer then
-            local range = Goals.limits().timer
-            kit:label("AT", x, y, 96, theme.row, { color = theme.text_dim, size = theme.font_small })
-            local at, changed = kit:number("event_at", x + 96, y, 120, event.at,
-                { min = range.min, max = range.max, step = range.step, big = range.step * 12, suffix = " S" })
-            if changed then
-                write(Goals.with(event, "at", at))
-                return
-            end
-            kit:label(Goals.clock(event.at) .. " INTO THE PHASE", x + 224, y, 200, theme.row,
-                { color = theme.text_dim, size = theme.font_small })
-            y = y + theme.row + 6
+        if dialog.ref.event then
+            if trigger_rows(editor, kit, dialog.ref, event, write, x, y, w) then return end
+            y = y + (theme.row + 6) * 2
         end
         kit:label("SAY", x, y, 96, theme.row, { color = theme.text_dim, size = theme.font_small })
         local say, _, done = kit:field("event_say", x + 96, y, w - 96, event.say or "",
@@ -1196,59 +1303,61 @@ local function draw_events(editor, kit, dialog)
     end)
 end
 
--- The map's timed events, each opened in the event editor.
-local TIMER_H = 52
+-- The map's events, each opened in the event editor.
+local MAP_EVENT_H = 52
 
-local function timer_card(editor, kit, list, i, x, y, w)
+local function map_event_card(editor, kit, list, i, x, y, w)
     local theme = kit.theme
-    local timer = list[i]
+    local event = list[i]
     local pad   = theme.pad
-    kit:rect(x, y, w, TIMER_H - 6, theme.panel_head, 3)
-    kit:label("AT " .. Goals.clock(timer.at), x + pad, y + 2, 120, theme.row, { color = theme.accent, size = theme.font_small })
-    kit:label(Goals.summary(timer), x + pad, y + theme.row + 2, w - pad * 2 - 130, theme.row,
+    kit:rect(x, y, w, MAP_EVENT_H - 6, theme.panel_head, 3)
+    kit:label(i .. ".  " .. Goals.when(editor.doc, event), x + pad, y + 2, w - pad * 2 - 130, theme.row,
+        { color = theme.accent, size = theme.font_small })
+    kit:label(Goals.summary(event), x + pad, y + theme.row + 2, w - pad * 2 - 130, theme.row,
         { color = theme.text_dim, size = theme.font_small })
-    if kit:button("timer" .. i .. "_remove", x + w - pad - 22, y + 2, 22, theme.row,
-        { icon = "trash", flat = true, tip = "REMOVE THIS TIMED EVENT" }) then
-        Goals.remove_timer(editor.doc, list, i)
+    if kit:button("map_event" .. i .. "_remove", x + w - pad - 22, y + 2, 22, theme.row,
+        { icon = "trash", flat = true, tip = "REMOVE THIS EVENT" }) then
+        Goals.remove_map_event(editor.doc, list, i)
         return true
     end
-    if kit:button("timer" .. i .. "_edit", x + w - pad - 120, y + 2, 92, theme.row, { text = "EDIT", icon = "edit",
-        tip = "WHEN IT HAPPENS, WHAT IS SAID AND WHAT HAPPENS THEN" }) then
-        editor.dialog = { kind = "event", ref = { timer = i } }
+    if kit:button("map_event" .. i .. "_edit", x + w - pad - 120, y + 2, 92, theme.row, { text = "EDIT", icon = "edit",
+        tip = "WHAT SETS IT OFF, WHAT IS SAID AND WHAT HAPPENS THEN" }) then
+        editor.dialog = { kind = "event", ref = { event = i } }
         return true
     end
     return false
 end
 
-local function draw_timers(editor, kit)
+local function draw_map_events(editor, kit)
     local doc = editor.doc
-    kit:dialog("TIMED EVENTS", 660, 420, function(_, x, y, w, h)
+    kit:dialog("EVENTS OF THE MAP", 660, 420, function(_, x, y, w, h)
         local theme  = kit.theme
-        local list   = Goals.timers(doc)
+        local list   = Goals.map_events(doc)
         local bottom = y + h - theme.row - 2
-        if kit:button("timer_add", x, y, 170, theme.row + 2, { text = "ADD TIMED EVENT", icon = "plus" }) then
-            editor.dialog = { kind = "event", ref = { timer = Goals.add_timer(doc, list) } }
+        if kit:button("map_event_add", x, y, 150, theme.row + 2, { text = "ADD EVENT", icon = "plus" }) then
+            editor.dialog = { kind = "event", ref = { event = Goals.add_map_event(doc, list) } }
             return
         end
         y = y + theme.row + 8
         local note_h = theme.row * 2
         local list_h = bottom - y - note_h - 12
         kit:rect(x, y, w, list_h, theme.field, 3)
-        local offset = kit:scroll_begin("timers_list", x, y, w, list_h, #list * TIMER_H + 2)
+        local offset = kit:scroll_begin("map_events_list", x, y, w, list_h, #list * MAP_EVENT_H + 2)
         for i = 1, #list do
-            local cy = y + 4 + (i - 1) * TIMER_H - offset
-            if cy + TIMER_H > y and cy < y + list_h and timer_card(editor, kit, list, i, x + 4, cy, w - 16) then
+            local cy = y + 4 + (i - 1) * MAP_EVENT_H - offset
+            if cy + MAP_EVENT_H > y and cy < y + list_h and map_event_card(editor, kit, list, i, x + 4, cy, w - 16) then
                 kit:blur()
                 break
             end
         end
         if #list == 0 then
-            kit:label("NO TIMED EVENT YET", x, y, w, list_h, { align = "center", color = theme.text_dim })
+            kit:label("NO EVENT YET", x, y, w, list_h, { align = "center", color = theme.text_dim })
         end
         kit:scroll_end()
-        kit:paragraph("THE TIME COUNTS FROM THE START OF THE PHASE. EVENTS AT THE SAME TIME HAPPEN IN THE ORDER OF "
-            .. "THIS LIST.", x, y + list_h + 8, w, { color = theme.text_dim, size = theme.font_small })
-        if kit:button("timers_back", x + w - 100, bottom, 100, theme.row + 2, { text = "BACK", primary = true }) then
+        kit:paragraph("AN EVENT HAPPENS AT A TIME OF THE PHASE, WHEN A PLAYER GETS TO A PLACE OR ONCE OBJECTS ARE "
+            .. "DESTROYED. EVENTS SET OFF TOGETHER HAPPEN IN THE ORDER OF THIS LIST.", x, y + list_h + 8, w,
+            { color = theme.text_dim, size = theme.font_small })
+        if kit:button("map_events_back", x + w - 100, bottom, 100, theme.row + 2, { text = "BACK", primary = true }) then
             back_to_objectives(editor)
         end
     end)
@@ -1525,7 +1634,7 @@ end
 
 local DRAW = { settings = draw_settings, cards = draw_cards, new = draw_new, open = draw_open,
                save_as = draw_save_as, prefab = draw_prefab, generate = draw_generate, ask = draw_ask,
-               help = draw_help, events = draw_events, event = draw_event, timers = draw_timers }
+               help = draw_help, events = draw_events, event = draw_event, map_events = draw_map_events }
 
 function Dialogs.draw(editor, kit)
     local dialog = editor.dialog

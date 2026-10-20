@@ -53,13 +53,13 @@ end
 -- own among them, in the order it wants them, and words them all; one its
 -- content asks for and it does not list follows the listed ones. An objective
 -- of a map may carry events (spec.on_open, spec.on_done), fired as it comes
--- up or is done, and its timed events (own.timers: an event with at) fire
--- once the phase is that many seconds old. What an event does is
+-- up or is done, and the map's own events (own.events) fire when what sets
+-- them off happens (Mission:_update_events). What an event does is
 -- Mission:_fire's.
 local function objectives_from_stage(world)
     local own = world.stage.mission or {}
     local def = { objectives = {}, no_return = own.no_return, ordered = own.ordered,
-                  time_limit = own.time_limit, timers = own.timers, announce = world.stage.mission ~= nil }
+                  time_limit = own.time_limit, events = own.events, announce = world.stage.mission ~= nil }
     local asked = {
         destroy_targets = #world.targets > 0,
         rescue_people   = world.rescue ~= nil and world.rescue.total > 0,
@@ -163,10 +163,11 @@ function Mission:init(world, players, def)
             self:_prepare(spec.on_done)
         end
     end
-    self.timers = {}              -- a map's timed events not fired yet
-    for _, timer in ipairs(def.timers or {}) do
-        self.timers[#self.timers + 1] = timer
-        self:_prepare(timer)
+    self.events = {}              -- { spec, next_at, left, targets }: a map's events still to fire
+    for _, spec in ipairs(def.events or {}) do
+        self.events[#self.events + 1] = { spec = spec, next_at = spec.at, left = spec.times or 1,
+                                          targets = spec.targets and self:_placed(spec.targets) }
+        self:_prepare(spec)
     end
 
     -- The phase flagged with a special end (0x2909e8 bit 0) keeps its commander
@@ -404,13 +405,50 @@ function Mission:_over()
     return self.state == "won" or self.state == "phase_failed"
 end
 
--- Fire the timed events whose time has come, in the order the map lists them.
-function Mission:_update_timers()
-    local waiting = {}
-    for _, timer in ipairs(self.timers) do
-        if self.age >= timer.at then self:_fire(timer) else waiting[#waiting + 1] = timer end
+-- Whether a player is inside the circle; with land, one that is down or stopped.
+function Mission:_player_at(x, y, radius, land)
+    for _, p in ipairs(self.players) do
+        if not p.death and (not land or p:is_stationary()) then
+            local dx, dy = self.world:delta(p.x, p.y, x, y)
+            if dx * dx + dy * dy <= radius * radius then return true end
+        end
     end
-    self.timers = waiting
+    return false
+end
+
+-- Whether what sets off a map's event has happened: its time has come, a
+-- player got to its place, the last of its objects is destroyed (never when
+-- none of them can be).
+function Mission:_triggered(event)
+    local spec = event.spec
+    if spec.when == "area" then
+        local place = spec.place
+        return self:_player_at(place.x, place.y, place.radius or REACH_RADIUS, place.land)
+    elseif spec.when == "destroyed" then
+        if #event.targets == 0 then return false end
+        for _, e in ipairs(event.targets) do
+            if not e:is_destroyed() then return false end
+        end
+        return true
+    end
+    return self.age >= event.next_at
+end
+
+-- Fire the map's events that are set off, in the order the map lists them;
+-- one at a time with every fires again that much later, times in all.
+function Mission:_update_events()
+    local waiting = {}
+    for _, event in ipairs(self.events) do
+        local again = true
+        if self:_triggered(event) then
+            self:_fire(event.spec)
+            event.left = event.left - 1
+            again      = event.spec.every ~= nil and event.left > 0
+            if again then event.next_at = event.next_at + event.spec.every end
+        end
+        if again then waiting[#waiting + 1] = event end
+    end
+    self.events = waiting
 end
 
 function Mission:_close(o)
@@ -461,7 +499,7 @@ end
 function Mission:update(dt)
     if self.state == "won" or self.state == "failed" or self.state == "phase_failed" then return end
     self.age = self.age + dt
-    self:_update_timers()
+    self:_update_events()
     if self:_over() then return end
     if self:_all_dead() then self.state = "failed"; return end
     -- An agent killed leaves its pad open for good (0x1fe911).
@@ -545,14 +583,9 @@ end
 
 -- A vehicle inside the place's circle; with land, one that is down or stopped.
 function Mission:_update_reach(o)
-    for _, p in ipairs(self.players) do
-        if not p.death and (not o.spec.land or p:is_stationary()) then
-            local dx, dy = self.world:delta(p.x, p.y, o.x, o.y)
-            if dx * dx + dy * dy <= o.radius * o.radius then
-                o.progress = 1
-                o.done     = true
-            end
-        end
+    if self:_player_at(o.x, o.y, o.radius, o.spec.land) then
+        o.progress = 1
+        o.done     = true
     end
 end
 

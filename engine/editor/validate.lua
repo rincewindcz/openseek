@@ -172,14 +172,16 @@ function Validate.run(doc)
             end
         end
     end
-    for _, timer in ipairs(map.timers or {}) do
-        local name = "THE TIMED EVENT AT " .. Goals.clock(timer.at)
-        if map.time_limit and timer.at >= map.time_limit then
+    for i, event in ipairs(map.events or {}) do
+        local name = "EVENT " .. i
+        if event.when == "time" and map.time_limit and event.at >= map.time_limit then
             issue("warn", name .. " COMES AFTER THE TIME LIMIT AND NEVER HAPPENS")
-        elseif not Goals.does_something(timer) then
+        elseif event.when == "destroyed" and #Goals.targets(doc, event) == 0 then
+            issue("warn", name .. " WAITS FOR OBJECTS TO BE DESTROYED, BUT HAS NONE THAT CAN BE: IT NEVER HAPPENS")
+        elseif not Goals.does_something(event) then
             issue("warn", name .. " SAYS AND DOES NOTHING")
         end
-        check_event(name, timer)
+        check_event(name, event)
     end
     for i, goal in ipairs(map.objectives) do
         for _, key in ipairs(Goals.EVENTS) do

@@ -379,7 +379,7 @@ map list and the editor are reached through ADVANCED / EDITOR.
 | `briefing_cards` | The picture beside each paragraph: `{ kind = "view", x, y, size, label }` (a square of the map, `size` world pixels a side, drawn from the map whenever it is shown), `{ kind = "card", stage, slot }` (a card of a pack stage's briefing) or `{ kind = "none" }`. |
 | `difficulty` | Set when the map is played on a difficulty of its own whatever the player's is: values of the difficulty keys (`game/difficulty`: `enemy_damage_level`, `enemy_damage`, `enemy_fire_level`, `enemy_fire_rate`, `enemy_aggression`, `pickup_level`, `land_for_medals`, `land_for_supplies`). |
 | `objectives` | The objectives in order, each `{ type, label, optional, on_open, on_done }` plus its own fields (table below). `on_open` / `on_done` are the objective's events, as it comes up and once it is done (an event: table below). The first files held `{ destroy, rescue, sabotage }` by name, which is still read. |
-| `timers` | Timed events: an event with `at`, fired once the phase is `at` seconds old. |
+| `events` | The map's events: an event with what sets it off, `when`: `time` (`at` seconds into the phase; with `every`, again that many seconds later, `times` in all), `area` (`place = { x, y, radius, land }`: a player inside the circle, down or stopped with `land`) or `destroyed` (`targets`: the last of these objects is destroyed; never when none of them can be). Files before triggers held `timers`, read as events at a time. |
 | `ordered` | An objective is worked on once every required one before it is done. |
 | `time_limit` | Seconds the required objectives have to be done in. |
 | `hold_agents`, `commander` | Stage global 5 (agents wait until all are in) and the special end. |
@@ -454,7 +454,7 @@ Compiling:
 - An objective's events get their objects as places in the entity list
   (`spec.on_open`, `spec.on_done`), the pickups among those to show or hide
   as places in `stage.pickups` (`show_pickups`, `hide_pickups`); so do the
-  timed events (`mission.timers`). `World.placed_posts` turns an entity place
+  map's events (`mission.events`), whose `targets` become entity places too. `World.placed_posts` turns an entity place
   into a helicopter post.
 - Routes, ground lines and roads are compiled from their points as stored,
   so a shape over the seam runs across it: the ground segments and road
@@ -513,8 +513,10 @@ other) through the replay path (`app.replay_return = "map_select"`). They
 belong to the map's file as it stood: a changed map starts over.
 
 Events: an objective of a map fires its events as it comes up and once it
-is done (`Mission:_fire`), and a timed event once the phase is that old
-(`Mission:_update_timers`, on `Mission.age`, the clock of the time limit).
+is done (`Mission:_fire`), and the map's own events when what sets them off
+happens (`Mission:_update_events`, in the map's order: the time on
+`Mission.age`, the clock of the time limit; a player at the place,
+`Mission:_player_at`; the last target destroyed).
 What an event waits to do is kept from happening until then
 (`Mission:_prepare`): what it shows is held back, the units it sets off are
 parked, the guns it opens fire with are silent. A held entity (`Entity.held`) is not there: it is not
@@ -673,19 +675,23 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   (a number; the row says how many posts the map has and whether they send
   another). Objects are taken from
   the selection (USE THE SELECTION; one id per hull and turret) and found
-  again with SHOW. TIMED EVENTS beside ADD OBJECTIVE lists the map's timed
-  events, each with its time, what it does in a few words, EDIT and remove.
+  again with SHOW. EVENTS beside ADD OBJECTIVE lists the map's events, each
+  with what sets it off and what it does in a few words, EDIT and remove.
   EVENTS on an objective (not one to keep intact) lists its two events, as it
-  comes up and once it is done, with EDIT. EDIT opens the event: AT (seconds
-  into the phase, timed events only), a line to SAY and, added with ADD WHAT
+  comes up and once it is done, with EDIT. EDIT opens the event: for an event
+  of the map WHEN (AT A TIME OF THE PHASE: AT, REPEAT, EVERY, TIMES; WHEN A
+  PLAYER GETS TO A PLACE: PICK ON THE MAP, WITHIN, DOWN OR STOPPED THERE,
+  the place drawn on the map with a flag; WHEN OBJECTS ARE DESTROYED: taken
+  from the selection), a line to SAY and, added with ADD WHAT
   HAPPENS, what it does (`Goals.ACTIONS`): APPEAR and VANISH (anything but a
   start or a mark of the people objectives), BLOW UP (what can be destroyed),
   SET OFF (units on a route), OPEN FIRE and HOLD FIRE (guns and mines), each
   with USE THE SELECTION and SELECT ON MAP; SHELLING (PICK ON THE MAP and a
   radius, drawn on the map in red), TIME LIMIT (seconds, signed), WEATHER, END
   THE PHASE (won or lost). An object that appears wears an eye on the map and
-  says so in PROPERTIES. The checks name a timed event at or past the time
-  limit, one that says and does nothing, an event that moves a time limit the
+  says so in PROPERTIES. The checks name an event at a time at or past the
+  time limit, one waiting for objects none of which can be destroyed, one
+  that says and does nothing, an event that moves a time limit the
   map lacks and one that takes away an object an objective has to destroy. Under the list: IN ORDER, TIME LIMIT, no flight home,
   agents together, commander rule.
 - The BASE objects hold START OF PLAYER 1 / 2: a player's chopper with the
@@ -1154,7 +1160,7 @@ galleries, debug mission picker, headless checks.
 | `data/overrides.json` | Per-sprite fixes over the stage data: `assets` (every stage) and `stages` (one stage), fields `explosion`, `drop`. Empty at present. |
 | `data/enemy_weapons.json` | Enemy fire in the original's units (`tick_rate` 70): `turret` (settle, turn, arc), `homing` (bearing refresh per level, radar penalty), the 20 `routines`, `soldier` (with `wander`), `mine`, `helicopter` (with the respawn clearance), `shelling` (the artillery pattern a map's event calls: radius, delay, impacts, window, impact radius, damage to what stands there and per damage level to the players), and `movement` (route modes, hangar rides, yield distance). Read once by `World` (`world.enemy_rules`). |
 | `data/missions.json` | Section 9. |
-| `data/editor.json` | Map editor: `theme` (colours and sizes of `ui/kit`), `art` (art set labels), `sizes`, `grid_steps`, `categories` and `layers` (kinds per catalog tab, `locked` by default), `layer_colors` (overview map dots), `line_colors` (ground line swatches), `stack_share`, `home_pad` (pad and mark sprite), `names` (sprite labels), `weapons` (labels of enemy weapons), `pickups` (the kinds a map can lay out besides ammunition, and their labels), `cards` (`caption`: colour, shadow, row and the glyphs of the briefing cards' pixel lettering, rows of `#` and `.`), `roads` (width limits, `join` reach, the sprite names of centre marks, and per art set a road's `width`, mark `pitch` and the two `edge` colours), `goals` (ranges and defaults of an objective's radius, seconds, medals, helicopters, of the time limit, a timed event's time, an event's shelling radius and time added; `kinds`: the kind groups an objective may ask for), `difficulty` (ranges of the percentages a map may set), `scatter` / `erase` brush defaults, `ground` (`min_uses`, `clear`), `autosave_seconds`. |
+| `data/editor.json` | Map editor: `theme` (colours and sizes of `ui/kit`), `art` (art set labels), `sizes`, `grid_steps`, `categories` and `layers` (kinds per catalog tab, `locked` by default), `layer_colors` (overview map dots), `line_colors` (ground line swatches), `stack_share`, `home_pad` (pad and mark sprite), `names` (sprite labels), `weapons` (labels of enemy weapons), `pickups` (the kinds a map can lay out besides ammunition, and their labels), `cards` (`caption`: colour, shadow, row and the glyphs of the briefing cards' pixel lettering, rows of `#` and `.`), `roads` (width limits, `join` reach, the sprite names of centre marks, and per art set a road's `width`, mark `pitch` and the two `edge` colours), `goals` (ranges and defaults of an objective's radius, seconds, medals, helicopters, of the time limit, an event's time, repeat interval and count, shelling radius and time added; `kinds`: the kind groups an objective may ask for), `difficulty` (ranges of the percentages a map may set), `scatter` / `erase` brush defaults, `ground` (`min_uses`, `clear`), `autosave_seconds`. |
 | `data/vehicles/*.json` | Vehicle tuning (sandbox editable); `armor_base` is the original's per-vehicle armor factor (chopper 20, tank 40). Tank only: `bump_bounce`, `bump_back`, `bump_arc`, `bump_min` (the bounce off a solid object). |
 | `data/vehicle_variants.json` | Chopper and tank variants (section 9a). |
 | `data/credits.json` | Credits: `styles` (fonts, name offset, `color` tint of a mask font) and positioned `entries` (`heading` / `name`, or a label `text`), 320x240 design space. |

@@ -323,11 +323,16 @@ function MapCompiler.compile(map)
         if spec.type then goals[#goals + 1] = spec end
     end
     local rescue = MapFile.objective(map, "rescue")
-    local timers = {}
-    for _, timer in ipairs(map.timers or {}) do
-        local spec = event(timer)
-        spec.at = timer.at
-        timers[#timers + 1] = spec
+    -- The map's events, with what sets each off.
+    local events = {}
+    for _, raw in ipairs(map.events or {}) do
+        local spec = event(raw)
+        spec.when, spec.at, spec.every, spec.times = raw.when, raw.at, raw.every, raw.times
+        if raw.place then
+            spec.place = { x = raw.place.x, y = raw.place.y, radius = raw.place.radius, land = raw.place.land }
+        end
+        if raw.targets then spec.targets = placed(raw.targets) end
+        events[#events + 1] = spec
     end
 
     return {
@@ -355,7 +360,7 @@ function MapCompiler.compile(map)
         mission     = { name = map.name, author = map.author, briefing = map.briefing, vehicle = map.vehicle,
                         players = map.players, objectives = goals, loadout = map.loadout, equip = map.equip,
                         difficulty = map.difficulty, ordered = map.ordered == true, time_limit = map.time_limit,
-                        no_return = map.no_return == true, timers = timers },
+                        no_return = map.no_return == true, events = events },
         missing     = missing,
     }
 end

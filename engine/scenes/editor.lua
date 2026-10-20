@@ -1058,7 +1058,8 @@ function Editor:_draw_marks()
             end
         end
     end
-    -- Where an objective asks the player to get to, and where shelling lands.
+    -- Where an objective asks the player to get to, where shelling lands and
+    -- where a player sets off an event.
     if self.layers.objectives.visible then
         for _, place in ipairs(self:goal_marks().places) do
             local dx, dy = doc:delta(place.x, place.y, self.view.x, self.view.y)
@@ -1182,7 +1183,8 @@ function Editor:_draw_badges()
         local dx, dy = doc:delta(place.x, place.y, self.view.x, self.view.y)
         local sx, sy = self.view:to_screen(self.view.x + dx, self.view.y + dy)
         kit:rect(sx / s - 9, sy / s - 9, 18, 18, { 0, 0, 0, 0.72 }, 9)
-        kit:icon(place.shell and "bomb" or "pin", sx / s - 8, sy / s - 8, 16, place.shell and theme.danger or theme.accent)
+        local icon = (place.shell and "bomb") or (place.trigger and "flag") or "pin"
+        kit:icon(icon, sx / s - 8, sy / s - 8, 16, place.shell and theme.danger or theme.accent)
     end
     love.graphics.setScissor()
 end
