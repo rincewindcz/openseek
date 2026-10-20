@@ -1,16 +1,18 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class = require "engine.core.class"
-local Scene = require "engine.core.scene"
-local Menu  = require "engine.ui.menu"
+local Class   = require "engine.core.class"
+local Scene   = require "engine.core.scene"
+local Menu    = require "engine.ui.menu"
+local Display = require "engine.core.display"
 
 -- ADVANCED submenu: the entries that are not part of a normal run (the mission
 -- / phase picker, the player-made maps with their editor, the replay browser),
 -- kept off the main menu so it stays short. Same Menu widget and backdrop as
 -- the main menu; BACK returns to it. Not to be confused with
 -- advanced_settings, which is the OPTIONS page. The map editor is a mouse and
--- keyboard tool, so the web and phone builds leave EDITOR out.
+-- keyboard tool, so the web and phone builds and fixed-display handhelds leave
+-- EDITOR out.
 local AdvancedMenu = Class(Scene)
 
 AdvancedMenu.ui_pointer = true
@@ -28,7 +30,8 @@ function AdvancedMenu:init(app)
     Scene.init(self, app)
     local entries = {}
     for _, entry in ipairs(ENTRIES) do
-        if entry.id ~= "maps" or (DESKTOP[love.system.getOS()] and not app.touch_emulation) then
+        if entry.id ~= "maps"
+            or (DESKTOP[love.system.getOS()] and not app.touch_emulation and not Display.fixed()) then
             entries[#entries + 1] = entry
         end
     end

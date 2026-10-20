@@ -24,11 +24,19 @@ Display.SIZES = {
 local REFERENCE_HEIGHT = 720
 local MOBILE_OS        = { Android = true, iOS = true }
 
--- Gameplay framing multiplier for the world zoom and the HUD. Phones and tablets
--- frame the game as if the screen were REFERENCE_HEIGHT tall, so a dense display
--- does not shrink the HUD or widen the view; desktop and web keep 1.
+-- KMSDRM drives the panel directly in its one native mode, so there is no
+-- window to size or to make fullscreen. Re-creating the window there (setMode
+-- reloads every canvas, shader and image) aborted the game on Mesa Lima.
+function Display.fixed()
+    return os.getenv("SDL_VIDEODRIVER") == "kmsdrm"
+end
+
+-- Gameplay framing multiplier for the world zoom and the HUD. Phones, tablets
+-- and fixed displays frame the game as if the screen were REFERENCE_HEIGHT
+-- tall, so a dense display does not shrink the HUD or widen the view and a
+-- 480-line panel keeps the original framing; desktop and web keep 1.
 function Display.view_scale()
-    if not MOBILE_OS[love.system.getOS()] then return 1 end
+    if not (MOBILE_OS[love.system.getOS()] or Display.fixed()) then return 1 end
     return love.graphics.getHeight() / REFERENCE_HEIGHT
 end
 
@@ -51,8 +59,15 @@ end
 -- Push the persisted display settings onto the window. Called at startup and
 -- whenever a DISPLAY option changes. A no-op on failure (headless / unsupported).
 -- The web page letterboxes a fixed canvas and owns fullscreen (tools/web/seek.js),
--- so the web build ignores the persisted size and fullscreen.
+-- so the web build ignores the persisted size and fullscreen. A fixed display
+-- only takes vsync, without re-creating the window.
 function Display.apply()
+    if Display.fixed() then
+        love.window.setVSync(Config.vsync and 1 or 0)
+        local w, h = love.graphics.getDimensions()
+        Log.info("display", "%dx%d fixed, vsync %s", w, h, Config.vsync and "on" or "off")
+        return
+    end
     local web        = love.system.getOS() == "Web"
     local s          = web and Display.SIZES[1] or size_for(Config.window_size)
     local fullscreen = not web and Config.fullscreen and true or false

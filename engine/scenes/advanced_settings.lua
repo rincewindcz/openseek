@@ -68,8 +68,8 @@ local function apply_style()      Style.apply(Config.style) end
 -- `kind = "controls"` builds its rows from the rebindable input actions; `kind =
 -- "exit"` leaves the screen when chosen. Every option key is a persisted Config
 -- field (or, for keybinds, an Input action). An option with `web = false` is
--- dropped on the web build, where the page owns the canvas size and fullscreen;
--- a category with `touch` set is shown only where touch play is possible
+-- dropped on the web build, where the page owns the canvas size and fullscreen,
+-- and one with `fixed = false` on a fixed display (Display.fixed); a category with `touch` set is shown only where touch play is possible
 -- (TouchControls.available). A `kind = "scene"` row opens another scene; with
 -- `menu_only` it is dimmed and does nothing while a game is suspended under
 -- the options.
@@ -79,8 +79,8 @@ local CATEGORIES = {
         { label = "PREVIEW STYLES", kind = "scene", scene = "style_select", menu_only = true },
     } },
     { title = "DISPLAY", options = {
-        { key = "fullscreen",  label = "FULLSCREEN",  kind = "toggle", on_change = apply_display, web = false },
-        { key = "window_size", label = "WINDOW SIZE", kind = "choice", choices = Display.size_choices(), on_change = apply_display, web = false },
+        { key = "fullscreen",  label = "FULLSCREEN",  kind = "toggle", on_change = apply_display, web = false, fixed = false },
+        { key = "window_size", label = "WINDOW SIZE", kind = "choice", choices = Display.size_choices(), on_change = apply_display, web = false, fixed = false },
         { key = "vsync",       label = "VSYNC",       kind = "toggle", on_change = apply_display },
         { key = "show_fps",    label = "SHOW FPS",    kind = "toggle" },
     } },
@@ -238,6 +238,7 @@ end
 -- The categories and rows this build shows.
 function AdvancedSettings:_build_categories()
     local web   = love.system.getOS() == "Web"
+    local fixed = Display.fixed()
     local touch = TouchControls.available(self.app)
     self.categories = {}
     for _, cat in ipairs(CATEGORIES) do
@@ -246,7 +247,9 @@ function AdvancedSettings:_build_categories()
             if cat.options then
                 shown.options = {}
                 for _, opt in ipairs(cat.options) do
-                    if not (web and opt.web == false) then shown.options[#shown.options + 1] = opt end
+                    if not (web and opt.web == false) and not (fixed and opt.fixed == false) then
+                        shown.options[#shown.options + 1] = opt
+                    end
                 end
             end
             self.categories[#self.categories + 1] = shown
