@@ -30,6 +30,9 @@ local DEFAULTS  = {
 }
 
 -- World coordinates reach the map size, more than mediump holds to the pixel.
+-- They come in as the texture coordinates of the fill: LOVE transforms the
+-- vertices of a streamed draw on the CPU, so the vertex position may already
+-- be in screen pixels.
 local SHADER_SRC = [[
 #if defined(GL_ES) && defined(GL_FRAGMENT_PRECISION_HIGH)
 precision highp float;
@@ -43,7 +46,7 @@ varying WORLD_PRECISION vec2 world_pos;
 
 #ifdef VERTEX
 vec4 position(mat4 transform_projection, vec4 vertex_position) {
-    world_pos = vertex_position.xy;
+    world_pos = VertexTexCoord.xy;
     return transform_projection * vertex_position;
 }
 #endif
@@ -178,12 +181,14 @@ local function make_noise(spec)
 end
 
 function Terrain:init()
-    self.grid   = nil    -- { cell, cells } shown, or nil for one ground colour
-    self.key    = nil
-    self.data   = nil    -- the cell image's pixels
-    self.image  = nil
-    self.shader = nil
-    self.noise  = nil
+    self.grid      = nil    -- { cell, cells } shown, or nil for one ground colour
+    self.key       = nil
+    self.data      = nil    -- the cell image's pixels
+    self.image     = nil
+    self.shader    = nil
+    self.noise     = nil
+    self.fill      = nil    -- the map square, texture coordinates in world units
+    self.fill_size = nil
 end
 
 -- Show grid (a map's terrain, or nil) over a map size px a side whose own
@@ -235,9 +240,16 @@ function Terrain:draw()
     shader:send("fine", spec.fine)
     shader:send("dither", spec.dither)
     shader:send("colors", unpack(colors))
+    local size = self.size
+    if not self.fill or self.fill_size ~= size then
+        self.fill = g.newMesh({
+            { 0, 0, 0, 0 }, { size, 0, size, 0 }, { size, size, size, size }, { 0, size, 0, size },
+        }, "fan", "static")
+        self.fill_size = size
+    end
     g.setShader(shader)
     g.setColor(1, 1, 1, 1)
-    g.rectangle("fill", 0, 0, self.size, self.size)
+    g.draw(self.fill)
     g.setShader()
 end
 
