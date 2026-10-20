@@ -91,7 +91,7 @@ float weight_if(float art, float k, float w) {
 #else
 #define ARG_PRECISION
 #endif
-vec4 effect(ARG_PRECISION vec4 color, Image tex, ARG_PRECISION vec2 texcoord, ARG_PRECISION vec2 screen) {
+ARG_PRECISION vec4 effect(ARG_PRECISION vec4 color, Image tex, ARG_PRECISION vec2 texcoord, ARG_PRECISION vec2 screen) {
     vec2 p = floor(world_pos) + 0.5;
     vec2 uv = p / noise_world;
     vec4 coarse = Texel(noise, uv);

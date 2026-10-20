@@ -100,8 +100,9 @@ end
 -- LOVE compiles OpenGL ES pixel shaders at mediump, 16-bit on many mobile GPUs:
 -- too coarse for window-pixel coordinates (the grain hash bands) and one-texel
 -- offsets on a wide canvas. Every shader here opts into highp where available.
--- LOVE declares effect() before this code at mediump, so the parameters keep
--- that precision and the texture coordinate is read from its highp varying.
+-- LOVE declares effect() before this code at mediump, so its return type and
+-- parameters keep that precision (Mesa rejects a definition that differs) and
+-- the texture coordinate is read from its highp varying.
 -- Only there: on the desktop the declaration carries no precision, and the
 -- Vulkan renderer of LOVE 12 refuses a definition that names another one.
 local PRECISION = [[
@@ -116,7 +117,7 @@ local EFFECT = [[
 #else
 #define ARG_PRECISION
 #endif
-vec4 effect(ARG_PRECISION vec4 color, Image tex, ARG_PRECISION vec2 texcoord, ARG_PRECISION vec2 screen) {
+ARG_PRECISION vec4 effect(ARG_PRECISION vec4 color, Image tex, ARG_PRECISION vec2 texcoord, ARG_PRECISION vec2 screen) {
     vec2 uv = VaryingTexCoord.st;
 ]]
 
