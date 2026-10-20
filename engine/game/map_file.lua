@@ -103,6 +103,12 @@ local Log  = require "engine.core.log"
 --                the left, then below and to the right) and centre marks
 --                every pitch pixels (across / down: the mark's type for a
 --                level and an upright leg, { from, class, sprite })
+--   terrain      ground of other art sets: { cell = side of a square cell in
+--                world px, cells = { [k] = art digit } } with k = row * n +
+--                column + 1 and n = size / cell; a cell left out has the
+--                map's own art set. Stored as rows, one string a row of runs
+--                ("12a40.": twelve cells of art 0, forty of the map's own;
+--                "a" to "e" are art 0 to 4, "." the map's own)
 --   view         the editor's last view { x, y, zoom }
 local MapFile = {}
 
@@ -114,6 +120,11 @@ MapFile.MAX_SIZE     = 4096
 MapFile.DEFAULT_SIZE = 4096
 
 local NAME_MAX = 40
+
+-- The sides a terrain cell may have; each divides every map size.
+MapFile.TERRAIN_CELLS = { 16, 32, 64, 128 }
+local OWN_ART  = "."
+local ART_BASE = string.byte("a")
 
 local OBJECTIVE_TYPES = {
     targets = true, rescue = true, sabotage = true, destroy = true, reach = true, survive = true,
@@ -194,6 +205,50 @@ local function rows(list, fn)
     return "[\n" .. table.concat(parts, ",\n") .. "\n  ]"
 end
 
+-- The terrain as rows of runs, one string a row.
+local function terrain_rows(terrain, size)
+    local n, cells, out = size / terrain.cell, terrain.cells, {}
+    for row = 0, n - 1 do
+        local parts, run, code = {}, 0, nil
+        for column = 0, n - 1 do
+            local art  = cells[row * n + column + 1]
+            local this = art and string.char(ART_BASE + tonumber(art)) or OWN_ART
+            if this ~= code and run > 0 then
+                parts[#parts + 1] = run .. code
+                run = 0
+            end
+            code, run = this, run + 1
+        end
+        parts[#parts + 1] = run .. code
+        out[#out + 1] = json.encode(table.concat(parts))
+    end
+    return out
+end
+
+-- The terrain of a decoded file, or nil when it has none or none that fits the size.
+local function terrain_of(raw, size)
+    if type(raw) ~= "table" or type(raw.rows) ~= "table" then return nil end
+    local cell = tonumber(raw.cell)
+    local fits = false
+    for _, side in ipairs(MapFile.TERRAIN_CELLS) do
+        if side == cell and size % side == 0 then fits = true end
+    end
+    if not fits then return nil end
+    local n, cells = size / cell, {}
+    for row = 0, n - 1 do
+        local text   = type(raw.rows[row + 1]) == "string" and raw.rows[row + 1] or ""
+        local column = 0
+        for run, code in text:gmatch("(%d+)([%.a-e])") do
+            local art = code ~= OWN_ART and tostring(code:byte() - ART_BASE) or nil
+            for _ = 1, tonumber(run) do
+                if column < n then cells[row * n + column + 1] = art end
+                column = column + 1
+            end
+        end
+    end
+    return { cell = cell, cells = cells }
+end
+
 local function object_row(o)
     return string.format("[%d,%d,%d,%d,%d,%d,%d]", o.id, o.t, o.x, o.y, o.route or 0, o.owner or 0, o.group or 0)
 end
@@ -210,6 +265,10 @@ function MapFile.encode(map)
         if map[key] ~= nil then
             out[#out + 1] = string.format("  %s: %s", json.encode(key), compact(map[key]))
         end
+    end
+    if map.terrain then
+        out[#out + 1] = string.format('  "terrain": {"cell":%d,"rows":%s}', map.terrain.cell,
+            rows(terrain_rows(map.terrain, map.size), function(row) return row end))
     end
     out[#out + 1] = '  "types": '   .. rows(map.types, compact)
     out[#out + 1] = '  "routes": '  .. rows(map.routes, compact)
@@ -306,6 +365,7 @@ function MapFile.decode(text)
     map.timers      = nil
     map.ordered     = map.ordered == true or nil
     map.time_limit  = (tonumber(map.time_limit) or 0) > 0 and tonumber(map.time_limit) or nil
+    map.terrain     = terrain_of(map.terrain, map.size)
     map.routes      = type(map.routes) == "table" and map.routes or {}
     map.lines       = type(map.lines) == "table" and map.lines or {}
     local roads = {}
@@ -334,6 +394,47 @@ function MapFile.decode(text)
     map.objects = objects
     map.next_id = math.max(tonumber(map.next_id) or 1, top + 1)
     return map
+end
+
+-- terrain
+
+-- An empty terrain of cells cell px a side.
+function MapFile.new_terrain(cell)
+    return { cell = cell, cells = {} }
+end
+
+-- The art digit of the terrain cell under (x, y), or nil for the map's own.
+function MapFile.terrain_at(terrain, size, x, y)
+    local n = size / terrain.cell
+    local column = math.floor((x % size) / terrain.cell)
+    local row    = math.floor((y % size) / terrain.cell)
+    return terrain.cells[row * n + column + 1]
+end
+
+-- The terrain of a map old_size px a side as cells of cell px over a map
+-- size px a side: a new cell takes the ground most of the old cells it
+-- covers have (the first of them on a tie), or the one it lies in; what lies
+-- past the old edge wraps around, as the objects do.
+function MapFile.resample_terrain(terrain, old_size, size, cell)
+    local n, out = size / cell, {}
+    local per    = math.max(1, cell / terrain.cell)
+    local step   = cell / per
+    for row = 0, n - 1 do
+        for column = 0, n - 1 do
+            local counts, best, most = {}, nil, 0
+            for i = 0, per - 1 do
+                for j = 0, per - 1 do
+                    local art = MapFile.terrain_at(terrain, old_size, column * cell + (j + 0.5) * step,
+                        row * cell + (i + 0.5) * step)
+                    local key = art or OWN_ART
+                    counts[key] = (counts[key] or 0) + 1
+                    if counts[key] > most then best, most = art, counts[key] end
+                end
+            end
+            out[row * n + column + 1] = best
+        end
+    end
+    return { cell = cell, cells = out }
 end
 
 -- files

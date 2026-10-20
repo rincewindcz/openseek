@@ -4,6 +4,7 @@
 local Class     = require "engine.core.class"
 local Animation = require "engine.core.animation"
 local World     = require "engine.game.world"
+local Terrain   = require "engine.game.terrain"
 
 local Renderer = Class()
 
@@ -11,6 +12,7 @@ function Renderer:init(world, camera)
     self.world         = world
     self.camera        = camera
     self.highlight     = nil        -- Entity to tint (debug selection / hover)
+    self.terrain       = Terrain:new()   -- the ground of a map mixing art sets
 end
 
 -- Pulsing additive pass over a just-drawn sprite to mark the debug selection.
@@ -64,12 +66,14 @@ function Renderer:_world_pass(fn)
     g.pop()
 end
 
--- Ground pass: terrain fill, decals, and craters. Everything a vehicle on the
+-- Ground pass: terrain fill (one colour, or the art sets a map mixes), decals, and craters. Everything a vehicle on the
 -- ground (a tank, or a chopper on its skids) sits on top of; drawn before the
 -- object layer so trees/buildings can occlude it. Grounded players are drawn
 -- between this and draw_objects.
 function Renderer:draw_ground()
-    love.graphics.clear(self.world:ground_color())
+    local w = self.world
+    love.graphics.clear(w:ground_color())
+    self.terrain:set(w.stage.terrain, w.stage.world_size, w.env.art)
     self:_world_pass(self._draw_ground_layers)
 end
 
@@ -93,6 +97,7 @@ function Renderer:_draw_ground_layers(vp)
     local g = love.graphics
     local w = self.world
 
+    self.terrain:draw()
     -- Lowest layer: dust kicked up where shrapnel landed, under decals and trees.
     self:_draw_ground_fx(vp)
 

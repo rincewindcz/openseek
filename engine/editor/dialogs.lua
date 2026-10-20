@@ -1532,8 +1532,8 @@ local function draw_generate(editor, kit, dialog)
     local art = editor.doc:art()
     dialog.stage   = dialog.stage or Catalog.stages(art)[1]
     dialog.density = dialog.density or 100
-    if dialog.trees == nil then dialog.trees, dialog.scenery = true, true end
-    kit:dialog("GENERATE GROUND", 520, 300, function(_, x, y, w, h)
+    if dialog.trees == nil then dialog.trees, dialog.scenery, dialog.by_ground = true, true, true end
+    kit:dialog("GENERATE GROUND", 520, 330, function(_, x, y, w, h)
         local theme  = kit.theme
         local fw     = w - LABEL_W
         local bottom = y + h - theme.row - 2
@@ -1550,6 +1550,10 @@ local function draw_generate(editor, kit, dialog)
         dialog.scenery = kit:check("gen_scenery", x + LABEL_W, y, fw, "STONES, TUFTS AND GROUND TEXTURE", dialog.scenery)
         y = y + theme.row + 2
         dialog.trees = kit:check("gen_trees", x + LABEL_W, y, fw, "TREES", dialog.trees)
+        y = y + theme.row + 2
+        dialog.by_ground = kit:check("gen_by_ground", x + LABEL_W, y, fw, "EACH GROUND ITS OWN SCENERY", dialog.by_ground,
+            { disabled = not editor.doc.map.terrain,
+              tip = "THE GROUND OF ANOTHER ART SET GETS THE SCENERY OF A STAGE OF THAT ART SET" })
         if dialog.stage then
             local names = {}
             for i, item in ipairs(Generate.clutter(dialog.stage)) do names[i] = item.sprite:upper() end
@@ -1559,7 +1563,8 @@ local function draw_generate(editor, kit, dialog)
         if kit:button("gen_go", x + w - 110, bottom, 110, theme.row + 2,
             { text = "GENERATE", primary = true, disabled = not dialog.stage }) then
             local count = Generate.ground(editor.doc, dialog.stage,
-                { density = dialog.density / 100, trees = dialog.trees, scenery = dialog.scenery })
+                { density = dialog.density / 100, trees = dialog.trees, scenery = dialog.scenery,
+                  by_ground = dialog.by_ground })
             close(editor)
             editor:say(count .. " OBJECTS ADDED")
         end
@@ -1595,7 +1600,7 @@ end
 -- keys
 
 local KEYS = {
-    { "V  P  B  E  R  L  O  U", "SELECT, PLACE, SCATTER, ERASE, ROUTE, LINE, ROAD, MEASURE" },
+    { "V  P  B  E  T  R  L  O  U", "SELECT, PLACE, SCATTER, ERASE, GROUND, ROUTE, LINE, ROAD, MEASURE" },
     { "WHEEL", "ZOOM ABOUT THE POINTER" },
     { "0  /  SHIFT + 0", "RESET THE ZOOM, SHOW THE WHOLE MAP" },
     { "RIGHT OR MIDDLE DRAG, SPACE + DRAG", "MOVE THE VIEW" },

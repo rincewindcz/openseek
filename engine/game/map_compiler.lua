@@ -349,6 +349,7 @@ function MapCompiler.compile(map)
         pickups     = pickups,
         starts      = starts,
         environment = map.environment,
+        terrain     = map.terrain and { cell = map.terrain.cell, cells = copy(map.terrain.cells) },
         objectives  = {
             destroy           = targets > 0,
             rescue            = not (rescue and rescue.optional),

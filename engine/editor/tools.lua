@@ -24,7 +24,7 @@ local HALF_STEP_TAN = math.tan(math.rad(22.5))   -- between two rays 45 degrees 
 
 local ROUTE_KINDS = { tank = true, truck = true }
 
-Tools.ORDER = { "select", "place", "scatter", "erase", "route", "line", "road", "measure" }
+Tools.ORDER = { "select", "place", "scatter", "erase", "ground", "route", "line", "road", "measure" }
 
 local function shift_down()
     return love.keyboard.isDown("lshift", "rshift")
@@ -404,6 +404,52 @@ end
 
 function Erase.draw(editor)
     draw_brush(editor, editor.erase.radius)
+end
+
+-- ground: paints the terrain, cells of the ground of another art set, with a
+-- brush. One stroke is one undo step.
+
+local Ground = { id = "ground", icon = "ground", label = "GROUND", key = "t",
+                 tip = "PAINT THE GROUND OF AN ART SET (T)" }
+
+local function paint_at(editor, wx, wy)
+    local doc     = editor.doc
+    local brush   = editor.ground
+    local size    = doc:size()
+    local cell    = doc.map.terrain and doc.map.terrain.cell or brush.cell
+    local n       = size / cell
+    local radius  = brush.radius
+    local indices = { (math.floor(wy / cell) % n) * n + math.floor(wx / cell) % n + 1 }
+    for row = math.floor((wy - radius) / cell), math.floor((wy + radius) / cell) do
+        for column = math.floor((wx - radius) / cell), math.floor((wx + radius) / cell) do
+            local dx, dy = (column + 0.5) * cell - wx, (row + 0.5) * cell - wy
+            if dx * dx + dy * dy <= radius * radius then indices[#indices + 1] = (row % n) * n + column % n + 1 end
+        end
+    end
+    doc:paint_terrain(indices, brush.art or doc:art(), cell)
+end
+
+function Ground.press(editor, wx, wy)
+    editor.work = {}
+    editor.doc:begin("GROUND")
+    paint_at(editor, wx, wy)
+end
+
+function Ground.drag(editor, wx, wy)
+    if editor.work then paint_at(editor, wx, wy) end
+end
+
+function Ground.release(editor)
+    if editor.work then editor.doc:commit() end
+    editor.work = nil
+end
+
+function Ground.cancel(editor)
+    if editor.work then Ground.release(editor) else editor:set_tool("select") end
+end
+
+function Ground.draw(editor)
+    draw_brush(editor, editor.ground.radius)
 end
 
 -- routes, ground lines and roads: polylines edited point by point
@@ -899,7 +945,7 @@ function Spot.draw(editor)
     g.circle("line", x, y, pick.radius, 48)
 end
 
-Tools.defs = { select = Select, place = Place, scatter = Scatter, erase = Erase, route = Route, line = Line,
+Tools.defs = { select = Select, place = Place, scatter = Scatter, erase = Erase, ground = Ground, route = Route, line = Line,
                road = Road, measure = Measure, card = Card, spot = Spot }
 
 Tools.ROUTE_KINDS = ROUTE_KINDS

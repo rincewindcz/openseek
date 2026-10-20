@@ -3,6 +3,7 @@
 
 local Class   = require "engine.core.class"
 local World   = require "engine.game.world"
+local Terrain = require "engine.game.terrain"
 local Catalog = require "engine.editor.catalog"
 
 -- The editor's view of a map: a free camera over the wrapped world inside a
@@ -25,6 +26,20 @@ function View:init()
     self.zoom_index = DEFAULT_ZOOM
     self.rect       = { x = 0, y = 0, w = 800, h = 600 }   -- window pixels
     self.drawn      = { decals = {}, objects = {} }         -- what the last draw showed, in draw order
+    self.terrain    = Terrain:new()
+end
+
+local region_terrain = nil   -- the terrain fill of View.draw_region
+
+-- The ground of the map's terrain over (0, 0) to (size, size) of the current
+-- transform; nothing on a map of one ground.
+local function draw_terrain(terrain, doc)
+    terrain:set(doc.map.terrain, doc:size(), doc:art(), doc.terrain_revision)
+    terrain:draw()
+end
+
+function View:draw_terrain(doc)
+    draw_terrain(self.terrain, doc)
 end
 
 function View:zoom()
@@ -214,6 +229,7 @@ function View:draw(doc, opts)
             local decals, objects = self:collect(doc, tile, opts.hidden)
             g.push()
             g.translate(tile.ox, tile.oy)
+            self:draw_terrain(doc)
             for _, o in ipairs(decals) do draw_object(doc, o) end
             g.setLineWidth(math.max(1, 1 / z))
             if opts.show_roads then draw_roads(doc) end
@@ -314,6 +330,8 @@ function View.draw_region(doc, x, y, size, px, py, pw, ph)
             sort_pass(doc, objects)
             g.push()
             g.translate(ox, oy)
+            region_terrain = region_terrain or Terrain:new()
+            draw_terrain(region_terrain, doc)
             for _, o in ipairs(decals) do draw_object(doc, o) end
             draw_roads(doc)
             for _, line in ipairs(doc.map.lines) do

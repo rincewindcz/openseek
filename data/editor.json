@@ -262,6 +262,7 @@
   },
   "scatter": { "radius": 96, "density": 6, "gap": 10 },
   "erase":   { "radius": 48 },
+  "terrain": { "radius": 64, "cell": 32 },
   "ground":  { "min_uses": 100, "clear": 40 },
   "autosave_seconds": 60
 }

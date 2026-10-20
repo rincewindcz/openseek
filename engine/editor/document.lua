@@ -45,6 +45,7 @@ function Document:init(map, name)
     self.name     = name    -- file name in maps/, nil until first saved
     self.dirty    = false
     self.revision = 0       -- counts changes; views cache against it
+    self.terrain_revision = 0   -- counts changes to the terrain alone
     self.undo     = {}
     self.redo     = {}
     self.batch    = nil
@@ -608,14 +609,58 @@ end
 function Document:set_map(field, value, label)
     local before = self.map[field]
     if before == value then return end
-    self:_run(label or "MAP SETTINGS", function() self.map[field] = value end,
-        function() self.map[field] = before end)
+    local terrain = field == "terrain"
+    self:_run(label or "MAP SETTINGS", function()
+        self.map[field] = value
+        if terrain then self.terrain_revision = self.terrain_revision + 1 end
+    end, function()
+        self.map[field] = before
+        if terrain then self.terrain_revision = self.terrain_revision + 1 end
+    end)
 end
 
--- Change the wrap period. Objects, route, line and road points and objective places
--- past the new edge wrap around; the history is cleared, since it holds positions of the old size.
+-- terrain
+
+-- Set the terrain cells at indices (into map.terrain.cells) to the ground of
+-- art (a digit; the map's own art set leaves them to it). A map without
+-- terrain gets an empty one of cells cell px a side first.
+function Document:paint_terrain(indices, art, cell)
+    if not self.map.terrain then self:set_map("terrain", MapFile.new_terrain(cell), "GROUND") end
+    local cells = self.map.terrain.cells
+    if art == self:art() then art = nil end
+    local changed, before = {}, {}
+    for _, k in ipairs(indices) do
+        if cells[k] ~= art then
+            changed[#changed + 1] = k
+            before[#changed]      = cells[k] or false
+        end
+    end
+    if #changed == 0 then return end
+    self:_run("GROUND", function()
+        for _, k in ipairs(changed) do cells[k] = art end
+        self.terrain_revision = self.terrain_revision + 1
+    end, function()
+        for i, k in ipairs(changed) do cells[k] = before[i] or nil end
+        self.terrain_revision = self.terrain_revision + 1
+    end)
+end
+
+-- The terrain in cells of another size.
+function Document:set_terrain_cell(cell)
+    local terrain = self.map.terrain
+    if not terrain or terrain.cell == cell then return end
+    self:set_map("terrain", MapFile.resample_terrain(terrain, self.map.size, self.map.size, cell), "GROUND CELLS")
+end
+
+-- Change the wrap period. Objects, route, line and road points, objective and
+-- event places and the terrain past the new edge wrap around; the history is
+-- cleared, since it holds positions of the old size.
 function Document:resize(size)
     if size == self.map.size then return end
+    if self.map.terrain then
+        self.map.terrain = MapFile.resample_terrain(self.map.terrain, self.map.size, size, self.map.terrain.cell)
+        self.terrain_revision = self.terrain_revision + 1
+    end
     self.map.size = size
     for _, o in ipairs(self.map.objects) do
         o.x, o.y = o.x % size, o.y % size
@@ -628,6 +673,17 @@ function Document:resize(size)
     end
     for _, goal in ipairs(self.map.objectives) do
         if goal.x then goal.x, goal.y = goal.x % size, goal.y % size end
+    end
+    local events = {}
+    for _, event in ipairs(self.map.events or {}) do events[#events + 1] = event end
+    for _, goal in ipairs(self.map.objectives) do
+        events[#events + 1] = goal.on_open or false
+        events[#events + 1] = goal.on_done or false
+    end
+    for _, event in ipairs(events) do
+        for _, place in ipairs({ event and event.place or false, event and event.shell or false }) do
+            if place then place.x, place.y = place.x % size, place.y % size end
+        end
     end
     self.undo, self.redo = {}, {}
     self:_index()

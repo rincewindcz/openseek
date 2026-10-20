@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
+local MapFile     = require "engine.game.map_file"
 local MapCompiler = require "engine.game.map_compiler"
 local Catalog     = require "engine.editor.catalog"
 
@@ -28,28 +29,47 @@ function Generate.clutter(stage_name)
     return out
 end
 
+-- The stage whose clutter covers each ground, by art digit: stage_name for
+-- the map's own art set and, with by_ground, the first stage of every other
+-- art set its terrain lays (false when the pack has none).
+local function stages_by_ground(doc, stage_name, by_ground)
+    local stages = { [doc:art()] = stage_name }
+    if by_ground and doc.map.terrain then
+        for _, art in pairs(doc.map.terrain.cells) do
+            if stages[art] == nil then stages[art] = Catalog.stages(art)[1] or false end
+        end
+    end
+    return stages
+end
+
 -- Scatter the clutter of stage_name over the map. opts: density (1 = as the
--- stage), trees, scenery (which kinds to lay). Spots within the clear radius
--- of anything that is not ground cover stay free. Returns the count added.
+-- stage), trees, scenery (which kinds to lay), by_ground (the ground of
+-- another art set gets the clutter of a stage of that art set instead).
+-- Spots within the clear radius of anything that is not ground cover stay
+-- free. Returns the count added.
 function Generate.ground(doc, stage_name, opts)
-    local pack = MapCompiler.pack_stage(stage_name)
-    if not pack then return 0 end
-    local size  = doc:size()
-    local clear = Catalog.data().ground.clear
-    local area  = (size * size) / (pack.world_size * pack.world_size)
+    local size    = doc:size()
+    local clear   = Catalog.data().ground.clear
+    local terrain = opts.by_ground and doc.map.terrain
     local objects = {}
-    for _, item in ipairs(Generate.clutter(stage_name)) do
-        local wanted = (item.kind_name == "tree" and opts.trees) or (item.kind_name == "scenery" and opts.scenery)
-        if wanted then
-            local t     = doc:intern({ from = stage_name, class = item.class, sprite = item.sprite })
-            local count = math.floor(item.uses * area * (opts.density or 1) + 0.5)
-            for _ = 1, count do
-                local x, y = math.random(0, size - 1), math.random(0, size - 1)
-                local free = true
-                doc:each_in(x, y, x, y, clear, function(o)
-                    if doc:info(o).layer ~= "scenery" then free = false end
-                end)
-                if free then objects[#objects + 1] = { t = t, x = x, y = y } end
+    for art, stage in pairs(stages_by_ground(doc, stage_name, opts.by_ground)) do
+        local pack = stage and MapCompiler.pack_stage(stage)
+        local area = pack and (size * size) / (pack.world_size * pack.world_size) or 0
+        for _, item in ipairs(pack and Generate.clutter(stage) or {}) do
+            local wanted = (item.kind_name == "tree" and opts.trees) or (item.kind_name == "scenery" and opts.scenery)
+            if wanted then
+                local t     = doc:intern({ from = stage, class = item.class, sprite = item.sprite })
+                local count = math.floor(item.uses * area * (opts.density or 1) + 0.5)
+                for _ = 1, count do
+                    local x, y = math.random(0, size - 1), math.random(0, size - 1)
+                    local free = not terrain or (MapFile.terrain_at(terrain, size, x, y) or doc:art()) == art
+                    if free then
+                        doc:each_in(x, y, x, y, clear, function(o)
+                            if doc:info(o).layer ~= "scenery" then free = false end
+                        end)
+                    end
+                    if free then objects[#objects + 1] = { t = t, x = x, y = y } end
+                end
             end
         end
     end
