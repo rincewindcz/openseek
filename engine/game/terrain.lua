@@ -1,9 +1,10 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 Michal Genserek
 
-local Class = require "engine.core.class"
-local json  = require "lib.json"
-local World = require "engine.game.world"
+local Class   = require "engine.core.class"
+local json    = require "lib.json"
+local World   = require "engine.game.world"
+local MapFile = require "engine.game.map_file"
 
 -- The ground of a map that mixes art sets (map terrain, engine/game/map_file.lua):
 -- a fill over the whole map, drawn in world units under the decals, in place
@@ -63,6 +64,9 @@ uniform float fine;
 uniform float dither;
 uniform vec3 colors[5];
 
+// The art of grid cell c. The map is drawn from 0 to its size, so a cell
+// past an edge is the first or last one: the last row and column of cells
+// may reach past the edge, but no pixel lies past it.
 float art_of(vec2 c) {
     vec2 w = mod(c, cell_count);
     return floor(Texel(cells, (w + 0.5) / cell_count).r * 255.0 / 50.0 + 0.5);
@@ -201,7 +205,7 @@ function Terrain:set(grid, size, art, stamp)
     local key = table.concat({ tostring(grid), size, tostring(art), tostring(stamp) }, ":")
     if key == self.key then return end
     self.key, self.grid, self.size, self.art = key, grid, size, art
-    local n    = size / grid.cell
+    local n    = MapFile.terrain_side(grid.cell, size)
     local own  = tonumber(art) or 0
     local data = self.data
     if not data or data:getWidth() ~= n then data = love.image.newImageData(n, n) end
@@ -232,7 +236,7 @@ function Terrain:draw()
     local shader = self.shader
     shader:send("cells", self.image)
     shader:send("noise", self.noise)
-    shader:send("cell_count", self.size / self.grid.cell)
+    shader:send("cell_count", MapFile.terrain_side(self.grid.cell, self.size))
     shader:send("cell_size", self.grid.cell)
     shader:send("noise_world", spec.noise.world)
     shader:send("amount", spec.amount)

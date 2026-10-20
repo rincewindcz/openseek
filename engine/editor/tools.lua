@@ -3,6 +3,7 @@
 
 local Entity   = require "engine.game.entity"
 local Roads    = require "engine.game.roads"
+local MapFile  = require "engine.game.map_file"
 local Catalog  = require "engine.editor.catalog"
 local Document = require "engine.editor.document"
 local Ops      = require "engine.editor.ops"
@@ -417,13 +418,26 @@ local function paint_at(editor, wx, wy)
     local brush   = editor.ground
     local size    = doc:size()
     local cell    = doc.map.terrain and doc.map.terrain.cell or brush.cell
-    local n       = size / cell
+    local n       = MapFile.terrain_side(cell, size)
     local radius  = brush.radius
-    local indices = { (math.floor(wy / cell) % n) * n + math.floor(wx / cell) % n + 1 }
-    for row = math.floor((wy - radius) / cell), math.floor((wy + radius) / cell) do
-        for column = math.floor((wx - radius) / cell), math.floor((wx + radius) / cell) do
-            local dx, dy = (column + 0.5) * cell - wx, (row + 0.5) * cell - wy
-            if dx * dx + dy * dy <= radius * radius then indices[#indices + 1] = (row % n) * n + column % n + 1 end
+    local indices = { MapFile.terrain_index(cell, size, wx, wy) }
+    -- The last row and column may be cut short by the edge: a cell's middle
+    -- is the middle of what lies inside the map, and the brush reaches over
+    -- the seam into the copies around.
+    local function middle(k)
+        return (k * cell + math.min((k + 1) * cell, size)) / 2
+    end
+    wx, wy = wx % size, wy % size
+    for oy = -size, size, size do
+        for ox = -size, size, size do
+            local lx, ly = wx - ox, wy - oy
+            for row = math.max(0, math.floor((ly - radius) / cell)), math.min(n - 1, math.floor((ly + radius) / cell)) do
+                for column = math.max(0, math.floor((lx - radius) / cell)),
+                             math.min(n - 1, math.floor((lx + radius) / cell)) do
+                    local dx, dy = middle(column) - lx, middle(row) - ly
+                    if dx * dx + dy * dy <= radius * radius then indices[#indices + 1] = row * n + column + 1 end
+                end
+            end
         end
     end
     doc:paint_terrain(indices, brush.art or doc:art(), cell)

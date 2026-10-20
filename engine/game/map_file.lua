@@ -105,7 +105,8 @@ local Log  = require "engine.core.log"
 --                level and an upright leg, { from, class, sprite })
 --   terrain      ground of other art sets: { cell = side of a square cell in
 --                world px, cells = { [k] = art digit } } with k = row * n +
---                column + 1 and n = size / cell; a cell left out has the
+--                column + 1 and n = size / cell rounded up (the last row and
+--                column reach past the edge); a cell left out has the
 --                map's own art set. Stored as rows, one string a row of runs
 --                ("12a40.": twelve cells of art 0, forty of the map's own;
 --                "a" to "e" are art 0 to 4, "." the map's own)
@@ -121,7 +122,7 @@ MapFile.DEFAULT_SIZE = 4096
 
 local NAME_MAX = 40
 
--- The sides a terrain cell may have; each divides every map size.
+-- The sides a terrain cell may have.
 MapFile.TERRAIN_CELLS = { 16, 32, 64, 128 }
 local OWN_ART  = "."
 local ART_BASE = string.byte("a")
@@ -207,7 +208,7 @@ end
 
 -- The terrain as rows of runs, one string a row.
 local function terrain_rows(terrain, size)
-    local n, cells, out = size / terrain.cell, terrain.cells, {}
+    local n, cells, out = MapFile.terrain_side(terrain.cell, size), terrain.cells, {}
     for row = 0, n - 1 do
         local parts, run, code = {}, 0, nil
         for column = 0, n - 1 do
@@ -231,10 +232,10 @@ local function terrain_of(raw, size)
     local cell = tonumber(raw.cell)
     local fits = false
     for _, side in ipairs(MapFile.TERRAIN_CELLS) do
-        if side == cell and size % side == 0 then fits = true end
+        if side == cell then fits = true end
     end
     if not fits then return nil end
-    local n, cells = size / cell, {}
+    local n, cells = MapFile.terrain_side(cell, size), {}
     for row = 0, n - 1 do
         local text   = type(raw.rows[row + 1]) == "string" and raw.rows[row + 1] or ""
         local column = 0
@@ -403,20 +404,29 @@ function MapFile.new_terrain(cell)
     return { cell = cell, cells = {} }
 end
 
+-- Cells a side of a terrain of cells cell px a side over a map size px a side.
+function MapFile.terrain_side(cell, size)
+    return math.ceil(size / cell)
+end
+
+-- The key into the cells of the cell under (x, y), which wraps around the map.
+function MapFile.terrain_index(cell, size, x, y)
+    local column = math.floor((x % size) / cell)
+    local row    = math.floor((y % size) / cell)
+    return row * MapFile.terrain_side(cell, size) + column + 1
+end
+
 -- The art digit of the terrain cell under (x, y), or nil for the map's own.
 function MapFile.terrain_at(terrain, size, x, y)
-    local n = size / terrain.cell
-    local column = math.floor((x % size) / terrain.cell)
-    local row    = math.floor((y % size) / terrain.cell)
-    return terrain.cells[row * n + column + 1]
+    return terrain.cells[MapFile.terrain_index(terrain.cell, size, x, y)]
 end
 
 -- The terrain of a map old_size px a side as cells of cell px over a map
 -- size px a side: a new cell takes the ground most of the old cells it
--- covers have (the first of them on a tie), or the one it lies in; what lies
--- past the old edge wraps around, as the objects do.
+-- covers inside the map have (the first of them on a tie), or the one it
+-- lies in; what lies past the old edge wraps around, as the objects do.
 function MapFile.resample_terrain(terrain, old_size, size, cell)
-    local n, out = size / cell, {}
+    local n, out = MapFile.terrain_side(cell, size), {}
     local per    = math.max(1, cell / terrain.cell)
     local step   = cell / per
     for row = 0, n - 1 do
@@ -424,11 +434,13 @@ function MapFile.resample_terrain(terrain, old_size, size, cell)
             local counts, best, most = {}, nil, 0
             for i = 0, per - 1 do
                 for j = 0, per - 1 do
-                    local art = MapFile.terrain_at(terrain, old_size, column * cell + (j + 0.5) * step,
-                        row * cell + (i + 0.5) * step)
-                    local key = art or OWN_ART
-                    counts[key] = (counts[key] or 0) + 1
-                    if counts[key] > most then best, most = art, counts[key] end
+                    local x, y = column * cell + (j + 0.5) * step, row * cell + (i + 0.5) * step
+                    if (x < size and y < size) or (i == 0 and j == 0) then
+                        local art = MapFile.terrain_at(terrain, old_size, x, y)
+                        local key = art or OWN_ART
+                        counts[key] = (counts[key] or 0) + 1
+                        if counts[key] > most then best, most = art, counts[key] end
+                    end
                 end
             end
             out[row * n + column + 1] = best
