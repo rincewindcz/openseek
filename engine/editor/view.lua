@@ -76,6 +76,22 @@ function View:zoom_by(steps, sx, sy, size)
     self:wrap(size)
 end
 
+-- Back to the zoom the editor opens with, keeping the middle of the view.
+function View:reset_zoom()
+    self.zoom_index = DEFAULT_ZOOM
+end
+
+-- The closest zoom that shows the whole map, centred on it.
+function View:fit(size)
+    local side = math.min(self.rect.w, self.rect.h)
+    local index = 1
+    for i, z in ipairs(ZOOMS) do
+        if size * z <= side then index = i end
+    end
+    self.zoom_index = index
+    self:look_at(size / 2, size / 2, size)
+end
+
 function View:look_at(wx, wy, size)
     self.x, self.y = wx % size, wy % size
 end

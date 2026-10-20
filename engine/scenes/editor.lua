@@ -866,6 +866,8 @@ function Editor:keypressed(key)
     elseif key == "f1" then self:open_dialog("help")
     elseif key == "=" or key == "+" or key == "kp+" then self.view:zoom_by(1, nil, nil, self.doc:size())
     elseif key == "-" or key == "kp-" then self.view:zoom_by(-1, nil, nil, self.doc:size())
+    elseif key == "0" or key == "kp0" then
+        if love.keyboard.isDown("lshift", "rshift") then self.view:fit(self.doc:size()) else self.view:reset_zoom() end
     end
 end
 
@@ -1377,6 +1379,8 @@ function Editor:_menus(kit, x)
         {},
         { label = "ZOOM IN", key = "+", icon = "zoom_in", action = function() self.view:zoom_by(1, nil, nil, doc:size()) end },
         { label = "ZOOM OUT", key = "-", icon = "zoom_out", action = function() self.view:zoom_by(-1, nil, nil, doc:size()) end },
+        { label = "RESET ZOOM", key = "0", action = function() self.view:reset_zoom() end },
+        { label = "SHOW THE WHOLE MAP", key = "SHIFT+0", icon = "map", action = function() self.view:fit(doc:size()) end },
         { label = "GO TO THE HOME PAD", key = "HOME", icon = "home", action = function() self:go_home() end },
         { label = "SHOW THE SELECTION", key = "F", icon = "fit", disabled = not chosen, action = function() self:frame_selection() end },
         {},
