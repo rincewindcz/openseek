@@ -116,6 +116,13 @@ function love.load(args)
     print(BANNER)
     Log.info("app", "starting %s (LOVE %s, %s, %s)", require("engine.core.version").string(),
         love.getVersion and select(4, love.getVersion()) or "?", _VERSION, love.system.getOS())
+    -- On 32-bit ARM Linux the JIT is already off when the game loads (LOVE 11.5,
+    -- Debian's LuaJIT, goodluckOS). Turned on, it compiles normally and runs the
+    -- game's table loops about 3x faster than the interpreter on a Cortex-A7.
+    if jit and jit.arch == "arm" and love.system.getOS() == "Linux" and not jit.status() then
+        jit.on()
+        Log.info("app", "JIT turned on: %s", tostring(jit.status()))
+    end
     love.graphics.setDefaultFilter("nearest", "nearest")
     Config.load()   -- overlay persisted advanced settings onto the defaults
     -- A named difficulty preset always carries its current values; CUSTOM keeps
