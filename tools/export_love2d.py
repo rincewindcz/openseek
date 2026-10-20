@@ -21,7 +21,8 @@ Each exported frame is decoded with the exact blitter decoder into
 assets/stage{M}{P}/<name>_f<N>.png, and the stage JSON gets a
 per-class "render" entry: image name plus the top-left draw offset from
 the entity position (ox, oy), derived from the engine's center anchors in
-the frame header (hdr+6, hdr+8) and the decoded pixel bounding box. Classes
+the frame header (hdr+6, hdr+8) and the decoded pixel bounding box
+(ANCHOR_FIX corrects a header anchor that misses its art). Classes
 no entity of the stage uses (the crater, the fuel dump, the pipes) are
 rendered too when their BIN is in the class's own STAGE0{N}/ or the
 mission's, so the map editor can offer them. Sheets no class of any stage
@@ -56,6 +57,14 @@ import gamedata
 # Other sprites keep index 0: CMDRHUT's roof shading and the jeep's wheels use it.
 CLEAR_INDICES = {
     "sanddune.bin": {0},
+}
+
+# Frame-0 anchors that miss their art, replacing the header's (hdr+6, hdr+8).
+# BASECIRC's 43x43 ring is centered on (21, 21) but anchored at (24, 24), so the
+# original draws it 3 px up and left of the pad and of the H or LAND HERE mark
+# placed with it.
+ANCHOR_FIX = {
+    "basecirc.bin": (21, 21),
 }
 
 
@@ -117,9 +126,10 @@ def find_bin(game_dir: Path, name: str, source_dir: int, mission: int, strict=Fa
     return None
 
 
-def render_class_frame(bin_path: Path, frame: int, palette: bytes, clear=()):
+def render_class_frame(bin_path: Path, frame: int, palette: bytes, clear=(), anchor=None):
     """Decode one frame; returns (image, ox, oy) or (None, why, None).
-    (ox, oy) is the PNG top-left offset from the entity position."""
+    (ox, oy) is the PNG top-left offset from the entity position; anchor
+    overrides the header's sprite center."""
     data = bin_path.read_bytes()
     frames = db.read_frames(data)
     if frame >= len(frames):
@@ -136,7 +146,8 @@ def render_class_frame(bin_path: Path, frame: int, palette: bytes, clear=()):
     min_x = min(c[0] for c in canvas)
     min_y = min(c[1] for c in canvas)
     # engine draws at entity_pos - (hdr+6, hdr+8) = minus the sprite center
-    return img, min_x - ex[1], min_y - ex[2]
+    ax, ay = anchor or (ex[1], ex[2])
+    return img, min_x - ax, min_y - ay
 
 
 def export_stage(game_dir: Path, mission: int, phase: int) -> None:
@@ -178,9 +189,10 @@ def export_stage(game_dir: Path, mission: int, phase: int) -> None:
                     failed.append((asset["file"], "file not found"))
                 rendered[key] = None
             else:
-                clear = CLEAR_INDICES.get(asset["file"].lower(), ())
+                clear  = CLEAR_INDICES.get(asset["file"].lower(), ())
+                anchor = ANCHOR_FIX.get(asset["file"].lower()) if frame == 0 else None
                 try:
-                    img, ox, oy = render_class_frame(src, frame, palette, clear)
+                    img, ox, oy = render_class_frame(src, frame, palette, clear, anchor)
                 except Exception as err:   # a spare class may name a sheet the decoder cannot read
                     if not spare:
                         raise
