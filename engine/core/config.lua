@@ -265,6 +265,10 @@ local Config = {
     coop_device_1     = "auto",
     coop_device_2     = "auto",
 
+    -- Text of the map editor (engine/ui/kit.lua): "game" is the shipped
+    -- "Loaded" font, "plain" LOVE's own, plainer to read at small sizes.
+    editor_font = "game",
+
     -- Play the short openSEEK engine card before the TITLE card on every launch
     -- (engine/scenes/title.lua). Independent of this key, the card plays once on
     -- the first launch (no saved settings yet) and whenever the game data is missing.
@@ -307,7 +311,7 @@ local PERSISTED = {
     "touch_color", "touch_opacity", "touch_button_scale", "touch_stick_scale",
     "touch_left_handed",
     "pad_dead_zone", "mouse_control", "mouse_sensitivity", "coop_device_1", "coop_device_2",
-    "style", "style_chosen",
+    "editor_font", "style", "style_chosen",
 }
 
 -- Overlay any saved values onto the shipped defaults. Called once at startup.

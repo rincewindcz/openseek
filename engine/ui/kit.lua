@@ -20,7 +20,7 @@ local json  = require "lib.json"
 -- All positions are UI units: window pixels divided by the kit's scale.
 local Kit = Class()
 
-local FONT_PATH  = "content/fonts/loaded/loaded.ttf"
+local FONT_PATH  = "content/fonts/loaded/loaded.ttf"   -- the "game" font; "plain" is LOVE's own
 local ICON_DIR   = "content/editor/icons/"
 local ICON_SIZES = { 16, 20, 32, 40 }
 local THEME_PATH = "data/editor.json"
@@ -70,6 +70,7 @@ function Kit:init()
     self.theme    = load_theme()
     self.scale    = 1
     self.fonts    = {}    -- "px" -> love Font
+    self.font_name = "game"
     self.icons    = {}    -- "name_px" -> Image, or false when missing
     self.mx       = 0
     self.my       = 0
@@ -241,12 +242,20 @@ end
 
 -- drawing helpers
 
+-- Set the text in the shipped font ("game") or in LOVE's own ("plain").
+function Kit:set_font(name)
+    name = name == "plain" and "plain" or "game"
+    if name == self.font_name then return end
+    self.font_name = name
+    self.fonts     = {}
+end
+
 function Kit:font(size)
     size = size or self.theme.font
     local px   = math.floor(size * self.scale + 0.5)
     local font = self.fonts[px]
     if not font then
-        font = love.graphics.newFont(FONT_PATH, px)
+        font = self.font_name == "plain" and love.graphics.newFont(px) or love.graphics.newFont(FONT_PATH, px)
         font:setFilter("linear", "linear")
         self.fonts[px] = font
     end

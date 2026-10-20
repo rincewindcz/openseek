@@ -5,6 +5,7 @@ local json        = require "lib.json"
 local Class       = require "engine.core.class"
 local Scene       = require "engine.core.scene"
 local Log         = require "engine.core.log"
+local Config      = require "engine.core.config"
 local World       = require "engine.game.world"
 local Mission     = require "engine.game.mission"
 local MapFile     = require "engine.game.map_file"
@@ -140,6 +141,7 @@ function Editor:enter(opts)
     Sound.play_music()
     love.keyboard.setKeyRepeat(true)
     self.kit.scale = self.ui_scale or Kit.scale_for(select(2, love.graphics.getDimensions()))
+    self.kit:set_font(Config.editor_font)
     self.pan, self.right, self.work = nil, nil, nil
     self.previewing = nil
     Prefabs.refresh()
@@ -1371,6 +1373,13 @@ function Editor:_menus(kit, x)
             kit.scale     = scale
         end }
     end
+    local function font_item(name, label)
+        return { label = label, on = Config.editor_font == name, action = function()
+            Config.editor_font = name
+            Config.save()
+            kit:set_font(name)
+        end }
+    end
     menu("menu_view", "VIEW", {
         { label = "GRID", key = "G", on = self.grid.show, action = function() self.grid.show = not self.grid.show end },
         { label = "SNAP TO GRID", key = "CTRL+G", on = self.grid.snap, action = function() self.grid.snap = not self.grid.snap end },
@@ -1385,6 +1394,8 @@ function Editor:_menus(kit, x)
         { label = "SHOW THE SELECTION", key = "F", icon = "fit", disabled = not chosen, action = function() self:frame_selection() end },
         {},
         scale_item(Kit.SCALES[1]), scale_item(Kit.SCALES[2]), scale_item(Kit.SCALES[3]), scale_item(Kit.SCALES[4]),
+        {},
+        font_item("game", "TEXT IN THE GAME FONT"), font_item("plain", "TEXT IN A PLAIN FONT"),
     })
     menu("menu_map", "MAP", {
         { label = "MAP SETTINGS", icon = "settings", action = function() self:open_dialog("settings") end },
