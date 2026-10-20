@@ -6,7 +6,8 @@
 -- Never called per tick, and it never touches simulation state, so logging
 -- cannot affect a replay. The clock is read on first use, not at require time,
 -- so the headless tools can load modules without stubbing love.timer. The last
--- lines are kept for the crash report (engine/ui/error_screen.lua).
+-- lines are kept for the crash report (engine/ui/error_screen.lua). Each line is
+-- flushed, so a log redirected to a file survives a crash in native code.
 local Log = {}
 
 local RECENT_MAX = 80
@@ -20,6 +21,7 @@ local function emit(level, tag, fmt, ...)
     local msg = select("#", ...) > 0 and fmt:format(...) or fmt
     local line = ("[%9.3f] %s%s: %s"):format(now - start, level, tag, msg)
     print(line)
+    io.stdout:flush()
     recent[#recent + 1] = line
     if #recent > RECENT_MAX then table.remove(recent, 1) end
 end
