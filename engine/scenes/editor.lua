@@ -108,7 +108,8 @@ function Editor:init(app)
     self.scatter = { radius = brush.radius, density = brush.density, gap = brush.gap, set = {}, list = {} }
     self.erase   = { radius = Catalog.data().erase.radius, all = false }
     -- The ground brush: art nil paints the map's own art set back.
-    self.ground  = { radius = Catalog.data().terrain.radius, cell = Catalog.data().terrain.cell, art = nil }
+    self.ground  = { radius = Catalog.data().terrain.radius, cell = Catalog.data().terrain.cell, art = nil,
+                     clear = false }
     self.line_colors = Catalog.data().line_colors
     self.line_color  = self.line_colors[1]
     self.road        = { width = nil, marks = true }   -- the next road: nil is the art set's own width
@@ -1641,21 +1642,24 @@ function Editor:_options_bar(kit, vx, vw)
                 arts[#arts + 1] = { label = item.label .. (own and " (THE MAP'S OWN)" or ""), value = tostring(item.art) }
             end
         end
-        kit:label("ART SET", x, y, 56, OPTIONS_H, { color = theme.text_dim, size = theme.font_small })
-        brush.art = kit:choice("opt_ground_art", x + 58, ry, 200, arts, brush.art or doc:art())
-        x = x + 268
+        brush.art = kit:choice("opt_ground_art", x, ry, 140, arts, brush.art or doc:art(),
+            { list_w = 240, tip = "THE ART SET WHOSE GROUND THE BRUSH PAINTS" })
+        x = x + 148
         brush.radius = number("opt_ground_radius", "RADIUS", brush.radius, { min = 8, max = 512, step = 8, big = 32 })
         local cells = {}
         for i, side in ipairs(MapFile.TERRAIN_CELLS) do cells[i] = { label = side .. " PX", value = side } end
-        kit:label("CELLS", x, y, 44, OPTIONS_H, { color = theme.text_dim, size = theme.font_small })
         local cell = doc.map.terrain and doc.map.terrain.cell or brush.cell
-        local new_cell, cell_changed = kit:choice("opt_ground_cell", x + 46, ry, 80, cells, cell,
+        local new_cell, cell_changed = kit:choice("opt_ground_cell", x, ry, 80, cells, cell,
             { tip = "THE SIDE OF A SQUARE OF GROUND; AN EDGE RUNS RAGGED THROUGH ONE" })
         if cell_changed then
             brush.cell = new_cell
             doc:set_terrain_cell(new_cell)
         end
-        x = x + 134
+        x = x + 88
+        local clear_w = kit:text_width("CLEAR SCENERY") + 30
+        brush.clear = kit:check("opt_ground_scenery", x, ry, clear_w, "CLEAR SCENERY", brush.clear,
+            { tip = "TREES, STONES AND GROUND MARKS ON THE CELLS YOU PAINT GO WITH THE OLD GROUND" })
+        x = x + clear_w + 8
         if kit:button("opt_ground_clear", x, ry, 22, 22, { icon = "trash", flat = true, disabled = not doc.map.terrain,
             tip = "THE WHOLE MAP BACK TO ITS OWN GROUND" }) then
             doc:set_map("terrain", nil, "CLEAR GROUND")

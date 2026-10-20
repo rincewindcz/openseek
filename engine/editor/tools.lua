@@ -408,7 +408,8 @@ function Erase.draw(editor)
 end
 
 -- ground: paints the terrain, cells of the ground of another art set, with a
--- brush. One stroke is one undo step.
+-- brush, and with clear set takes the scenery and ground marks off the cells
+-- it paints. One stroke is one undo step.
 
 local Ground = { id = "ground", icon = "ground", label = "GROUND", key = "t",
                  tip = "PAINT THE GROUND OF AN ART SET (T)" }
@@ -441,6 +442,27 @@ local function paint_at(editor, wx, wy)
         end
     end
     doc:paint_terrain(indices, brush.art or doc:art(), cell)
+    if brush.clear then
+        local painted, seen, gone = {}, {}, {}
+        for _, k in ipairs(indices) do painted[k] = true end
+        for oy = -size, size, size do
+            for ox = -size, size, size do
+                doc:each_in(wx - ox, wy - oy, wx - ox, wy - oy, radius + cell, function(o)
+                    local info = doc:info(o)
+                    if not seen[o] and painted[MapFile.terrain_index(cell, size, o.x, o.y)]
+                    and SOFT_LAYERS[info.layer] and not editor:hidden(o, info) then
+                        for _, member in ipairs(whole(editor, o)) do
+                            if not seen[member] then
+                                seen[member] = true
+                                gone[#gone + 1] = member
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+        if #gone > 0 then doc:remove(gone) end
+    end
 end
 
 function Ground.press(editor, wx, wy)
@@ -456,6 +478,7 @@ end
 function Ground.release(editor)
     if editor.work then editor.doc:commit() end
     editor.work = nil
+    editor.selection:prune(editor.doc)
 end
 
 function Ground.cancel(editor)
