@@ -6,6 +6,7 @@ local Roads    = require "engine.game.roads"
 local MapFile  = require "engine.game.map_file"
 local Catalog  = require "engine.editor.catalog"
 local Document = require "engine.editor.document"
+local Generate = require "engine.editor.generate"
 local Ops      = require "engine.editor.ops"
 local View     = require "engine.editor.view"
 
@@ -408,8 +409,9 @@ function Erase.draw(editor)
 end
 
 -- ground: paints the terrain, cells of the ground of another art set, with a
--- brush, and with clear set takes the scenery and ground marks off the cells
--- it paints. One stroke is one undo step.
+-- brush. scenery: "keep" what lies on the cells it paints, "clear" the
+-- scenery and ground marks off them, or "replace" them with the ground cover
+-- of the art set painted. One stroke is one undo step.
 
 local Ground = { id = "ground", icon = "ground", label = "GROUND", key = "t",
                  tip = "PAINT THE GROUND OF AN ART SET (T)" }
@@ -441,10 +443,20 @@ local function paint_at(editor, wx, wy)
             end
         end
     end
-    doc:paint_terrain(indices, brush.art or doc:art(), cell)
-    if brush.clear then
-        local painted, seen, gone = {}, {}, {}
-        for _, k in ipairs(indices) do painted[k] = true end
+    local art = brush.art or doc:art()
+    doc:paint_terrain(indices, art, cell)
+    if brush.scenery ~= "keep" then
+        -- Only the cells this stroke reaches for the first time: what it laid
+        -- stays while the brush passes over it again.
+        local work = editor.work
+        work.cells = work.cells or {}
+        local painted, fresh, seen, gone = {}, {}, {}, {}
+        for _, k in ipairs(indices) do
+            if not work.cells[k] then
+                work.cells[k], painted[k] = true, true
+                fresh[#fresh + 1] = k
+            end
+        end
         for oy = -size, size, size do
             for ox = -size, size, size do
                 doc:each_in(wx - ox, wy - oy, wx - ox, wy - oy, radius + cell, function(o)
@@ -462,6 +474,11 @@ local function paint_at(editor, wx, wy)
             end
         end
         if #gone > 0 then doc:remove(gone) end
+        if brush.scenery == "replace" and #fresh > 0 then
+            if work.stage == nil then work.stage = Generate.stage_for(doc, art) or false end
+            local objects = Generate.cells(doc, work.stage, fresh, cell)
+            if #objects > 0 then doc:add(objects) end
+        end
     end
 end
 

@@ -42,6 +42,16 @@ local function stages_by_ground(doc, stage_name, by_ground)
     return stages
 end
 
+-- Whether a ground cover object at (x, y) keeps clear of everything that is
+-- not ground cover.
+local function free_at(doc, x, y, clear)
+    local free = true
+    doc:each_in(x, y, x, y, clear, function(o)
+        if doc:info(o).layer ~= "scenery" then free = false end
+    end)
+    return free
+end
+
 -- Scatter the clutter of stage_name over the map. opts: density (1 = as the
 -- stage), trees, scenery (which kinds to lay), by_ground (the ground of
 -- another art set gets the clutter of a stage of that art set instead).
@@ -63,12 +73,7 @@ function Generate.ground(doc, stage_name, opts)
                 for _ = 1, count do
                     local x, y = math.random(0, size - 1), math.random(0, size - 1)
                     local free = not terrain or (MapFile.terrain_at(terrain, size, x, y) or doc:art()) == art
-                    if free then
-                        doc:each_in(x, y, x, y, clear, function(o)
-                            if doc:info(o).layer ~= "scenery" then free = false end
-                        end)
-                    end
-                    if free then objects[#objects + 1] = { t = t, x = x, y = y } end
+                    if free and free_at(doc, x, y, clear) then objects[#objects + 1] = { t = t, x = x, y = y } end
                 end
             end
         end
@@ -78,6 +83,41 @@ function Generate.ground(doc, stage_name, opts)
     doc:add(objects)
     doc:commit()
     return #objects
+end
+
+-- The stage whose clutter a ground brush lays on the ground of art: the
+-- map's base stage on its own art set, else the first stage of that art set.
+function Generate.stage_for(doc, art)
+    local base = doc.map.base
+    if art == doc:art() and type(base) == "string" and base:match("^stage" .. art .. "%d$") then return base end
+    return Catalog.stages(art)[1]
+end
+
+-- The clutter of stage as thick as that stage has it over the terrain cells
+-- at indices (cell px a side), as new objects for the caller to add.
+function Generate.cells(doc, stage, indices, cell)
+    local pack = stage and MapCompiler.pack_stage(stage)
+    if not pack then return {} end
+    local size    = doc:size()
+    local n       = MapFile.terrain_side(cell, size)
+    local clear   = Catalog.data().ground.clear
+    local per_px  = 1 / (pack.world_size * pack.world_size)
+    local objects = {}
+    for _, item in ipairs(Generate.clutter(stage)) do
+        local t = doc:intern({ from = stage, class = item.class, sprite = item.sprite })
+        for _, k in ipairs(indices) do
+            local x0, y0 = (k - 1) % n * cell, math.floor((k - 1) / n) * cell
+            local w, h   = math.min(cell, size - x0), math.min(cell, size - y0)
+            local want   = item.uses * w * h * per_px
+            local count  = math.floor(want)
+            if math.random() < want - count then count = count + 1 end
+            for _ = 1, count do
+                local x, y = x0 + math.random(0, w - 1), y0 + math.random(0, h - 1)
+                if free_at(doc, x, y, clear) then objects[#objects + 1] = { t = t, x = x, y = y } end
+            end
+        end
+    end
+    return objects
 end
 
 -- Remove every object of the scenery layer.

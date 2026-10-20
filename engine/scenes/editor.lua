@@ -57,6 +57,12 @@ local AUTO_PREFIX  = "_auto_"
 local ARROW_SIZE   = 5      -- window px of the arrowhead on a route segment
 local ARROW_MIN    = 28     -- window px a segment is long before it gets one
 
+-- What the ground brush does with the scenery on the cells it paints.
+local GROUND_SCENERY = {
+    { label = "KEEP SCENERY", value = "keep" }, { label = "CLEAR SCENERY", value = "clear" },
+    { label = "REPLACE SCENERY", value = "replace" },
+}
+
 -- ARRANGE: the menu's entries, which the select tool also shows as buttons
 -- while two objects or more are selected. ctrl / shift name the key; single
 -- ones also work on one object.
@@ -109,7 +115,7 @@ function Editor:init(app)
     self.erase   = { radius = Catalog.data().erase.radius, all = false }
     -- The ground brush: art nil paints the map's own art set back.
     self.ground  = { radius = Catalog.data().terrain.radius, cell = Catalog.data().terrain.cell, art = nil,
-                     clear = false }
+                     scenery = "keep" }
     self.line_colors = Catalog.data().line_colors
     self.line_color  = self.line_colors[1]
     self.road        = { width = nil, marks = true }   -- the next road: nil is the art set's own width
@@ -1639,11 +1645,11 @@ function Editor:_options_bar(kit, vx, vw)
         for _, item in ipairs(Catalog.arts()) do
             if item.present then
                 local own = tostring(item.art) == doc:art()
-                arts[#arts + 1] = { label = item.label .. (own and " (THE MAP'S OWN)" or ""), value = tostring(item.art) }
+                arts[#arts + 1] = { label = item.label .. (own and " (OWN)" or ""), value = tostring(item.art) }
             end
         end
         brush.art = kit:choice("opt_ground_art", x, ry, 140, arts, brush.art or doc:art(),
-            { list_w = 240, tip = "THE ART SET WHOSE GROUND THE BRUSH PAINTS" })
+            { list_w = 240, tip = "THE ART SET WHOSE GROUND THE BRUSH PAINTS. THE MAP'S OWN (OWN) PAINTS A CELL BACK" })
         x = x + 148
         brush.radius = number("opt_ground_radius", "RADIUS", brush.radius, { min = 8, max = 512, step = 8, big = 32 })
         local cells = {}
@@ -1656,10 +1662,9 @@ function Editor:_options_bar(kit, vx, vw)
             doc:set_terrain_cell(new_cell)
         end
         x = x + 88
-        local clear_w = kit:text_width("CLEAR SCENERY") + 30
-        brush.clear = kit:check("opt_ground_scenery", x, ry, clear_w, "CLEAR SCENERY", brush.clear,
-            { tip = "TREES, STONES AND GROUND MARKS ON THE CELLS YOU PAINT GO WITH THE OLD GROUND" })
-        x = x + clear_w + 8
+        brush.scenery = kit:choice("opt_ground_scenery", x, ry, 150, GROUND_SCENERY, brush.scenery,
+            { tip = "WHAT BECOMES OF THE TREES, STONES AND GROUND MARKS ON THE CELLS YOU PAINT" })
+        x = x + 158
         if kit:button("opt_ground_clear", x, ry, 22, 22, { icon = "trash", flat = true, disabled = not doc.map.terrain,
             tip = "THE WHOLE MAP BACK TO ITS OWN GROUND" }) then
             doc:set_map("terrain", nil, "CLEAR GROUND")
