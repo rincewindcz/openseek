@@ -25,14 +25,21 @@ function Entity.type_for(kind_name)
     return entity_types[kind_name] or {}
 end
 
+-- The hit points a part starts with: a map's class may set strength, the
+-- percentage of its toughness left, so the object starts damaged.
+local function starting_hp(toughness, strength)
+    if not strength or toughness <= 0 then return toughness end
+    return math.max(1, math.floor(toughness * strength / 100 + 0.5))
+end
+
 function Entity:init(id, stage_ent, stage_cls)
     self.id           = id
     self.class_idx    = stage_ent.class
     self.x            = stage_ent.x
     self.y            = stage_ent.y
     self.angle        = 0
-    self.hp           = stage_cls.toughness or 0
     self.max_hp       = stage_cls.toughness or 0
+    self.hp           = starting_hp(self.max_hp, stage_cls.strength)
     self.state        = "idle"
     self.state_before = nil
     self.route        = stage_ent.route
@@ -73,7 +80,8 @@ end
 -- A map's event may hold an object back until it fires, or take it away
 -- (held, set and lifted by the mission): while held it is not there. Nothing
 -- sees, hits or draws it, and it does nothing. An event may also keep a unit
--- off its route (parked) or a gun from firing (silent) until it fires.
+-- off its route (parked), a gun from firing (silent) or anything from being
+-- damaged (shielded) until it fires.
 function Entity:is_alive()
     return not self.held and self.state ~= "dead" and self.state ~= "exploding"
 end
@@ -96,7 +104,7 @@ function Entity:take_damage(amount, dx, dy)
     if not self:is_alive() then return end
     -- A POW building stays indestructible while it still holds prisoners, and the
     -- player's own base only falls to friendly fire.
-    if self.protected then return end
+    if self.protected or self.shielded then return end
     if self.base_building and not Config.friendly_fire_pows then return end
     if self.world and self:is_combatant() then self.world:hit_flash(self) end
     -- While the turret stands it absorbs all incoming damage; the hull is only
@@ -131,7 +139,7 @@ function Entity:attach_turret(render, spin, turret_class)
     self.has_turret    = true
     self.turret_alive  = true
     self.turret_max_hp = (turret_class and turret_class.toughness) or 0
-    self.turret_hp     = self.turret_max_hp
+    self.turret_hp     = starting_hp(self.turret_max_hp, turret_class and turret_class.strength)
 end
 
 function Entity:_destroy_turret()
@@ -192,6 +200,30 @@ function Entity:blow_up()
     if self.turret_alive then self:_destroy_turret() end
     self.hp = 0
     self:_start_death()
+end
+
+-- What is left of the object, as a percentage of its toughness: hull and
+-- turret together, 0 once destroyed.
+function Entity:strength()
+    if self:is_destroyed() then return 0 end
+    local hp, max_hp = self.hp, self.max_hp
+    if self.has_turret then hp, max_hp = hp + self.turret_hp, max_hp + self.turret_max_hp end
+    if max_hp <= 0 then return 100 end
+    return hp * 100 / max_hp
+end
+
+-- A map's event damages the object down to strength percent of its toughness,
+-- hull and turret alike; 0 blows it up. It never mends what is worse already.
+function Entity:damage_to(strength)
+    if not self:is_alive() or self.max_hp <= 0 then return end
+    if strength <= 0 then
+        self:blow_up()
+        return
+    end
+    self.hp = math.min(self.hp, starting_hp(self.max_hp, strength))
+    if self.turret_alive then
+        self.turret_hp = math.min(self.turret_hp, starting_hp(self.turret_max_hp, strength))
+    end
 end
 
 function Entity:_start_death(dx, dy)

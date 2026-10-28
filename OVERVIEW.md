@@ -380,7 +380,7 @@ map list and the editor are reached through ADVANCED / EDITOR.
 | `briefing_cards` | The picture beside each paragraph: `{ kind = "view", x, y, size, label }` (a square of the map, `size` world pixels a side, drawn from the map whenever it is shown), `{ kind = "card", stage, slot }` (a card of a pack stage's briefing) or `{ kind = "none" }`. |
 | `difficulty` | Set when the map is played on a difficulty of its own whatever the player's is: values of the difficulty keys (`game/difficulty`: `enemy_damage_level`, `enemy_damage`, `enemy_fire_level`, `enemy_fire_rate`, `enemy_aggression`, `pickup_level`, `land_for_medals`, `land_for_supplies`). |
 | `objectives` | The objectives in order, each `{ type, label, optional, on_open, on_done }` plus its own fields (table below). `on_open` / `on_done` are the objective's events, as it comes up and once it is done (an event: table below). The first files held `{ destroy, rescue, sabotage }` by name, which is still read. |
-| `events` | The map's events: an event with what sets it off, `when`: `time` (`at` seconds into the phase; with `every`, again that many seconds later, `times` in all), `area` (`place = { x, y, radius, land }`: a player inside the circle, down or stopped with `land`) or `destroyed` (`targets`: the last of these objects is destroyed; never when none of them can be). Files before triggers held `timers`, read as events at a time. |
+| `events` | The map's events: an event with its `id` (unique among the events; `MapFile.decode` gives one to an event without one or with one taken), `off` (it waits for another event to switch it on) and what sets it off, `when`: `time` (`at` seconds after it was switched on, the start of the phase unless `off`; with `every`, again that many seconds later, `times` in all), `area` (`place = { x, y, radius, land }`: a player inside the circle, down or stopped with `land`; with `units`, one of these objects inside it), `destroyed` (`targets`: these objects are destroyed) or `damaged` (`targets`, `below`: they are down to `below` percent of their toughness or destroyed, `Entity:strength`, hull and turret together); with `count`, that many of the targets (all when absent; never when none of them can be destroyed). Files before triggers held `timers`, read as events at a time. |
 | `ordered` | An objective is worked on once every required one before it is done. |
 | `time_limit` | Seconds the required objectives have to be done in. |
 | `hold_agents`, `commander` | Stage global 5 (agents wait until all are in) and the special end. |
@@ -398,12 +398,16 @@ An event (`Mission:_fire`, in this order; objects are ids):
 | `show` | The objects come in: until then they are not on the map. Entities, helicopter posts (their helicopter waits off the map, `HeliSystem:hold`) and pickups (`Powerups:hold`). |
 | `hide` | The objects are taken off the map, without a wreck; a post's helicopter leaves the air and none comes from it. |
 | `destroy` | The objects blow up as if shot (`Entity:blow_up`): explosion, wreck, drop, no points. |
+| `damage` | With `strength`: the objects are damaged down to that percent of their toughness, hull and turret alike (`Entity:damage_to`), never mended; 0 blows them up. Under 60 they smoke. |
+| `reroute` | With `route` (a route id): the units drive that route from its first point (`World:reroute`). Only a unit that drives a route from the start can. |
 | `drive` | The units stand (`Entity.parked`) until then, then drive their routes. |
 | `open_fire` / `hold_fire` | Guns and mines do nothing (`Entity.silent`) until then / from then on. |
+| `unshield` / `shield` | The objects cannot be damaged (`Entity.shielded`) until then / from then on. |
 | `shell` | `{ x, y, radius }`: enemy shelling (`AirStrike:shell`, `shelling` of `data/enemy_weapons.json`) on the place, hitting the players and what stands there. |
 | `add_time` | Seconds added to the time limit (`Mission.time_limit`), taken off when negative, never before the present. |
 | `weather` | The weather from then on (`none`: clear skies); the scenes apply `world.env.weather` each frame. |
 | `say` | A line shown to the player. |
+| `switch_on` / `switch_off` | Events of the map (ids) switched on or off (`Mission:_switch`). One switched on counts its time from then and goes off as many times as it was set to, even after it went off before; one already on goes on as it was. |
 | `ends` | `win` / `fail`: the phase is won or lost there and then. |
 
 | Objective `type` | Fields | Done when |
@@ -517,13 +521,18 @@ other) through the replay path (`app.replay_return = "map_select"`). They
 belong to the map's file as it stood: a changed map starts over.
 
 Events: an objective of a map fires its events as it comes up and once it
-is done (`Mission:_fire`), and the map's own events when what sets them off
-happens (`Mission:_update_events`, in the map's order: the time on
-`Mission.age`, the clock of the time limit; a player at the place,
-`Mission:_player_at`; the last target destroyed).
+is done (`Mission:_fire`), and the map's own events that are on when what
+sets them off happens (`Mission:_update_events`, in the map's order: the
+time on `Mission.age`, the clock of the time limit, counted from when the
+event was switched on; a player at the place, `Mission:_player_at`, or one
+of its units, `Mission:_unit_at`; its targets destroyed or damaged). An
+event is counted before it fires, then is off once it has gone off as many
+times as it was set to, so it may switch itself on again.
 What an event waits to do is kept from happening until then
-(`Mission:_prepare`): what it shows is held back, the units it sets off are
-parked, the guns it opens fire with are silent. A held entity (`Entity.held`) is not there: it is not
+(`Mission:_prepare`), whether it is on or off: what it shows is held back,
+the units it sets off are parked, the guns it opens fire with are silent,
+what it makes destructible is shielded. What an event that never goes off
+holds stays so. A held entity (`Entity.held`) is not there: it is not
 alive to anything that sees, hits, blocks or draws (`Entity:is_alive`), does
 nothing, and is no kill either (`Entity:is_destroyed` is what the objectives,
 the stats and the rescue count). Once brought in it is marked for the open
@@ -614,7 +623,11 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   highlight and the lock sight's centre) draws it as a quarter turn flipped top
   to bottom (`Catalog.draw_sprite` in the editor). Only drawing changes:
   collision and hits are circles.
-- PROPERTIES edits class fields per kind: toughness, score, mission target,
+- PROPERTIES edits class fields per kind: toughness, strength (buildings,
+  guns and vehicles: the percentage of its toughness the object starts with,
+  type field `strength`, absent at 100; under 60 it smokes as a damaged
+  object does, `Entity:init`, a turret's own in `Entity:attach_turret`),
+  score, mission target,
   drops, missile guidance (radar / radio tower), own base building,
   commander's building, firing routine, movement, route, soldier and
   helicopter weapon, respawn, leash. On a single building: PEOPLE INSIDE (adds
@@ -686,19 +699,27 @@ The editor (`scenes/editor`, `engine/editor/`, `ui/kit`):
   with what sets it off and what it does in a few words, EDIT and remove.
   EVENTS on an objective (not one to keep intact) lists its two events, as it
   comes up and once it is done, with EDIT. EDIT opens the event: for an event
-  of the map WHEN (AT A TIME OF THE PHASE: AT, REPEAT, EVERY, TIMES; WHEN A
-  PLAYER GETS TO A PLACE: PICK ON THE MAP, WITHIN, DOWN OR STOPPED THERE,
-  the place drawn on the map with a flag; WHEN OBJECTS ARE DESTROYED: taken
-  from the selection), a line to SAY and, added with ADD WHAT
-  HAPPENS, what it does (`Goals.ACTIONS`): APPEAR and VANISH (anything but a
-  start or a mark of the people objectives), BLOW UP (what can be destroyed),
-  SET OFF (units on a route), OPEN FIRE and HOLD FIRE (guns and mines), each
-  with USE THE SELECTION and SELECT ON MAP; SHELLING (PICK ON THE MAP and a
-  radius, drawn on the map in red), TIME LIMIT (seconds, signed), WEATHER, END
-  THE PHASE (won or lost). An object that appears wears an eye on the map and
+  of the map WHEN and OFF UNTIL SWITCHED ON, then the trigger's settings
+  (AFTER A TIME: AFTER, REPEAT, EVERY, TIMES; WHEN SOMETHING GETS TO A PLACE:
+  PICK ON THE MAP, WITHIN, DOWN OR STOPPED THERE, the place drawn on the map
+  with a flag, WHO: A PLAYER or UNITS ON A ROUTE taken from the selection;
+  WHEN OBJECTS ARE DESTROYED and WHEN OBJECTS ARE DAMAGED: OBJECTS taken from
+  the selection, HOW MANY of them, and for damage DOWN TO a percent), a line
+  to SAY and, added with ADD WHAT HAPPENS, what it does (`Goals.ACTIONS`):
+  APPEAR and VANISH (anything but a start or a mark of the people
+  objectives), BLOW UP and DAMAGE (what can be destroyed; DAMAGE down to a
+  percent, 0 blowing up), NEW ROUTE (units on a route, and the route) and SET
+  OFF (units on a route), OPEN FIRE and HOLD FIRE (guns and mines),
+  DESTRUCTIBLE and INDESTRUCTIBLE (what can be destroyed), each with USE THE
+  SELECTION and SELECT ON MAP; SHELLING (PICK ON THE MAP and a radius, drawn
+  on the map in red), TIME LIMIT (seconds, signed), WEATHER, SWITCH ON and
+  SWITCH OFF (PICK EVENTS ticks or unticks an event of the map; an event
+  removed is taken out of every list that switches it,
+  `Goals.remove_map_event`), END THE PHASE (won or lost). An object that appears wears an eye on the map and
   says so in PROPERTIES. The checks name an event at a time at or past the
-  time limit, one waiting for objects none of which can be destroyed, one
-  that says and does nothing, an event that moves a time limit the
+  time limit, one waiting for objects none of which can be destroyed or for
+  units none of which is left, one off that nothing switches on, one sending
+  units along a route the map lacks, one that says and does nothing, an event that moves a time limit the
   map lacks and one that takes away an object an objective has to destroy. Under the list: IN ORDER, TIME LIMIT, no flight home,
   agents together, commander rule.
 - The BASE objects hold START OF PLAYER 1 / 2: a player's chopper with the

@@ -61,22 +61,33 @@ local Log  = require "engine.core.log"
 --                  "air"       count of enemy helicopters to shoot down
 --                The first three follow from what is on the map and need no
 --                entry; one gives them their wording and their place.
---   events       events of the map, each an event with what sets it off
---                (when): "time" at = seconds since the phase began (again
---                every so many seconds, times in all, with every), "area"
---                place = { x, y, radius, land }: a player gets there (down or
---                stopped with land), "destroyed" targets = objects (ids): the
---                last of them is destroyed. Files before triggers held them
---                as timers, every one at a time.
+--   events       events of the map, each an event with its id (unique among
+--                the events, given at decode when missing), off (it waits to
+--                be switched on by another event) and what sets it off
+--                (when): "time" at = seconds since it was switched on, the
+--                start of the phase unless off (again every so many seconds,
+--                times in all, with every), "area" place = { x, y, radius,
+--                land }: a player gets there (down or stopped with land), or
+--                with units = objects (ids) one of them does, "destroyed"
+--                targets = objects (ids): they are destroyed, "damaged"
+--                targets, below = percent: they are down to below percent of
+--                their toughness or destroyed; count of the targets when not
+--                all. Files before triggers held them as timers, every one at
+--                a time.
 --                An event is { say = a line shown then, show = objects (ids)
 --                not on the map until then, hide = objects taken away then,
---                destroy = objects blown up, drive = units standing until then
---                and setting off on their routes, open_fire = guns silent until
---                then, hold_fire = guns silent from then on, shell = { x, y,
---                radius }: enemy shelling on a place, add_time = seconds added
---                to the time limit (fewer when negative), weather = the
---                weather from then on ("none": clear skies), ends = "win" or
---                "fail": the phase ends so }
+--                destroy = objects blown up, damage = objects damaged down to
+--                strength percent (0 blows them up), reroute = units sent
+--                along route (a route id) from its first point, drive = units
+--                standing until then and setting off on their routes,
+--                open_fire = guns silent until then, hold_fire = guns silent
+--                from then on, unshield = objects that cannot be destroyed
+--                until then, shield = objects that cannot be from then on,
+--                shell = { x, y, radius }: enemy shelling on a place, add_time
+--                = seconds added to the time limit (fewer when negative),
+--                weather = the weather from then on ("none": clear skies),
+--                switch_on / switch_off = events of the map (ids) switched on
+--                or off, ends = "win" or "fail": the phase ends so }
 --   ordered      an objective is worked on once those before it are done
 --   time_limit   seconds the required objectives have to be done in
 --   hold_agents  agents stay inside until every building has one
@@ -302,10 +313,11 @@ local function objective_list(raw)
 end
 
 -- The fields of an event that list objects (ids), in the order they act.
-MapFile.EVENT_OBJECTS = { "show", "hide", "destroy", "drive", "open_fire", "hold_fire" }
+MapFile.EVENT_OBJECTS = { "show", "hide", "destroy", "damage", "reroute", "drive", "open_fire", "hold_fire",
+                          "unshield", "shield" }
 
 -- What sets off an event of the map.
-MapFile.TRIGGERS = { "time", "area", "destroyed" }
+MapFile.TRIGGERS = { "time", "area", "destroyed", "damaged" }
 
 -- Whether an event of the map is set off by something it has.
 local function triggered(event)
@@ -316,7 +328,13 @@ local function triggered(event)
         return event.at ~= nil and event.at >= 0
     elseif event.when == "area" then
         local place = event.place
+        if type(event.units) ~= "table" then event.units = nil end
         return type(place) == "table" and tonumber(place.x) ~= nil and tonumber(place.y) ~= nil
+    end
+    event.count = (tonumber(event.count) or 0) >= 1 and math.floor(tonumber(event.count)) or nil
+    if event.when == "damaged" then
+        event.below = tonumber(event.below)
+        if not event.below then return false end
     end
     return type(event.targets) == "table"
 end
@@ -328,10 +346,36 @@ local function event_list(raw)
     for _, event in ipairs(type(raw) == "table" and raw or {}) do
         if type(event) == "table" then
             event.when = known[event.when] and event.when or "time"
+            event.off  = event.off == true or nil
             if triggered(event) then out[#out + 1] = event end
         end
     end
+    -- Ids: what the map gave, kept when unique, else the next free one.
+    local used, last = {}, 0
+    for _, event in ipairs(out) do
+        local id = tonumber(event.id)
+        if id and id >= 1 and id % 1 == 0 and not used[id] then
+            used[id] = true
+            last     = math.max(last, id)
+        else
+            event.id = nil
+        end
+    end
+    for _, event in ipairs(out) do
+        if not event.id then
+            last       = last + 1
+            event.id   = last
+            used[last] = true
+        end
+    end
     return #out > 0 and out or nil
+end
+
+-- The id of a new event of the map: one past the highest.
+function MapFile.next_event_id(map)
+    local last = 0
+    for _, event in ipairs(map.events or {}) do last = math.max(last, event.id or 0) end
+    return last + 1
 end
 
 -- The entry of a map's objectives of one type, or nil.

@@ -347,6 +347,19 @@ local function common_rows(editor, kit, x, y, w, objects)
     return y
 end
 
+-- How much of its toughness an object starts with; under 60 percent it smokes.
+-- Full strength is no change, so it leaves the class as the pack has it.
+local function strength_row(editor, kit, x, y, w, objects)
+    local doc   = editor.doc
+    local value, mixed = shared(objects, function(o) return doc:info(o).cls.strength or 100 end)
+    local shown = mixed and (doc:info(objects[1]).cls.strength or 100) or value
+    local new, changed = kit:number("prop_strength", x + LABEL_W, y, w - LABEL_W, shown,
+        { min = 1, max = 100, step = 10, big = 50, suffix = "%" })
+    if changed then doc:set_class_fields(objects, { strength = new < 100 and new }, "STARTS DAMAGED") end
+    if mixed then kit:label("MIXED", x + 62, y, 48, kit.theme.row, { size = kit.theme.font_small, color = kit.theme.warn }) end
+    return row(kit, x, y, "STRENGTH")
+end
+
 local function target_row(editor, kit, x, y, w, objects)
     local doc   = editor.doc
     local value = shared(objects, function(o) return doc:info(o).cls.is_target == true end)
@@ -366,6 +379,7 @@ function SECTIONS.structure(editor, kit, x, y, w, objects)
     local doc   = editor.doc
     local theme = kit.theme
     y = common_rows(editor, kit, x, y, w, objects)
+    y = strength_row(editor, kit, x, y, w, objects)
     y = target_row(editor, kit, x, y, w, objects)
 
     -- What it leaves behind: nothing, a random pickup, or always a medal.
@@ -458,6 +472,7 @@ end
 
 function SECTIONS.flak_turret(editor, kit, x, y, w, objects)
     y = common_rows(editor, kit, x, y, w, objects)
+    y = strength_row(editor, kit, x, y, w, objects)
     y = Fields.choice(editor, kit, x, y, w, objects, "FIRES", "behaviour", Catalog.routines())
     return target_row(editor, kit, x, y, w, objects)
 end
@@ -465,6 +480,7 @@ end
 local function mover_section(kind)
     return function(editor, kit, x, y, w, objects)
         y = common_rows(editor, kit, x, y, w, objects)
+        y = strength_row(editor, kit, x, y, w, objects)
         local riding = false
         for _, o in ipairs(objects) do
             if Catalog.is_ride(editor.doc:info(o).cls) then riding = true end

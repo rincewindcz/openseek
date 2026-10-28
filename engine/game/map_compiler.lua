@@ -288,13 +288,22 @@ function MapCompiler.compile(map)
         end
         return out
     end
+    local function event_ids(ids)
+        local out = {}
+        for _, id in ipairs(type(ids) == "table" and ids or {}) do
+            if tonumber(id) then out[#out + 1] = tonumber(id) end
+        end
+        return out
+    end
     -- An event of the map (Mission:_fire): the objects it acts on by entity
     -- place, those it brings in or takes away that are pickups by their place
-    -- in stage.pickups.
+    -- in stage.pickups, the route it sends units along by its place in routes.
     local function event(raw)
         if type(raw) ~= "table" then return nil end
         local out = { say = raw.say, show_pickups = placed_pickups(raw.show), hide_pickups = placed_pickups(raw.hide),
                       add_time = tonumber(raw.add_time), weather = type(raw.weather) == "string" and raw.weather or nil,
+                      strength = tonumber(raw.strength), route = raw.route and route_index[raw.route],
+                      switch_on = event_ids(raw.switch_on), switch_off = event_ids(raw.switch_off),
                       ends = (raw.ends == "win" or raw.ends == "fail") and raw.ends or nil }
         for _, key in ipairs(MapFile.EVENT_OBJECTS) do out[key] = placed(raw[key]) end
         local shell = raw.shell
@@ -327,10 +336,13 @@ function MapCompiler.compile(map)
     local events = {}
     for _, raw in ipairs(map.events or {}) do
         local spec = event(raw)
+        spec.id, spec.off = raw.id, raw.off
         spec.when, spec.at, spec.every, spec.times = raw.when, raw.at, raw.every, raw.times
+        spec.count, spec.below = raw.count, raw.below
         if raw.place then
             spec.place = { x = raw.place.x, y = raw.place.y, radius = raw.place.radius, land = raw.place.land }
         end
+        if raw.units then spec.units = placed(raw.units) end
         if raw.targets then spec.targets = placed(raw.targets) end
         events[#events + 1] = spec
     end

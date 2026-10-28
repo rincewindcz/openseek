@@ -453,16 +453,7 @@ function World:load(name)
                 self.home_entity = entity
             end
         end
-        -- Resolve patrol waypoints (route index is 0-based into stage.routes).
-        if entity.route ~= nil and self.stage.routes then
-            local route = self.stage.routes[entity.route + 1]
-            entity.route_points = route and route.points or nil
-            if entity.route_points then
-                local state = self.route_states[entity.route] or { halts = 0, finished = false }
-                self.route_states[entity.route] = state
-                entity.route_state = state
-            end
-        end
+        if entity.route ~= nil then self:_set_route(entity, entity.route) end
         created[id] = entity
         if hull_class[raw.class] then
             hull_at[raw.x .. "," .. raw.y] = entity
@@ -679,6 +670,28 @@ function World:delta(ax, ay, bx, by)
     local dy = (ay - by) % s
     if dy > s * 0.5 then dy = dy - s end
     return dx, dy
+end
+
+-- Resolve a unit's patrol waypoints (route index is 0-based into stage.routes)
+-- and the state it shares with the others on that route.
+function World:_set_route(entity, route)
+    local points = self.stage.routes and self.stage.routes[route + 1]
+    entity.route        = route
+    entity.route_points = points and points.points or nil
+    if entity.route_points then
+        local state = self.route_states[route] or { halts = 0, finished = false }
+        self.route_states[route] = state
+        entity.route_state = state
+    end
+end
+
+-- A map's event sends a unit along another route, from its first point. Only
+-- a unit that drives a route from the start can: the others stay where they
+-- are in the load-time y index.
+function World:reroute(entity, route)
+    if not (entity.route_points and self.stage.routes and self.stage.routes[route + 1]) then return end
+    self:_set_route(entity, route)
+    entity.route_pt, entity.route_wait, entity.route_done = 1, 0, nil
 end
 
 -- Asset (.bin) filename backing a class index, or nil. Shared by the debug

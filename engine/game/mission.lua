@@ -163,10 +163,16 @@ function Mission:init(world, players, def)
             self:_prepare(spec.on_done)
         end
     end
-    self.events = {}              -- { spec, next_at, left, targets }: a map's events still to fire
+    -- A map's events: { spec, on, next_at, left, targets, units }. One that is
+    -- off waits for another event to switch it on (event_of: by its id).
+    self.events   = {}
+    self.event_of = {}
     for _, spec in ipairs(def.events or {}) do
-        self.events[#self.events + 1] = { spec = spec, next_at = spec.at, left = spec.times or 1,
-                                          targets = spec.targets and self:_placed(spec.targets) }
+        local event = { spec = spec, on = not spec.off, next_at = spec.at, left = spec.times or 1,
+                        targets = spec.targets and self:_placed(spec.targets),
+                        units   = spec.units and self:_units(spec.units) }
+        self.events[#self.events + 1] = event
+        if spec.id then self.event_of[spec.id] = event end
         self:_prepare(spec)
     end
 
@@ -214,6 +220,20 @@ function Mission:_placed(indices)
     for _, index in ipairs(indices) do
         local e = self.world.placed[index]
         if e and not seen[e] and e.max_hp > 0 then
+            seen[e] = true
+            list[#list + 1] = e
+        end
+    end
+    return list
+end
+
+-- The entities at places of the stage's entity list, each once, whatever
+-- they are.
+function Mission:_units(indices)
+    local list, seen = {}, {}
+    for _, index in ipairs(indices) do
+        local e = self.world.placed[index]
+        if e and not seen[e] then
             seen[e] = true
             list[#list + 1] = e
         end
@@ -334,7 +354,7 @@ end
 
 -- What a map's event waits to do is kept from happening until it fires: what
 -- it brings in is not there, the units it sets off stand, the guns it opens
--- fire with are silent.
+-- fire with are silent, what it lets be destroyed cannot be.
 function Mission:_prepare(event)
     if not event then return end
     local world = self.world
@@ -346,13 +366,18 @@ function Mission:_prepare(event)
     for _, index in ipairs(event.open_fire or {}) do
         if world.placed[index] then world.placed[index].silent = true end
     end
+    for _, index in ipairs(event.unshield or {}) do
+        if world.placed[index] then world.placed[index].shielded = true end
+    end
 end
 
 -- An event of a map: in this order, objects come in (show) and go
--- (hide), blow up (destroy), set off on their routes (drive), open or hold
--- fire, shelling is called on a place (shell), the time limit moves
--- (add_time), the weather changes, its line is said, and the phase may end
--- won or lost (ends).
+-- (hide), blow up (destroy), are damaged (damage, down to strength), take
+-- another route (reroute) and set off on it (drive), open or hold fire, can
+-- be destroyed again or no longer (unshield, shield), shelling is called on a
+-- place (shell), the time limit moves (add_time), the weather changes, its
+-- line is said, events are switched on and off (switch_on, switch_off), and
+-- the phase may end won or lost (ends).
 function Mission:_fire(event)
     if not event then return end
     local world = self.world
@@ -369,6 +394,16 @@ function Mission:_fire(event)
     for _, index in ipairs(event.destroy or {}) do
         if world.placed[index] then world.placed[index]:blow_up() end
     end
+    if event.strength then
+        for _, index in ipairs(event.damage or {}) do
+            if world.placed[index] then world.placed[index]:damage_to(event.strength) end
+        end
+    end
+    if event.route then
+        for _, index in ipairs(event.reroute or {}) do
+            if world.placed[index] then world:reroute(world.placed[index], event.route) end
+        end
+    end
     for _, index in ipairs(event.drive or {}) do
         if world.placed[index] then world.placed[index].parked = nil end
     end
@@ -378,6 +413,12 @@ function Mission:_fire(event)
     for _, index in ipairs(event.hold_fire or {}) do
         if world.placed[index] then world.placed[index].silent = true end
     end
+    for _, index in ipairs(event.unshield or {}) do
+        if world.placed[index] then world.placed[index].shielded = nil end
+    end
+    for _, index in ipairs(event.shield or {}) do
+        if world.placed[index] then world.placed[index].shielded = true end
+    end
     if event.shell and world.combat then
         world.combat.air_strike:shell(event.shell.x, event.shell.y, event.shell.radius)
     end
@@ -386,6 +427,8 @@ function Mission:_fire(event)
     end
     if event.weather then world.env.weather = event.weather ~= "none" and event.weather or nil end
     if event.say and event.say ~= "" then self.messages[#self.messages + 1] = event.say end
+    for _, id in ipairs(event.switch_on or {}) do self:_switch(id, true) end
+    for _, id in ipairs(event.switch_off or {}) do self:_switch(id, false) end
     if event.ends == "win" then
         self:_win()
     elseif event.ends == "fail" then
@@ -416,39 +459,68 @@ function Mission:_player_at(x, y, radius, land)
     return false
 end
 
--- Whether what sets off a map's event has happened: its time has come, a
--- player got to its place, the last of its objects is destroyed (never when
--- none of them can be).
+-- Whether one of the units is inside the circle.
+function Mission:_unit_at(units, x, y, radius)
+    for _, e in ipairs(units) do
+        if e:is_alive() then
+            local dx, dy = self.world:delta(e.x, e.y, x, y)
+            if dx * dx + dy * dy <= radius * radius then return true end
+        end
+    end
+    return false
+end
+
+-- Whether what sets off a map's event has happened: its time has come since
+-- it was switched on, a player (or one of its units) got to its place, its
+-- objects are destroyed or damaged down to below percent (all of them, or
+-- count of them; never when none of them can be).
 function Mission:_triggered(event)
     local spec = event.spec
     if spec.when == "area" then
-        local place = spec.place
-        return self:_player_at(place.x, place.y, place.radius or REACH_RADIUS, place.land)
-    elseif spec.when == "destroyed" then
-        if #event.targets == 0 then return false end
-        for _, e in ipairs(event.targets) do
-            if not e:is_destroyed() then return false end
+        local place  = spec.place
+        local radius = place.radius or REACH_RADIUS
+        if event.units then return self:_unit_at(event.units, place.x, place.y, radius) end
+        return self:_player_at(place.x, place.y, radius, place.land)
+    elseif spec.when == "destroyed" or spec.when == "damaged" then
+        local targets = event.targets
+        if #targets == 0 then return false end
+        local n = 0
+        for _, e in ipairs(targets) do
+            if e:is_destroyed() or (spec.when == "damaged" and e:strength() <= spec.below) then n = n + 1 end
         end
-        return true
+        return n >= math.min(spec.count or #targets, #targets)
     end
     return self.age >= event.next_at
 end
 
--- Fire the map's events that are set off, in the order the map lists them;
--- one at a time with every fires again that much later, times in all.
-function Mission:_update_events()
-    local waiting = {}
-    for _, event in ipairs(self.events) do
-        local again = true
-        if self:_triggered(event) then
-            self:_fire(event.spec)
-            event.left = event.left - 1
-            again      = event.spec.every ~= nil and event.left > 0
-            if again then event.next_at = event.next_at + event.spec.every end
-        end
-        if again then waiting[#waiting + 1] = event end
+-- An event switched on counts its time from then and goes off as many times
+-- as it was set to, even one that has gone off before; one already on goes on
+-- as it was. Switched off, it waits to be switched on again.
+function Mission:_switch(id, on)
+    local event = self.event_of[id]
+    if not event or event.on == on then return end
+    event.on = on
+    if on then
+        event.next_at = self.age + (event.spec.at or 0)
+        event.left    = event.spec.times or 1
     end
-    self.events = waiting
+end
+
+-- Fire the map's events that are on and set off, in the order the map lists
+-- them; one at a time with every fires again that much later, times in all,
+-- then is off. It is counted before it fires, so it may switch itself on again.
+function Mission:_update_events()
+    for _, event in ipairs(self.events) do
+        if event.on and self:_triggered(event) then
+            event.left = event.left - 1
+            if event.spec.every and event.left > 0 then
+                event.next_at = event.next_at + event.spec.every
+            else
+                event.on = false
+            end
+            self:_fire(event.spec)
+        end
+    end
 end
 
 function Mission:_close(o)

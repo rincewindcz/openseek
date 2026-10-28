@@ -161,9 +161,14 @@ function Validate.run(doc)
             for _, o in ipairs(Goals.objects(doc, goal)) do to_destroy[o.id] = true end
         end
     end
+    local route_ids = {}
+    for _, route in ipairs(map.routes) do route_ids[route.id] = true end
     local function check_event(name, event)
         if event.add_time and not map.time_limit then
             issue("warn", name .. " MOVES THE TIME LIMIT, BUT THE MAP HAS NONE")
+        end
+        if event.reroute and not route_ids[event.route] then
+            issue("warn", name .. " SENDS UNITS ALONG A ROUTE THE MAP DOES NOT HAVE")
         end
         for _, o in ipairs(Goals.acted_on(doc, event, "hide")) do
             if to_destroy[o.id] then
@@ -174,10 +179,15 @@ function Validate.run(doc)
     end
     for i, event in ipairs(map.events or {}) do
         local name = "EVENT " .. i
-        if event.when == "time" and map.time_limit and event.at >= map.time_limit then
+        if event.off and not Goals.switched_on(doc, event.id) then
+            issue("warn", name .. " IS SWITCHED OFF AT THE START AND NOTHING SWITCHES IT ON: IT NEVER HAPPENS")
+        elseif event.when == "time" and not event.off and map.time_limit and event.at >= map.time_limit then
             issue("warn", name .. " COMES AFTER THE TIME LIMIT AND NEVER HAPPENS")
-        elseif event.when == "destroyed" and #Goals.targets(doc, event) == 0 then
-            issue("warn", name .. " WAITS FOR OBJECTS TO BE DESTROYED, BUT HAS NONE THAT CAN BE: IT NEVER HAPPENS")
+        elseif (event.when == "destroyed" or event.when == "damaged") and #Goals.targets(doc, event) == 0 then
+            issue("warn", name .. " WAITS FOR OBJECTS TO BE " .. (event.when == "damaged" and "DAMAGED" or "DESTROYED")
+                .. ", BUT HAS NONE THAT CAN BE: IT NEVER HAPPENS")
+        elseif event.when == "area" and event.units and #Goals.units(doc, event) == 0 then
+            issue("warn", name .. " WAITS FOR UNITS ON A ROUTE TO GET TO A PLACE, BUT HAS NONE: IT NEVER HAPPENS")
         elseif not Goals.does_something(event) then
             issue("warn", name .. " SAYS AND DOES NOTHING")
         end
