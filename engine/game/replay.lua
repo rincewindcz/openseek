@@ -35,7 +35,7 @@ Replay.PARAMS = {
     "speed_scale", "explosive_trees", "tree_crush_speed", "friendly_fire_pows", "remote_mine",
     "enemy_damage_level", "enemy_damage", "enemy_fire_level", "enemy_fire_rate", "enemy_aggression",
     "pickup_level", "weapon_finds", "land_for_medals", "land_for_supplies", "flame_momentum",
-    "enemy_hunts_people",
+    "enemy_hunts_people", "start_bay_weapon",
 }
 
 -- The value a parameter had before it existed, for replays recorded without it:
@@ -45,7 +45,7 @@ Replay.LEGACY_PARAMS = {
     enemy_damage_level = "hard", enemy_damage = 1, enemy_fire_level = "hard", enemy_fire_rate = 1,
     enemy_aggression = 1, pickup_level = "hard", weapon_finds = false,
     land_for_medals = false, land_for_supplies = false, remote_mine = false,
-    flame_momentum = false, enemy_hunts_people = false,
+    flame_momentum = false, enemy_hunts_people = false, start_bay_weapon = false,
 }
 
 -- The platform a recording was made on. The simulation avoids what differs

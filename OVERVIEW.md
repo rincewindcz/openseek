@@ -239,7 +239,9 @@ Scenes (`engine/scenes/`, base `core/scene.lua`, stack manager
 | `anim_gallery`, `font_gallery`, `sound_gallery` (F8/F9/F10 on the main menu, `--dev`) | Asset galleries. |
 
 `scenes/gameplay_base.lua` is shared by the three gameplay scenes: firing,
-weapon cycling, landing, tick accounting, mission-won sequencing.
+weapon cycling, landing, tick accounting, mission-won sequencing. A vehicle
+opens a phase on the first weapon of its list, the chain gun, or with the
+EXTRA `start_bay_weapon` on its main bay weapon (`start_weapon`).
 
 | Module | Responsibility |
 |--------|----------------|
@@ -312,6 +314,7 @@ weapon cycling, landing, tick accounting, mission-won sequencing.
 | `ui/pointer` | Mouse / touch pointer in 320x240 design space. |
 | `ui/layout` | 320x240 design space, letterbox `fit`. |
 | `ui/hint` | Two-tone footer key hints: `{ENTER} LOAD` draws the braced key name gold and the action white. |
+| `ui/control_hints` | EXTRA `control_hints`: for `SHOW_TIME` 12 s of phase time after a single-player vehicle enters, `{CTRL}  FIRE`, `{Q}  SWITCH WEAPON` (more than one weapon) and, in the chopper, `{SPACE}  LAND` under the view centre, named from the primary binding of the device last touched (keyboard, gamepad). A line fades out once its action arrives in the player's input frame and is never shown again: the actions used are kept in `Config.hints_learned`, saved when the phase lets go of its parameters (a menu over it, its end). Not shown on playback, with the touch controls up, outside an active mission, or in the scripted style preview and self-test (`hints_live`). |
 | `ui/scroll_text` | Text held to a fixed width for typed values: clipped print with an offset, `tail` (the end in view, for a field being typed into) and `swing` (pans a text that does not fit to its end and back). |
 | `ui/touch_controls` | Single-player on-screen controls: floating stick (left half), FIRE, STRAFE, LAND, WEAPON, MENU. Held state and analog `turn()` read by `InputSource.Local`, buttons queue edge events. Stick angle from vertical: straight within 8 deg, turn rate linear to full at sideways, drives within 65 deg of up/down, dead zone 0.25 of the radius. Buttons draw their white icon from `content/mobileui/icon_<id>.png` (label when missing), tinted gold or white. MOBILE UI options: `touch_color`, `touch_opacity` (multiplies every alpha), `touch_button_scale`, `touch_stick_scale`, `touch_left_handed` (buttons measured from the left edge, stick on the right half). Drawn while the last input was touch (from the start under `--touch`). |
 | `editor/document` | The open map: lookups by id, group and owner, a 128 px grid for picking and culling, the undo history (every change is a recorded redo / undo pair, batched per action), type interning (`type_with`), the roads as built geometry (`built_roads`), the road under a point (`road_at`), moving roads (`move_roads`, `record_road_move`). |

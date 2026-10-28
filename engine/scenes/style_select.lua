@@ -35,6 +35,7 @@ StyleSelect.ui_pointer     = true
 StyleSelect.no_record      = true
 StyleSelect.holds_params   = false   -- a choice here is meant to change the running phase
 StyleSelect.mouse_steering = false
+StyleSelect.hints_live     = false   -- flown by script
 StyleSelect.padpressed     = Scene.padpressed   -- a menu: the pad stands for keys
 
 local DESIGN_W = Layout.DESIGN_W

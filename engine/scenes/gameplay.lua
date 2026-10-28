@@ -17,6 +17,7 @@ local TouchControls = require "engine.ui.touch_controls"
 local Gamepad      = require "engine.core.gamepad"
 local MouseStick   = require "engine.core.mouse_stick"
 local CrashFX      = require "engine.ui.crash_fx"
+local ControlHints = require "engine.ui.control_hints"
 local Log          = require "engine.core.log"
 
 -- Single-player gameplay scene: player lifecycle, camera follow, the death /
@@ -26,6 +27,10 @@ local Gameplay = Class(GameplayBase)
 
 -- Whether Config.mouse_control applies; the sandbox keeps the pointer for its panel.
 Gameplay.mouse_steering = true
+
+-- Whether the control hints follow the player's input; a scene flown by script
+-- keeps them out.
+Gameplay.hints_live = true
 
 -- Ticks between spending a life and the vehicle being back on the pad. Counted in
 -- simulation ticks, not by the crash picture's fade: the respawn has to land on
@@ -44,6 +49,7 @@ function Gameplay:enter()
     self.touch:reset()
     self.pad             = self.pad or Gamepad:new()
     self.mouse           = self.mouse or MouseStick:new(app.camera)
+    self.hints           = self.hints or ControlHints:new()
     app.renderer.in_game = true
     app.camera:set_zoom(Camera.GAME_ZOOM_INDEX)
     self:enter_weather()
@@ -60,6 +66,7 @@ end
 function Gameplay:leave()
     local app = self.app
     self:end_session()
+    self.hints:save()
     self.touch:reset()
     self.paused          = false
     self.death_timer     = nil
@@ -154,8 +161,6 @@ function Gameplay:spawn_player(carry)
     if loadout then
         player.weapon_list   = loadout.list
         player.weapon_levels = loadout.levels
-        player.weapon_name   = loadout.list[1]
-        player.weapon_level  = loadout.levels[player.weapon_name] or 1
         -- Equip-screen characteristics (0..1) scale the fuel/armor loadout; speed
         -- follows from their sum via Player:_apply_config.
         if loadout.chars then
@@ -163,10 +168,9 @@ function Gameplay:spawn_player(carry)
             player.load_armor = loadout.chars.armor * 100
             player:_apply_config()
         end
-    else
-        local weapon_list = Vehicles.WEAPONS[player.vehicle]
-        if weapon_list then player.weapon_name = weapon_list[1] end
     end
+    player.weapon_name  = self:start_weapon(player) or player.weapon_name
+    player.weapon_level = player.weapon_levels and player.weapon_levels[player.weapon_name] or 1
     player:seed_ammo(combat.weapons, loadout and loadout.counts)
     -- A map tried from the editor may be flown in god mode.
     if app.play_return and app.play_return.god then player.unlimited = true end
@@ -186,6 +190,7 @@ function Gameplay:spawn_player(carry)
     camera.x, camera.y = player.x, player.y
     camera:start_zoom_intro(1.5, 1.0)   -- smooth zoom-in as the level opens
     self.pending_takeoff = true         -- chopper takes off when the zoom-in ends
+    self.hints:start(player, world.time, #self:weapon_list_for(player) > 1)
     self:reset_end_stats()
     self:announce_start(player)
 end
@@ -285,6 +290,7 @@ function Gameplay:respawn_at_base()
     self:announce_start(player)
     self.pending_takeoff = true
     self.death_timer     = nil
+    self.hints:start(player, app.world.time, #self:weapon_list_for(player) > 1)
 end
 
 -- Stats dismissed: in a campaign run, carry the accumulated score and remaining
@@ -362,6 +368,7 @@ function Gameplay:update(dt)
     self:begin_tick()
     self.mouse.blocked = not self.mouse_steering or app.debug_panel.enabled
     local frame = self:apply_input(player, self.source)
+    if self.hints_live and not self.playback then self.hints:observe(frame, app.world.time) end
     player:update(dt)
     if not player.death then app.combat:crush_units(player) end
     if app.settings.death_enabled and not player.death and player:is_dead() then
@@ -511,6 +518,10 @@ function Gameplay:draw()
             self:draw_overlay_text(msg, 0)
         end
     end
+    if self.hints_live and not (self.playback or self.touch:visible() or app.end_stats:is_active())
+            and (not mission or mission.state == "active") then
+        self.hints:draw(app.hud:font(), app.world.time)
+    end
     if app.end_stats:is_active() then app.end_stats:draw() end
     self:draw_replay_tag()
     if self.paused then self:draw_overlay_text("PAUSE") end
@@ -577,6 +588,7 @@ function Gameplay:game_keys(key)
 end
 
 function Gameplay:keypressed(key)
+    self.hints:use("keys")
     if self:debug_keys(key) then return end
     self:game_keys(key)
 end
@@ -585,6 +597,7 @@ end
 -- actions (fire, strafe, the d-pad) are sampled by the input source instead.
 function Gameplay:padpressed(_pad, button, from_stick)
     local app = self.app
+    self.hints:use("pad")
     if from_stick then return end
     if app.end_stats:is_active() then self:end_stats_keypressed(button); return end
     if Input.pressed("pause", button, "pad") then self.paused = not self.paused; return end
@@ -640,6 +653,7 @@ end
 
 function Gameplay:suspend()
     GameplayBase.suspend(self)
+    self.hints:save()
     self.touch:reset()
 end
 

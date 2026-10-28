@@ -190,6 +190,19 @@ local Config = {
     -- for a carried weapon, as in the original. Replay parameter.
     weapon_finds = true,
 
+    -- Bay weapon start (engine/scenes/gameplay_base.lua start_weapon): a phase
+    -- opens on the vehicle's main bay weapon (rockets, shells) instead of the
+    -- chain gun of bay 1. Off, it opens on the gun, as in the original. Replay
+    -- parameter.
+    start_bay_weapon = true,
+
+    -- Control hints (engine/ui/control_hints.lua): the first seconds of a
+    -- single-player phase name the keys for fire, the weapon switch and landing,
+    -- each until the player has used it once. hints_learned lists the actions
+    -- used so far ("fire,weapon"), so a player who knows them never sees them.
+    control_hints = true,
+    hints_learned = "",
+
     -- Pitch the one explosion sound the original plays for every blast by size
     -- (data/audio.json size_pitch), so small and large blasts sound apart.
     explosion_pitch = true,
@@ -303,7 +316,8 @@ local PERSISTED = {
     "flame_momentum", "shard_amount", "lying_shards",
     "explosion_pitch", "ending_stats", "crash_fx", "crash_cause", "crash_stats",
     "difficulty", "enemy_damage_level", "enemy_damage", "enemy_fire_level", "enemy_fire_rate",
-    "enemy_aggression", "pickup_level", "weapon_finds",
+    "enemy_aggression", "pickup_level", "weapon_finds", "start_bay_weapon",
+    "control_hints", "hints_learned",
     "land_for_medals", "land_for_supplies", "enemy_hunts_people",
     "master_volume", "sfx_volume", "voice_volume", "engine_volume", "ui_volume",
     "music_volume", "audio_positional", "coop_split_pan", "voice_callouts",

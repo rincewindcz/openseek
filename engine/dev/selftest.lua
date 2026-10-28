@@ -131,6 +131,7 @@ local function record_pass(app, stage, ticks, hook)
     local scene = app.scenes:top()
     scene.sources[1] = script_source()
     scene.source     = scene.sources[1]
+    scene.hints_live = false   -- the script is not a player learning the controls
     local samples = drive(app, scene, ticks, hook)
     local recording = scene.recording
     scene.recording = nil          -- keep the self-test from writing a file

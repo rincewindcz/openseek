@@ -93,17 +93,12 @@ function CoopGameplay:make_player(slot, number, sx, sy)
     if loadout then
         p.weapon_list   = loadout.list
         p.weapon_levels = loadout.levels
-        p.weapon_name   = loadout.list[1]
-        p.weapon_level  = loadout.levels[p.weapon_name] or 1
         p.load_fuel     = loadout.chars.fuel  * 100
         p.load_armor    = loadout.chars.armor * 100
         p:_apply_config()
-    else
-        local weapon_list = Vehicles.WEAPONS[p.vehicle]
-        if weapon_list then p.weapon_name = weapon_list[1] end
     end
-    local weapon_def = app.combat.weapons[p.weapon_name]
-    p.weapon_icon = weapon_def and weapon_def.icon or 0
+    p.weapon_name  = self:start_weapon(p) or p.weapon_name
+    p.weapon_level = p.weapon_levels and p.weapon_levels[p.weapon_name] or 1
     p:seed_ammo(app.combat.weapons, loadout and loadout.counts)
     if run then
         local state = run.players[number]
@@ -113,6 +108,8 @@ function CoopGameplay:make_player(slot, number, sx, sy)
     -- A map tried from the editor may be flown in god mode.
     if app.play_return and app.play_return.god then p.unlimited = true end
     self:apply_replay_player(p, slot)   -- playback: the recorded loadout wins
+    local weapon_def = app.combat.weapons[p.weapon_name]
+    p.weapon_icon = weapon_def and weapon_def.icon or 0
     return p
 end
 

@@ -217,6 +217,25 @@ function GameplayBase:weapon_list_for(p)
     return p.weapon_list or Vehicles.WEAPONS[p.vehicle] or {}
 end
 
+-- The weapon p opens a phase on: the first of its list, the chain gun of bay 1.
+-- EXTRA (start_bay_weapon): the vehicle's main bay weapon (the chopper's
+-- rockets, the tank's shells) when aboard, else the first other bay weapon in
+-- list order, so a player who never finds the weapon switch is not left on the gun.
+function GameplayBase:start_weapon(p)
+    local weapon_list = self:weapon_list_for(p)
+    if not Config.start_bay_weapon then return weapon_list[1] end
+    local main = Vehicles.STARTING_WEAPON[p.vehicle]
+    local bay  = {}
+    for _, name in ipairs(Vehicles.BAY_WEAPONS[p.vehicle] or {}) do bay[name] = name ~= "chaingun" end
+    for _, name in ipairs(weapon_list) do
+        if name == main then return name end
+    end
+    for _, name in ipairs(weapon_list) do
+        if bay[name] then return name end
+    end
+    return weapon_list[1]
+end
+
 -- Select the i-th weapon of p's list (the number keys, assigned in bay
 -- order). A loadout carries the owned level per weapon; free play starts
 -- every weapon at level 1 (E cycles it).
@@ -470,15 +489,11 @@ function GameplayBase:apply_replay_player(p, slot)
         p:_apply_config()
     end
     local weapons = Replay.decode_list(header[key .. "weapons"])
-    if #weapons > 0 then
-        p.weapon_list = weapons
-        p.weapon_name = weapons[1]
-    end
+    if #weapons > 0 then p.weapon_list = weapons end
     local levels = header[key .. "levels"]
-    if levels then
-        p.weapon_levels = Replay.decode_map(levels)
-        p.weapon_level  = p.weapon_levels[p.weapon_name] or 1
-    end
+    if levels then p.weapon_levels = Replay.decode_map(levels) end
+    p.weapon_name  = self:start_weapon(p) or p.weapon_name
+    p.weapon_level = p.weapon_levels and p.weapon_levels[p.weapon_name] or 1
     local ammo = Replay.decode_map(header[key .. "ammo"])
     if next(ammo) then p.ammo = ammo end
 end

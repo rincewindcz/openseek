@@ -178,6 +178,8 @@ local CATEGORIES = {
         { key = "shard_amount",        label = "SHARD AMOUNT",    kind = "range", min = 0.5, max = 3.0, step = 0.25 },
         { key = "lying_shards",        label = "LYING SHARDS",    kind = "toggle" },
         { key = "weapon_finds",        label = "WEAPON FINDS",    kind = "toggle" },
+        { key = "start_bay_weapon",    label = "ROCKETS FIRST",   kind = "toggle" },
+        { key = "control_hints",       label = "CONTROL HINTS",   kind = "toggle" },
         { key = "explosion_pitch",     label = "EXPLOSION PITCH", kind = "toggle" },
         { key = "ending_stats",        label = "ENDING STATS",    kind = "toggle" },
         { key = "crash_fx",            label = "CRASH FX",        kind = "toggle" },
