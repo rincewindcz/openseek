@@ -17,7 +17,9 @@ local Loadout = require "engine.game.loadout"
 -- darkened and cannot be selected, and any higher level can be bought directly.
 -- The medal purse is drawn bottom-left as digits plus a large medal per ten
 -- and a small one per single medal. DONE closes the screen; CHOP / TANK flips
--- the shopped vehicle.
+-- the shopped vehicle. On the keyboard (or a pad) the arrows move the
+-- selection, Enter buys it and Esc is DONE; up from the top row moves the
+-- focus onto the buttons, down from them comes back to the selection.
 --
 -- Layout (design-space pixels measured from the original) is data/shop.json;
 -- prices and descriptions come from Loadout.info.
@@ -37,6 +39,7 @@ local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
 
 local LAYOUT_PATH  = "data/shop.json"
 local CONFIRM_TIME = 0.3
+local FOCUS_COLOR  = { 1, 0.85, 0.2 }   -- ring of the button the keyboard is on
 
 -- POWGADS frame per button state; ring is the gold rim the original draws over
 -- a pressed button.
@@ -81,6 +84,8 @@ local function common_prefix(a, b)
     while n < #a and n < #b and a[n + 1].large == b[n + 1].large do n = n + 1 end
     return n
 end
+
+local function is_button(z) return z.kind == "button" end
 
 local NAV_STEP = {
     left  = { 0, -1 },
@@ -136,6 +141,7 @@ function ShopScreen:open(loadout, weapons, opts)
     self.lock        = opts.lock_vehicle or false
     self.vehicle     = loadout.vehicle
     self.pressed     = nil
+    self.button      = nil
     self.confirming  = nil
     self.confirm_t   = 0
     self.clock       = 0
@@ -196,6 +202,14 @@ function ShopScreen:_build()
     end
     self.focus_zone = self.selected
     self.focus_from = nil
+    self.button     = self.button and self:_button(self.button.id)
+end
+
+function ShopScreen:_button(id)
+    for _, z in ipairs(self.zones) do
+        if z.kind == "button" and z.id == id then return z end
+    end
+    return nil
 end
 
 function ShopScreen:_add_button(id, pos, image)
@@ -293,15 +307,35 @@ function ShopScreen:_activate(id)
     end
 end
 
--- Moves the selection one grid step, skipping gaps and darkened levels.
+-- Moves the selection one grid step, skipping gaps and darkened levels; up
+-- past the top row moves the focus onto the button above, DONE when there is
+-- none in line. With a button
+-- focused the arrows move between the buttons, down past them back to the grid.
 function ShopScreen:_navigate(key)
     local step = NAV_STEP[key]
     local z    = self.selected
-    if not step or not z then return end
+    if not step then return end
+    if self.button then
+        local next_button = Layout.nearest(self.zones, self.button, key, is_button)
+        if next_button then
+            self.button = next_button
+        elseif key == "down" and z then
+            self.button = nil
+        end
+        return
+    end
+    if not z then
+        if key == "up" then self.button = self:_button("done") end
+        return
+    end
     local row, col = z.row, z.col
     local rows = #self.layout.rows
     while true do
         row, col = row + step[1], col + step[2]
+        if row < 1 and key == "up" then
+            self.button = Layout.nearest(self.zones, z, key, is_button) or self:_button("done")
+            return
+        end
         if row < 1 or row > rows or col < 1 or col > self.grid_cols then return end
         local target = self.grid[row] and self.grid[row][col]
         if target and self:selectable(target.weapon, target.level) then
@@ -316,6 +350,7 @@ end
 function ShopScreen:press(x, y)
     if not self.active or self.confirming then return end
     local z = self:_zone_at(Pointer.to_design(x, y, DW, DH))
+    self.button = nil
     if not z then return end
     if z.kind == "box" then
         if self:selectable(z.weapon, z.level) then self.selected = z end
@@ -339,7 +374,7 @@ end
 function ShopScreen:keypressed(key)
     if not self.active or self.confirming then return end
     if key == "return" or key == "kpenter" or key == "space" then
-        self:_purchase()
+        if self.button then self:_activate(self.button.id) else self:_purchase() end
     elseif key == "escape" then
         self:_activate("done")
     elseif key == "tab" then
@@ -503,6 +538,13 @@ function ShopScreen:_draw_button(g, z)
     self:_draw_at(g, self:_gads(frame), z.x, z.y)
     if frames.ring and self:_pressed(z.id) then
         self:_draw_at(g, self:_gads(frames.ring), z.x, z.y)
+    end
+    if z == self.button and not self.confirming then
+        local alpha = select(4, g.getColor())
+        g.setColor(FOCUS_COLOR[1], FOCUS_COLOR[2], FOCUS_COLOR[3], alpha)
+        g.setLineWidth(1)
+        g.rectangle("line", z.x - 1.5, z.y - 1.5, z.w + 3, z.h + 3)
+        g.setColor(1, 1, 1, alpha)
     end
 end
 

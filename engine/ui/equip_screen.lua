@@ -17,9 +17,13 @@ local Layout  = require "engine.ui.layout"
 -- All art and widget positions come from assets/equip/ (tools/export_equip.py,
 -- layout.json). Clicking a row loads that bay; OK / EXIT confirm through the
 -- shared fade and call self.on_select(id); the TANK / CHOP button flips the
--- edited vehicle in place. The caller passes the campaign Loadout and the
--- combat weapon table (a weapon without a def is not implemented yet and
--- shows permanently darkened). An area a map closed (loadout.locked: the bays,
+-- edited vehicle in place. The keyboard (and a pad, as the keys its buttons
+-- stand for) reaches every widget: the arrows move the focus to the nearest
+-- widget that way, Enter does what a click does, and on a slider it grabs the
+-- knob for left / right until Enter, Esc or up / down lets go. Enter with
+-- nothing focused is OK, Esc is EXIT. The caller passes the campaign Loadout
+-- and the combat weapon table (a weapon without a def is not implemented yet
+-- and shows permanently darkened). An area a map closed (loadout.locked: the bays,
 -- the specials, the fuel and armour sliders) shows what the map put there,
 -- the rest of it darkened, and takes no click; so does a weapon a map keeps
 -- out (loadout.banned).
@@ -30,6 +34,8 @@ local DW, DH = Layout.DESIGN_W, Layout.DESIGN_H
 local PIP_PITCH    = 5     -- pip box pitch (4 px box + 1 px shadow)
 local PIP_SLOTS    = 3
 local FOCUS_COLOR  = { 1, 0.85, 0.2 }
+local GRAB_COLOR   = { 1, 1, 1 }   -- focus ring of a slider the keys are moving
+local SLIDER_STEP  = 0.1   -- characteristic change per left / right on a grabbed slider
 local CONFIRM_TIME = 0.3   -- fade-through-black before OK / EXIT fires
 local KNOB_W       = 3     -- slider knob (EQPTNKF f3) width
 local TRACK_L      = 1     -- slider track's left bevel, excluded from knob travel
@@ -37,6 +43,8 @@ local TRACK_R      = 2     -- and its right shadow
 local LOCKED_DIM   = 0.45  -- brightness of the sliders a map closed
 
 local LAYOUT_PATH = "assets/equip/layout.json"
+
+local NAV_KEYS = { up = true, down = true, left = true, right = true }
 
 local function img(path)
     if not love.filesystem.getInfo(path) then return nil end
@@ -81,6 +89,7 @@ function EquipScreen:open(loadout, weapons, opts)
     self.lock       = opts.lock_vehicle or false
     self.vehicle    = loadout.vehicle
     self.focus      = nil
+    self.grabbed    = nil
     self.pressed    = nil
     self.dragging   = nil
     self.confirming = nil
@@ -93,6 +102,7 @@ end
 -- Clickable zones for the current vehicle, from the exported layout.
 function EquipScreen:_build()
     self.dragging = nil
+    self.grabbed  = nil
     local L = self.layout[self.vehicle]
     self.screen_layout = L
     -- Backdrop is the correctly-decoded full-screen art (assets/fullscreen/); the
@@ -234,13 +244,15 @@ function EquipScreen:hover(x, y)
         return
     end
     self.focus = self:_zone_at(dx, dy)
+    if self.focus ~= self.grabbed then self.grabbed = nil end
 end
 
 function EquipScreen:press(x, y)
     if not self.active or self.confirming then return end
     local dx, dy = Pointer.to_design(x, y, DW, DH)
     local z = self:_zone_at(dx, dy)
-    self.focus = z
+    self.focus   = z
+    self.grabbed = nil
     if not z then return end
     if z.kind == "button" then
         self.pressed = z
@@ -265,41 +277,74 @@ function EquipScreen:release(x, y)
     end
 end
 
--- Move keyboard focus through the button menu (PLAY / TANK|CHOP / EXIT), top to
--- bottom, wrapping. The first press lands on the top or bottom button.
-function EquipScreen:_focus_step(dir)
-    local btns = {}
-    for _, z in ipairs(self.zones) do
-        if z.kind == "button" then btns[#btns + 1] = z end
-    end
-    if #btns == 0 then return end
-    table.sort(btns, function(a, b) return a.y < b.y end)
-    local idx
-    for i, z in ipairs(btns) do
-        if z == self.focus then idx = i break end
-    end
-    if not idx then
-        self.focus = btns[dir > 0 and 1 or #btns]
+-- A widget the keyboard stops on: a read-only slider only shows a value.
+function EquipScreen:_focusable(z)
+    return not (z.kind == "slider" and z.readonly)
+end
+
+-- Move keyboard focus to the nearest focusable widget in a direction; the
+-- first move lands on the first focusable widget.
+function EquipScreen:_focus_move(key)
+    if not self.focus then
+        self:_focus_next()
         return
     end
-    self.focus = btns[((idx - 1 + dir) % #btns) + 1]
+    local z = Layout.nearest(self.zones, self.focus, key, function(zone) return self:_focusable(zone) end)
+    if z then self.focus = z end
+end
+
+-- Tab: the next focusable widget in build order, wrapping.
+function EquipScreen:_focus_next()
+    local n     = #self.zones
+    local start = 0
+    for i, z in ipairs(self.zones) do
+        if z == self.focus then start = i break end
+    end
+    for k = 1, n do
+        local z = self.zones[(start + k - 1) % n + 1]
+        if self:_focusable(z) then
+            self.focus = z
+            return
+        end
+    end
+end
+
+-- Keys while a slider is grabbed: left / right step it; Enter or Esc lets go,
+-- up / down let go and move on.
+function EquipScreen:_grabbed_key(key)
+    local z = self.grabbed
+    if key == "left" or key == "right" then
+        local step = (key == "left") and -SLIDER_STEP or SLIDER_STEP
+        self.loadout:set_char(self.vehicle, z.char, self.loadout:char(self.vehicle, z.char) + step)
+    elseif key == "return" or key == "kpenter" or key == "space" or key == "escape" then
+        self.grabbed = nil
+    elseif key == "up" or key == "down" then
+        self.grabbed = nil
+        self:_focus_move(key)
+    end
 end
 
 function EquipScreen:keypressed(key)
     if not self.active or self.confirming then return end
-    if key == "return" or key == "kpenter" then
+    if self.grabbed then
+        self:_grabbed_key(key)
+        return
+    end
+    if key == "return" or key == "kpenter" or key == "space" then
         local z = self.focus
-        if z and z.kind == "button" then
-            self:_activate(z)
-        else
+        if not z then
             self:_confirm("ok")
+        elseif z.kind == "slider" then
+            if not z.readonly then self.grabbed = z end
+        else
+            self:_activate(z)
         end
     elseif key == "escape" then
         self:_confirm("exit")
-    elseif key == "up" or key == "left" then
-        self:_focus_step(-1)
-    elseif key == "down" or key == "right" or key == "tab" then
-        self:_focus_step(1)
+    elseif NAV_KEYS[key] then
+        self:_focus_move(key)
+    elseif key == "tab" then
+        self:_focus_next()
     end
 end
 
@@ -405,11 +450,12 @@ function EquipScreen:draw()
         end
     end
 
-    -- Focus outline around the hovered widget (the selected states carry their
-    -- own art, so hover feedback is a thin ring).
+    -- Focus outline around the hovered or keyboard-focused widget (the selected
+    -- states carry their own art, so focus feedback is a thin ring).
     local z = self.focus
     if z then
-        g.setColor(FOCUS_COLOR[1], FOCUS_COLOR[2], FOCUS_COLOR[3], fade)
+        local ring = (z == self.grabbed) and GRAB_COLOR or FOCUS_COLOR
+        g.setColor(ring[1], ring[2], ring[3], fade)
         g.setLineWidth(1)
         g.rectangle("line", z.x - 1.5, z.y - 1.5, z.w + 3, z.h + 3)
     end

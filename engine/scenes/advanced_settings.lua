@@ -648,7 +648,9 @@ function AdvancedSettings:draw()
     else
         hint = "{UP/DOWN} MOVE   {LEFT/RIGHT} CHANGE   {ESC} BACK"
     end
-    Hint.print_centered(self.hint_font, hint, DESIGN_W, FOOTER_Y, { alpha = fade })
+    -- A button capture takes B as the binding, so only the keyboard cancels it.
+    Hint.print_centered(self.hint_font, hint, DESIGN_W, FOOTER_Y,
+        { alpha = fade, raw = self.capturing ~= nil })
 
     g.pop()
     g.setColor(1, 1, 1, 1)

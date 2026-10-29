@@ -562,6 +562,7 @@ function Gameplay:game_keys(key)
         if key == "t" then self:toggle_replay_tag() end
         return
     end
+    if ControlHints.is_dismiss_key(key) and self.hints_live and self.hints:dismiss(app.world.time) then return end
     if key == "r" and (app.dev or not app.campaign) then self.paused = false; self:restart(); return end
     if app.dev and key == "f5" then self.source:queue("god"); return end
     if app.dev and key == "f6" then self.source:queue("pickup_mode"); return end
@@ -604,6 +605,9 @@ function Gameplay:padpressed(_pad, button, from_stick)
     if Input.pressed("radar_zoom", button, "pad") then app.hud:toggle_radar_zoom(self.player); return end
     if self.playback then
         if button == Gamepad.MENU_BUTTON then self:finish_playback("stopped") end
+        return
+    end
+    if button == ControlHints.DISMISS_BUTTON and self.hints_live and self.hints:dismiss(app.world.time) then
         return
     end
     if Input.pressed("takeoff", button, "pad") then self.source:queue("takeoff"); return end

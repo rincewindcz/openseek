@@ -581,7 +581,7 @@ function VehicleSelect:draw()
     for _, z in ipairs(self:_device_zones()) do
         local lit = self.hover and self.hover.kind == "device" and self.hover.player == z.player
         Hint.print(self.hint_font, self:_device_text(z.player), z.x + 2, DEVICE_Y,
-            { alpha = fade * (lit and 1.4 or 1), shadow = true })
+            { alpha = fade * (lit and 1.4 or 1), shadow = true, raw = true })
     end
 
     local hints

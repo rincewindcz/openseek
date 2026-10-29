@@ -29,6 +29,7 @@ local Score           = require "engine.game.score"
 local Screen          = require "engine.core.screen"
 local EndStats        = require "engine.ui.end_stats"
 local Pointer         = require "engine.ui.pointer"
+local Hint            = require "engine.ui.hint"
 local TouchControls   = require "engine.ui.touch_controls"
 local DataSetup       = require "engine.ui.data_setup"
 local ErrorScreen     = require "engine.ui.error_screen"
@@ -403,6 +404,7 @@ function love.draw()
 end
 
 function love.keypressed(key)
+    Hint.use("keys")
     if app.photo and app.photo:keypressed(key) then return end
     local top = app.scenes:top()
     if Input.pressed("screenshot", key) and not (top and top:captures_keys()) then
@@ -455,6 +457,7 @@ end
 local function pad_pressed(joystick, button, from_stick)
     local pad = Gamepad.index_of(joystick)
     if not pad then return end
+    Hint.use("pad")
     if app.photo and app.photo:engaged() then return end
     local top = app.scenes:top()
     local capturing = top and top:captures_keys()
@@ -475,8 +478,17 @@ local function pad_pressed(joystick, button, from_stick)
     app.scenes:dispatch("padpressed", pad, button, from_stick)
 end
 
-function love.joystickadded()   Gamepad.refresh() end
-function love.joystickremoved() Gamepad.refresh() end
+-- The menu hints name a pad's buttons from the moment one is connected (a
+-- handheld has it from the start) until the keyboard or mouse is used.
+function love.joystickadded(joystick)
+    Gamepad.refresh()
+    if Gamepad.index_of(joystick) then Hint.use("pad") end
+end
+
+function love.joystickremoved()
+    Gamepad.refresh()
+    if Gamepad.count() == 0 then Hint.use("keys") end
+end
 
 function love.gamepadpressed(joystick, button)
     pad_pressed(joystick, button, false)
@@ -533,6 +545,7 @@ function love.mousepressed(x, y, button, istouch)
     end
     if app.photo and app.photo:engaged() then return end   -- its drags are read in mousemoved
     app.debug_panel:mousepressed(x, y, button)
+    Hint.use("keys")
     if button == 1 then
         Pointer.moved(x, y, false)
         pointer_pressed(x, y)
